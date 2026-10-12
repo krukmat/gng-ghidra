@@ -21,7 +21,8 @@ STUBS = {
    public com.google.gson.JsonObject getAsJsonObject(){return null;} }''',
  'com.google.gson.JsonArray': '''public class JsonArray extends JsonElement {
    public void add(String x) {} public void add(JsonObject x) {}
-   public void add(JsonElement x) {} public int size(){return 0;} }''',
+   public void add(JsonElement x) {} public int size(){return 0;}
+   public JsonElement get(int index){return null;} }''',
  'com.google.gson.JsonObject': '''public class JsonObject extends JsonElement {
    public void addProperty(String k, String x) {} public void addProperty(String k, Number x) {}
    public void addProperty(String k, Boolean x) {} public void add(String k, JsonElement x) {}
