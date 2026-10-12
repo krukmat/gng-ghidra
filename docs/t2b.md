@@ -167,3 +167,31 @@ cat out/functions.report.json
 The normalizer can PASS even when code generation is BLOCKED for real CPU
 semantics (SYNC, external control flow, hardware reads, etc.). Actual
 behavioral equivalence of complete functions is not yet demonstrated.
+
+## T2.B real-ROM `SYNC` boundary: verified executable prefix
+
+The operator obtained `GNG_FUNCTION_EXPORT=PASS functions=1` and successfully normalized
+the real ROM. Full function codegen correctly blocks at Motorola 6809
+`SYNC` (`0x6016`), which waits for an interrupt and has no Ghidra P-code.
+
+A separate *bounded region* compiler follows **actual Ghidra CFG edges** from
+`0x6000` up to but not including the verified `SYNC` instruction.
+Unknown paths, P-code operators, banks and truncated source graphs remain
+blocked. It returns memory/register state and PC before that instruction,
+not an emulation of the interrupt/wait state.
+
+Run with the IR already extracted; no Ghidra rerun or MAME needed:
+
+```bash
+git pull --ff-only
+python3 src/region_codegen.py --input out/functions.ir.json \
+  --entry 0x6000 --stop-before 0x6016 --out out/generated
+node scripts/verify-boot-prefix.mjs
+```
+
+The Node verifier checks the **384-byte sprite RAM initialization** at
+`0x1e00..0x1f7f` and checks that no other memory changes.
+The output report is `out/generated/boot-prefix.report.json` and explicitly
+says `generated-not-equivalence-verified`.
+A successful isolated prefix does not unblock full-game codegen, which
+still requires modeled interrupt behavior.

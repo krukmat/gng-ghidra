@@ -129,7 +129,7 @@ CASES
 }
 '''
 
-def compile_function(func: dict) -> str:
+def compile_function(func: dict, boundary_address: int | None = None) -> str:
     if func['bank_context'] != 'bank4':
         raise Unsupported('Unknown ROM bank context')
     if func.get('truncated'):
@@ -147,7 +147,7 @@ def compile_function(func: dict) -> str:
         for p in item['pcode']:
             if p['op'] in ('BRANCH', 'CBRANCH'):
                 target = integer(p['inputs'][0]['offset']) if p['inputs'] else -1
-                if target not in pcs: raise Unsupported(f'Unresolved branch 0x{pc:x} -> 0x{target:x}')
+                if target not in pcs and target != boundary_address: raise Unsupported(f'Unresolved branch 0x{pc:x} -> 0x{target:x}')
         opcodes = '\n'.join('          ' + emission(p) for p in item['pcode'])
         fall = item['fallthrough']
         if fall is None: fall = pc + len(bytes.fromhex(item['raw']))
@@ -160,7 +160,13 @@ def compile_function(func: dict) -> str:
         break;
       }}'''
         cases.append(case)
-    return HEADER.replace('ENTRY', str(integer(func['entry']))).replace('CASES', '\n'.join(cases))
+    result = HEADER.replace('ENTRY', str(integer(func['entry']))).replace('CASES', '\n'.join(cases))
+    if boundary_address is not None:
+        # This is a partial region, NOT a translation of SYNC or interrupt timing.
+        sentinel = ('    if (pc === ' + str(boundary_address) +
+                    ") return { registers, steps, pc, memory, status: 'suspended-before-SYNC' };\n")
+        result = result.replace('  while(true) {\n', '  while(true) {\n' + sentinel, 1)
+    return result
 
 def compile_bundle(bundle: dict, output_dir: Path):
     output_dir.mkdir(parents=True, exist_ok=True)
