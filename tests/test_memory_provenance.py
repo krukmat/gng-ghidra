@@ -53,8 +53,12 @@ class PointerProvenanceTests(unittest.TestCase):
         self.assertFalse(mixed['safe'])
 
     def test_memory_load_output_is_not_inferred_from_address(self):
-        ptr=v('unique',0x350,1)
-        output=profile(fun([mem(v('register',24,2)),mem(ptr,'STORE')]))
+        # A 16-bit memory-derived pointer is unconstrained, unlike an
+        # 8-bit value whose entire 0..255 range is legitimately in RAM.
+        ptr=v('unique',0x350,2)
+        ld=mem(v('register',24,2))
+        ld['output']=ptr
+        output=profile(fun([ld,mem(ptr,'STORE')]))
         self.assertEqual(output[1]['bucket'],'other-memory-value')
         self.assertFalse(output[1]['safe'])
 
