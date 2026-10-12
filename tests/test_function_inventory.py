@@ -315,3 +315,46 @@ class AnchoredJsRProbeTests(unittest.TestCase):
         # independently anchored byte probe, not a confirmed execution path.
         self.assertEqual([p['call_site'] for p in probes], ['0x65d6'])
         self.assertEqual([p['target'] for p in probes], ['0x6772'])
+
+
+class GhidraAnchoredJsRConfirmationTests(unittest.TestCase):
+    def _fixture(self):
+        raw, image = synthetic()
+        image = bytearray(image)
+        # After the already Ghidra-decoded 0x6000 CALL, the ROM contains
+        # a second syntactic JSR. Real instruction verification is done
+        # by the Java exporter; this fixture simulates its JSON contract.
+        image[0x6003:0x6006] = bytes.fromhex('bd65fb')
+        raw['functions'][0]['instructions'] = raw['functions'][0]['instructions'][:1]
+        raw['anchored_verified_calls'] = [{
+            'anchor_call_site':'0x6000','call_site':'0x6003',
+            'target':'0x65fb','source':'ghidra-anchored-jsr',
+            'ghidra_decoded':True,'return_semantics_verified':False
+        }]
+        raw['anchored_rejected_probes'] = []
+        return raw, bytes(image)
+
+    def test_confirmation_adds_candidate_not_false_pure_function(self):
+        raw, image = self._fixture()
+        result, _ = inventory(raw, image)
+        candidate = next(c for c in result['candidates'] if c['entry'] == '0x65fb')
+        self.assertTrue(candidate['independent_entry_evidence'])
+        self.assertEqual(candidate['discovery'], 'not-yet-exported')
+        self.assertIn('anchored-call-return-not-verified', candidate['review_blockers'])
+        self.assertEqual(len(result['ghidra_confirmed_anchored_calls']), 1)
+
+    def test_confirmed_call_must_match_rom_opcode_and_target(self):
+        raw, image = self._fixture()
+        raw['anchored_verified_calls'][0]['target'] = '0x6755'
+        with self.assertRaisesRegex(ValueError,'Anchored JSR target mismatch'):
+            inventory(raw,image)
+        raw, image = self._fixture()
+        raw['anchored_verified_calls'][0]['call_site'] = '0x6004'
+        with self.assertRaisesRegex(ValueError, 'Unaligned anchored JSR'):
+            inventory(raw,image)
+
+    def test_fake_return_verification_rejected(self):
+        raw, image = self._fixture()
+        raw['anchored_verified_calls'][0]['return_semantics_verified'] = True
+        with self.assertRaisesRegex(ValueError,'Invalid anchored JSR confirmation'):
+            inventory(raw,image)
