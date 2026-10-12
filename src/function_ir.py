@@ -12,6 +12,23 @@ from pathlib import Path
 SCHEMA = 'gng.function-ir.v1'
 ROM_RANGES = ((0x4000, 0x6000), (0x6000, 0x10000))  # 0x4000 bank4 only
 
+# Ghidra 12.1.4 exports the default 6809 memory space as "RAM".  Normalize
+# *only* known default P-code spaces, not arbitrary named memory overlays.
+KNOWN_SPACES = frozenset({'const', 'ram', 'register', 'unique'})
+
+def canonical_space(raw: str) -> str:
+    if not isinstance(raw, str):
+        raise ValueError(f'Unsupported varnode space: {raw!r}')
+    candidate = raw.casefold()
+    if candidate not in KNOWN_SPACES:
+        raise ValueError(f'Unsupported varnode space: {raw}')
+    return candidate
+
+def canonical_memory_space(raw: str) -> str:
+    # A named nondefault LOAD/STORE space stays unsupported by the emitter.
+    # Only the Ghidra default RAM space is safely mapped to our flat memory.
+    return 'ram' if isinstance(raw, str) and raw.casefold() == 'ram' else raw
+
 def integer(s: str) -> int:
     if not isinstance(s, str) or not s.startswith('0x'):
         raise ValueError(f'Expected hex address, got {s!r}')
@@ -20,14 +37,13 @@ def integer(s: str) -> int:
 def node(v: dict) -> dict:
     if set(v) != {'space', 'offset', 'size'}:
         raise ValueError(f'Invalid P-code varnode fields: {v}')
-    if v['space'] not in {'const', 'ram', 'register', 'unique'}:
-        raise ValueError(f'Unsupported varnode space: {v["space"]}')
+    space = canonical_space(v['space'])
     if not isinstance(v['size'], int) or not 1 <= v['size'] <= 8:
         raise ValueError(f'Unsupported varnode size: {v}')
     off = integer(v['offset'])
     if off < 0 or off > (1 << 64) - 1:
         raise ValueError('Invalid varnode offset')
-    return {'space': v['space'], 'offset': v['offset'], 'size': v['size']}
+    return {'space': space, 'offset': v['offset'], 'size': v['size']}
 
 def normalize_function(func: dict) -> dict:
     raw = func['instructions']
@@ -51,7 +67,7 @@ def normalize_function(func: dict) -> dict:
                 raise ValueError('Missing P-code opcode')
             micro.append({'op': op, 'output': node(p['output']) if p.get('output') else None,
                           'inputs': [node(x) for x in p['inputs']],
-                          **({'space_name': p['space_name']} if 'space_name' in p else {})})
+                          **({'space_name': canonical_memory_space(p['space_name'])} if 'space_name' in p else {})})
         status = obj.get('pcode_status', 'native' if micro else 'unmodeled-empty-pcode')
         if not micro:
             if status == 'verified-nop':

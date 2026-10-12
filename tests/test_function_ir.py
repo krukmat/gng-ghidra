@@ -109,3 +109,58 @@ class EmptyPcodeTests(unittest.TestCase):
         raw['truncated'] = True
         with self.assertRaisesRegex(Unsupported, 'Partial CFG'):
             compile_function(normalize_function(raw))
+
+class GhidraAddressSpaceRegressionTests(unittest.TestCase):
+    """Ghidra 12.1.4 on macOS uses uppercase RAM for its default memory space."""
+
+    def test_actual_exported_ram_alias_in_pcode_branch(self):
+        first = {'address': '0x7000', 'length': 2, 'raw': '20fe',
+                 'assembly': 'BRA 0x7000', 'flow_type': 'UNCONDITIONAL_JUMP',
+                 'fallthrough': None, 'flows': ['0x7000'], 'pcode_status': 'native',
+                 'pcode': [{'op': 'BRANCH', 'output': None,
+                            'inputs': [{'space': 'RAM', 'offset': '0x7000', 'size': 2}]}]}
+        f = {'entry': '0x7000', 'name': 'rom_7000', 'bank_context': 'bank4',
+             'instructions': [first]}
+        ir = normalize_function(f)
+        item = ir['blocks'][0]['instructions'][0]['pcode'][0]
+        self.assertEqual(item['inputs'][0]['space'], 'ram')
+        js = compile_function(ir)
+        self.assertIn('pc = 28672', js)
+
+    def test_uppercase_default_ram_space_on_load_codegen(self):
+        f = simple([{'op': 'LOAD', 'output': {'space': 'REGISTER', 'offset': '0x0', 'size': 1},
+                     'inputs': [{'space': 'CONST', 'offset': '0x1', 'size': 1},
+                                {'space': 'CONST', 'offset': '0x1e00', 'size': 2}],
+                     'space_name': 'RAM'},
+                    {'op': 'RETURN', 'output': None, 'inputs': [C(0)]}])
+        ir = normalize_function(f)
+        p = ir['blocks'][0]['instructions'][0]['pcode'][0]
+        self.assertEqual(p['space_name'], 'ram')
+        self.assertEqual(p['output']['space'], 'register')
+        self.assertEqual(p['inputs'][0]['space'], 'const')
+        js = compile_function(ir)
+        self.assertIn('memRead(', js)
+
+    def test_unknown_overlay_varnode_still_rejected(self):
+        f = simple()
+        f['instructions'][0]['pcode'][0]['output']['space'] = 'BANK_3'
+        with self.assertRaisesRegex(ValueError, 'Unsupported varnode space'):
+            normalize_function(f)
+
+    def test_unknown_memory_overlay_not_treated_as_default_ram(self):
+        f = simple([{'op': 'LOAD', 'output': R(0, 1),
+                     'inputs': [C(1, 1), C(0x1000, 2)], 'space_name': 'BANK_3'},
+                    {'op': 'RETURN', 'output': None, 'inputs': [C(0)]}])
+        with self.assertRaisesRegex(Unsupported, 'unknown memory space'):
+            compile_function(normalize_function(f))
+
+    def test_full_bundle_with_ghidra_uppercase_spaces(self):
+        f = simple([{'op': 'COPY', 'output': {'space': 'REGISTER', 'offset': '0x0', 'size': 2},
+                     'inputs': [{'space': 'CONST', 'offset': '0x1234', 'size': 2}]},
+                    {'op': 'RETURN', 'output': None, 'inputs': [C(0)]}])
+        bundle = normalize({'schema': 'gng.ghidra-functions.v1',
+                            'processor': '6809:BE:16:default', 'bank_context': 'bank4',
+                            'functions': [f], 'skipped': []})
+        self.assertEqual(len(bundle['functions']), 1)
+        self.assertEqual(bundle['skipped'], [])
+        self.assertIn('case 28672', compile_function(bundle['functions'][0]))

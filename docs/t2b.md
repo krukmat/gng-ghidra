@@ -140,3 +140,30 @@ A CODEGEN_BLOCKED mentioning SYNC is an expected safety limit, not
 a completed translation of hardware behavior.
 
 Source: https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Processors/MC6800/data/languages/6x09.sinc
+
+## Ghidra default RAM space normalization (2026-10-12)
+
+The operator's real Ghidra 12.1.4 export contains typed P-code varnodes with
+`space: "RAM"`. The first IR normalizer incorrectly accepted only lowercase
+`ram`, so Ghidra's successful function export was discarded at normalization
+with `Unsupported varnode space: RAM`.
+
+The IR now canonicalizes only the four known default P-code spaces
+(`const`, `ram`, `register`, `unique`) case-insensitively. It also
+canonicalizes the default `LOAD`/`STORE` memory `space_name: "RAM"`
+to `ram`. Unrecognized banks, overlays, and MMIO semantics are **not**
+accepted silently; they remain rejected or blocked by code generation.
+
+**No need to rerun Ghidra** when `out/functions.raw.json` was successfully
+exported. After pulling, resume from the JSON directly:
+
+```bash
+git pull --ff-only
+python3 src/function_ir.py --input out/functions.raw.json \
+  --out out/functions.ir.json --report out/functions.report.json
+cat out/functions.report.json
+```
+
+The normalizer can PASS even when code generation is BLOCKED for real CPU
+semantics (SYNC, external control flow, hardware reads, etc.). Actual
+behavioral equivalence of complete functions is not yet demonstrated.
