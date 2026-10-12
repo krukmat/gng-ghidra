@@ -116,6 +116,12 @@ def verify_raw(raw: dict, image: bytes) -> None:
             unique.add(pc)
             if bs != image[pc:pc + len(bs)]:
                 raise ValueError(f'ROM bytes differ from Ghidra at {hx(pc)} (stale or wrong export)')
+            # A missing Ghidra fallthrough can be reconstructed *syntactically*
+            # for direct CALLs on a 6809, not as evidence the callee returns.
+            if ins.get('fallthrough_source') == '6809-call-return-inferred':
+                if ('CALL' not in ins.get('flow_type', '').upper()
+                        or ins.get('fallthrough') != hx(pc + len(bs))):
+                    raise ValueError(f'Invalid inferred call continuation at {hx(pc)}')
         if entry not in unique:
             raise ValueError(f'Function entry {hx(entry)} missing from its own instructions')
         if 'direct_calls' in fun and fun['direct_calls'] != direct_call_records(fun):
@@ -161,6 +167,10 @@ def classify(function: dict, is_interrupt: bool) -> tuple[list[str], dict]:
         reasons.append('truncated-control-flow-graph')
     if calls:
         reasons.append('has-direct-callees')
+    speculative = [ins['address'] for ins in insns
+                   if ins.get('fallthrough_source') == '6809-call-return-inferred']
+    if speculative:
+        reasons.append('call-return-continuation-unverified')
     if any(op in ('CALL', 'CALLIND') for op in ops) and not calls:
         reasons.append('unresolved-or-indirect-call')
     if indirect:
@@ -194,6 +204,7 @@ def classify(function: dict, is_interrupt: bool) -> tuple[list[str], dict]:
                                     for ins in insns),
                'unsupported_operators': unsupported_ops,
                'bank_select_write_sites': bank_select_sites,
+               'speculative_call_continuation_sites': speculative,
                'external_jump_count': len(external_jumps)}
     return reasons, metrics
 

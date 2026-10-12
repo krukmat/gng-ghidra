@@ -176,3 +176,21 @@ still needs validation on the operator's real Ghidra instance.
 No hardware bypass, emulator dependency or behavioral equivalence
 is claimed. Prioritize *other* genuinely isolated routines after
 the next discovery run.
+
+## Call continuation provenance hardening
+
+Operator-validated T2.B.6/7 baseline: Ghidra exported 3 entries and one
+direct call, while the shortlist contained zero eligible pure routines.
+The post-CALL discovery extension is committed separately; its expanded
+real-ROM result still requires Ghidra execution on the operator's Mac.
+
+An inferred return-to-next-instruction has source
+`6809-call-return-inferred`. The ROM-authenticated inventory now verifies
+that the source instruction is a decoded CALL and the destination equals
+its verified next byte boundary, and labels the owning graph
+`call-return-continuation-unverified`. This provenance is preserved in
+the normalized IR. Crucially it is not a proof of runtime callee return,
+independent function bounds, or behavioral equivalence.
+
+The bank selector `0x3e00` and indirect bank jumps remain blocked from
+standalone code generation. Do not choose 0x65fb as an independent leaf.

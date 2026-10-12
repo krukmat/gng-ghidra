@@ -228,3 +228,29 @@ class RealBankSelectorPatternTests(unittest.TestCase):
         inv, _ = inventory(raw, bytes(image))
         candidate = next(c for c in inv['candidates'] if c['entry'] == '0x7000')
         self.assertIn('writes-bank-select-register: 0x3e00', candidate['review_blockers'])
+
+class InferredCallFlowRegressions(unittest.TestCase):
+    def test_inferred_return_continuation_does_not_make_pure_routine(self):
+        raw, image = synthetic()
+        raw['functions'][0]['instructions'][0]['fallthrough_source'] = '6809-call-return-inferred'
+        inv, _ = inventory(raw, image)
+        found = next(x for x in inv['candidates'] if x['entry'] == '0x6000')
+        self.assertIn('call-return-continuation-unverified', found['review_blockers'])
+        self.assertEqual(found['metrics']['speculative_call_continuation_sites'], ['0x6000'])
+
+    def test_forged_inferred_continuation_fails_closed(self):
+        raw, image = synthetic()
+        call = raw['functions'][0]['instructions'][0]
+        call['fallthrough_source'] = '6809-call-return-inferred'
+        call['fallthrough'] = '0x6123'
+        with self.assertRaisesRegex(ValueError, 'Invalid inferred call continuation'):
+            inventory(raw, image)
+
+    def test_inference_for_noncall_fails_closed(self):
+        raw, image = synthetic()
+        call = raw['functions'][0]['instructions'][0]
+        call['fallthrough_source'] = '6809-call-return-inferred'
+        call['flow_type'] = 'FALL_THROUGH'
+        call['flows'] = []
+        with self.assertRaisesRegex(ValueError, 'Invalid inferred call continuation'):
+            inventory(raw, image)

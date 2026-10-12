@@ -83,7 +83,9 @@ def normalize_function(func: dict) -> dict:
         flows = [integer(x) for x in obj['flows']]
         ins.append({'address': obj['address'], 'raw': obj['raw'], 'assembly': obj['assembly'],
                     'next': f'0x{pc + length:x}', 'flow_type': obj['flow_type'],
-                    'fallthrough': falls[0] if falls else None, 'flows': flows, 'pcode': micro,
+                    'fallthrough': falls[0] if falls else None,
+                    'fallthrough_source': obj.get('fallthrough_source', 'ghidra-or-legacy'),
+                    'flows': flows, 'pcode': micro,
                     'pcode_status': status})
     ins.sort(key=lambda i: integer(i['address']))
     pcs = {integer(x['address']) for x in ins}
