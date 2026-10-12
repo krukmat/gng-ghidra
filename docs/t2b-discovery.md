@@ -233,3 +233,48 @@ python3 src/function_inventory.py --input out/functions.raw.json \
 
 The corresponding Ghidra rerun is required **only** to validate the new
 work-queue priority and discover the candidate functions themselves.
+
+## Real-ROM repeat: still 3 entries; Ghidra-anchored JSR verification
+
+The operator repeated the full Ghidra 12.1.4 headless run on the
+call-continuation-priority build. The result **remained** three
+exported entries, one decoded direct call and zero eligible leaf
+routines. The ROM-only inventory also printed no
+`GNG_ANCHORED_JSR_PROBES` line.
+
+Direct byte inspection of the *matching local* gngb bank-4 flat image
+confirms seven contiguous MC6809 `BD xxxx` encodings at
+`0x65d3..0x65e7`. The absence of ROM-only probes means the old
+probe's `decoded_sites` suppression rule or the anchor/continuation
+classification prevented output; the prior log does not distinguish
+these conditions. **Do not report the calls as proven execution edges.**
+
+The exporter now independently asks Ghidra to disassemble each
+three-byte `JSR` after a **decoded** call anchor. It verifies the
+mnemonic, instruction size, Ghidra flow type, and flow destination
+against the encoded ROM target. Results appear in
+`anchored_verified_calls` or `anchored_rejected_probes`;
+the console prints `GNG_ANCHORED_JSR_VERIFIED` or
+`GNG_ANCHORED_JSR_REJECT`. Confirmed targets can become bounded
+export seeds, but the originating call's return behavior remains
+unverified. No Ghidra or synthetic stub tests assert a playable game.
+
+The inventory independently rechecks the 0xBD opcode, target word,
+verified call anchor and 3-byte alignment in the ROM. Verified anchored
+candidates are **not** counted as pure functions: the shortlist
+retains `anchored-call-return-not-verified` among its blockers.
+The result also reports
+`GNG_GHIDRA_ANCHORED_JSR=REVIEW verified=N rejected=M`,
+including rejection reasons.
+
+To validate with real Ghidra:
+
+```bash
+git pull --ff-only
+bash scripts/functions-headless.sh "$PWD/roms/gng.zip"
+grep -E 'GNG_ANCHORED_JSR|GNG_FUNCTION_EXPORT' out/functions-ghidra.log | tail -40
+cat out/functions-shortlist.json
+```
+
+Ghidra's script compilation/execution still must run on the Mac.
+Java preflight stubs and synthetic inventory regression tests pass in CI.
