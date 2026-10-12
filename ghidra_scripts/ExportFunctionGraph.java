@@ -184,6 +184,81 @@ public class ExportFunctionGraph extends GhidraScript {
         f.add("instructions", code);
         return f;
     }
+    // Decode call sites only after a Ghidra-confirmed CALL anchor.
+    // This verifies instruction boundaries, not that its callee returns.
+    private void probeAnchoredJsrs(JsonObject exportedFunction,
+                                  ArrayDeque<Address> pending,
+                                  JsonArray verified,
+                                  JsonArray rejected,
+                                  HashSet<Long> probed) {
+        JsonArray instructions = exportedFunction.getAsJsonArray("instructions");
+        for (int i = 0; i < instructions.size(); i++) {
+            JsonObject origin = instructions.get(i).getAsJsonObject();
+            if (!origin.get("flow_type").getAsString().contains("CALL")) continue;
+            long anchor = Long.decode(origin.get("address").getAsString());
+            long cursor = anchor + origin.get("length").getAsInt();
+            for (int n = 0; n < 12 && cursor + 3 <= 0x10000; n++) {
+                if (probed.contains(cursor)) break;
+                try {
+                    Address location = toAddr(cursor);
+                    if (!inRom(location)) break;
+                    int opcode = currentProgram.getMemory().getByte(location) & 0xff;
+                    if (opcode != 0xbd) break; // 6809 JSR extended only.
+                    probed.add(cursor);
+                    int high = currentProgram.getMemory().getByte(toAddr(cursor + 1)) & 0xff;
+                    int low = currentProgram.getMemory().getByte(toAddr(cursor + 2)) & 0xff;
+                    int encodedTarget = (high << 8) | low;
+                    Instruction jsr = currentProgram.getListing().getInstructionAt(location);
+                    if (jsr == null) {
+                        disassemble(location);
+                        jsr = currentProgram.getListing().getInstructionAt(location);
+                    }
+                    boolean valid = jsr != null
+                        && jsr.getAddress().getOffset() == cursor
+                        && jsr.getLength() == 3
+                        && "JSR".equalsIgnoreCase(jsr.getMnemonicString())
+                        && jsr.getFlowType().isCall();
+                    if (valid) {
+                        boolean confirmed = false;
+                        for (Address target : jsr.getFlows()) {
+                            if (target.getOffset() == encodedTarget && inRom(target))
+                                confirmed = true;
+                        }
+                        valid = confirmed;
+                    }
+                    JsonObject record = new JsonObject();
+                    record.addProperty("anchor_call_site", hex(anchor));
+                    record.addProperty("call_site", hex(cursor));
+                    record.addProperty("target", hex(encodedTarget));
+                    record.addProperty("source", "ghidra-anchored-jsr");
+                    record.addProperty("ghidra_decoded", valid);
+                    record.addProperty("return_semantics_verified", false);
+                    if (!valid) {
+                        record.addProperty("reason", jsr == null ? "Ghidra could not decode" :
+                            "Ghidra instruction/flow mismatch: " + jsr.toString());
+                        rejected.add(record);
+                        println("GNG_ANCHORED_JSR_REJECT=" + hex(cursor) + " target=" +
+                            hex(encodedTarget));
+                        break;
+                    }
+                    verified.add(record);
+                    pending.add(toAddr(encodedTarget));
+                    println("GNG_ANCHORED_JSR_VERIFIED=" + hex(cursor) + " target=" +
+                        hex(encodedTarget) + " anchor=" + hex(anchor));
+                    cursor += 3;
+                } catch (Exception e) {
+                    JsonObject error = new JsonObject();
+                    error.addProperty("anchor_call_site", hex(anchor));
+                    error.addProperty("call_site", hex(cursor));
+                    error.addProperty("reason", e.toString());
+                    rejected.add(error);
+                    println("GNG_ANCHORED_JSR_ERROR=" + hex(cursor) + " " + e);
+                    break;
+                }
+            }
+        }
+    }
+
     @Override
     protected void run() throws Exception {
         if (!CPU.equals(currentProgram.getLanguageID().toString()))
@@ -212,6 +287,9 @@ public class ExportFunctionGraph extends GhidraScript {
         HashSet<Long> seen = new HashSet<>();
         JsonArray exported = new JsonArray();
         JsonArray skipped = new JsonArray();
+        JsonArray anchoredVerified = new JsonArray();
+        JsonArray anchoredRejected = new JsonArray();
+        HashSet<Long> probedAnchors = new HashSet<>();
         boolean anyTruncated = false;
         while (!pending.isEmpty() && exported.size() < MAX_FUNCTIONS) {
             Address entry = pending.removeFirst();
@@ -220,6 +298,8 @@ public class ExportFunctionGraph extends GhidraScript {
                 JsonObject exportedFunction = exportSeed(entry, pending);
                 if (exportedFunction.get("truncated").getAsBoolean()) anyTruncated = true;
                 exported.add(exportedFunction);
+                probeAnchoredJsrs(exportedFunction, pending, anchoredVerified,
+                                  anchoredRejected, probedAnchors);
             } catch (Exception e) {
                 JsonObject skip = new JsonObject();
                 skip.addProperty("entry", hex(entry.getOffset()));
@@ -237,6 +317,8 @@ public class ExportFunctionGraph extends GhidraScript {
         root.add("functions", exported);
         root.add("skipped", skipped);
         root.add("vectors", vectors);
+        root.add("anchored_verified_calls", anchoredVerified);
+        root.add("anchored_rejected_probes", anchoredRejected);
         root.addProperty("discovery_mode", "cpu-vectors-and-decoded-direct-calls");
         File dest = new File(args[0]);
         File parent = dest.getAbsoluteFile().getParentFile();
@@ -244,6 +326,8 @@ public class ExportFunctionGraph extends GhidraScript {
             throw new IllegalStateException("Output directory missing: " + dest);
         try (FileWriter w = new FileWriter(dest)) { w.write(root.toString()); }
         println("GNG_FUNCTION_EXPORT=" + (exported.size() > 0 ? "PASS" : "EMPTY") +
-                " functions=" + exported.size() + " skipped=" + skipped.size() + " " + dest);
+                " functions=" + exported.size() + " skipped=" + skipped.size() +
+                " anchored_verified=" + anchoredVerified.size() +
+                " anchored_rejected=" + anchoredRejected.size() + " " + dest);
     }
 }
