@@ -156,3 +156,25 @@ from IRQ to `0x65fb`. The shortlist remains `PARTIAL` (`eligible=0`).
 Entry `0x65fb` writes to the hardware ROM bank-select register
 `0x3e00` and uses indirect dispatch; do **not** treat it as an isolated
 function or bypass hardware checks. See [discovery status](docs/t2b-discovery.md).
+
+### Real-ROM discovery update — 2026-10-12
+
+The operator's Ghidra 12.1.4 run recovered **14 ROM-rooted code graphs** and
+confirmed seven 6809 extended `JSR` instruction sites with the Ghidra
+`PseudoDisassembler` and the ISA's `0xBD` operand. No anchored sites
+were rejected in that run. This confirms **static decoding only** — it
+does not prove execution reachability, isolated function boundaries or
+behavioral equivalence.
+
+To inspect **all candidates** and their compiler blockers after pulling,
+without re-running Ghidra:
+
+```bash
+python3 src/function_inventory.py --input out/functions.raw.json \
+  --rom-image out/gngb-flat.bin --out out/functions-inventory.json \
+  --shortlist out/functions-shortlist.json
+python3 scripts/triage-functions.py
+```
+
+T2.B.7 remains open until independent, bounded ROM routines are
+selected and validated. See [Ghidra discovery evidence](docs/t2b-discovery.md).

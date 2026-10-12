@@ -352,3 +352,62 @@ python3 tests/test_java_preflight.py
 bash scripts/functions-headless.sh "$PWD/roms/gng.zip"
 grep -E 'GNG_ANCHORED_JSR|GNG_FUNCTION_EXPORT' out/functions-ghidra.log | tail -40
 ```
+
+## Real Ghidra validation of seven JSR instruction sites (2026-10-12)
+
+The operator's Ghidra 12.1.4 headless run resolved **seven** previously
+rejected `JSR` sites using the MC6809 extended-instruction target encoding.
+Actual terminal output:
+
+```text
+GNG_ANCHORED_JSR_VERIFIED=0x65d3 target=0x6755
+GNG_ANCHORED_JSR_VERIFIED=0x65d6 target=0x6772
+GNG_ANCHORED_JSR_VERIFIED=0x65d9 target=0x622c
+GNG_ANCHORED_JSR_VERIFIED=0x65dc target=0x7930
+GNG_ANCHORED_JSR_VERIFIED=0x65df target=0x67b3
+GNG_ANCHORED_JSR_VERIFIED=0x65e2 target=0x6239
+GNG_ANCHORED_JSR_VERIFIED=0x65e5 target=0x6274
+GNG_FUNCTION_EXPORT=PASS functions=14 skipped=0 anchored_verified=7 anchored_rejected=0
+```
+
+Each site reported `listing_matches=true`,
+`resolution=6809-jsr-extended-operand`, and
+`reachability=unverified`. Therefore these are proven
+**static JSR encodings and destinations**, not evidence of seven
+dynamically executed calls or fourteen independent routines.
+
+### Separate independent-callee safety from caller reachability
+
+Previously, any callee with an anchored incoming `JSR` was blocked
+because the caller's runtime return behavior had not been verified.
+That conflated entry *reachability* with isolated *callee safety*.
+
+The inventory now records `anchored-call-reachability-unverified`
+as an `evidence_caveats` item instead of a callee `review_blocker`.
+All callee-specific restrictions remain unchanged: missing returns,
+incomplete/overlapping CFGs, unsupported P-code, unresolved calls or
+branching, dynamic/unsafe memory, bank selection, MMIO, and incorrect
+bank context. This is a triage distinction, **not** permission to
+claim executed calls, drop MMIO restrictions, or consider a routine
+behaviorally equivalent.
+
+The latest operator run does not include the complete shortlist or
+codegen report, so the number of eligible independent routines is
+**not established** yet.
+
+The top-three shortlist can hide other candidates. The new
+`scripts/triage-functions.py` prints every currently discovered entry,
+its provenance, CPU/flow blockers and compiler failure. It requires no
+new Ghidra execution:
+
+```bash
+git pull --ff-only
+python3 src/function_inventory.py --input out/functions.raw.json \
+  --rom-image out/gngb-flat.bin --out out/functions-inventory.json \
+  --shortlist out/functions-shortlist.json
+python3 scripts/triage-functions.py
+```
+
+T2.B.6 is verified for the expanded discovery; T2.B.7 remains open
+until actual complete leaf candidates and independent behavioral
+reference vectors are available.
