@@ -114,3 +114,22 @@ T2.B.8 uses the produced inventory to pick genuinely bounded leaf functions
 and implement only the P-code operators they require. T2.B.9 supplies
 independent state vectors. Do not start hardware emulation or bypass unknown
 MMIO semantics to force an artificial PASS.
+
+## Ghidra Java compiler preflight (2026-10-12)
+
+The B.6/B.7 exporter initially failed on Ghidra 12.1.4 because a local
+JsonArray named calls collided with the ArrayDeque parameter calls
+in exportSeed(). The subsequent ClassNotFoundException resulted from
+the failed script compilation; it was not an installation issue.
+
+The local JSON variable is now named directCalls, preserving the
+direct_calls JSON field. CI now runs Java 21 javac against **minimal
+tracked-in-Python API stubs** for both exporter scripts; a negative
+regression verifies that the original name collision is rejected.
+Run the same preflight locally with:
+
+    python3 tests/test_java_preflight.py
+
+This is a source-level Java preflight, **not** validation against the
+actual Ghidra 12.1.4 JAR APIs or actual ROM execution. The latter
+still requires the operator's Ghidra headless run.
