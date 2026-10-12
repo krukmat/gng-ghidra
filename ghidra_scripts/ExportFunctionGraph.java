@@ -55,12 +55,15 @@ public class ExportFunctionGraph extends GhidraScript {
         ArrayDeque<Address> todo = new ArrayDeque<>();
         HashSet<Long> seen = new HashSet<>();
         ArrayList<Instruction> found = new ArrayList<>();
+        boolean truncated = false;
         todo.add(entry);
         while (!todo.isEmpty()) {
             Address pc = todo.removeFirst();
             if (!inRom(pc) || !seen.add(pc.getOffset())) continue;
-            if (found.size() >= MAX_INSTRUCTIONS)
-                throw new IllegalStateException("Instruction budget exceeded at " + entry);
+            if (found.size() >= MAX_INSTRUCTIONS) {
+                truncated = true;
+                break;
+            }
             Instruction inst = currentProgram.getListing().getInstructionAt(pc);
             if (inst == null) {
                 disassemble(pc);
@@ -70,8 +73,8 @@ public class ExportFunctionGraph extends GhidraScript {
             if (inst.getAddress().getOffset() + inst.getLength() > 0x10000)
                 throw new IllegalStateException("Instruction crosses image end: " + pc);
             found.add(inst);
-            if (inst.getPcode().length == 0)
-                throw new IllegalStateException("Missing P-code at " + pc);
+            // Empty SLEIGH semantic bodies occur for NOP and SYNC.
+            // SYNC waits for an interrupt; never assume it is a NOP.
             for (Address dest : inst.getFlows()) {
                 if (!inRom(dest)) continue;
                 if (inst.getFlowType().isCall()) calls.add(dest);
@@ -100,6 +103,14 @@ public class ExportFunctionGraph extends GhidraScript {
             JsonArray micro = new JsonArray();
             for (PcodeOp op : inst.getPcode()) micro.add(pcodeOp(op));
             rec.add("pcode", micro);
+            if (micro.size() == 0) {
+                if ("12".equals(raw.toString()) && "NOP".equals(inst.getMnemonicString()))
+                    rec.addProperty("pcode_status", "verified-nop");
+                else if ("13".equals(raw.toString()) && "SYNC".equals(inst.getMnemonicString()))
+                    rec.addProperty("pcode_status", "unmodeled-wait-for-interrupt");
+                else
+                    rec.addProperty("pcode_status", "unmodeled-empty-pcode");
+            } else rec.addProperty("pcode_status", "native");
             code.add(rec);
         }
         JsonObject f = new JsonObject();
@@ -107,6 +118,7 @@ public class ExportFunctionGraph extends GhidraScript {
         f.addProperty("name", "rom_" + Long.toHexString(entry.getOffset()));
         f.addProperty("bank_context", "bank4");
         f.addProperty("instruction_count", found.size());
+        f.addProperty("truncated", truncated);
         f.add("instructions", code);
         return f;
     }
