@@ -62,7 +62,7 @@ It doesn't depend on React Native and can run inside a TS game-core package.
 Set `GHIDRA_HOME` to the installed Ghidra directory (the one with `support/analyzeHeadless`).
 
 ```bash
-GHIDRA_HOME=/absolute/path/to/ghidra ./scripts/ghidra-headless.sh /absolute/path/to/gng.zip
+GHIDRA_HOME=/absolute/path/to/ghidra bash scripts/ghidra-headless.sh /absolute/path/to/gng.zip
 ```
 
 The script imports `out/gngb-flat.bin` at address zero using language
