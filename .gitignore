@@ -1,0 +1,9 @@
+out/
+__pycache__/
+*.pyc
+*.zip
+*.bin
+*.rom
+*.gpr
+*.rep/
+.DS_Store
