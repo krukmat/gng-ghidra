@@ -9,8 +9,14 @@ or gameplay recording**.
 - **PASS locally (Python + Node):** real reset-loop ROM bytes → 7 decoded
   instructions (`gng.lir.v1`) → verified bounded-memory initialization IR
   (`gng.sir.v1`) → executable JS and TS.
-- **Not yet executed in Ghidra in this environment:** optional headless
-  P-code exporter and cross-check included; run locally if you have Ghidra.
+- **PASS (operator's Mac, Ghidra 12.1.4):** real-ROM P-code exporter and
+  seven-instruction independent decoder cross-check.
+- **PASS (operator's Mac):** nine-instruction boot prefix (`0x6000` up to
+  but not including `SYNC` at `0x6016`) compiled from Ghidra P-code to
+  JavaScript, executed with Node; 384 sprite RAM bytes verified and
+  execution suspended at the required boundary.
+- **T2.B still partial:** complete function translation, interrupt handling,
+  and three independently verified real ROM routines remain pending.
 - **Not a playable port:** physics, graphics, Z80 sound, and other ROM banks
   have not been translated. No entire 6809 emulator is involved in the
   generated output.
@@ -69,7 +75,8 @@ The script imports `out/gngb-flat.bin` at address zero using language
 `6809:BE:16:default`, decodes the bounded routine, exports P-code to
 `out/reset-pcode.json`, and compares every instruction's address and raw bytes
 against the Python LIR. It fails if Ghidra cannot decode or disagrees.
-**This optional Ghidra step is supplied but has not been run here.**
+**This Ghidra cross-check was executed successfully on the operator's Mac.
+It is not part of ROM-free CI.**
 
 ## Architecture and limits
 
@@ -104,7 +111,20 @@ node --test tests/test_function_generated.mjs
 tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution node out-synthetic/functions/generated/*.ts
 ```
 
-**Important:** The generic new pipeline has passed synthetic tests, but the new
-Ghidra function exporter still needs a real Mac/headless run. The previous
-7-instruction real-ROM proof remains separate and verified. See
-[docs/t2b.md](docs/t2b.md) for status and operational acceptance criteria.
+**Verified on real ROM:** the generalized Ghidra exporter and normalizer
+recovered one CFG rooted at reset `0x6000`. Full-routine code generation
+correctly blocks on `SYNC`, but the bounded boot prefix translates and
+passes the memory invariant check in Node:
+```bash
+python3 src/region_codegen.py --input out/functions.ir.json \
+  --entry 0x6000 --stop-before 0x6016 --out out/generated
+node scripts/verify-boot-prefix.mjs
+```
+Results supplied by the operator: `GNG_REGION_CODEGEN=PASS`
+(`instructions=9`) and `GNG_BOOT_PREFIX_MEMORY=PASS`
+(`steps=389 bytes_written=384 boundary=0x6016`).
+
+**Not yet proven:** three separate real routines, full-game behavior, hardware
+interrupts, or end-to-end behavioral equivalence. See
+[docs/t2b.md](docs/t2b.md) and
+[operator evidence](docs/audit/t2b-boot-prefix-operator-evidence-2026-10-12.md).

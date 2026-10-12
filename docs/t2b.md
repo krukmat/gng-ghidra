@@ -49,7 +49,9 @@ will only export entries Ghidra can decode and recognizes as functions.
 | Real ROM initial loop -> JS | `src/poc.py` + Node test | PASS (previous work) |
 | Real ROM reset P-code cross-check | Ghidra log supplied by operator | PASS (previous work) |
 | Three distinct generic P-code routines | Synthetic fixtures + CI | PASS (synthetic only) |
-| Headless discovery of 3 **real ROM** functions | Run `scripts/functions-headless.sh` on Mac | PENDING |
+| Headless recovery of one real ROM reset CFG | Operator Ghidra 12.1.4 `functions.raw.json` and `functions.report.json` | PASS (one CFG, full codegen blocked at SYNC) |
+| Real ROM boot prefix `0x6000..0x6016` -> JS, memory invariant | Operator `GNG_REGION_CODEGEN=PASS` and `GNG_BOOT_PREFIX_MEMORY=PASS` | PASS (9 instructions, 384 bytes) |
+| Headless discovery of 3 **distinct real ROM** functions | Additional verified seeds/call targets | PENDING |
 | Three real function outputs with independent behavioral equivalence | Real 6809 reference tests / vectors | PENDING |
 
 The extractor is exploratory: it may report zero generated functions because
@@ -104,10 +106,10 @@ bash scripts/functions-headless.sh "$PWD/roms/gng.zip"
 grep -iE 'error|exception|GNG_FUNCTION|compile|script' out/functions-ghidra.log | tail -40
 ```
 
-**Evidence boundary:** The script-failure regression is tested without
-redistributing ROMs. Real Ghidra 12.1.4 execution of this new exporter is
-still pending on the operator's Mac; do not mark real-function discovery PASS
-on the strength of synthetic fixtures or a successful ROM import.
+**Evidence boundary:** Script-failure regression runs without distributing
+ROMs. The operator has now executed Ghidra 12.1.4 successfully and recovered
+one real ROM reset CFG. This does not establish three distinct real routines
+or full-routine behavioral equivalence.
 
 ## Zero-P-code SLEIGH instructions (Ghidra 12.1.4)
 
@@ -195,3 +197,24 @@ The output report is `out/generated/boot-prefix.report.json` and explicitly
 says `generated-not-equivalence-verified`.
 A successful isolated prefix does not unblock full-game codegen, which
 still requires modeled interrupt behavior.
+
+## Operator-verified real-ROM prefix (2026-10-12)
+
+Actual terminal output after updating to commit `ead21de`:
+
+```text
+GNG_REGION_CODEGEN=PASS entry=0x6000 stop_before=0x6016 instructions=9
+GNG_BOOT_PREFIX_MEMORY=PASS steps=389 bytes_written=384 boundary=0x6016
+```
+
+This verifies the P-code-derived *region* codegen and its tested
+384-byte sprite RAM memory effect in Node. The original full reset CFG
+still returns `GNG_CODEGEN=BLOCKED` on `SYNC`. The segment stops before
+`SYNC` rather than modeling an interrupt. See
+[audit evidence](audit/t2b-boot-prefix-operator-evidence-2026-10-12.md).
+
+**Next acceptance tasks:** discover and label candidate ROM routines using
+grounded entry points (e.g. ROM reset/interrupt vector targets, validated
+direct CALL destinations). Extract deterministic leaf functions, retain bank
+identity, and obtain function-specific behavioral reference vectors. Do not
+count additional segments of the same reset CFG as distinct functions.
