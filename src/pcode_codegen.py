@@ -132,12 +132,16 @@ CASES
 def compile_function(func: dict) -> str:
     if func['bank_context'] != 'bank4':
         raise Unsupported('Unknown ROM bank context')
+    if func.get('truncated'):
+        raise Unsupported('Partial CFG: instruction budget exceeded')
     if func['external_edges']:
         raise Unsupported('External edges (call, tail jump or unknown fallthrough): ' + str(func['external_edges'][:3]))
     inst = [item for b in func['blocks'] for item in b['instructions']]
     pcs = {integer(item['address']) for item in inst}
     cases = []
     for item in inst:
+        if not item['pcode'] and item.get('pcode_status') != 'verified-nop':
+            raise Unsupported(f"Unmodeled instruction {item['address']} ({item['assembly']}): {item.get('pcode_status')}")
         pc = integer(item['address'])
         # For a branch to another routine or non-instruction, refuse compiling.
         for p in item['pcode']:
