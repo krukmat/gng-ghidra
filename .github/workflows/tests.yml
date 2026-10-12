@@ -14,4 +14,6 @@ jobs:
         with:
           node-version: '22'
       - run: python3 -m unittest discover -s tests -v
+      - run: python3 tests/generate_synthetic.py
+      - run: node --test tests/test_synthetic_js.mjs
       - run: node --test tests/test_generated.mjs
