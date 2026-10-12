@@ -313,3 +313,42 @@ grep -E 'GNG_ANCHORED_JSR|GNG_FUNCTION_EXPORT|GNG_FUNCTION_SHORTLIST' \\
 ```
 
 A Java-stub CI pass is not a real Ghidra runtime test.
+
+## Root cause verified: 6809 extended JSR is COMPUTED_CALL in Ghidra
+
+Operator's Ghidra 12.1.4 output verified all seven candidate instructions
+as three-byte `JSR 0xNNNN`, but marked every one `COMPUTED_CALL` with
+`target_matches=false` when querying `getDefaultFlows()`. This is
+consistent with the upstream Ghidra 6809 SLEIGH source:
+
+- `OP2J: imm16` uses `export *[const]:2 imm16`;
+- `JSR OP2J` uses `call [target]` and thus produces an indirect call P-code
+  rather than a declared direct address edge.
+
+Source: https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Processors/MC6800/data/languages/6x09.sinc
+
+**Correction:** For a Ghidra pseudo-decoded 6809 `JSR` whose first byte
+is exactly `BD`, length exactly three, and flow type computed-call,
+if no concrete default target exists, derive the statically encoded
+16-bit target from the two following bytes. This rule does **not** apply
+to the indexed/direct JSR forms. If Ghidra provides a conflicting
+concrete target, the instruction stays rejected. The JSON now records
+`target_resolution=6809-jsr-extended-operand`,
+`target_from_isa_encoding=true`, `ghidra_flow_type=COMPUTED_CALL` and
+`return_semantics_verified=false`. The Python inventory rejects claims
+missing or mislabeling that provenance and independently checks the ROM
+opcode and address operand.
+
+This proves ISA decoding plus an explicit target interpretation, **not**
+that the previous BSR returns, that a candidate is reachable or that a
+hardware/banked function is safe to compile. New function bodies must
+still be recovered and independently tested.
+
+Mac acceptance:
+
+```bash
+git pull --ff-only
+python3 tests/test_java_preflight.py
+bash scripts/functions-headless.sh "$PWD/roms/gng.zip"
+grep -E 'GNG_ANCHORED_JSR|GNG_FUNCTION_EXPORT' out/functions-ghidra.log | tail -40
+```

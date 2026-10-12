@@ -223,18 +223,33 @@ public class ExportFunctionGraph extends GhidraScript {
                         && "JSR".equalsIgnoreCase(jsr.getMnemonicString())
                         && jsr.getFlowType().isCall();
                     boolean targetMatches = false;
+                    boolean hasConcreteFlow = false;
                     if (valid) {
                         Address[] flows = jsr.getDefaultFlows();
                         if (flows != null) {
                             for (Address target : flows) {
-                                if (target != null && target.isMemoryAddress()
-                                        && target.getOffset() == encodedTarget
-                                        && inRom(target))
+                                if (target == null || !target.isMemoryAddress()) continue;
+                                hasConcreteFlow = true;
+                                if (target.getOffset() == encodedTarget && inRom(target))
                                     targetMatches = true;
                             }
                         }
                     }
-                    valid = valid && targetMatches;
+                    // Ghidra MC6800 6x09.sinc compiles extended JSR via
+                    // "call [target]" and reports COMPUTED_CALL without a
+                    // concrete default flow.  Opcode BD *only* is the 6809
+                    // fixed 16-bit extended JSR (NOT indexed/direct JSR).
+                    // In that precise case derive the target from the two
+                    // encoded bytes, but never infer dynamic reachability.
+                    boolean isaTargetResolved = valid
+                        && !hasConcreteFlow
+                        && jsr.getFlowType().isComputed()
+                        && opcode == 0xbd
+                        && encodedTarget != 0xffff
+                        && inRom(toAddr(encodedTarget));
+                    String targetResolution = targetMatches ? "ghidra-default-flow" :
+                        isaTargetResolved ? "6809-jsr-extended-operand" : "unresolved";
+                    valid = valid && (targetMatches || isaTargetResolved);
                     boolean listingMatches = listed != null
                         && listed.getAddress().getOffset() == cursor
                         && listed.getLength() == 3
@@ -247,6 +262,11 @@ public class ExportFunctionGraph extends GhidraScript {
                     record.addProperty("source", "ghidra-anchored-jsr");
                     record.addProperty("ghidra_decoded", valid);
                     record.addProperty("decode_backend", "ghidra-pseudo-disassembler");
+                    record.addProperty("ghidra_flow_type", jsr == null ? "null" :
+                        jsr.getFlowType().toString());
+                    record.addProperty("target_resolution", targetResolution);
+                    record.addProperty("target_from_isa_encoding",
+                        "6809-jsr-extended-operand".equals(targetResolution));
                     record.addProperty("listing_matches", listingMatches);
                     record.addProperty("return_semantics_verified", false);
                     if (!valid) {
@@ -254,7 +274,9 @@ public class ExportFunctionGraph extends GhidraScript {
                             "Pseudo instruction/target mismatch: " + jsr.toString() +
                             " opcode=" + jsr.getMnemonicString() +
                             " length=" + jsr.getLength() + " flow=" + jsr.getFlowType() +
-                            " target_matches=" + targetMatches;
+                            " target_matches=" + targetMatches +
+                            " has_concrete_flow=" + hasConcreteFlow +
+                            " resolution=" + targetResolution;
                         record.addProperty("reason", reason);
                         rejected.add(record);
                         println("GNG_ANCHORED_JSR_REJECT=" + hex(cursor) + " target=" +
@@ -265,7 +287,9 @@ public class ExportFunctionGraph extends GhidraScript {
                     pending.add(toAddr(encodedTarget));
                     println("GNG_ANCHORED_JSR_VERIFIED=" + hex(cursor) + " target=" +
                         hex(encodedTarget) + " anchor=" + hex(anchor) +
-                        " listing_matches=" + listingMatches);
+                        " listing_matches=" + listingMatches +
+                        " resolution=" + targetResolution +
+                        " reachability=unverified");
                     cursor += 3;
                 } catch (Exception e) {
                     JsonObject error = new JsonObject();

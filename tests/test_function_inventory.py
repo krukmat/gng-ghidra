@@ -329,7 +329,10 @@ class GhidraAnchoredJsRConfirmationTests(unittest.TestCase):
         raw['anchored_verified_calls'] = [{
             'anchor_call_site':'0x6000','call_site':'0x6003',
             'target':'0x65fb','source':'ghidra-anchored-jsr',
-            'ghidra_decoded':True,'return_semantics_verified':False
+            'ghidra_decoded':True,'return_semantics_verified':False,
+            'target_resolution':'6809-jsr-extended-operand',
+            'target_from_isa_encoding':True,
+            'ghidra_flow_type':'COMPUTED_CALL'
         }]
         raw['anchored_rejected_probes'] = []
         return raw, bytes(image)
@@ -358,3 +361,34 @@ class GhidraAnchoredJsRConfirmationTests(unittest.TestCase):
         raw['anchored_verified_calls'][0]['return_semantics_verified'] = True
         with self.assertRaisesRegex(ValueError,'Invalid anchored JSR confirmation'):
             inventory(raw,image)
+
+class ComputedExtendedJsRProvenanceTests(unittest.TestCase):
+    def _fixture(self):
+        return GhidraAnchoredJsRConfirmationTests()._fixture()
+
+    def test_computed_jsr_is_evidence_but_never_reachability(self):
+        raw, image = self._fixture()
+        result, selection = inventory(raw, image)
+        evidence = result['ghidra_confirmed_anchored_calls'][0]
+        self.assertEqual(evidence['target_resolution'], '6809-jsr-extended-operand')
+        candidate = next(x for x in result['candidates'] if x['entry'] == '0x65fb')
+        self.assertIn('anchored-call-return-not-verified', candidate['review_blockers'])
+        self.assertFalse(selection['acceptance_met'])
+
+    def test_computed_jsr_missing_resolution_fails(self):
+        raw, image = self._fixture()
+        del raw['anchored_verified_calls'][0]['target_resolution']
+        with self.assertRaisesRegex(ValueError, 'Missing or unsupported'):
+            inventory(raw, image)
+
+    def test_isa_resolution_not_claimed_on_noncomputed_flow(self):
+        raw, image = self._fixture()
+        raw['anchored_verified_calls'][0]['ghidra_flow_type'] = 'UNCONDITIONAL_CALL'
+        with self.assertRaisesRegex(ValueError, 'Invalid computed'):
+            inventory(raw, image)
+
+    def test_isa_resolution_flag_must_be_true(self):
+        raw, image = self._fixture()
+        raw['anchored_verified_calls'][0]['target_from_isa_encoding'] = False
+        with self.assertRaisesRegex(ValueError, 'Invalid computed'):
+            inventory(raw, image)

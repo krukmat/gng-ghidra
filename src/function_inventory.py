@@ -102,6 +102,13 @@ def verify_raw(raw: dict, image: bytes) -> None:
                 or rec.get('ghidra_decoded') is not True
                 or rec.get('return_semantics_verified') is not False):
             raise ValueError('Invalid anchored JSR confirmation')
+        resolution = rec.get('target_resolution')
+        if resolution not in ('ghidra-default-flow', '6809-jsr-extended-operand'):
+            raise ValueError('Missing or unsupported JSR target resolution')
+        if resolution == '6809-jsr-extended-operand' and (
+                rec.get('ghidra_flow_type') != 'COMPUTED_CALL'
+                or rec.get('target_from_isa_encoding') is not True):
+            raise ValueError('Invalid computed JSR target provenance')
         anchor = address(rec['anchor_call_site'])
         site = address(rec['call_site'])
         dest = address(rec['target'])
@@ -292,6 +299,7 @@ def inventory(raw: dict, image: bytes, max_shortlist: int = 3) -> tuple[dict, di
         provenance.setdefault(address(item['target']), []).append({
             'type': 'ghidra-confirmed-anchored-jsr',
             'call_site': item['call_site'], 'anchor_call_site': item['anchor_call_site'],
+            'target_resolution': item['target_resolution'],
             'return_semantics_verified': False})
     for probe in probes:
         provenance.setdefault(address(probe['target']), []).append(
