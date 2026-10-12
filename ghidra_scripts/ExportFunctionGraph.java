@@ -123,7 +123,7 @@ public class ExportFunctionGraph extends GhidraScript {
         f.addProperty("bank_context", "bank4");
         f.addProperty("instruction_count", found.size());
         f.addProperty("truncated", truncated);
-        JsonArray calls = new JsonArray();
+        JsonArray directCalls = new JsonArray();
         for (Instruction ins : found) {
             if (!ins.getFlowType().isCall()) continue;
             for (Address target : ins.getFlows()) {
@@ -133,10 +133,10 @@ public class ExportFunctionGraph extends GhidraScript {
                 c.addProperty("call_site", hex(ins.getAddress().getOffset()));
                 c.addProperty("target", hex(target.getOffset()));
                 c.addProperty("source", "ghidra-direct-call");
-                calls.add(c);
+                directCalls.add(c);
             }
         }
-        f.add("direct_calls", calls);
+        f.add("direct_calls", directCalls);
         f.add("instructions", code);
         return f;
     }
