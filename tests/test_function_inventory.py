@@ -343,7 +343,7 @@ class GhidraAnchoredJsRConfirmationTests(unittest.TestCase):
         candidate = next(c for c in result['candidates'] if c['entry'] == '0x65fb')
         self.assertTrue(candidate['independent_entry_evidence'])
         self.assertEqual(candidate['discovery'], 'not-yet-exported')
-        self.assertIn('anchored-call-return-not-verified', candidate['review_blockers'])
+        self.assertIn('anchored-call-reachability-unverified', candidate['evidence_caveats'])
         self.assertEqual(len(result['ghidra_confirmed_anchored_calls']), 1)
 
     def test_confirmed_call_must_match_rom_opcode_and_target(self):
@@ -372,7 +372,7 @@ class ComputedExtendedJsRProvenanceTests(unittest.TestCase):
         evidence = result['ghidra_confirmed_anchored_calls'][0]
         self.assertEqual(evidence['target_resolution'], '6809-jsr-extended-operand')
         candidate = next(x for x in result['candidates'] if x['entry'] == '0x65fb')
-        self.assertIn('anchored-call-return-not-verified', candidate['review_blockers'])
+        self.assertIn('anchored-call-reachability-unverified', candidate['evidence_caveats'])
         self.assertFalse(selection['acceptance_met'])
 
     def test_computed_jsr_missing_resolution_fails(self):
@@ -392,3 +392,46 @@ class ComputedExtendedJsRProvenanceTests(unittest.TestCase):
         raw['anchored_verified_calls'][0]['target_from_isa_encoding'] = False
         with self.assertRaisesRegex(ValueError, 'Invalid computed'):
             inventory(raw, image)
+
+
+class JsREvidenceVsCalleeEligibilityTests(unittest.TestCase):
+    def _realistic_fixture(self):
+        raw, image = synthetic()
+        image = bytearray(image)
+        # The original 0x6000 direct CALL is a verified anchor.
+        image[0x6003:0x6006] = bytes.fromhex('bd7000')
+        raw['functions'][0]['instructions'] = raw['functions'][0]['instructions'][:1]
+        raw['anchored_verified_calls'] = [{
+            'anchor_call_site':'0x6000', 'call_site':'0x6003', 'target':'0x7000',
+            'source':'ghidra-anchored-jsr', 'ghidra_decoded':True,
+            'target_resolution':'6809-jsr-extended-operand',
+            'target_from_isa_encoding':True, 'ghidra_flow_type':'COMPUTED_CALL',
+            'return_semantics_verified':False,
+        }]
+        return raw, bytes(image)
+
+    def test_unknown_caller_reachability_does_not_block_isolated_leaf(self):
+        raw, image = self._realistic_fixture()
+        inv, shortlist = inventory(raw, image)
+        candidate = next(c for c in inv['candidates'] if c['entry'] == '0x7000')
+        self.assertEqual(candidate['classification'], 'eligible-for-codegen-review')
+        self.assertEqual(candidate['review_blockers'], [])
+        self.assertIn('anchored-call-reachability-unverified', candidate['evidence_caveats'])
+        self.assertIn('anchored-call-reachability-unverified',
+                      shortlist['items'][0]['evidence_caveats'])
+
+    def test_hardware_unknown_still_blocks_isolated_leaf(self):
+        raw, image = self._realistic_fixture()
+        raw['functions'][2]['instructions'][0]['pcode'].insert(0, {
+            'op':'STORE','output':None,'space_name':'RAM',
+            'inputs':[{'space':'const','offset':'0x1','size':8},
+                      {'space':'register','offset':'0x10','size':2},
+                      {'space':'register','offset':'0x0','size':1}],
+        })
+        inv, _ = inventory(raw, image)
+        candidate = next(c for c in inv['candidates'] if c['entry'] == '0x7000')
+        self.assertEqual(candidate['classification'], 'requires-review')
+        self.assertIn('dynamic-memory-address: needs-MMIO-and-bank-proof',
+                      candidate['review_blockers'])
+        self.assertIn('anchored-call-reachability-unverified',
+                      candidate['evidence_caveats'])

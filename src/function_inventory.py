@@ -329,10 +329,14 @@ def inventory(raw: dict, image: bytes, max_shortlist: int = 3) -> tuple[dict, di
         grounded = any(p['type'] in ('cpu-vector', 'ghidra-direct-call',
                                      'ghidra-confirmed-anchored-jsr') for p in source)
         reasons, metrics = classify(fun, interrupt) if fun else (['awaiting-Ghidra-disassembly'], {})
+        # Proof of an instruction's encoded target is not proof that the
+        # caller reaches it, but caller reachability is NOT a callee defect.
+        # Keep uncertainty separate without loosening any callee safety gate.
+        evidence_caveats = []
+        if any(p['type'] == 'ghidra-confirmed-anchored-jsr' for p in source):
+            evidence_caveats.append('anchored-call-reachability-unverified')
         if entry in overlapping_entries:
             reasons.append('overlapping-exported-CFGs: independent-boundaries-unproven')
-        if any(p['type'] == 'ghidra-confirmed-anchored-jsr' for p in source):
-            reasons.append('anchored-call-return-not-verified')
         if not grounded:
             reasons.insert(0, 'seed-has-no-vector-or-decoded-call-provenance')
         if any(p.get('name') == 'RESET' for p in source):
@@ -351,7 +355,8 @@ def inventory(raw: dict, image: bytes, max_shortlist: int = 3) -> tuple[dict, di
             'provenance': source, 'discovery': 'exported' if fun else 'not-yet-exported',
             'independent_entry_evidence': grounded,
             'classification': 'eligible-for-codegen-review' if not reasons else 'requires-review',
-            'review_blockers': reasons, 'metrics': metrics, 'triage_score': scores,
+            'review_blockers': reasons, 'evidence_caveats': evidence_caveats,
+            'metrics': metrics, 'triage_score': scores,
         })
     candidates.sort(key=lambda c: (-c['triage_score'], address(c['entry'])))
     ready = [c for c in candidates if c['classification'] == 'eligible-for-codegen-review']
@@ -366,6 +371,7 @@ def inventory(raw: dict, image: bytes, max_shortlist: int = 3) -> tuple[dict, di
                                            for c in selected),
         'items': [{'entry': c['entry'], 'classification': c['classification'],
                    'provenance': c['provenance'], 'review_blockers': c['review_blockers'],
+                   'evidence_caveats': c['evidence_caveats'],
                    'next_action': ('T2.B.8: manually verify generated operations and independent vectors'
                                    if c['classification'] == 'eligible-for-codegen-review'
                                    else 'T2.B.7: disassemble or resolve all review blockers')}
