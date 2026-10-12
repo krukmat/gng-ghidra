@@ -178,3 +178,19 @@ python3 scripts/triage-functions.py
 
 T2.B.7 remains open until independent, bounded ROM routines are
 selected and validated. See [Ghidra discovery evidence](docs/t2b-discovery.md).
+
+### Memory pointer origin diagnosis
+
+When `src/memory_analysis.py` cannot prove the address range for a
+P-code `LOAD/STORE`, use the 6809 register-origin diagnostic without
+rerunning Ghidra:
+
+```bash
+python3 src/memory_provenance.py \
+  --entries 0x622c 0x6755 0x7930 0x6793 0x6839
+```
+
+The tool tracks per-instruction `unique` temporaries back to `S`
+(stack), `X/Y/U` (indices), `DP`, and other registers. This is a
+**pointer-origin fingerprint**, not a proof that those registers remain
+within RAM; MMIO/ROM write protection is unchanged.

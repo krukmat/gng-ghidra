@@ -455,3 +455,46 @@ source address, assembly, P-code index, pointer varnode and safe/unsafe
 range. `memory=N/M` in the triage output reports proven-safe memory
 operations versus all accesses. **Do not change the IO bounds or treat
 an unknown 16-bit pointer as RAM to force a passing status.**
+
+## Operator: 14 functions, 217 memory operations, 0 statically safe
+
+The operator ran the memory audit on the 14 Ghidra-exported ROM entry
+graphs and reported **217 LOAD/STORE operations**, with **zero**
+statically proven safe. This is a limitation of the available
+context-sensitive proof, not evidence that all accesses touch hardware.
+In particular, unknown 16-bit register pointers span RAM, I/O, and ROM;
+the strict memory filter rightly refuses to make them safe by default.
+
+To find the actual missing preconditions, a diagnostic-only
+`src/memory_provenance.py` has been added. It follows register/unique
+dependencies **within each decoded instruction**, using the
+upstream Ghidra MC6809 SLEIGH register offsets (S at 24, X at 18,
+Y at 20, U at 22, all 2 bytes). It labels stack-pointer-dependent
+accesses separately from index pointers, mixed expressions, memory
+derived pointers, literal addresses and unknown unique temporaries.
+It does not propagate values across instructions, and does not infer
+register initialization from the ROM, stack bounds, dynamic
+reachability, or behavioral equivalence. Existing memory safety gates
+are entirely unchanged.
+
+Ghidra SLEIGH source:
+https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Processors/MC6800/data/languages/6x09.sinc
+
+Get a concise per-function register fingerprint **without a new Ghidra
+run**:
+
+```bash
+git pull --ff-only
+python3 src/memory_provenance.py \
+  --entries 0x622c 0x6755 0x7930 0x6793 0x6839
+```
+
+The script writes
+`out/functions-memory-provenance.json` and prints pointer-origin
+groups and one sample instruction for each group. It also validates
+the Ghidra bytes and vector table against the operator's local flat
+ROM. Use the grouping to decide whether the next step is an explicit
+stack-domain contract or an index/memory-map adapter. Do not approve
+all 217 accesses merely because they have identifiable source
+registers. The full 6809 `RTS` P-code includes stack activity, so
+a safe stack contract will be necessary for full routine translation.
