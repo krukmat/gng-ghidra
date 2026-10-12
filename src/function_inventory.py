@@ -95,6 +95,27 @@ def verify_raw(raw: dict, image: bytes) -> None:
             if got != expected:
                 raise ValueError(f'Ghidra/ROM vector mismatch: {got!r} != {expected!r}')
     seen_entries = set()
+    decoded_anchors = {address(ins['address']): ins
+                       for fun in raw['functions'] for ins in fun['instructions']}
+    for rec in raw.get('anchored_verified_calls', []):
+        if (rec.get('source') != 'ghidra-anchored-jsr'
+                or rec.get('ghidra_decoded') is not True
+                or rec.get('return_semantics_verified') is not False):
+            raise ValueError('Invalid anchored JSR confirmation')
+        anchor = address(rec['anchor_call_site'])
+        site = address(rec['call_site'])
+        dest = address(rec['target'])
+        origin = decoded_anchors.get(anchor)
+        if origin is None or 'CALL' not in origin.get('flow_type', '').upper():
+            raise ValueError(f'No decoded CALL anchor for JSR at {hx(site)}')
+        after_anchor = anchor + len(bytes.fromhex(origin['raw']))
+        if site < after_anchor or (site - after_anchor) % 3 != 0:
+            raise ValueError(f'Unaligned anchored JSR at {hx(site)}')
+        if site + 3 > len(image) or image[site] != 0xbd or not mapped_entry(dest):
+            raise ValueError(f'Invalid JSR encoding at {hx(site)}')
+        if dest != int.from_bytes(image[site + 1:site + 3], 'big'):
+            raise ValueError(f'Anchored JSR target mismatch at {hx(site)}')
+    seen_entries = set()
     for fun in raw['functions']:
         entry = address(fun['entry'])
         if entry in seen_entries or not mapped_entry(entry):
@@ -264,8 +285,14 @@ def inventory(raw: dict, image: bytes, max_shortlist: int = 3) -> tuple[dict, di
     callsites = []
     for fun in raw['functions']:
         callsites += direct_call_records(fun)
-    # Keep unverified ROM probes separate from genuine Ghidra call records.
+    # Keep unverified byte probes separate from Ghidra-confirmed sites.
     probes = anchored_jsr_probes(raw, image)
+    confirmed = raw.get('anchored_verified_calls', [])
+    for item in confirmed:
+        provenance.setdefault(address(item['target']), []).append({
+            'type': 'ghidra-confirmed-anchored-jsr',
+            'call_site': item['call_site'], 'anchor_call_site': item['anchor_call_site'],
+            'return_semantics_verified': False})
     for probe in probes:
         provenance.setdefault(address(probe['target']), []).append(
             {'type': 'anchored-jsr-byte-probe', 'anchor_call_site': probe['anchor_call_site'],
@@ -291,10 +318,13 @@ def inventory(raw: dict, image: bytes, max_shortlist: int = 3) -> tuple[dict, di
         fun = functions.get(entry)
         source = provenance[entry]
         interrupt = any(p['type'] == 'cpu-vector' and p['name'] != 'RESET' for p in source)
-        grounded = any(p['type'] in ('cpu-vector', 'ghidra-direct-call') for p in source)
+        grounded = any(p['type'] in ('cpu-vector', 'ghidra-direct-call',
+                                     'ghidra-confirmed-anchored-jsr') for p in source)
         reasons, metrics = classify(fun, interrupt) if fun else (['awaiting-Ghidra-disassembly'], {})
         if entry in overlapping_entries:
             reasons.append('overlapping-exported-CFGs: independent-boundaries-unproven')
+        if any(p['type'] == 'ghidra-confirmed-anchored-jsr' for p in source):
+            reasons.append('anchored-call-return-not-verified')
         if not grounded:
             reasons.insert(0, 'seed-has-no-vector-or-decoded-call-provenance')
         if any(p.get('name') == 'RESET' for p in source):
@@ -339,6 +369,8 @@ def inventory(raw: dict, image: bytes, max_shortlist: int = 3) -> tuple[dict, di
               'flat_sha256': hashlib.sha256(image).hexdigest(),
               'vector_table': vectors, 'exported_function_count': len(functions),
               'decoded_direct_calls': callsites,
+              'ghidra_confirmed_anchored_calls': confirmed,
+              'ghidra_rejected_anchored_probes': raw.get('anchored_rejected_probes', []),
               'anchored_jsr_probes': probes,
               'call_continuation_gaps': [
                   {'entry': f['entry'], 'gaps': f.get('unrecovered_call_continuations', 0)}
@@ -363,6 +395,13 @@ def main() -> None:
         path.write_text(json.dumps(data, indent=2, sort_keys=True) + '\n')
     print(f'GNG_FUNCTION_INVENTORY=PASS exported={result["exported_function_count"]} '
           f'calls={len(result["decoded_direct_calls"])} candidates={len(result["candidates"])}')
+    if 'ghidra_confirmed_anchored_calls' in result:
+        confirmed = result['ghidra_confirmed_anchored_calls']
+        rejected = result['ghidra_rejected_anchored_probes']
+        print(f'GNG_GHIDRA_ANCHORED_JSR=REVIEW verified={len(confirmed)} '
+              f'rejected={len(rejected)}')
+        for rejection in rejected[:6]:
+            print('GHIDRA_ANCHOR_REJECTED', rejection)
     if result['anchored_jsr_probes']:
         seed_list = ' '.join(sorted({x['target'] for x in result['anchored_jsr_probes']}))
         print(f'GNG_ANCHORED_JSR_PROBES=UNVERIFIED count={len(result["anchored_jsr_probes"])} '
