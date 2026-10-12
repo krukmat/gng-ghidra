@@ -15,14 +15,18 @@ RESET_EXPORTER = ROOT / 'ghidra_scripts/ExportResetPcode.java'
 
 # Package/class declarations. Only API shapes exercised by these two scripts.
 STUBS = {
- 'com.google.gson.JsonElement': '''public class JsonElement { public boolean getAsBoolean(){return false;} }''',
+ 'com.google.gson.JsonElement': '''public class JsonElement {
+   public boolean getAsBoolean(){return false;} public int getAsInt(){return 0;}
+   public String getAsString(){return null;}
+   public com.google.gson.JsonObject getAsJsonObject(){return null;} }''',
  'com.google.gson.JsonArray': '''public class JsonArray extends JsonElement {
    public void add(String x) {} public void add(JsonObject x) {}
    public void add(JsonElement x) {} public int size(){return 0;} }''',
  'com.google.gson.JsonObject': '''public class JsonObject extends JsonElement {
    public void addProperty(String k, String x) {} public void addProperty(String k, Number x) {}
    public void addProperty(String k, Boolean x) {} public void add(String k, JsonElement x) {}
-   public JsonElement get(String k){return null;} }''',
+   public JsonElement get(String k){return null;}
+   public JsonArray getAsJsonArray(String k){return null;} }''',
  'ghidra.app.script.GhidraScript': '''public abstract class GhidraScript {
    protected ghidra.program.model.listing.Program currentProgram;
    protected abstract void run() throws Exception;
