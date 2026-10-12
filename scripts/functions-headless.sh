@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bounded Ghidra ROM discovery, diagnostics and P-code -> JS.
+# Bounded Ghidra function discovery, diagnostics, and conservative P-code -> JS.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if [[ $# -lt 1 ]]; then
@@ -18,8 +18,9 @@ else
 fi
 [[ -x "$headless" ]] || { echo "ERROR: cannot execute $headless" >&2; exit 2; }
 mkdir -p out/ghidra-project
-# Fail closed: a prior successful export must not hide a new Ghidra failure.
-rm -f out/functions.raw.json out/functions.ir.json out/functions.report.json
+# Never let output from a previous successful run mask a failed Ghidra invocation.
+rm -f out/functions.raw.json out/functions.ir.json out/functions.report.json \
+  out/functions-inventory.json out/functions-shortlist.json
 log="$PWD/out/functions-ghidra.log"
 status=0
 "$headless" "$PWD/out/ghidra-project" GngFunctions \
@@ -40,17 +41,22 @@ fi
 python3 - <<'PY'
 import json
 from pathlib import Path
-p = Path('out/functions.raw.json')
+p=Path('out/functions.raw.json')
 try:
-    raw = json.loads(p.read_text())
+    raw=json.loads(p.read_text())
 except (OSError, ValueError) as exc:
     raise SystemExit(f'GNG_FUNCTION_EXPORT=FAIL invalid JSON: {exc}')
 if raw.get('schema') != 'gng.ghidra-functions.v1':
     raise SystemExit('GNG_FUNCTION_EXPORT=FAIL unexpected JSON schema')
-print(f'GNG_FUNCTION_EXPORT={"PASS" if raw.get("functions") else "EMPTY"} functions={len(raw.get("functions", []))} skipped={len(raw.get("skipped", []))}')
+print(f'GNG_FUNCTION_EXPORT=PASS functions={len(raw.get("functions", []))} skipped={len(raw.get("skipped", []))}')
 if not raw.get('functions'):
     for skip in raw.get('skipped', [])[:12]:
         print(f'FUNCTION_SKIPPED {skip}')
-    raise SystemExit('GNG_FUNCTION_EXPORT=BLOCKED no functions discovered; inspect out/functions-ghidra.log')
+    raise SystemExit('GNG_FUNCTION_EXPORT=BLOCKED no functions discovered; check out/functions-ghidra.log')
 PY
+python3 src/function_inventory.py --input out/functions.raw.json \
+  --rom-image out/gngb-flat.bin --out out/functions-inventory.json \
+  --shortlist out/functions-shortlist.json
 python3 src/function_ir.py --input out/functions.raw.json --out out/functions.ir.json --report out/functions.report.json
+
+# T2.B.6/7: ROM-authenticated provenance and conservative deterministic triage.

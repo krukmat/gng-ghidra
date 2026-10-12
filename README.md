@@ -128,3 +128,23 @@ Results supplied by the operator: `GNG_REGION_CODEGEN=PASS`
 interrupts, or end-to-end behavioral equivalence. See
 [docs/t2b.md](docs/t2b.md) and
 [operator evidence](docs/audit/t2b-boot-prefix-operator-evidence-2026-10-12.md).
+
+## T2.B.6–7 — ROM-authenticated function discovery and triage
+
+The Ghidra exporter now reads real CPU vectors, seeds RESET and IRQ entries,
+and follows **decoded** direct call targets (no guessed opcode scanning).
+A fail-closed inventory checks every exported instruction's bytes against
+local ROM, then prioritizes independent candidates without claiming that
+hardware-dependent paths are translatable:
+
+```bash
+bash scripts/functions-headless.sh "$PWD/roms/gng.zip"
+cat out/functions-shortlist.json
+```
+
+Outputs `out/functions-inventory.json` and `out/functions-shortlist.json`
+are local-only. The ROM confirms RESET `0x6000` and IRQ `0x65c4`; all other
+6809 vector targets are `0xffff` sentinels. The IRQ is not a pure leaf.
+
+See [T2.B.6–7 plan](docs/t2b-discovery.md) for eligibility criteria, partial
+results, and the next Ghidra execution requirement.

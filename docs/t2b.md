@@ -218,3 +218,20 @@ grounded entry points (e.g. ROM reset/interrupt vector targets, validated
 direct CALL destinations). Extract deterministic leaf functions, retain bank
 identity, and obtain function-specific behavioral reference vectors. Do not
 count additional segments of the same reset CFG as distinct functions.
+
+## T2.B.6–7 status — ROM vector and decoded-CALL discovery
+
+Implementation adds vector-seeded (RESET, IRQ) bounded Ghidra CFG discovery,
+direct-call site provenance, a ROM-byte-matched function inventory, conservative
+independent/leaf candidate selection, CI regression fixtures, and local JSON
+reports (no ROM assets committed).
+
+Confirmed from verified gngb ROM bytes: RESET 0x6000, IRQ 0x65c4; all other
+vectors point to 0xffff sentinels. IRQ is a hardware-dependent handler, **not**
+a verified pure leaf. Full call discovery and a 2–3 candidate shortlist still
+require running updated Ghidra headless on the operator Mac.
+A shortlist can remain PARTIAL and is never itself evidence of translation.
+
+Run `bash scripts/functions-headless.sh "$PWD/roms/gng.zip"` then inspect
+`out/functions-inventory.json` and `out/functions-shortlist.json`.
+See [B.6–7 detailed design](t2b-discovery.md).

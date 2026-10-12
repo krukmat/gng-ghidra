@@ -1,7 +1,8 @@
 // @category GNG
-// Bounded 6809 ROM CFG traversal, without function autoanalysis or MAME.
-// Arguments: <output-json> [0xENTRY ...]; default = 0x6000.
-// ROM bank 4 is the only mapped bank. Calls are discovered, not inlined.
+// Bounded, deterministic ROM CFG traversal from explicit entry points.
+// This deliberately avoids createFunction() and whole-program autoanalysis.
+// Arguments: <output-json> [0xENTRY ...]; default = reset vector 0x6000.
+// RAM/I/O and ROM bank contexts other than the bank-4 snapshot are NOT analyzed.
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Instruction;
@@ -18,9 +19,11 @@ import java.util.Comparator;
 import java.util.HashSet;
 
 public class ExportFunctionGraph extends GhidraScript {
-    private static final int MAX_FUNCTIONS = 12;
+    private static final int MAX_FUNCTIONS = 24;
     private static final int MAX_INSTRUCTIONS = 2500;
     private static final String CPU = "6809:BE:16:default";
+    private static final String[] VECTOR_NAMES = {"SWI3", "SWI2", "FIRQ", "IRQ", "SWI", "NMI", "RESET"};
+    private static final int[] VECTOR_ADDRS = {0xfff2, 0xfff4, 0xfff6, 0xfff8, 0xfffa, 0xfffc, 0xfffe};
 
     private String hex(long n) { return String.format("0x%x", n); }
     private boolean inRom(Address a) {
@@ -51,7 +54,7 @@ public class ExportFunctionGraph extends GhidraScript {
     }
     private JsonObject exportSeed(Address entry, ArrayDeque<Address> calls) throws MemoryAccessException {
         if (!inRom(entry)) throw new IllegalArgumentException("Outside ROM: " + entry);
-        // Disassemble explicit seeds; no createFunction()/whole-program analyzer.
+        // Disassemble from explicit seeds; function creation fails unreliably without autoanalysis.
         ArrayDeque<Address> todo = new ArrayDeque<>();
         HashSet<Long> seen = new HashSet<>();
         ArrayList<Instruction> found = new ArrayList<>();
@@ -71,10 +74,11 @@ public class ExportFunctionGraph extends GhidraScript {
             }
             if (inst == null) throw new IllegalStateException("Could not decode " + pc);
             if (inst.getAddress().getOffset() + inst.getLength() > 0x10000)
-                throw new IllegalStateException("Instruction crosses image end: " + pc);
+                throw new IllegalStateException("Instruction crosses ROM image boundary " + pc);
             found.add(inst);
-            // Empty SLEIGH semantic bodies occur for NOP and SYNC.
-            // SYNC waits for an interrupt; never assume it is a NOP.
+            // SLEIGH has legitimate empty semantic bodies for NOP and SYNC.
+            // Preserve opaque instructions, never discard a whole CFG.
+            // SYNC is an interrupt wait, NOT a NOP and not safe for codegen.
             for (Address dest : inst.getFlows()) {
                 if (!inRom(dest)) continue;
                 if (inst.getFlowType().isCall()) calls.add(dest);
@@ -119,6 +123,20 @@ public class ExportFunctionGraph extends GhidraScript {
         f.addProperty("bank_context", "bank4");
         f.addProperty("instruction_count", found.size());
         f.addProperty("truncated", truncated);
+        JsonArray calls = new JsonArray();
+        for (Instruction ins : found) {
+            if (!ins.getFlowType().isCall()) continue;
+            for (Address target : ins.getFlows()) {
+                if (!inRom(target)) continue;
+                JsonObject c = new JsonObject();
+                c.addProperty("caller_entry", hex(entry.getOffset()));
+                c.addProperty("call_site", hex(ins.getAddress().getOffset()));
+                c.addProperty("target", hex(target.getOffset()));
+                c.addProperty("source", "ghidra-direct-call");
+                calls.add(c);
+            }
+        }
+        f.add("direct_calls", calls);
         f.add("instructions", code);
         return f;
     }
@@ -129,16 +147,35 @@ public class ExportFunctionGraph extends GhidraScript {
         String[] args = getScriptArgs();
         if (args.length < 1) throw new IllegalArgumentException("Expected output JSON path");
         ArrayDeque<Address> pending = new ArrayDeque<>();
-        if (args.length == 1) pending.add(toAddr(0x6000));
-        for (int i = 1; i < args.length; ++i) pending.add(toAddr(Long.decode(args[i])));
+        JsonArray vectors = new JsonArray();
+        for (int i = 0; i < VECTOR_ADDRS.length; ++i) {
+            int vectorAddr = VECTOR_ADDRS[i];
+            int hi = currentProgram.getMemory().getByte(toAddr(vectorAddr)) & 0xff;
+            int lo = currentProgram.getMemory().getByte(toAddr(vectorAddr + 1)) & 0xff;
+            int target = (hi << 8) | lo;
+            // 0xffff is a sentinel in the verified gngb set, not a seed.
+            boolean valid = target != 0xffff && inRom(toAddr(target));
+            JsonObject v = new JsonObject();
+            v.addProperty("name", VECTOR_NAMES[i]);
+            v.addProperty("vector_address", hex(vectorAddr));
+            v.addProperty("target", hex(target));
+            v.addProperty("status", valid ? "mapped" : "unmapped-or-sentinel");
+            vectors.add(v);
+            if (args.length == 1 && valid) pending.add(toAddr(target));
+        }
+        if (args.length > 1)
+            for (int i = 1; i < args.length; ++i) pending.add(toAddr(Long.decode(args[i])));
         HashSet<Long> seen = new HashSet<>();
         JsonArray exported = new JsonArray();
         JsonArray skipped = new JsonArray();
+        boolean anyTruncated = false;
         while (!pending.isEmpty() && exported.size() < MAX_FUNCTIONS) {
             Address entry = pending.removeFirst();
             if (!seen.add(entry.getOffset())) continue;
             try {
-                exported.add(exportSeed(entry, pending));
+                JsonObject exportedFunction = exportSeed(entry, pending);
+                if (exportedFunction.get("truncated").getAsBoolean()) anyTruncated = true;
+                exported.add(exportedFunction);
             } catch (Exception e) {
                 JsonObject skip = new JsonObject();
                 skip.addProperty("entry", hex(entry.getOffset()));
@@ -152,9 +189,11 @@ public class ExportFunctionGraph extends GhidraScript {
         root.addProperty("processor", CPU);
         root.addProperty("image", "gngb-flat.bin");
         root.addProperty("bank_context", "bank4");
-        root.addProperty("partial_discovery", !pending.isEmpty());
+        root.addProperty("partial_discovery", !pending.isEmpty() || anyTruncated);
         root.add("functions", exported);
         root.add("skipped", skipped);
+        root.add("vectors", vectors);
+        root.addProperty("discovery_mode", "cpu-vectors-and-decoded-direct-calls");
         File dest = new File(args[0]);
         File parent = dest.getAbsoluteFile().getParentFile();
         if (parent == null || !parent.isDirectory())
