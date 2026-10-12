@@ -52,13 +52,23 @@ def normalize_function(func: dict) -> dict:
             micro.append({'op': op, 'output': node(p['output']) if p.get('output') else None,
                           'inputs': [node(x) for x in p['inputs']],
                           **({'space_name': p['space_name']} if 'space_name' in p else {})})
+        status = obj.get('pcode_status', 'native' if micro else 'unmodeled-empty-pcode')
         if not micro:
-            raise ValueError(f'Missing P-code for {pc:04x}')
+            if status == 'verified-nop':
+                if obj['raw'].lower() != '12' or obj['assembly'].strip().upper() != 'NOP':
+                    raise ValueError(f'Invalid NOP provenance for {pc:04x}')
+            elif status not in {'unmodeled-wait-for-interrupt', 'unmodeled-empty-pcode'}:
+                raise ValueError(f'Invalid empty P-code status for {pc:04x}')
+        elif status != 'native':
+            raise ValueError(f'Unexpected P-code status for {pc:04x}')
+        if status == 'unmodeled-wait-for-interrupt' and obj['raw'].lower() != '13':
+            raise ValueError(f'Invalid SYNC provenance for {pc:04x}')
         falls = [integer(obj['fallthrough'])] if obj.get('fallthrough') else []
         flows = [integer(x) for x in obj['flows']]
         ins.append({'address': obj['address'], 'raw': obj['raw'], 'assembly': obj['assembly'],
                     'next': f'0x{pc + length:x}', 'flow_type': obj['flow_type'],
-                    'fallthrough': falls[0] if falls else None, 'flows': flows, 'pcode': micro})
+                    'fallthrough': falls[0] if falls else None, 'flows': flows, 'pcode': micro,
+                    'pcode_status': status})
     ins.sort(key=lambda i: integer(i['address']))
     pcs = {integer(x['address']) for x in ins}
     entry = integer(func['entry'])
@@ -93,7 +103,7 @@ def normalize_function(func: dict) -> dict:
     return {'schema': SCHEMA, 'entry': func['entry'], 'name': func['name'],
             'cpu': '6809:BE:16:default', 'bank_context': func['bank_context'],
             'blocks': blocks, 'external_edges': external,
-            'instruction_count': len(ins)}
+            'instruction_count': len(ins), 'truncated': bool(func.get('truncated', False))}
 
 def normalize(raw: dict) -> dict:
     if raw.get('schema') != 'gng.ghidra-functions.v1' or raw.get('processor') != '6809:BE:16:default':
@@ -129,6 +139,7 @@ def main():
     report['partial_discovery'] = bundle['partial_discovery']
     args.report.write_text(json.dumps(report, indent=2) + '\n')
     print(f'GNG_FUNCTION_IR=PASS functions={len(bundle["functions"])} generated={len(report["generated"])} blocked={len(report["blocked"])}')
+    print(f'GNG_CODEGEN={"PASS" if report["generated"] else "BLOCKED"} generated={len(report["generated"])}')
     if report['blocked']:
         for x in report['blocked'][:12]:
             print('CODEGEN_BLOCKED', x['entry'], x['reason'])
