@@ -5,6 +5,7 @@
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Instruction;
+import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.pcode.PcodeOp;
 import ghidra.program.model.pcode.Varnode;
 import com.google.gson.JsonArray;
@@ -48,7 +49,7 @@ public class ExportFunctionGraph extends GhidraScript {
         p.add("inputs", ins);
         return p;
     }
-    private JsonObject exportSeed(Address entry, ArrayDeque<Address> calls) {
+    private JsonObject exportSeed(Address entry, ArrayDeque<Address> calls) throws MemoryAccessException {
         if (!inRom(entry)) throw new IllegalArgumentException("Outside ROM: " + entry);
         // Disassemble explicit seeds; no createFunction()/whole-program analyzer.
         ArrayDeque<Address> todo = new ArrayDeque<>();
