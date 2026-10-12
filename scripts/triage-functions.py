@@ -38,6 +38,8 @@ def render(inventory: dict, report: dict | None = None, limit: int = 24) -> list
             f'origin={",".join(source)} '
             f'ins={metrics.get("instruction_count", "-")} '
             f'returns={metrics.get("return_count", "-")} '
+            f'memory={metrics.get("memory_proof", {}).get("safe", 0)}/'
+            f'{metrics.get("memory_proof", {}).get("total", 0)} '
             f'blockers={";".join(reasons) if reasons else "none"}'
         )
         if warnings:

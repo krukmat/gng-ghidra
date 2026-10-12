@@ -435,3 +435,40 @@ class JsREvidenceVsCalleeEligibilityTests(unittest.TestCase):
                       candidate['review_blockers'])
         self.assertIn('anchored-call-reachability-unverified',
                       candidate['evidence_caveats'])
+
+
+class StaticMemoryProofIntegrationTests(unittest.TestCase):
+    def test_masked_pointer_pcode_removes_only_dynamic_memory_blocker(self):
+        raw,image=synthetic()
+        leaf=raw['functions'][2]['instructions'][0]
+        pointer={'space':'unique','offset':'0x100','size':2}
+        leaf['pcode'].insert(0,{
+            'op':'INT_AND','output':pointer,'inputs':[
+                {'space':'register','offset':'0x10','size':2},
+                {'space':'const','offset':'0x1fff','size':2}]})
+        leaf['pcode'].insert(1,{
+            'op':'STORE','space_name':'RAM','inputs':[
+                {'space':'const','offset':'0x1','size':8},
+                pointer,{'space':'register','offset':'0x0','size':1}]})
+        inv,shortlist=inventory(raw,image)
+        leafCandidate=next(x for x in inv['candidates'] if x['entry']=='0x7000')
+        self.assertNotIn('dynamic-memory-address: needs-MMIO-and-bank-proof',
+                         leafCandidate['review_blockers'])
+        self.assertEqual(leafCandidate['metrics']['memory_proof']['safe'],1)
+        self.assertEqual(leafCandidate['classification'],'eligible-for-codegen-review')
+
+    def test_unbounded_pointer_stays_blocked_with_explicit_audit(self):
+        raw,image=synthetic()
+        leaf=raw['functions'][2]['instructions'][0]
+        leaf['pcode'].insert(0,{
+            'op':'LOAD','space_name':'RAM',
+            'output':{'space':'register','offset':'0x0','size':1},
+            'inputs':[{'space':'const','offset':'0x1','size':8},
+                      {'space':'register','offset':'0x10','size':2}]})
+        inv,_=inventory(raw,image)
+        leafCandidate=next(x for x in inv['candidates'] if x['entry']=='0x7000')
+        self.assertIn('dynamic-memory-address: needs-MMIO-and-bank-proof',
+                      leafCandidate['review_blockers'])
+        audit=leafCandidate['metrics']['memory_access_sites']
+        self.assertEqual(audit[0]['instruction'],'0x7000')
+        self.assertEqual(audit[0]['interval'],[0,65535])

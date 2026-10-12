@@ -411,3 +411,47 @@ python3 scripts/triage-functions.py
 T2.B.6 is verified for the expanded discovery; T2.B.7 remains open
 until actual complete leaf candidates and independent behavioral
 reference vectors are available.
+
+## T2.B.7 — Per-instruction memory-address proof (2026-10-13)
+
+The operator's updated ROM-authenticated inventory exports **14** roots,
+**seven** Ghidra-confirmed anchored JSR sites and **zero** routines eligible
+for isolated codegen. Nine candidates have only one common blocker:
+`dynamic-memory-address: needs-MMIO-and-bank-proof`.
+
+**Root cause:** The old heuristic marked *every* non-constant P-code
+LOAD/STORE address unsafe, without recording its instruction address,
+value width, or address provenance. Yet some dynamic addresses may be
+provably within safe RAM (e.g. 8-bit pointer or 16-bit pointer masked
+with `INT_AND 0x1fff`). Others, such as a raw 16-bit X/Y/S/U pointer,
+can address MMIO, ROM or RAM and MUST remain blocked.
+
+The new `src/memory_analysis.py` computes a conservative abstract
+interval for each LOAD/STORE pointer, scoped to the current Ghidra
+instruction. Supports constants, bounded register widths, COPY,
+INT_ZEXT, constant-mask INT_AND and non-overflowing addition/subtraction.
+Unknown arithmetic/overflows/overwrites fail closed. It never infers
+machine hardware state, register initial values or inter-instruction
+dataflow. The audit classifies safe RAM/ROM reads separately from
+unresolved pointers, ROM writes and MMIO. The inventory removes the
+*dynamic address review blocker* **only if every dynamic access is
+provably within an allowed range**. Other blockers remain intact.
+Codegen already has runtime MMIO/ROM guards; this is only
+`eligible-for-codegen-review`, not functional equivalence.
+
+To get instruction-level evidence without another Ghidra run:
+
+```bash
+git pull --ff-only
+python3 src/function_inventory.py --input out/functions.raw.json \
+  --rom-image out/gngb-flat.bin --out out/functions-inventory.json \
+  --shortlist out/functions-shortlist.json
+python3 src/memory_analysis.py
+python3 scripts/triage-functions.py
+```
+
+`out/functions-memory-audit.json` lists every memory operation with
+source address, assembly, P-code index, pointer varnode and safe/unsafe
+range. `memory=N/M` in the triage output reports proven-safe memory
+operations versus all accesses. **Do not change the IO bounds or treat
+an unknown 16-bit pointer as RAM to force a passing status.**

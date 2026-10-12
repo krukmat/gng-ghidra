@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 from pcode_codegen import ALU, UNARY
+from memory_analysis import audit_function_memory, summarize_accesses
 
 CPU = '6809:BE:16:default'
 SCHEMA = 'gng.function-inventory.v1'
@@ -207,21 +208,14 @@ def classify(function: dict, is_interrupt: bool) -> tuple[list[str], dict]:
     external_jumps = [ins for ins in insns if 'CALL' not in ins.get('flow_type', '').upper()
                       and any(address(target) not in pcs for target in ins.get('flows', []))]
     memory_ops = [p for ins in insns for p in ins['pcode'] if p['op'] in ('LOAD', 'STORE')]
-    non_constant_memory = any(len(p.get('inputs', [])) < 2 or
-                              p['inputs'][1]['space'].casefold() != 'const'
-                              for p in memory_ops)
-    unsafe_static_memory = False
-    for p in memory_ops:
-        args = p.get('inputs', [])
-        if len(args) < 2 or args[1]['space'].casefold() != 'const':
-            continue
-        ptr = address(args[1]['offset'])
-        size = p.get('output', {}).get('size', 1) if p['op'] == 'LOAD' else (
-            args[2]['size'] if len(args) > 2 else 1)
-        if ptr + size > 0x10000 or 0x3000 <= ptr + size - 1 and ptr < 0x4000:
-            unsafe_static_memory = True
-        if p['op'] == 'STORE' and ptr + size > 0x3000:
-            unsafe_static_memory = True
+    access_sites = audit_function_memory(function)
+    proof = summarize_accesses(access_sites)
+    non_constant_memory = any(not a['safe_for_pure_codegen']
+                              and a['derived_from'] != 'literal'
+                              for a in access_sites)
+    unsafe_static_memory = any(not a['safe_for_pure_codegen']
+                               and a['derived_from'] == 'literal'
+                               for a in access_sites)
     # These are decoded 6809 STA/STB extended $3e00 writes to the
     # bank-select register, not a blind opcode scan across ROM bytes.
     # verify_raw() has already checked the disassembly's bytes against ROM.
@@ -267,6 +261,8 @@ def classify(function: dict, is_interrupt: bool) -> tuple[list[str], dict]:
     metrics = {'instruction_count': len(insns), 'direct_call_count': len(calls),
                'unmodeled_instruction_count': len(unknown),
                'memory_operation_count': len(memory_ops),
+               'memory_proof': proof,
+               'memory_access_sites': access_sites,
                'indirect_flow_count': sum(op in ('BRANCHIND', 'CALLIND') for op in ops),
                'return_count': return_count,
                'contains_sync': any(ins.get('pcode_status') == 'unmodeled-wait-for-interrupt'
