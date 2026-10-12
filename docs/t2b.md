@@ -108,3 +108,35 @@ grep -iE 'error|exception|GNG_FUNCTION|compile|script' out/functions-ghidra.log 
 redistributing ROMs. Real Ghidra 12.1.4 execution of this new exporter is
 still pending on the operator's Mac; do not mark real-function discovery PASS
 on the strength of synthetic fixtures or a successful ROM import.
+
+## Zero-P-code SLEIGH instructions (Ghidra 12.1.4)
+
+Actual gngb reset path reaches address 0x6016 (hex byte 13, Motorola 6809 SYNC).
+Ghidra's upstream 6x09.sinc defines SYNC with an empty SLEIGH
+semantic body; it also defines NOP (hex byte 12) with an empty body.
+The initial CFG exporter incorrectly threw Missing P-code at 6016.
+
+**Contract:** Empty P-code never discards a whole discovered CFG.
+Exported instructions include pcode_status:
+- native: nonempty Ghidra P-code;
+- verified-nop: byte 12, mnemonic NOP, empty P-code; safe JS no-op;
+- unmodeled-wait-for-interrupt: byte 13, mnemonic SYNC; preserve in IR,
+  block JS code generation pending interrupt/device model;
+- unmodeled-empty-pcode: any other empty body; preserve, block codegen.
+
+Exporter preserves graphs up to its instruction budget, then marks
+truncated=true. Incomplete CFGs are not codegen eligible. The report
+distinguishes GNG_FUNCTION_IR=PASS from GNG_CODEGEN=BLOCKED when the graph
+is extractable but behavioral translation is unsupported.
+
+Run on Mac:
+```bash
+git pull --ff-only
+bash scripts/functions-headless.sh "$PWD/roms/gng.zip"
+cat out/functions.report.json
+```
+
+A CODEGEN_BLOCKED mentioning SYNC is an expected safety limit, not
+a completed translation of hardware behavior.
+
+Source: https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Processors/MC6800/data/languages/6x09.sinc
