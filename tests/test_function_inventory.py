@@ -311,4 +311,7 @@ class AnchoredJsRProbeTests(unittest.TestCase):
             'fallthrough':'0x65d6', 'flows':['0x6755'],
             'pcode_status':'native','pcode':[{'op':'CALL','inputs':[]}]})
         probes=anchored_jsr_probes(raw,image)
-        self.assertEqual(probes, [])
+        # The first JSR is already Ghidra-decoded; the next one remains an
+        # independently anchored byte probe, not a confirmed execution path.
+        self.assertEqual([p['call_site'] for p in probes], ['0x65d6'])
+        self.assertEqual([p['target'] for p in probes], ['0x6772'])
