@@ -199,3 +199,32 @@ class InventoryCliTests(unittest.TestCase):
         raw['functions'] = raw['functions'][:2]
         _, result = inventory(raw, image, max_shortlist=1)
         self.assertFalse(result['acceptance_met'])
+
+class RealBankSelectorPatternTests(unittest.TestCase):
+    def test_extended_sta_select_bank_disqualified(self):
+        raw, image = synthetic()
+        image = bytearray(image)
+        image[0x7000:0x7003] = bytes.fromhex('b73e00')
+        raw['functions'][2]['instructions'][0].update(raw='b73e00', length=3,
+            assembly='STA $3e00', pcode_status='native', pcode=[
+            {'op':'STORE', 'space_name':'RAM', 'output':None,
+             'inputs':[{'space':'const','offset':'0x1','size':8},
+                       {'space':'register','offset':'0x10','size':2},
+                       {'space':'register','offset':'0x0','size':1}]},
+            {'op':'RETURN','output':None,'inputs':[{'space':'register','offset':'0x2','size':2}]}])
+        inv, shortlist = inventory(raw, bytes(image))
+        candidate = next(c for c in inv['candidates'] if c['entry'] == '0x7000')
+        self.assertIn('writes-bank-select-register: 0x3e00', candidate['review_blockers'])
+        self.assertEqual(candidate['metrics']['bank_select_write_sites'], ['0x7000'])
+        self.assertNotEqual(candidate['classification'], 'eligible-for-codegen-review')
+        self.assertEqual(shortlist['eligible_for_codegen_review'], 0)
+
+    def test_extended_stb_bank_selector_also_blocked(self):
+        raw, image = synthetic()
+        image = bytearray(image)
+        image[0x7000:0x7003] = bytes.fromhex('f73e00')
+        raw['functions'][2]['instructions'][0].update(raw='f73e00', length=3,
+            assembly='STB $3e00')
+        inv, _ = inventory(raw, bytes(image))
+        candidate = next(c for c in inv['candidates'] if c['entry'] == '0x7000')
+        self.assertIn('writes-bank-select-register: 0x3e00', candidate['review_blockers'])

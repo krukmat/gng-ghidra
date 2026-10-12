@@ -148,3 +148,11 @@ are local-only. The ROM confirms RESET `0x6000` and IRQ `0x65c4`; all other
 
 See [T2.B.6–7 plan](docs/t2b-discovery.md) for eligibility criteria, partial
 results, and the next Ghidra execution requirement.
+
+
+**Operator verification of B.6/B.7:** Ghidra 12.1.4 has now recovered
+three real entries (`0x6000`, `0x65c4`, `0x65fb`), with one direct call
+from IRQ to `0x65fb`. The shortlist remains `PARTIAL` (`eligible=0`).
+Entry `0x65fb` writes to the hardware ROM bank-select register
+`0x3e00` and uses indirect dispatch; do **not** treat it as an isolated
+function or bypass hardware checks. See [discovery status](docs/t2b-discovery.md).

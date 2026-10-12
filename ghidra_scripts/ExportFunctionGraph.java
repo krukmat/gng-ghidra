@@ -26,6 +26,18 @@ public class ExportFunctionGraph extends GhidraScript {
     private static final int[] VECTOR_ADDRS = {0xfff2, 0xfff4, 0xfff6, 0xfff8, 0xfffa, 0xfffc, 0xfffe};
 
     private String hex(long n) { return String.format("0x%x", n); }
+    // Some Ghidra headless disassemblies omit an explicit fallthrough for
+    // call instructions. A 6809 direct CALL returns to its next instruction
+    // (assuming the callee returns); use that as a bounded discovery seed.
+    // This is architectural inference, NOT confirmation that a call returns.
+    private Address callContinuation(Instruction inst) {
+        Address next = inst.getFallThrough();
+        if (next == null && inst.getFlowType().isCall()) {
+            long sequential = inst.getAddress().getOffset() + inst.getLength();
+            if (sequential <= 0xffff) next = toAddr(sequential);
+        }
+        return next;
+    }
     private boolean inRom(Address a) {
         return a != null && a.isMemoryAddress() &&
             a.getOffset() >= 0x4000 && a.getOffset() <= 0xffff;
@@ -84,7 +96,7 @@ public class ExportFunctionGraph extends GhidraScript {
                 if (inst.getFlowType().isCall()) calls.add(dest);
                 else if (!inst.getFlowType().isComputed()) todo.add(dest);
             }
-            Address fallthrough = inst.getFallThrough();
+            Address fallthrough = callContinuation(inst);
             if (inRom(fallthrough)) todo.add(fallthrough);
         }
         if (found.isEmpty()) throw new IllegalStateException("No instructions at " + entry);
@@ -99,8 +111,13 @@ public class ExportFunctionGraph extends GhidraScript {
             rec.addProperty("raw", raw.toString());
             rec.addProperty("assembly", inst.toString());
             rec.addProperty("flow_type", inst.getFlowType().toString());
-            if (inst.getFallThrough() != null)
-                rec.addProperty("fallthrough", hex(inst.getFallThrough().getOffset()));
+            Address physicalFallthrough = inst.getFallThrough();
+            Address fallthrough = callContinuation(inst);
+            if (fallthrough != null) {
+                rec.addProperty("fallthrough", hex(fallthrough.getOffset()));
+                if (physicalFallthrough == null && inst.getFlowType().isCall())
+                    rec.addProperty("fallthrough_source", "6809-call-return-inferred");
+            }
             JsonArray flows = new JsonArray();
             for (Address dest : inst.getFlows()) flows.add(hex(dest.getOffset()));
             rec.add("flows", flows);

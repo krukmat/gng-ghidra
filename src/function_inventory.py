@@ -147,6 +147,11 @@ def classify(function: dict, is_interrupt: bool) -> tuple[list[str], dict]:
             unsafe_static_memory = True
         if p['op'] == 'STORE' and ptr + size > 0x3000:
             unsafe_static_memory = True
+    # These are decoded 6809 STA/STB extended $3e00 writes to the
+    # bank-select register, not a blind opcode scan across ROM bytes.
+    # verify_raw() has already checked the disassembly's bytes against ROM.
+    bank_select_sites = [ins['address'] for ins in insns
+                         if ins['raw'].lower() in ('b73e00', 'f73e00')]
     indirect = any(op in ('BRANCHIND', 'CALLIND') for op in ops)
     return_count = ops.count('RETURN')
     reasons = []
@@ -160,6 +165,8 @@ def classify(function: dict, is_interrupt: bool) -> tuple[list[str], dict]:
         reasons.append('unresolved-or-indirect-call')
     if indirect:
         reasons.append('indirect-control-flow')
+    if bank_select_sites:
+        reasons.append('writes-bank-select-register: 0x3e00')
     if any(op == 'CALLOTHER' for op in ops):
         reasons.append('architecture-specific-P-code')
     if unknown:
@@ -186,6 +193,7 @@ def classify(function: dict, is_interrupt: bool) -> tuple[list[str], dict]:
                'contains_sync': any(ins.get('pcode_status') == 'unmodeled-wait-for-interrupt'
                                     for ins in insns),
                'unsupported_operators': unsupported_ops,
+               'bank_select_write_sites': bank_select_sites,
                'external_jump_count': len(external_jumps)}
     return reasons, metrics
 

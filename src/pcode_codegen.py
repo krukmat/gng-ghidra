@@ -36,8 +36,12 @@ def emission(p):
     op = p['op']
     ins = p['inputs']
     out = p['output']
-    if any(x['size'] > 4 for x in ins + ([out] if out else [])):
-        raise Unsupported(f'{op}: >32-bit P-code not yet supported')
+    # LOAD/STORE input[0] is the P-code address-space identifier, not data.
+    # It may occupy 8 bytes even when CPU pointers and values are only 16 bits.
+    # Never materialize it at runtime; enforce <=32-bit on all real operands.
+    data_inputs = ins[1:] if op in ('LOAD', 'STORE') and ins else ins
+    if any(x['size'] > 4 for x in data_inputs + ([out] if out else [])):
+        raise Unsupported(f'{op}: >32-bit data/address P-code not yet supported')
     if any(x['space'] not in ('const', 'register', 'unique', 'ram') for x in ins + ([out] if out else [])):
         raise Unsupported(f'{op}: unsupported address space')
     if op in ALU or op in UNARY:

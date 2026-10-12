@@ -133,3 +133,46 @@ Run the same preflight locally with:
 This is a source-level Java preflight, **not** validation against the
 actual Ghidra 12.1.4 JAR APIs or actual ROM execution. The latter
 still requires the operator's Ghidra headless run.
+
+## Operator validation of B.6/B.7 — October 12, 2026
+
+The operator executed the Ghidra 12.1.4 exporter and ROM-authenticated
+inventory after fixing the Java compile error. Actual terminal evidence:
+
+```text
+GNG_FUNCTION_EXPORT=PASS functions=3 skipped=0
+GNG_FUNCTION_INVENTORY=PASS exported=3 calls=1 candidates=3
+GNG_FUNCTION_SHORTLIST=PARTIAL candidates=2 eligible=0
+GNG_FUNCTION_IR=PASS functions=3 generated=0 blocked=3
+GNG_CODEGEN=BLOCKED generated=0
+```
+
+Real entries: RESET 0x6000, IRQ 0x65c4 and IRQ-called 0x65fb
+(call site 0x65d1). All three exported graphs match local ROM bytes.
+They are **not three independently validated leaf functions**.
+The 0x65fb routine writes the bank-select register 0x3e00
+(6809 instruction STA extended, bytes b7 3e 00), then dispatches
+using an indirect jump (6e 95). It is not safe to compile as a
+standalone pure function; the IRQ path also touches hardware. The
+reported `LOAD: >32-bit` issue is only the *first* compiler blocker.
+
+### Changes after operator run
+
+- Triage now recognizes byte-verified decoded STA/STB extended to
+  0x3e00 as `writes-bank-select-register: 0x3e00`.
+- The P-code emitter excludes LOAD/STORE input[0] (address-space
+  identifier metadata, occasionally an 8-byte constant) from its
+  32-bit *data* width limit; actual addresses, values and results
+  must still fit <=32 bits.
+- Ghidra discovery now explicitly considers the next physical
+  instruction after a decoded CALL when Ghidra has no explicit
+  fallthrough. Such an edge is tagged
+  `fallthrough_source: 6809-call-return-inferred`. The caller
+  continuation is a candidate control-flow edge, not proof that
+  a particular callee returns.
+
+These fixes are tested synthetically; the improved call discovery
+still needs validation on the operator's real Ghidra instance.
+No hardware bypass, emulator dependency or behavioral equivalence
+is claimed. Prioritize *other* genuinely isolated routines after
+the next discovery run.
