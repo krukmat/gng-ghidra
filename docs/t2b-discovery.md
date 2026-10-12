@@ -498,3 +498,53 @@ stack-domain contract or an index/memory-map adapter. Do not approve
 all 217 accesses merely because they have identifiable source
 registers. The full 6809 `RTS` P-code includes stack activity, so
 a safe stack contract will be necessary for full routine translation.
+
+## T2.B.7 — Conditional DP/S memory proof obligations (2026-10-13)
+
+The actual Ghidra memory provenance diagnosis covered five short
+ROM routines, 43 memory accesses, and zero unconditionally safe:
+- 0x622c: two DP-based direct-page accesses, one S-based RTS stack read
+- 0x6755: four DP-based accesses, one S-based RTS stack read
+- 0x7930: three DP, one X, one S access
+- 0x6793: nine X, two U, two S accesses
+- 0x6839: two DP, fourteen X, one S access
+
+We therefore prioritize the first two candidates. Ghidra's ordinary
+MC6809 SLEIGH source defines DP at register byte 9 and S at byte 24
+(two bytes). Direct page effective addresses use
+\`(zero_extend(DP) << 8) + imm8\`; RTS loads a 16-bit return address
+from S, then advances S by two.
+
+\`src/memory_contracts.py\` evaluates each P-code memory pointer under
+a deliberately **illustrative hypothesis**:
+\`DP == 0x00\`, \`0x0100 <= S <= 0x2ffc\`
+at **every instruction**. It recognizes bounded zext/left-shift,
+integer addition/subtraction without wrap, copies, constant masks
+and pair concatenations within one instruction. Writes to overlapping
+register bytes invalidate the assumed range. Unmodeled operations,
+16-bit X/U pointers, alias writes, wrapping and MMIO/ROM writes fail
+closed. This is a conditional *what-if* report, NOT a function safety
+proof. Assumptions may be invalidated by prior instructions or calls;
+they are not inferred from the real game. The existing unconditional
+inventory/codegen safety checks remain unchanged.
+
+Run with existing raw Ghidra export and ROM image, without Ghidra:
+
+\`\`\`bash
+git pull --ff-only
+python3 src/memory_contracts.py --entries 0x622c 0x6755
+\`\`\`
+
+\`out/functions-memory-obligations.json\` includes all P-code accesses,
+effective-address intervals and unresolved proof obligations. A
+\`hypothetical_in_range=N/M\` result means **only** that if the
+invariants hold at every instruction, those N accesses are bounded.
+It is NOT \`eligible_for_codegen_review\` and is NOT behaviorally
+equivalent to original MC6809 execution.
+
+Next engineering step: validate actual DP and stack state at routine
+entry and through its control-flow, or implement guards enforcing the
+contract during execution; then validate return behavior against
+independent reference state vectors. Do not assume DP=0 solely because
+a direct-page operand appears in disassembly. Unknown X/U memory
+remains excluded from these two contracts.
