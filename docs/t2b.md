@@ -79,3 +79,32 @@ verified decompiler.
    no hardware side effects. Add missing P-code operators only with tests.
 3. Collect function-level reference vectors (inputs, register/memory outputs)
    to distinguish valid translation from mere successful compilation.
+
+## Ghidra export troubleshooting (2026-10-12)
+
+The initial headless wrapper allowed Ghidra to return exit status 0 without
+producing `out/functions.raw.json`, so Python failed with `FileNotFoundError`
+even though Ghidra's **ROM import**, not its Java exporter, had succeeded.
+
+The wrapper now deletes stale exports, captures **full Ghidra output** at
+`out/functions-ghidra.log`, demands an explicit
+`GNG_FUNCTION_EXPORT=PASS/EMPTY` message **and** a nonempty JSON file,
+and fails before invoking the normalizer when either is missing.
+
+The extractor now traverses a bounded control-flow graph from reset (or
+explicit seeds) instead of relying on `createFunction()` during `-noanalysis`.
+It always serializes skipped discovery reasons when the Java script runs.
+
+If the command fails on macOS, report only the diagnostic lines:
+
+```bash
+git pull --ff-only
+export GHIDRA_HOME="$(brew --prefix ghidra)/libexec"
+bash scripts/functions-headless.sh "$PWD/roms/gng.zip"
+grep -iE 'error|exception|GNG_FUNCTION|compile|script' out/functions-ghidra.log | tail -40
+```
+
+**Evidence boundary:** The script-failure regression is tested without
+redistributing ROMs. Real Ghidra 12.1.4 execution of this new exporter is
+still pending on the operator's Mac; do not mark real-function discovery PASS
+on the strength of synthetic fixtures or a successful ROM import.
