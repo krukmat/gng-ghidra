@@ -17,3 +17,7 @@ jobs:
       - run: python3 tests/generate_synthetic.py
       - run: node --test tests/test_synthetic_js.mjs
       - run: node --test tests/test_generated.mjs
+      - run: python3 tests/generate_function_fixtures.py
+      - run: node --test tests/test_function_generated.mjs
+      - run: npm install --global typescript@5.9.3
+      - run: tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution node out-synthetic/functions/generated/*.ts

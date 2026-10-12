@@ -62,7 +62,7 @@ It doesn't depend on React Native and can run inside a TS game-core package.
 Set `GHIDRA_HOME` to the installed Ghidra directory (the one with `support/analyzeHeadless`).
 
 ```bash
-GHIDRA_HOME=/absolute/path/to/ghidra bash scripts/ghidra-headless.sh /absolute/path/to/gng.zip
+GHIDRA_HOME=/absolute/path/to/ghidra ./scripts/ghidra-headless.sh /absolute/path/to/gng.zip
 ```
 
 The script imports `out/gngb-flat.bin` at address zero using language
@@ -80,3 +80,31 @@ project intentionally avoids a requirement to automate MAME or record games.
 
 Source material: [MAME GnG hardware driver](https://github.com/mamedev/mame/blob/master/src/mame/capcom/gng.cpp)
 and [Ghidra SLEIGH 6809](https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Processors/MC6800/data/languages/6809.slaspec).
+
+
+## T2.B — Generalized Ghidra P-code function pipeline (experimental)
+
+A second, separate pipeline now exports candidate functions and CFGs from
+Ghidra, normalizes a typed intermediate representation and compiles supported
+isolated functions into generic JavaScript / TypeScript. It fails closed on
+unsupported P-code, calls, MMIO or unresolved control flow.
+
+```bash
+export GHIDRA_HOME="$(brew --prefix ghidra)/libexec"
+bash scripts/functions-headless.sh "$PWD/roms/gng.zip"
+cat out/functions.report.json
+```
+
+Run ROM-free CI fixtures locally:
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 tests/generate_function_fixtures.py
+node --test tests/test_function_generated.mjs
+tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution node out-synthetic/functions/generated/*.ts
+```
+
+**Important:** The generic new pipeline has passed synthetic tests, but the new
+Ghidra function exporter still needs a real Mac/headless run. The previous
+7-instruction real-ROM proof remains separate and verified. See
+[docs/t2b.md](docs/t2b.md) for status and operational acceptance criteria.
