@@ -73,3 +73,39 @@ class BankSafetyTests(unittest.TestCase):
     def test_register_width_preserved(self):
         f = normalize_function(simple())
         self.assertEqual(f['blocks'][0]['instructions'][0]['pcode'][0]['output'], R(0))
+
+
+class EmptyPcodeTests(unittest.TestCase):
+    def test_real_rom_sync_preserved_but_codegen_blocked(self):
+        raw = simple([])
+        raw['instructions'][0].update(address='0x6016', raw='13', assembly='SYNC',
+                                      pcode=[], pcode_status='unmodeled-wait-for-interrupt')
+        raw['entry'] = '0x6016'
+        normalized = normalize_function(raw)
+        self.assertEqual(normalized['blocks'][0]['instructions'][0]['pcode'], [])
+        with self.assertRaisesRegex(Unsupported, 'wait-for-interrupt'):
+            compile_function(normalized)
+
+    def test_no_pcode_nop_can_compile(self):
+        raw = simple([])
+        raw['instructions'][0].update(pcode=[], pcode_status='verified-nop')
+        normalized = normalize_function(raw)
+        self.assertIn('case 28672', compile_function(normalized))
+
+    def test_unknown_empty_pcode_is_not_silently_ignored(self):
+        raw = simple([])
+        raw['instructions'][0].update(pcode=[], pcode_status='unmodeled-empty-pcode', assembly='UNKNOWN')
+        with self.assertRaisesRegex(Unsupported, 'unmodeled-empty-pcode'):
+            compile_function(normalize_function(raw))
+
+    def test_bad_nop_provenance_rejected(self):
+        raw = simple([])
+        raw['instructions'][0].update(raw='13', assembly='SYNC', pcode=[], pcode_status='verified-nop')
+        with self.assertRaisesRegex(ValueError, 'NOP provenance'):
+            normalize_function(raw)
+
+    def test_truncated_function_fails_codegen(self):
+        raw = simple()
+        raw['truncated'] = True
+        with self.assertRaisesRegex(Unsupported, 'Partial CFG'):
+            compile_function(normalize_function(raw))
