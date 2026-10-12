@@ -97,7 +97,13 @@ public class ExportFunctionGraph extends GhidraScript {
                 else if (!inst.getFlowType().isComputed()) todo.add(dest);
             }
             Address fallthrough = callContinuation(inst);
-            if (inRom(fallthrough)) todo.add(fallthrough);
+            // Follow call continuation immediately rather than after an
+            // unbounded number of alternative branch paths. A continuation
+            // is a *syntactic* discovery path, NOT proof of return.
+            if (inRom(fallthrough)) {
+                if (inst.getFlowType().isCall()) todo.addFirst(fallthrough);
+                else todo.add(fallthrough);
+            }
         }
         if (found.isEmpty()) throw new IllegalStateException("No instructions at " + entry);
         found.sort(Comparator.comparingLong(i -> i.getAddress().getOffset()));
@@ -154,6 +160,27 @@ public class ExportFunctionGraph extends GhidraScript {
             }
         }
         f.add("direct_calls", directCalls);
+        JsonArray continuationAudit = new JsonArray();
+        int missingContinuations = 0;
+        for (Instruction ins : found) {
+            if (!ins.getFlowType().isCall()) continue;
+            Address continuation = callContinuation(ins);
+            if (!inRom(continuation)) continue;
+            JsonObject row = new JsonObject();
+            row.addProperty("call_site", hex(ins.getAddress().getOffset()));
+            row.addProperty("next_instruction", hex(continuation.getOffset()));
+            boolean recovered = seen.contains(continuation.getOffset());
+            row.addProperty("recovered_in_cfg", recovered);
+            row.addProperty("return_semantics_verified", false);
+            continuationAudit.add(row);
+            if (!recovered) {
+                missingContinuations++;
+                println("GNG_CALL_CONTINUATION_GAP=" + ins.getAddress() + " next=" +
+                    continuation + " truncated=" + truncated);
+            }
+        }
+        f.add("call_continuations", continuationAudit);
+        f.addProperty("unrecovered_call_continuations", missingContinuations);
         f.add("instructions", code);
         return f;
     }

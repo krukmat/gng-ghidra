@@ -194,3 +194,42 @@ independent function bounds, or behavioral equivalence.
 
 The bank selector `0x3e00` and indirect bank jumps remain blocked from
 standalone code generation. Do not choose 0x65fb as an independent leaf.
+
+## Operator result after call-continuation update; targeted diagnosis
+
+The operator re-ran Ghidra 12.1.4 and again obtained
+`exported=3 calls=1`, with an empty eligible shortlist.
+The resulting `0x65fb` uses bank selection and `BRANCHIND`,
+so it remains unsafe as a pure leaf.
+
+The ROM bytes **after the verified Ghidra call at `0x65d1`** contain
+seven consecutive `BD xxxx` Motorola 6809 JSR-extended patterns,
+at `0x65d3, 0x65d6, 0x65d9, 0x65dc, 0x65df, 0x65e2, 0x65e5`.
+These indicate *syntactic call candidates* to 0x6755, 0x6772,
+0x622c, 0x7930, 0x67b3, 0x6239, and 0x6274.
+They are **not confirmed reachable instructions**: the earlier BSR
+may not return, and the Ghidra CFG stopped before decoding them.
+
+The extractor now gives decoded call continuations priority in the
+bounded work queue and reports which ones were not recovered.
+The byte-backed inventory additionally performs a **strict, bounded
+three-byte JSR probe** starting only at the next instruction after a
+*Ghidra-decoded* CALL, never an arbitrary ROM scan. Probes:
+- retain raw bytes and the decoded parent call-site provenance;
+- remain tagged `execution_proven=false`, `ghidra_disassembly_verified=false`;
+- are not counted as confirmed direct calls or eligible pure functions;
+- appear in `anchored_jsr_probes` and as optional candidates in the
+  local inventory, even if the previous Ghidra CFG missed them.
+
+When the existing `functions.raw.json` exists, the operator can generate
+the probe inventory **without running Ghidra**:
+
+```bash
+git pull --ff-only
+python3 src/function_inventory.py --input out/functions.raw.json \
+  --rom-image out/gngb-flat.bin \
+  --out out/functions-inventory.json --shortlist out/functions-shortlist.json
+```
+
+The corresponding Ghidra rerun is required **only** to validate the new
+work-queue priority and discover the candidate functions themselves.

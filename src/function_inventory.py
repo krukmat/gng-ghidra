@@ -128,6 +128,47 @@ def verify_raw(raw: dict, image: bytes) -> None:
             raise ValueError(f'Ghidra direct call metadata mismatch at {hx(entry)}')
 
 
+def anchored_jsr_probes(raw: dict, image: bytes, max_probes_per_anchor: int = 12) -> list[dict]:
+    """Probe a straight JSR-extended byte sequence after a Ghidra-decoded CALL.
+
+    This is NOT CFG recovery or proof the preceding call returns. Starting
+    boundaries come solely from a matching Ghidra-decoded CALL; each candidate
+    has 6809's fixed three-byte JSR extended encoding (BD addr16).
+    """
+    if not 1 <= max_probes_per_anchor <= 32:
+        raise ValueError('Invalid anchored probe budget')
+    decoded_sites = {address(ins['address'])
+                     for fun in raw['functions'] for ins in fun['instructions']}
+    out = []
+    seen_sites = set()
+    for fun in raw['functions']:
+        for ins in fun['instructions']:
+            if 'CALL' not in ins.get('flow_type', '').upper():
+                continue
+            cursor = address(ins['address']) + len(bytes.fromhex(ins['raw']))
+            # Do not reinterpret Ghidra-decoded source instructions or follow
+            # long arbitrary raw byte sequences.
+            for _ in range(max_probes_per_anchor):
+                if cursor in decoded_sites or cursor in seen_sites or cursor + 3 > 0x10000:
+                    break
+                if image[cursor] != 0xbd:
+                    break
+                dest = (image[cursor + 1] << 8) | image[cursor + 2]
+                if not mapped_entry(dest):
+                    break
+                seen_sites.add(cursor)
+                out.append({'call_site': hx(cursor), 'target': hx(dest),
+                            'anchor_call_site': hx(address(ins['address'])),
+                            'anchor_entry': fun['entry'],
+                            'opcode': 'JSR-extended',
+                            'raw': image[cursor:cursor + 3].hex(),
+                            'evidence': 'rom-bytes-after-ghidra-call',
+                            'execution_proven': False,
+                            'ghidra_disassembly_verified': False})
+                cursor += 3
+    return out
+
+
 def classify(function: dict, is_interrupt: bool) -> tuple[list[str], dict]:
     insns = function['instructions']
     ops = [p['op'] for ins in insns for p in ins['pcode']]
@@ -223,6 +264,12 @@ def inventory(raw: dict, image: bytes, max_shortlist: int = 3) -> tuple[dict, di
     callsites = []
     for fun in raw['functions']:
         callsites += direct_call_records(fun)
+    # Keep unverified ROM probes separate from genuine Ghidra call records.
+    probes = anchored_jsr_probes(raw, image)
+    for probe in probes:
+        provenance.setdefault(address(probe['target']), []).append(
+            {'type': 'anchored-jsr-byte-probe', 'anchor_call_site': probe['anchor_call_site'],
+             'call_site': probe['call_site'], 'execution_proven': False})
     for call in callsites:
         provenance.setdefault(address(call['target']), []).append(
             {'type': 'ghidra-direct-call', 'caller_entry': call['caller_entry'],
@@ -292,6 +339,10 @@ def inventory(raw: dict, image: bytes, max_shortlist: int = 3) -> tuple[dict, di
               'flat_sha256': hashlib.sha256(image).hexdigest(),
               'vector_table': vectors, 'exported_function_count': len(functions),
               'decoded_direct_calls': callsites,
+              'anchored_jsr_probes': probes,
+              'call_continuation_gaps': [
+                  {'entry': f['entry'], 'gaps': f.get('unrecovered_call_continuations', 0)}
+                  for f in raw['functions'] if f.get('unrecovered_call_continuations', 0)],
               'partial_discovery': bool(raw.get('partial_discovery')),
               'skipped': raw.get('skipped', []), 'candidates': candidates}
     return result, selection
@@ -312,6 +363,13 @@ def main() -> None:
         path.write_text(json.dumps(data, indent=2, sort_keys=True) + '\n')
     print(f'GNG_FUNCTION_INVENTORY=PASS exported={result["exported_function_count"]} '
           f'calls={len(result["decoded_direct_calls"])} candidates={len(result["candidates"])}')
+    if result['anchored_jsr_probes']:
+        seed_list = ' '.join(sorted({x['target'] for x in result['anchored_jsr_probes']}))
+        print(f'GNG_ANCHORED_JSR_PROBES=UNVERIFIED count={len(result["anchored_jsr_probes"])} '
+              f'candidate_seeds={seed_list}')
+    if result['call_continuation_gaps']:
+        print(f'GNG_CALL_CONTINUATION_GAPS={len(result["call_continuation_gaps"])} '
+              f'details={result["call_continuation_gaps"]}')
     print(f'GNG_FUNCTION_SHORTLIST={"READY" if shortlist["acceptance_met"] else "PARTIAL"} '
           f'candidates={shortlist["chosen"]} '
           f'eligible={shortlist["eligible_for_codegen_review"]}')

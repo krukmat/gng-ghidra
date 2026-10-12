@@ -254,3 +254,61 @@ class InferredCallFlowRegressions(unittest.TestCase):
         call['flows'] = []
         with self.assertRaisesRegex(ValueError, 'Invalid inferred call continuation'):
             inventory(raw, image)
+
+class AnchoredJsRProbeTests(unittest.TestCase):
+    def _irq_fixture(self):
+        raw, image = synthetic()
+        image = bytearray(image)
+        # Real gngb-style IRQ BSR followed by two syntactic JSR opcodes.
+        image[0x65c4] = 0x12
+        image[0x65d1:0x65d3] = bytes.fromhex('8d28')
+        image[0x65d3:0x65d9] = bytes.fromhex('bd6755bd6772')
+        image[0x65d9] = 0xc6  # Next byte is not JSR: stop.
+        raw['functions'][1]['instructions'] = [
+            {'address':'0x65c4', 'raw':'12', 'length':1, 'assembly':'NOP',
+             'flow_type':'FALL_THROUGH', 'fallthrough':None, 'flows':[],
+             'pcode':[], 'pcode_status':'verified-nop'},
+            {'address':'0x65d1', 'raw':'8d28', 'length':2, 'assembly':'BSR 0x65fb',
+             'flow_type':'UNCONDITIONAL_CALL', 'fallthrough':'0x65d3',
+             'flows':['0x65fb'], 'pcode_status':'native',
+             'pcode':[{'op':'CALL','output':None,'inputs':[]}]},
+        ]
+        raw['functions'][2]['entry'] = '0x65fb'
+        raw['functions'][2]['name'] = 'rom_65fb'
+        raw['functions'][2]['instructions'][0]['address'] = '0x65fb'
+        image[0x65fb] = 0x39
+        raw['functions'][0]['instructions'][0]['flows'] = ['0x65fb']
+        image[0x6001:0x6003] = bytes.fromhex('65fb')
+        raw['functions'][0]['instructions'][0]['raw'] = 'bd65fb'
+        return raw, bytes(image)
+
+    def test_genuine_call_anchor_yields_only_syntactic_seeds(self):
+        from function_inventory import anchored_jsr_probes
+        raw, image = self._irq_fixture()
+        inv, shortlist = inventory(raw, image)
+        probes = inv['anchored_jsr_probes']
+        self.assertEqual([p['target'] for p in probes], ['0x6755', '0x6772'])
+        self.assertTrue(all(p['execution_proven'] is False for p in probes))
+        self.assertTrue(all(p['ghidra_disassembly_verified'] is False for p in probes))
+        candidate = next(c for c in inv['candidates'] if c['entry'] == '0x6755')
+        self.assertEqual(candidate['discovery'], 'not-yet-exported')
+        self.assertIn('seed-has-no-vector-or-decoded-call-provenance', candidate['review_blockers'])
+        self.assertFalse(shortlist['acceptance_met'])
+
+    def test_probe_stops_when_following_bytes_not_jsr(self):
+        from function_inventory import anchored_jsr_probes
+        raw, image = self._irq_fixture()
+        self.assertEqual(len(anchored_jsr_probes(raw,image)),2)
+        raw['functions'][1]['instructions'][1]['flow_type'] = 'FALL_THROUGH'
+        self.assertEqual(len(anchored_jsr_probes(raw,image)),0)
+
+    def test_probe_does_not_override_ghidra_decoded_instruction(self):
+        from function_inventory import anchored_jsr_probes
+        raw, image = self._irq_fixture()
+        raw['functions'][1]['instructions'].append({
+            'address':'0x65d3','raw':'bd6755','length':3,
+            'assembly':'JSR $6755','flow_type':'UNCONDITIONAL_CALL',
+            'fallthrough':'0x65d6', 'flows':['0x6755'],
+            'pcode_status':'native','pcode':[{'op':'CALL','inputs':[]}]})
+        probes=anchored_jsr_probes(raw,image)
+        self.assertEqual(probes, [])
