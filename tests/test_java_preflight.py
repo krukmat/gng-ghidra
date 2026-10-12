@@ -28,6 +28,11 @@ STUBS = {
    public void addProperty(String k, Boolean x) {} public void add(String k, JsonElement x) {}
    public JsonElement get(String k){return null;}
    public JsonArray getAsJsonArray(String k){return null;} }''',
+ 'ghidra.app.util.PseudoDisassembler': '''public class PseudoDisassembler {
+   public PseudoDisassembler(ghidra.program.model.listing.Program program) {}
+   public PseudoInstruction disassemble(ghidra.program.model.address.Address at) {return null;} }''',
+ 'ghidra.app.util.PseudoInstruction': '''public class PseudoInstruction
+     extends ghidra.program.model.listing.Instruction {}''',
  'ghidra.app.script.GhidraScript': '''public abstract class GhidraScript {
    protected ghidra.program.model.listing.Program currentProgram;
    protected abstract void run() throws Exception;
@@ -52,6 +57,7 @@ STUBS = {
    public int getLength(){return 0;}
    public ghidra.program.model.address.Address getAddress(){return null;}
    public ghidra.program.model.address.Address[] getFlows(){return null;}
+   public ghidra.program.model.address.Address[] getDefaultFlows(){return null;}
    public ghidra.program.model.symbol.FlowType getFlowType(){return null;}
    public ghidra.program.model.address.Address getFallThrough(){return null;}
    public ghidra.program.model.pcode.PcodeOp[] getPcode(){return null;}

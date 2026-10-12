@@ -4,6 +4,8 @@
 // Arguments: <output-json> [0xENTRY ...]; default = reset vector 0x6000.
 // RAM/I/O and ROM bank contexts other than the bank-4 snapshot are NOT analyzed.
 import ghidra.app.script.GhidraScript;
+import ghidra.app.util.PseudoDisassembler;
+import ghidra.app.util.PseudoInstruction;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.mem.MemoryAccessException;
@@ -192,6 +194,9 @@ public class ExportFunctionGraph extends GhidraScript {
                                   JsonArray rejected,
                                   HashSet<Long> probed) {
         JsonArray instructions = exportedFunction.getAsJsonArray("instructions");
+        // Pseudo decoding does NOT depend on already installed listing code
+        // units or on Ghidra's -noanalysis reference table.
+        PseudoDisassembler independentDecoder = new PseudoDisassembler(currentProgram);
         for (int i = 0; i < instructions.size(); i++) {
             JsonObject origin = instructions.get(i).getAsJsonObject();
             if (!origin.get("flow_type").getAsString().contains("CALL")) continue;
@@ -208,43 +213,59 @@ public class ExportFunctionGraph extends GhidraScript {
                     int high = currentProgram.getMemory().getByte(toAddr(cursor + 1)) & 0xff;
                     int low = currentProgram.getMemory().getByte(toAddr(cursor + 2)) & 0xff;
                     int encodedTarget = (high << 8) | low;
-                    Instruction jsr = currentProgram.getListing().getInstructionAt(location);
-                    if (jsr == null) {
-                        disassemble(location);
-                        jsr = currentProgram.getListing().getInstructionAt(location);
-                    }
+                    // A pre-existing (possibly overlapping) instruction in
+                    // Listing must not determine the SLEIGH decoder result.
+                    Instruction listed = currentProgram.getListing().getInstructionAt(location);
+                    PseudoInstruction jsr = independentDecoder.disassemble(location);
                     boolean valid = jsr != null
                         && jsr.getAddress().getOffset() == cursor
                         && jsr.getLength() == 3
                         && "JSR".equalsIgnoreCase(jsr.getMnemonicString())
                         && jsr.getFlowType().isCall();
+                    boolean targetMatches = false;
                     if (valid) {
-                        boolean confirmed = false;
-                        for (Address target : jsr.getFlows()) {
-                            if (target.getOffset() == encodedTarget && inRom(target))
-                                confirmed = true;
+                        Address[] flows = jsr.getDefaultFlows();
+                        if (flows != null) {
+                            for (Address target : flows) {
+                                if (target != null && target.isMemoryAddress()
+                                        && target.getOffset() == encodedTarget
+                                        && inRom(target))
+                                    targetMatches = true;
+                            }
                         }
-                        valid = confirmed;
                     }
+                    valid = valid && targetMatches;
+                    boolean listingMatches = listed != null
+                        && listed.getAddress().getOffset() == cursor
+                        && listed.getLength() == 3
+                        && "JSR".equalsIgnoreCase(listed.getMnemonicString())
+                        && listed.getFlowType().isCall();
                     JsonObject record = new JsonObject();
                     record.addProperty("anchor_call_site", hex(anchor));
                     record.addProperty("call_site", hex(cursor));
                     record.addProperty("target", hex(encodedTarget));
                     record.addProperty("source", "ghidra-anchored-jsr");
                     record.addProperty("ghidra_decoded", valid);
+                    record.addProperty("decode_backend", "ghidra-pseudo-disassembler");
+                    record.addProperty("listing_matches", listingMatches);
                     record.addProperty("return_semantics_verified", false);
                     if (!valid) {
-                        record.addProperty("reason", jsr == null ? "Ghidra could not decode" :
-                            "Ghidra instruction/flow mismatch: " + jsr.toString());
+                        String reason = jsr == null ? "Pseudo disassembler returned null" :
+                            "Pseudo instruction/target mismatch: " + jsr.toString() +
+                            " opcode=" + jsr.getMnemonicString() +
+                            " length=" + jsr.getLength() + " flow=" + jsr.getFlowType() +
+                            " target_matches=" + targetMatches;
+                        record.addProperty("reason", reason);
                         rejected.add(record);
                         println("GNG_ANCHORED_JSR_REJECT=" + hex(cursor) + " target=" +
-                            hex(encodedTarget));
+                            hex(encodedTarget) + " reason=" + reason);
                         break;
                     }
                     verified.add(record);
                     pending.add(toAddr(encodedTarget));
                     println("GNG_ANCHORED_JSR_VERIFIED=" + hex(cursor) + " target=" +
-                        hex(encodedTarget) + " anchor=" + hex(anchor));
+                        hex(encodedTarget) + " anchor=" + hex(anchor) +
+                        " listing_matches=" + listingMatches);
                     cursor += 3;
                 } catch (Exception e) {
                     JsonObject error = new JsonObject();

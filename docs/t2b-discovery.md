@@ -278,3 +278,38 @@ cat out/functions-shortlist.json
 
 Ghidra's script compilation/execution still must run on the Mac.
 Java preflight stubs and synthetic inventory regression tests pass in CI.
+
+## Operator repeat: seven anchored JSRs rejected (2026-10-12)
+
+The operator ran Ghidra 12.1.4 and observed seven anchored JSR candidates
+rejected at 0x65d3, 0x65d6, 0x65d9, 0x65dc, 0x65df, 0x65e2, and 0x65e5.
+The console showed `anchored_verified=0 anchored_rejected=7`. These results
+are **not** seven proven calls. Full JS codegen remains blocked as before.
+
+Previously, anchored validation used `Listing.getInstructionAt()`, optionally
+followed by `GhidraScript.disassemble()`, and then `getFlows()` from the
+installed listing instruction. Under `-noanalysis`, existing/overlapping code
+units or unavailable flow references can make that test reject an otherwise
+valid 6809 encoding. The operator's log did not include rejection reasons.
+
+The new probe instead uses Ghidra's `PseudoDisassembler.disassemble(Address)`
+with the current program's language and memory, independent of installed code
+units. It validates the three-byte `JSR` instruction and its decoded default
+flow target against the 16-bit ROM word. The output independently records
+`listing_matches` and `decode_backend=ghidra-pseudo-disassembler`. Any
+failure is logged with the actual reason and mnemonic/length/flow, and remains
+rejected. Even pseudo-verified instructions are **not** proof of dynamic
+reachability or a returning callee. The actual function export still needs
+Ghidra to disassemble target routines; unsafe bank hardware stays blocked.
+
+Repeat on operator's Mac:
+
+```bash
+git pull --ff-only
+python3 tests/test_java_preflight.py
+bash scripts/functions-headless.sh "$PWD/roms/gng.zip"
+grep -E 'GNG_ANCHORED_JSR|GNG_FUNCTION_EXPORT|GNG_FUNCTION_SHORTLIST' \\
+  out/functions-ghidra.log | tail -50
+```
+
+A Java-stub CI pass is not a real Ghidra runtime test.
