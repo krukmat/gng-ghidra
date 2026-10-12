@@ -47,7 +47,7 @@ except (OSError, ValueError) as exc:
     raise SystemExit(f'GNG_FUNCTION_EXPORT=FAIL invalid JSON: {exc}')
 if raw.get('schema') != 'gng.ghidra-functions.v1':
     raise SystemExit('GNG_FUNCTION_EXPORT=FAIL unexpected JSON schema')
-print(f'GNG_FUNCTION_EXPORT=PASS functions={len(raw.get("functions", []))} skipped={len(raw.get("skipped", []))}')
+print(f'GNG_FUNCTION_EXPORT={"PASS" if raw.get("functions") else "EMPTY"} functions={len(raw.get("functions", []))} skipped={len(raw.get("skipped", []))}')
 if not raw.get('functions'):
     for skip in raw.get('skipped', [])[:12]:
         print(f'FUNCTION_SKIPPED {skip}')
