@@ -108,3 +108,47 @@ class ContractTests(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
+class DirectRamVarnodeRegressionTests(unittest.TestCase):
+    """A 3/3 explicit-only report must not hide direct MMIO varnodes."""
+
+    def test_copy_from_mmio_is_read_even_without_load(self):
+        direct={'op':'COPY','inputs':[v('RAM',0x3003,1)],
+                'output':v('register',0,1)}
+        result=evaluate(f(direct))
+        self.assertEqual(result['access_count'],1)
+        self.assertEqual(result['conditionally_in_range'],0)
+        self.assertEqual(result['accesses'][0]['hypothetical_classification'],
+                         'mmio-forbidden')
+        self.assertEqual(result['accesses'][0]['access_form'],'direct-varnode')
+        self.assertEqual(result['accesses'][0]['operation'],'LOAD')
+
+    def test_copy_to_mmio_is_write_even_without_store(self):
+        direct={'op':'COPY','inputs':[v('register',0,1)],
+                'output':v('RAM',0x3d00,1)}
+        result=evaluate(f(direct))
+        self.assertEqual(result['access_count'],1)
+        self.assertEqual(result['conditionally_in_range'],0)
+        self.assertEqual(result['accesses'][0]['operation'],'STORE')
+        self.assertEqual(result['accesses'][0]['hypothetical_classification'],
+                         'mmio-forbidden')
+
+    def test_direct_ram_is_conditional_safe_when_in_ram(self):
+        result=evaluate(f({'op':'COPY','inputs':[v('RAM',0x40,1)],
+                           'output':v('register',0,1)}))
+        self.assertEqual(result['conditionally_in_range'],1)
+
+    def test_branch_ram_target_is_not_data_read(self):
+        for op in ('BRANCH','CALL','RETURN'):
+            result=evaluate(f({'op':op,'inputs':[v('RAM',0x7000,2)],
+                               'output':None}))
+            self.assertEqual(result['access_count'],0,op)
+
+    def test_explicit_load_and_direct_ram_in_one_pcode_are_distinct(self):
+        result=evaluate(f({'op':'LOAD','space_name':'ram',
+                           'inputs':[v('const',1,8),v('RAM',0x100,2)],
+                           'output':v('register',0,1)}))
+        self.assertEqual(result['access_count'],2)
+        self.assertEqual(result['accesses'][0]['access_form'],'explicit')
+        self.assertEqual(result['accesses'][1]['access_form'],'direct-varnode')
+

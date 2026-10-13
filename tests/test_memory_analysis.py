@@ -94,3 +94,26 @@ class MemoryAnalysisTests(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
+class DirectVarnodeMemoryAuditTests(unittest.TestCase):
+    def test_direct_ram_mmio_accesses_are_not_silently_omitted(self):
+        from memory_analysis import audit_function_memory
+        function={'entry':'0x622c','instructions':[{
+            'address':'0x622c','assembly':'LDA $3003',
+            'pcode':[{'op':'COPY',
+                      'inputs':[{'space':'RAM','offset':'0x3003','size':1}],
+                      'output':{'space':'register','offset':'0x0','size':1}}]}]}
+        accesses=audit_function_memory(function)
+        self.assertEqual(len(accesses),1)
+        self.assertEqual(accesses[0]['classification'],'mmio')
+        self.assertFalse(accesses[0]['safe_for_pure_codegen'])
+
+    def test_branch_target_is_not_memory_data_read(self):
+        from memory_analysis import audit_function_memory
+        function={'entry':'0x622c','instructions':[{
+            'address':'0x622c','assembly':'BRA $6230',
+            'pcode':[{'op':'BRANCH',
+                      'inputs':[{'space':'RAM','offset':'0x6230','size':2}],
+                      'output':None}]}]}
+        self.assertEqual(audit_function_memory(function),[])
+

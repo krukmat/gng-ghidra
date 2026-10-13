@@ -179,3 +179,96 @@ class GuardedArtifactIntegrityTests(unittest.TestCase):
             self.assertIn(b'Unmet experimental DP/S contract', js)
             self.assertFalse(generated['equivalence_verified'])
 
+class DirectRamRuntimeTests(GuardedCodegenTests):
+    def test_direct_ram_read_and_write_in_ram(self):
+        ops=[
+            {'op':'COPY','inputs':[n('RAM',0x40,1)],
+             'output':n('register',0,1)},
+            {'op':'COPY','inputs':[n('register',0,1)],
+             'output':n('RAM',0x41,1)},
+            {'op':'RETURN','inputs':[n('register',24,2)],'output':None},
+        ]
+        code=guard_source(compile_function(ir_ops(ops=ops)))
+        self.run_js(code, """
+import assert from 'node:assert/strict';
+const m=new Uint8Array(65536),r=new Uint8Array(256);
+r[24]=2;m[0x40]=0x73;
+const got=runRoutine(m,r,3);
+assert.equal(got.registers[0],0x73);
+assert.equal(got.memory[0x41],0x73);
+assert.equal(m[0x41],0);
+""")
+
+    def test_direct_mmio_read_is_not_faked_as_ram(self):
+        ops=[
+            {'op':'COPY','inputs':[n('RAM',0x3003,1)],
+             'output':n('register',0,1)},
+            {'op':'RETURN','inputs':[n('register',24,2)],'output':None},
+        ]
+        code=guard_source(compile_function(ir_ops(ops=ops)))
+        self.run_js(code, """
+import assert from 'node:assert/strict';
+const m=new Uint8Array(65536),r=new Uint8Array(256);
+r[24]=2;
+assert.throws(()=>runRoutine(m,r),/I\\/O read requires hardware adapter/);
+assert.equal(r[0],0);
+""")
+
+    def test_direct_mmio_write_is_rejected(self):
+        ops=[
+            {'op':'COPY','inputs':[n('register',0,1)],
+             'output':n('RAM',0x3d00,1)},
+            {'op':'RETURN','inputs':[n('register',24,2)],'output':None},
+        ]
+        code=guard_source(compile_function(ir_ops(ops=ops)))
+        self.run_js(code, """
+import assert from 'node:assert/strict';
+const m=new Uint8Array(65536),r=new Uint8Array(256);
+r[24]=2;r[0]=0x5a;
+assert.throws(()=>runRoutine(m,r),/MMIO or ROM/);
+assert.equal(m[0x3d00],0);
+""")
+
+    def test_direct_varnode_crossing_64k_boundary_rejected(self):
+        ops=[{'op':'COPY','inputs':[n('RAM',0xffff,2)],
+              'output':n('register',0,2)}]
+        with self.assertRaisesRegex(Unsupported,'outside 6809 map'):
+            compile_function(ir_ops(ops=ops))
+
+class DirectRamSafetyGateTests(unittest.TestCase):
+    def test_guarded_builder_rejects_hidden_mmio_reads(self):
+        import copy
+        raw,image=create_synthetic_raw()
+        ins=raw['functions'][2]['instructions'][0]
+        template=copy.deepcopy(ins['pcode'][0])
+        for i in (1,2):
+            other=copy.deepcopy(template)
+            other['inputs'][1]['offset']=hex(0xd8+i)
+            ins['pcode'].insert(i,other)
+        ins['pcode'].insert(0,{
+            'op':'COPY','inputs':[n('RAM',0x3003,1)],
+            'output':n('register',0,1)})
+        with tempfile.TemporaryDirectory() as tmp:
+            report=build(raw,image,Path(tmp),['0x622c'])
+            self.assertEqual(len(report['generated']),0)
+            self.assertEqual(len(report['blocked']),1)
+            self.assertIn('mmio-forbidden',report['blocked'][0]['reason'])
+            self.assertIn('3/4',report['blocked'][0]['reason'])
+
+    def test_guarded_builder_rejects_hidden_mmio_writes(self):
+        import copy
+        raw,image=create_synthetic_raw()
+        ins=raw['functions'][2]['instructions'][0]
+        template=copy.deepcopy(ins['pcode'][0])
+        for i in (1,2):
+            other=copy.deepcopy(template)
+            other['inputs'][1]['offset']=hex(0xd8+i)
+            ins['pcode'].insert(i,other)
+        ins['pcode'].insert(0,{
+            'op':'COPY','inputs':[n('register',0,1)],
+            'output':n('RAM',0x3d00,1)})
+        with tempfile.TemporaryDirectory() as tmp:
+            report=build(raw,image,Path(tmp),['0x622c'])
+            self.assertEqual(len(report['generated']),0)
+            self.assertIn('mmio-forbidden',report['blocked'][0]['reason'])
+
