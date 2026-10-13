@@ -272,3 +272,36 @@ class DirectRamSafetyGateTests(unittest.TestCase):
             self.assertEqual(len(report['generated']),0)
             self.assertIn('mmio-forbidden',report['blocked'][0]['reason'])
 
+
+class KnownRomIoSentinelTests(unittest.TestCase):
+    def test_missing_known_io_pcode_is_reported(self):
+        from guarded_codegen import missing_known_io_sites
+        image=bytearray(65536)
+        image[0x622c:0x622f]=bytes.fromhex('b63003')
+        image[0x6232:0x6235]=bytes.fromhex('b63004')
+        self.assertEqual(missing_known_io_sites('0x622c',bytes(image),[]),
+                         ['0x622c LOAD 0x3003','0x6232 LOAD 0x3004'])
+
+    def test_matching_io_sites_satisfy_byte_sentinel_but_not_pure_gate(self):
+        from guarded_codegen import missing_known_io_sites
+        image=bytearray(65536)
+        image[0x6759:0x675c]=bytes.fromhex('f73d00')
+        image[0x675e:0x6761]=bytes.fromhex('b73b09')
+        image[0x6761:0x6764]=bytes.fromhex('f73b08')
+        rows=[{'instruction':hex(pc),'operation':'STORE',
+               'address_interval':[addr,addr],'width_bytes':1}
+              for pc,addr in [(0x6759,0x3d00),(0x675e,0x3b09),(0x6761,0x3b08)]]
+        self.assertEqual(missing_known_io_sites('0x6755',bytes(image),rows),[])
+        from memory_contracts import evaluate
+        direct={'entry':'0x6755','instructions':[{
+            'address':'0x6759','assembly':'STB $3D00',
+            'pcode':[{'op':'COPY','inputs':[n('register',1,1)],
+                      'output':n('ram',0x3d00,1)}]}]}
+        result=evaluate(direct)
+        self.assertEqual(result['conditionally_in_range'],0)
+        self.assertEqual(result['accesses'][0]['hypothetical_classification'],
+                         'mmio-forbidden')
+
+    def test_synthetic_fixture_does_not_impersonate_rom(self):
+        from guarded_codegen import missing_known_io_sites
+        self.assertEqual(missing_known_io_sites('0x622c',bytes(65536),[]),[])
