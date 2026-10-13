@@ -194,3 +194,26 @@ The tool tracks per-instruction `unique` temporaries back to `S`
 (stack), `X/Y/U` (indices), `DP`, and other registers. This is a
 **pointer-origin fingerprint**, not a proof that those registers remain
 within RAM; MMIO/ROM write protection is unchanged.
+
+### T2.B.9 — controlled execution of two real-ROM candidates
+
+The operator confirmed that the guarded P-code compiler generated
+modules for 0x622c and 0x6755, with 3/3 and 5/5 conditionally bounded
+memory accesses, respectively. These are real ROM-derived generated
+modules, **not yet behaviorally equivalent** to the MC6809 CPU.
+
+Run a bounded, deterministic JS-only harness (no new Ghidra run):
+
+\`\`\`bash
+git pull --ff-only
+python3 src/guarded_codegen.py
+node scripts/verify-guarded-functions.mjs
+\`\`\`
+
+The harness requires SHA-256 of each generated file, checks three
+synthetic input cases per routine, replay determinism, no MMIO/ROM
+mutations, non-mutation of caller buffers, and invalid-DP/S rejection.
+It writes \`out/generated-guarded/verification-report.json\`.
+
+Even a successful \`GNG_GUARDED_HARNESS=PASS_JS_CONTROLLED_ONLY\`
+is **not** a native 6809 comparison. See [T2.B.9 harness gate](docs/t2b.md).

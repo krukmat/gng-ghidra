@@ -235,3 +235,59 @@ A shortlist can remain PARTIAL and is never itself evidence of translation.
 Run `bash scripts/functions-headless.sh "$PWD/roms/gng.zip"` then inspect
 `out/functions-inventory.json` and `out/functions-shortlist.json`.
 See [B.6–7 detailed design](t2b-discovery.md).
+
+## T2.B.9 Round 1 — controlled execution harness (2026-10-13)
+
+**Actual Ghidra/ROM result reported by operator:** the two real entrypoints
+0x622c and 0x6755 passed the conditional DP/S analysis (3/3 and 5/5
+addresses, respectively), and the experimental guarded JS generator
+produced **two modules, zero blocks**. Their status is
+\`EXPERIMENTAL_NOT_EQUIVALENCE_VERIFIED\`; there are no independent MC6809
+state vectors yet.
+
+\`scripts/verify-guarded-functions.mjs\` now executes those *existing*
+generated modules under three deterministic synthetic input states per
+routine (low/mid/high safe stack address). It checks:
+- the generated module's SHA-256 matches the manifest, and each module
+  corresponds to the expected entry point and DP/S contract;
+- exactly bounded execution returning at the known source \`RTS\`
+  instruction (0x6238 or 0x6771; this is NOT the CPU return PC);
+- registers, memory, steps and output fingerprints are reproducible;
+- no writes to MMIO/ROM (0x3000 and above);
+- the caller's memory/register arrays remain unchanged, including
+  when a contract fails;
+- malformed DP/S inputs are rejected before mutation.
+
+The synthetic inputs are *not* sampled from the actual game's runtime.
+The harness does not compare against an independent MC6809 reference and
+must never report behavioral equivalence.
+
+Run in the repository directory (no new Ghidra execution):
+
+\`\`\`bash
+git pull --ff-only
+python3 src/guarded_codegen.py
+node scripts/verify-guarded-functions.mjs
+cat out/generated-guarded/verification-report.json
+\`\`\`
+
+Expected stdout marker if and **only if** the two real compiled modules
+complete all three controlled cases and reject invalid conditions:
+
+\`\`\`text
+GNG_GUARDED_HARNESS=PASS_JS_CONTROLLED_ONLY routines=2
+GNG_6809_EQUIVALENCE=NOT_ESTABLISHED synthetic inputs; no native CPU oracle
+\`\`\`
+
+The harness writes detailed synthetic input seeds, stack values,
+changed-memory/register offsets, steps and SHA-256 output-state
+fingerprints into \`out/generated-guarded/verification-report.json\`.
+If a real routine fails, the harness writes a failure reason, returns
+nonzero and leaves T2.B.9 open. No ROM or extracted memory content
+is committed to the repository.
+
+**Next rounds:** obtain independently reproducible MC6809 state vectors
+for each candidate, compare *all* registers, memory effects, stack
+transitions and control-flow/return semantics, and only then claim
+equivalence. A third leaf candidate is still required. Full game
+porting, IRQ, MMIO, dynamic banks and sound are outside this gate.
