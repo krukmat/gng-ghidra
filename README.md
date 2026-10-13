@@ -217,3 +217,11 @@ It writes \`out/generated-guarded/verification-report.json\`.
 
 Even a successful \`GNG_GUARDED_HARNESS=PASS_JS_CONTROLLED_ONLY\`
 is **not** a native 6809 comparison. See [T2.B.9 harness gate](docs/t2b.md).
+
+**T2.B.9 safety update (2026-10-13):** the previous conditional
+3/3 and 5/5 memory-access counts did not include native P-code direct
+RAM varnodes. These routines appear to touch MMIO. The memory audit
+and guarded pure-codegen gate now include those accesses; a BLOCKED
+result is expected until a hardware I/O test adapter is explicitly
+defined. See [T2.B discovery and memory safety](docs/t2b-discovery.md).
+

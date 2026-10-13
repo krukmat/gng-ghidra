@@ -291,3 +291,47 @@ for each candidate, compare *all* registers, memory effects, stack
 transitions and control-flow/return semantics, and only then claim
 equivalence. A third leaf candidate is still required. Full game
 porting, IRQ, MMIO, dynamic banks and sound are outside this gate.
+
+
+## T2.B.9 safety correction — direct RAM varnodes (October 13, 2026)
+
+The operator's real guarded JS execution FAILED:
+- \`0x622c\`: \`Direct RAM varnode read not implemented; use LOAD\`.
+- \`0x6755\`: \`Invalid register write\`.
+
+This is not just a missing JS emitter feature. Native Ghidra P-code
+may encode concrete memory accesses as **direct RAM-space varnodes**,
+not only \`LOAD\`/\`STORE\` operations. Previous 3/3 and 5/5 conditional
+bounds were therefore **incomplete access inventories**.
+
+Independent instruction bytes already recorded for the matching ROM
+indicate \`LDA $3003\`, \`LDA $3004\` in \`0x622c\` and stores to
+\`$3d00\`, \`$3b09\`, \`$3b08\` in \`0x6755\`. These addresses fall in
+the project's forbidden I/O window \`0x3000..0x3fff\`. Do not call
+these routines hardware-independent RAM leaves.
+
+The shared \`src/pcode_memory_sites.py\` now enumerates both explicit
+and direct-varnode memory data accesses. Control-flow target varnodes
+to BRANCH/CBRANCH/CALL/RETURN are **not** counted as data accesses.
+\`memory_analysis.py\`, \`memory_contracts.py\`, and
+\`memory_provenance.py\` share this inventory. The compiler can emit
+direct RAM reads/writes through the existing guarded helpers, but the
+**pure** \`guarded_codegen.py\` blocks any unmodeled I/O access.
+
+Recompute the real-ROM inventory without rerunning Ghidra:
+
+\`\`\`bash
+git pull --ff-only
+python3 src/memory_contracts.py --entries 0x622c 0x6755
+python3 src/guarded_codegen.py
+\`\`\`
+
+The local ROM/Ghidra export determines the exact access counts.
+\`GNG_GUARDED_CODEGEN=EXPERIMENTAL generated=0 blocked=2\` is a
+**correct fail-closed result** if the known MMIO operands are present.
+The previous \`generated=2\` does not constitute equivalence.
+
+Next: either select RAM-only leaf candidates, or introduce a separate
+explicit, narrowly allowlisted I/O port adapter for test fixtures with
+recorded reads/writes and a 6809 differential oracle. Never silently
+treat I/O as ordinary RAM to force a PASS. T2.B.9 remains open.
