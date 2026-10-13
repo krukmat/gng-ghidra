@@ -44,6 +44,15 @@ def emission(p):
         raise Unsupported(f'{op}: >32-bit data/address P-code not yet supported')
     if any(x['space'] not in ('const', 'register', 'unique', 'ram') for x in ins + ([out] if out else [])):
         raise Unsupported(f'{op}: unsupported address space')
+    # A P-code 'ram' varnode is a fixed byte location, not a pointer
+    # requiring an explicit LOAD or STORE. Respect the 6809 16-bit map;
+    # actual reads/writes still go through memRead/memWrite guards.
+    for x in ins + ([out] if out else []):
+        if x['space'] == 'ram' and (integer(x['offset']) < 0 or
+                integer(x['offset']) + x['size'] > 0x10000):
+            raise Unsupported(f'{op}: direct RAM varnode outside 6809 map')
+    if out and out['space'] == 'const':
+        raise Unsupported(f'{op}: constant address-space output is invalid')
     if op in ALU or op in UNARY:
         expected = 2 if op in ALU or op == 'INT_SRIGHT' else 1
         if out is None or len(ins) != expected:
@@ -104,13 +113,14 @@ export function runRoutine(memory, registers=new Uint8Array(256), maxSteps=10000
   function rd(n) {
     if (n.space==='const') return mask(n.offset,n.size);
     if (n.space==='unique') { const k=n.offset+':'+n.size; if (!tmp.has(k)) throw new Error('Undefined P-code temporary '+k); return tmp.get(k); }
-    if (n.space==='ram') throw new Error('Direct RAM varnode read not implemented; use LOAD');
+    if (n.space==='ram') return memRead(n.offset,n.size);
     if (n.space!=='register' || n.offset+n.size>registers.length) throw new Error('Invalid register read');
     let v=0; for (let i=0;i<n.size;i++) v=(v*256)+registers[n.offset+i]; return v;
   }
   function wr(n,v) {
     v=mask(v,n.size);
     if (n.space==='unique') { tmp.set(n.offset+':'+n.size,v); return; }
+    if (n.space==='ram') { memWrite(n.offset,n.size,v); return; }
     if (n.space!=='register' || n.offset+n.size>registers.length) throw new Error('Invalid register write');
     for(let i=n.size-1;i>=0;i--) { registers[n.offset+i]=v & 255; v=Math.floor(v/256); }
   }
