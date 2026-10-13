@@ -23,6 +23,36 @@ from pcode_codegen import compile_function, Unsupported
 
 EXPECTED = {'0x622c': 3, '0x6755': 5}
 CONTRACT_NAME = 'illustrative-dp00-s0100-2ffc'
+
+# Independent byte-level sanity checks for *known* gngb MMIO instructions.
+# Only apply when the pinned ROM bytes match the known opcodes, so synthetic
+# fixtures can exercise the generic compiler without pretending to be gngb.
+# (instruction address, opcode bytes, access direction, effective address)
+KNOWN_IO = {
+    '0x622c': [
+        (0x622c, 'b63003', 'LOAD', 0x3003),
+        (0x6232, 'b63004', 'LOAD', 0x3004),
+    ],
+    '0x6755': [
+        (0x6759, 'f73d00', 'STORE', 0x3d00),
+        (0x675e, 'b73b09', 'STORE', 0x3b09),
+        (0x6761, 'f73b08', 'STORE', 0x3b08),
+    ],
+}
+
+def missing_known_io_sites(entry: str, image: bytes, accesses: list) -> list:
+    """Catch an exporter/audit that misses known fixed-address MMIO opcodes."""
+    missing=[]
+    for pc,opcode,operation,address in KNOWN_IO.get(entry,[]):
+        raw=bytes.fromhex(opcode)
+        if image[pc:pc+len(raw)]!=raw:
+            continue  # Different ROM/fixture; do not infer the opcode.
+        if not any(x['instruction']==f'0x{pc:04x}' and
+                   x['operation']==operation and
+                   x['address_interval']==[address,address] and
+                   x['width_bytes']==1 for x in accesses):
+            missing.append(f'0x{pc:04x} {operation} 0x{address:04x}')
+    return missing
 CORE_SIGNATURE = 'export function runRoutine(memory, registers=new Uint8Array(256), maxSteps=10000) {'
 DECLARATION = '  const tmp=new Map();'
 READ_HEADER = '  function memRead(addr,size) {\n'
@@ -83,6 +113,14 @@ def build(raw: dict, image: bytes, output_dir: Path, entries=None) -> dict:
             report['blocked'].append({'entry':entry,'reason':'Not exported by Ghidra'})
             continue
         obligations = evaluate(func)
+        missing_io=missing_known_io_sites(entry,image,obligations['accesses'])
+        if missing_io:
+            report['blocked'].append({
+                'entry':entry,
+                'reason':'Known ROM MMIO opcode absent from Ghidra P-code audit: '+
+                         ', '.join(missing_io),
+            })
+            continue
         if (obligations['access_count'] != EXPECTED[entry] or
                 obligations['conditionally_in_range'] != EXPECTED[entry] or
                 obligations['unresolved_or_forbidden'] != 0):
