@@ -1,4 +1,5 @@
 """Synthetic guarded JS execution, strict nonmutating failure behavior."""
+import hashlib
 import json
 import shutil
 import subprocess
@@ -153,3 +154,28 @@ assert.equal(m[0x3e00],0);
 
 if __name__=='__main__':
     unittest.main()
+
+
+class GuardedArtifactIntegrityTests(unittest.TestCase):
+    def test_generated_module_has_matching_sha256_in_manifest(self):
+        import copy
+        raw, image = create_synthetic_raw()
+        entry = raw['functions'][2]['instructions'][0]
+        # Exactly three legitimate reads, matching the 0x622c obligation
+        # count, without any assumption about a real game's DP/S state.
+        template = copy.deepcopy(entry['pcode'][0])
+        for i in (1, 2):
+            other = copy.deepcopy(template)
+            other['inputs'][1]['offset'] = hex(0xd8 + i)
+            other['output']['offset'] = hex(i)
+            entry['pcode'].insert(i, other)
+        with tempfile.TemporaryDirectory() as tmp:
+            report = build(raw, image, Path(tmp), ['0x622c'])
+            self.assertEqual(report['blocked'], [])
+            self.assertEqual(len(report['generated']), 1)
+            generated = report['generated'][0]
+            js = Path(generated['javascript']).read_bytes()
+            self.assertEqual(generated['sha256'], hashlib.sha256(js).hexdigest())
+            self.assertIn(b'Unmet experimental DP/S contract', js)
+            self.assertFalse(generated['equivalence_verified'])
+
