@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from pcode_memory_sites import sites
 
 def _int(value):
     return int(value, 16) if isinstance(value, str) and value.lower().startswith('0x') else int(value)
@@ -97,7 +98,7 @@ def _decision(op, bound, size, default_ram):
     return ('unresolved',False)
 
 def audit_function_memory(function):
-    """One record per LOAD/STORE, with proof that can be inspected manually."""
+    """One record per explicit or direct RAM data access; fail closed."""
     results=[]
     for ins in function['instructions']:
         # Unique temporaries are scoped to one decoded instruction only;
@@ -106,18 +107,21 @@ def audit_function_memory(function):
         for i,p in enumerate(ins.get('pcode',[])):
             op=p.get('op')
             operands=p.get('inputs',[])
-            if op in ('LOAD','STORE'):
-                ptr = operands[1] if len(operands)>=2 else None
-                size=(p.get('output') or {}).get('size') if op=='LOAD' else (
-                    operands[2].get('size') if len(operands)>=3 and isinstance(operands[2],dict)
-                    else None)
-                addr=_interval(ptr,env)
-                default_ram=p.get('space_name','RAM').casefold()=='ram' if isinstance(p.get('space_name','RAM'),str) else False
-                result,safe=_decision(op,addr,size,default_ram)
-                literal=isinstance(ptr,dict) and str(ptr.get('space','')).casefold()=='const'
+            for access_op,ptr,size,form,role in sites(p):
+                addr=((_int(ptr['offset']),_int(ptr['offset']))
+                      if form=='direct-varnode' and isinstance(ptr,dict)
+                      else _interval(ptr,env))
+                default_ram=(form=='direct-varnode' or
+                             (isinstance(p.get('space_name'),str) and
+                              p['space_name'].casefold()=='ram'))
+                result,safe=_decision(access_op,addr,size,default_ram)
+                literal=(form=='direct-varnode' or
+                         (isinstance(ptr,dict) and str(ptr.get('space','')).casefold()=='const'))
                 results.append({
                     'instruction':ins['address'],'assembly':ins.get('assembly',''),
-                    'pcode_index':i,'op':op,'space_name':p.get('space_name'),
+                    'pcode_index':i,'op':access_op,'pcode_op':op,
+                    'access_form':form,'operand_role':role,
+                    'space_name':p.get('space_name') if form=='explicit' else 'ram',
                     'pointer':ptr,'size':size,
                     'interval':list(addr) if addr is not None else None,
                     'derived_from': ('literal' if literal else

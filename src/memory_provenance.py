@@ -14,6 +14,7 @@ from pathlib import Path
 
 from memory_analysis import audit_function_memory
 from function_inventory import verify_raw
+from pcode_memory_sites import sites
 
 # Ghidra 6x09.sinc register offsets in byte-addressed register space.
 # For ordinary 6809 (not the HD6309 optional register extension):
@@ -79,7 +80,8 @@ def _bucket(sources):
 
 def profile(function):
     audited = audit_function_memory(function)
-    by_site={(x['instruction'], x['pcode_index']):x for x in audited}
+    by_site={(x['instruction'], x['pcode_index'], x['access_form'], x['operand_role']):x
+             for x in audited}
     items=[]
     for ins in function['instructions']:
         # Unique offsets can be reused by unrelated instructions. Reset here.
@@ -87,17 +89,17 @@ def profile(function):
         for index,op in enumerate(ins.get('pcode', [])):
             name=op.get('op')
             inputs=op.get('inputs', [])
-            if name in ('LOAD','STORE'):
-                ptr=inputs[1] if len(inputs)>1 else None
-                source=_sources(ptr,unique)
-                observed=by_site.get((ins['address'],index))
+            for access_op,ptr,size,form,role in sites(op):
+                source=(frozenset({'literal'}) if form=='direct-varnode'
+                        else _sources(ptr,unique))
+                observed=by_site.get((ins['address'],index,form,role))
                 if observed is None:
                     raise ValueError('Audit/trace memory-operation mismatch')
                 items.append({
                     'address':ins['address'],
                     'assembly':ins.get('assembly',''),
-                    'pcode_index':index,
-                    'operation':name,
+                    'pcode_index':index,'access_form':form,'operand_role':role,
+                    'operation':access_op,
                     'bucket':_bucket(source),
                     'sources':sorted(source),
                     'pointer':ptr,
