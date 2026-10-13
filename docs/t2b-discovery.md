@@ -548,3 +548,46 @@ contract during execution; then validate return behavior against
 independent reference state vectors. Do not assume DP=0 solely because
 a direct-page operand appears in disassembly. Unknown X/U memory
 remains excluded from these two contracts.
+
+
+## T2.B.7 — Guarded JS experiment, not runtime equivalence
+
+The operator observed \`hypothetical_in_range=3/3\` for \`0x622c\`
+and \`5/5\` for \`0x6755\` under an *illustrative* per-instruction
+\`DP=0\` and \`S in [0x0100,0x2ffc]\` contract. No native MC6809
+entry-state trace has verified those conditions.
+
+\`src/guarded_codegen.py\` now offers a separate, optional **experimental**
+JS generator for exactly those entrypoints. It:
+
+1. Verifies the complete Ghidra export against the matching 64 KiB ROM
+   snapshot (same vector/byte checks as the inventory).
+2. Requires all 3 or 5 P-code memory accesses to be conditionally bounded.
+3. Calls the *existing fail-closed P-code compiler*; unmodeled control
+   flow, missing P-code, ROM banks, or external calls remain hard blocks.
+4. Inserts DP/S checks at function entry and before every memory read/write.
+   Effective memory address checks for MMIO/ROM remain active.
+5. Runs the routine on copies of input memory and registers. If a guard
+   raises, the caller's original arrays have not been modified.
+6. Labels emitted files \`EXPERIMENTAL_NOT_EQUIVALENCE_VERIFIED\`; it
+   **never changes inventory classification or original codegen results**.
+
+Actual executable conditions can be *enforced* for a standalone
+invocation; this still does not show they hold at the game's call site,
+prove inter-instruction invariants, or supply independent native-CPU
+reference outputs.
+
+No new Ghidra run is needed:
+
+\`\`\`bash
+git pull --ff-only
+python3 src/guarded_codegen.py
+cat out/generated-guarded/report.json
+\`\`\`
+
+If the original P-code compiler cannot handle either real function,
+the guarded report says \`BLOCKED\` with the actual cause; do **not**
+replace those operations with guessed JS. If it emits modules, their
+outputs must next be compared with independent MC6809 reference state
+vectors (initial DP/S, memory, registers, return, side effects).
+\`GNG_T2B_ACCEPTANCE=NOT_ESTABLISHED\` until then.
