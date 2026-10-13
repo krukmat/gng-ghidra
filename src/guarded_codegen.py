@@ -12,6 +12,7 @@ complete; NO 6809-reference equivalence, reachability or bank behavior.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -97,6 +98,7 @@ def build(raw: dict, image: bytes, output_dir: Path, entries=None) -> dict:
         dest = output_dir / ('guarded_' + entry[2:] + '.mjs')
         dest.write_text(js)
         report['generated'].append({
+            'sha256': hashlib.sha256(js.encode('utf-8')).hexdigest(),
             'entry':entry,'javascript':str(dest),
             'conditional_access_count':EXPECTED[entry],
             'entry_and_per_memory_access_guards':True,
