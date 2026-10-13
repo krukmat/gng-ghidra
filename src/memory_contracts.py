@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from pcode_memory_sites import sites
 
 HYPOTHESIS = {
     'name': 'illustrative-dp00-s0100-2ffc',
@@ -114,16 +115,19 @@ def evaluate(function,hypothesis=HYPOTHESIS):
         for i,p in enumerate(ins.get('pcode',[])):
             op=p.get('op')
             inputs=p.get('inputs',[])
-            if op in ('LOAD','STORE'):
-                ptr=inputs[1] if len(inputs)>1 else None
-                interval=_read(ptr,env,bounds)
-                size=((p.get('output') or {}).get('size') if op=='LOAD'
-                      else inputs[2].get('size') if len(inputs)>2 and isinstance(inputs[2],dict)
-                      else None)
-                status=_classify(op,interval,size,str(p.get('space_name','')).casefold())
+            for access_op,ptr,size,form,role in sites(p):
+                if form=='direct-varnode' and isinstance(ptr,dict):
+                    addr=_number(ptr['offset'])
+                    interval=(addr,addr)
+                else:
+                    interval=_read(ptr,env,bounds)
+                space=('ram' if form=='direct-varnode'
+                       else str(p.get('space_name','')).casefold())
+                status=_classify(access_op,interval,size,space)
                 rows.append({
                     'instruction':ins['address'], 'assembly':ins.get('assembly',''),
-                    'pcode_index':i, 'operation':op, 'pointer':ptr,
+                    'pcode_index':i, 'operation':access_op,'pcode_op':op,
+                    'access_form':form,'operand_role':role,'pointer':ptr,
                     'address_interval':list(interval) if interval else None,
                     'width_bytes':size, 'hypothetical_classification':status,
                     'proof_requires_enforcement':status in

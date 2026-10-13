@@ -86,7 +86,19 @@ def build(raw: dict, image: bytes, output_dir: Path, entries=None) -> dict:
         if (obligations['access_count'] != EXPECTED[entry] or
                 obligations['conditionally_in_range'] != EXPECTED[entry] or
                 obligations['unresolved_or_forbidden'] != 0):
-            report['blocked'].append({'entry':entry,'reason':'DP/S contract obligations not all bounded'})
+            blockers=[x for x in obligations['accesses']
+                      if not x['proof_requires_enforcement']]
+            detail=(', '.join(x['instruction']+' '+x['access_form']+' '+
+                              x['operand_role']+' '+x['hypothetical_classification']+
+                              ' '+str(x['address_interval']) for x in blockers[:5]))
+            report['blocked'].append({
+                'entry':entry,
+                'reason':('DP/S contract obligations not all bounded: '+
+                          str(obligations['conditionally_in_range'])+'/'+
+                          str(obligations['access_count'])+
+                          ' safe; expected '+str(EXPECTED[entry])+
+                          '; blockers: '+(detail or 'unexpected access count')),
+            })
             continue
         try:
             normal = compile_function(normalize_function(func))
