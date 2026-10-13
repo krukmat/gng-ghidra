@@ -182,10 +182,10 @@ class GuardedArtifactIntegrityTests(unittest.TestCase):
 class DirectRamRuntimeTests(GuardedCodegenTests):
     def test_direct_ram_read_and_write_in_ram(self):
         ops=[
-            {'op':'COPY','inputs':[n('RAM',0x40,1)],
+            {'op':'COPY','inputs':[n('ram',0x40,1)],
              'output':n('register',0,1)},
             {'op':'COPY','inputs':[n('register',0,1)],
-             'output':n('RAM',0x41,1)},
+             'output':n('ram',0x41,1)},
             {'op':'RETURN','inputs':[n('register',24,2)],'output':None},
         ]
         code=guard_source(compile_function(ir_ops(ops=ops)))
@@ -201,7 +201,7 @@ assert.equal(m[0x41],0);
 
     def test_direct_mmio_read_is_not_faked_as_ram(self):
         ops=[
-            {'op':'COPY','inputs':[n('RAM',0x3003,1)],
+            {'op':'COPY','inputs':[n('ram',0x3003,1)],
              'output':n('register',0,1)},
             {'op':'RETURN','inputs':[n('register',24,2)],'output':None},
         ]
@@ -217,7 +217,7 @@ assert.equal(r[0],0);
     def test_direct_mmio_write_is_rejected(self):
         ops=[
             {'op':'COPY','inputs':[n('register',0,1)],
-             'output':n('RAM',0x3d00,1)},
+             'output':n('ram',0x3d00,1)},
             {'op':'RETURN','inputs':[n('register',24,2)],'output':None},
         ]
         code=guard_source(compile_function(ir_ops(ops=ops)))
@@ -230,7 +230,7 @@ assert.equal(m[0x3d00],0);
 """)
 
     def test_direct_varnode_crossing_64k_boundary_rejected(self):
-        ops=[{'op':'COPY','inputs':[n('RAM',0xffff,2)],
+        ops=[{'op':'COPY','inputs':[n('ram',0xffff,2)],
               'output':n('register',0,2)}]
         with self.assertRaisesRegex(Unsupported,'outside 6809 map'):
             compile_function(ir_ops(ops=ops))
@@ -246,7 +246,7 @@ class DirectRamSafetyGateTests(unittest.TestCase):
             other['inputs'][1]['offset']=hex(0xd8+i)
             ins['pcode'].insert(i,other)
         ins['pcode'].insert(0,{
-            'op':'COPY','inputs':[n('RAM',0x3003,1)],
+            'op':'COPY','inputs':[n('ram',0x3003,1)],
             'output':n('register',0,1)})
         with tempfile.TemporaryDirectory() as tmp:
             report=build(raw,image,Path(tmp),['0x622c'])
@@ -266,7 +266,7 @@ class DirectRamSafetyGateTests(unittest.TestCase):
             ins['pcode'].insert(i,other)
         ins['pcode'].insert(0,{
             'op':'COPY','inputs':[n('register',0,1)],
-            'output':n('RAM',0x3d00,1)})
+            'output':n('ram',0x3d00,1)})
         with tempfile.TemporaryDirectory() as tmp:
             report=build(raw,image,Path(tmp),['0x622c'])
             self.assertEqual(len(report['generated']),0)
