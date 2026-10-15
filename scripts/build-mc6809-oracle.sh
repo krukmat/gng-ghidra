@@ -21,7 +21,7 @@ if [[ -z "$CXX" ]]; then
   echo "GNG_NATIVE_BUILD=BLOCKED C++ compiler unavailable" >&2
   exit 1
 fi
-"$CXX" -std=c++17 -O2 -Wall -Wextra -I"$SOURCE/src" \
+"$CXX" -std=c++17 -O2 -Wall -Wextra -Wno-unused-parameter -I"$SOURCE/src" \
   scripts/mc6809-native-oracle.cpp \
   "$SOURCE/src/mc6809.cpp" \
   "$SOURCE/src/mc6809_addressing_modes.cpp" \
