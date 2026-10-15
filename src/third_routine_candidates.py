@@ -24,7 +24,8 @@ NON_LEAF_ROOTS = frozenset({'0x6000', '0x65c4', '0x65fb'})
 SCHEMA = 'gng.third-routine-triage.v1'
 
 
-def assess(function: dict) -> dict:
+def assess(function: dict, overlapping_instructions: int = 0,
+           incoming_decoded_call: bool = False) -> dict:
     entry = function['entry']
     instructions = function['instructions']
     obligations = evaluate(function)
@@ -42,12 +43,15 @@ def assess(function: dict) -> dict:
     # A decoded RTS with a P-code RETURN but no S-derived stack read is
     # an incomplete/fabricated model. The 6809 RTS must pop a 16-bit return
     # address. Keep this separate from merely compiling a RETURN opcode.
-    modeled_rts = any(
-        ins['raw'].casefold() == '39' and
-        any(p['op'] == 'RETURN' for p in ins.get('pcode', [])) and
+    rts_instructions = [
+        ins for ins in instructions
+        if ins['raw'].casefold() == '39' and
+        any(p['op'] == 'RETURN' for p in ins.get('pcode', []))
+    ]
+    modeled_rts = bool(rts_instructions) and all(
         any(x['address'] == ins['address'] and x['operation'] == 'LOAD'
             and x['bucket'] == 'stack-S' for x in provenance)
-        for ins in instructions
+        for ins in rts_instructions
     )
     opcodes = Counter(p['op'] for i in instructions for p in i.get('pcode', []))
     calls = opcodes['CALL'] + opcodes['CALLIND']
@@ -78,6 +82,9 @@ def assess(function: dict) -> dict:
         blockers.append('P-code/CFG compiler: ' + compile_blocker)
     if not modeled_rts:
         blockers.append('no validated RTS P-code pop from S')
+    if overlapping_instructions:
+        blockers.append('overlapping exported Ghidra CFG instructions: ' +
+                        str(overlapping_instructions))
     if mmio:
         blockers.append(f'{len(mmio)} fixed/dynamic MMIO access(es): needs board contract')
     if rom_writes:
@@ -88,7 +95,8 @@ def assess(function: dict) -> dict:
     # These classifications are *experimental candidate priorities*, not
     # assertions about game entry conditions or CPU functional equivalence.
     structurally_ready = (not compile_blocker and not calls and
-                          not interrupts and not bank_switch and modeled_rts)
+                          not interrupts and not bank_switch and modeled_rts
+                          and not overlapping_instructions)
     conditional_pure = (structurally_ready and not blockers and
                         conditional == len(accesses))
     if entry in PREVIOUSLY_DIFFERENTIALLY_TESTED:
@@ -114,6 +122,7 @@ def assess(function: dict) -> dict:
         - (600 if not structurally_ready else 0)
         - (900 if entry in NON_LEAF_ROOTS else 0)
         - (900 if entry in PREVIOUSLY_DIFFERENTIALLY_TESTED else 0)
+        - (45 if not incoming_decoded_call else 0)
         - 60 * len(rom_writes)
         - 30 * len(mmio)
         - 12 * len(unknown)
@@ -126,6 +135,8 @@ def assess(function: dict) -> dict:
         'pcode_ops': dict(sorted(opcodes.items())),
         'structural_compile_possible': compile_blocker is None,
         'modeled_6809_rts_stack_pop': modeled_rts,
+        'overlapping_exported_instruction_count': overlapping_instructions,
+        'decoded_incoming_call_provenance': incoming_decoded_call,
         'structural_block_reason': compile_blocker,
         'conditional_hypothesis': 'DP=0 at every instruction; 0x100<=S<=0x2ffc',
         'memory_total': len(accesses),
@@ -155,7 +166,22 @@ def assess(function: dict) -> dict:
 
 def rank(raw: dict, image: bytes) -> dict:
     verify_raw(raw, image)
-    items = [assess(f) for f in raw['functions']]
+    # Overlapping instruction boundaries across exported graphs make
+    # independent function boundaries unproven, even when P-code compiles.
+    owners = {}
+    for f in raw['functions']:
+        for ins in f['instructions']:
+            owners.setdefault(ins['address'],set()).add(f['entry'])
+    shared = {
+        f['entry']:sum(len(owners[i['address']])>1 for i in f['instructions'])
+        for f in raw['functions']
+    }
+    from function_inventory import direct_call_records
+    incoming = {x['target'] for f in raw['functions']
+                for x in direct_call_records(f)}
+    incoming.update(x['target'] for x in raw.get('anchored_verified_calls', []))
+    items = [assess(f, shared[f['entry']], f['entry'] in incoming)
+             for f in raw['functions']]
     items.sort(key=lambda x: (-x['priority'], x['instruction_count'], x['entry']))
     return {
         'schema': SCHEMA,
