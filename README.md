@@ -6,6 +6,18 @@ or gameplay recording**.
 
 ## Qué puedes ejecutar y ver hoy
 
+**Seguimiento visual:** seis checkpoints verificables ([roadmap](docs/roadmap.md)),
+con tablero local de capturas antes/después, independiente de los tests:
+
+```bash
+python3 scripts/visual-progress.py
+open out/visual-progress.html
+```
+
+No se atribuye «aceptado» automáticamente a la existencia de una imagen.
+Las capturas y gráficos ROM permanecen en `out/`, fuera de Git.
+
+
 - **[Roadmap de entregas visibles](docs/roadmap.md)**: diferencia gráficos ROM (V0), renderer VRAM (V1), primer frame derivado de código traducido (V2) y gameplay (V3). No contamos más funciones aisladas como avance visual.
 - **Visor gráfico local V0 (código implementado, ROM privada pendiente de comprobar):**
 

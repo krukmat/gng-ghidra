@@ -79,3 +79,83 @@ reconstruida del juego.
 
 Referencia de hardware visual: [MAME gng.cpp](https://github.com/mamedev/mame/blob/master/src/mame/capcom/gng.cpp)
 (`charlayout`, `tilelayout`, `spritelayout`, `gfx_gng`).
+
+
+## Seguimiento visual entre bloques — obligatorio a partir de V0
+
+Hay **seis checkpoints discretos** en
+[`docs/visual-milestones.json`](visual-milestones.json):
+V0, V1.1, V1.2, V1.3, V2 y V3. Cada uno define:
+salida local visible, dependencia, aceptación independiente de CI y
+fase real (`ROM GRAPHICS`, `VRAM FIXTURE`, `TRANSLATED ROM CODE`
+o `GAMEPLAY`). Los checkpoints no se cierran por cantidad de pruebas.
+
+El [dashboard local](../scripts/visual-progress.py) compara capturas
+privadas y muestra estados **separados del éxito de CI**:
+
+```bash
+python3 scripts/visual-progress.py
+open out/visual-progress.html
+```
+
+Puedes adjuntar imágenes **solo en tu equipo**:
+
+```text
+out/visual-evidence/v0/after.png
+out/visual-evidence/v1.1/before.png
+out/visual-evidence/v1.1/after.png
+out/visual-evidence/v1.2/before.png
+out/visual-evidence/v1.2/after.png
+out/visual-evidence/v1.3/before.png
+out/visual-evidence/v1.3/after.png
+```
+
+No es necesario adjuntar nada para generar el dashboard: aparecerán
+placeholders *Sin captura local*. Al añadir capturas, el HTML las
+incluye y permite una comparación visual. **La existencia de capturas
+no cambia el estado a ACCEPTED**; eso exige revisión explícita del
+usuario, criterios cumplidos y actualización del manifiesto versionado.
+
+### Contrato de cada bloque ejecutado
+
+1. **Tarea + subtareas de máximo 2 niveles** y dependencia con el
+   checkpoint anterior. Nada de investigación paralela sin salida visual.
+2. **Una salida ejecutable local**: HTML o visor, más comando reproducible.
+3. **Una diferencia observable**: captura antes/después (en V0 solo
+   captura inicial), con fuente de datos identificada.
+4. **Pruebas pertinentes y CI**: no sustituyen la evidencia visual.
+5. **STOP/GO**: si no hay cambio observable, no se declara entrega;
+   se corrige ese bloque antes de ampliar alcance.
+
+### Primeros dos bloques concretos
+
+**V0 — Visor de ROM** (implementado, pendiente comprobación en Mac).
+Se acepta al comprobar localmente la carga de sprites, tiles y
+caracteres y capturar `out/visual-evidence/v0/after.png`.
+Si el ZIP no contiene gráficos, documentar el chip faltante y usar
+`--shared` con ROM propia; no generar gráficos ficticios para dar PASS.
+
+**V1.1 — Primer render en memoria** (siguiente bloque de desarrollo).
+Subtareas: **A)** convertir una representación explícita de sprite
+RAM en instancias gráficas usando los bitplanes que ya carga V0;
+**B)** usar el mismo renderer para dos estados de memoria y guardar
+capturas antes/después. Entregar un HTML con control verificable de
+posición/índice de sprite. Sin código Motorola 6809 ejecutándose
+todavía: etiqueta visible `VRAM FIXTURE`.
+
+**V1.2 — FG/BG y scroll**: depende de V1.1. Subtareas:
+**A)** mapear atributos/flip/posición y memoria de tiles sobre
+Canvas; **B)** producir dos estados visuales deterministas y
+compararlos. No permitir estética aproximada como sustituto de
+mapear bytes reales de las ROM.
+
+**V1.3 — Primer efecto visual del programa traducido**:
+depende de V1.2. Subtareas: **A)** ejecutar el prefijo ROM ya
+traducido hasta `0x6016`; **B)** alimentar el renderer con la
+RAM resultante y comparar el estado previo/posterior. Si la
+inicialización es visualmente indistinguible, se debe mostrar un
+overlay explícito de los bytes modificados, sin inventar gameplay.
+
+Solo después V2 aborda SYNC, IRQ, bank switching y control-flow para
+un primer frame auténtico. Las rutinas adicionales deben justificar
+cómo habilitan ese frame.
