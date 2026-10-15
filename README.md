@@ -4,6 +4,19 @@ First **ROM-derived, testable** migration experiment for Ghosts 'n Goblins
 (`gngb`, Motorola 6809), deliberately **without MAME automation, video capture,
 or gameplay recording**.
 
+## Qué puedes ejecutar y ver hoy
+
+- **[Roadmap de entregas visibles](docs/roadmap.md)**: diferencia gráficos ROM (V0), renderer VRAM (V1), primer frame derivado de código traducido (V2) y gameplay (V3). No contamos más funciones aisladas como avance visual.
+- **Visor gráfico local V0 (código implementado, ROM privada pendiente de comprobar):**
+
+```bash
+git pull --ff-only
+python3 src/graphics_preview.py --rom roms/gng.zip
+open out/graphics-preview.html
+```
+
+Muestra sprites, tiles y caracteres desde los chips gráficos originales si están presentes en tu ZIP. Si la ROM está dividida, añade `--shared /ruta/al/parent.zip`. Los colores son diagnósticos, no la paleta real del arcade. **No es todavía un frame ni una partida ejecutada.** El HTML generado contiene píxeles de tu ROM y solo debe permanecer local.
+
 ## Status
 
 - **PASS locally (Python + Node):** real reset-loop ROM bytes → 7 decoded
@@ -15,8 +28,7 @@ or gameplay recording**.
   but not including `SYNC` at `0x6016`) compiled from Ghidra P-code to
   JavaScript, executed with Node; 384 sprite RAM bytes verified and
   execution suspended at the required boundary.
-- **T2.B still partial:** complete function translation, interrupt handling,
-  and three independently verified real ROM routines remain pending.
+- **T2.B still partial:** two original-ROM functions matched 60/60 laboratory CPU comparisons each; a third is not validated; live IRQ, bank switching and complete game execution remain pending.
 - **Not a playable port:** physics, graphics, Z80 sound, and other ROM banks
   have not been translated. No entire 6809 emulator is involved in the
   generated output.
