@@ -126,6 +126,13 @@ class BoardCodegenTests(unittest.TestCase):
                 self.assertFalse(item['equivalence_verified'])
             self.assertFalse(report['pure_codegen_eligibility_changed'])
             self.assertFalse(report['hardware_equivalence_verified'])
+            # The original pure generation contract MUST stay fail-closed.
+            from guarded_codegen import build as pure_build
+            pure=pure_build(raw,image,folder / 'pure',['0x622c','0x6755'])
+            self.assertEqual(len(pure['generated']),0)
+            self.assertEqual(len(pure['blocked']),2)
+            self.assertTrue(all('mmio-forbidden' in x['reason']
+                                for x in pure['blocked']))
 
     def test_no_uninstrumented_generated_output(self):
         with self.assertRaisesRegex(Unsupported,'anchor'):
@@ -209,6 +216,37 @@ const m=new Uint8Array(65536),r=new Uint8Array(256);
 r[9]=1;r[24]=2;m[0x40]=0xaa;
 assert.throws(()=>runRoutine(m,r,20,[]),/DP\\/S contract/);
 assert.equal(m[0x40],0xaa);assert.equal(m[0x3d00],0);
+""")
+
+
+    def test_runtime_forbids_new_mmio_write_even_in_board_mode(self):
+        f=candidate_6755()
+        f['instructions'][3]['pcode'].append(op_write(0x3b0f,0))
+        self.emit_and_run(f,'0x6755',"""
+const m=new Uint8Array(65536),r=new Uint8Array(256);r[24]=2;
+assert.throws(()=>runRoutine(m,r,20,[]),/Unapproved board MMIO/);
+assert.equal(m[0x3b0f],0);
+""")
+
+    def test_runtime_forbids_rom_write(self):
+        f=candidate_6755()
+        f['instructions'][0]['pcode'].insert(0,op_write(0x6000,0))
+        self.emit_and_run(f,'0x6755',"""
+const m=new Uint8Array(65536),r=new Uint8Array(256);r[24]=2;
+assert.throws(()=>runRoutine(m,r,20,[]),/ROM write forbidden/);
+assert.equal(m[0x6000],0);
+""")
+
+    def test_runtime_forbids_ram_mmio_cross_boundary(self):
+        f=candidate_6755()
+        f['instructions'][0]['pcode'].insert(0,{
+            'op':'STORE','space_name':'RAM','inputs':[
+              vn('const',1,8),vn('const',0x2fff,2),vn('register',18,2)],
+            'output':None})
+        self.emit_and_run(f,'0x6755',"""
+const m=new Uint8Array(65536),r=new Uint8Array(256);r[24]=2;
+assert.throws(()=>runRoutine(m,r,20,[]),/straddles board boundary/);
+assert.equal(m[0x2fff],0);
 """)
 
     def test_unapproved_runtime_mmio_access_is_rejected(self):
