@@ -222,3 +222,44 @@ assert.throws(()=>runRoutine(m,r,20,[
 """)
 
 if __name__=='__main__': unittest.main()
+
+@unittest.skipUnless(shutil.which('node'),'Node required')
+class BoardHarnessIntegrationTests(unittest.TestCase):
+    def test_synthetic_end_to_end_manifest_and_replay(self):
+        raw,image=synthetic_image_and_raw()
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)
+            manifest=build(raw,image,folder)
+            self.assertEqual(manifest['blocked'],[])
+            filename=folder/'report.json'
+            filename.write_text(json.dumps(manifest))
+            script=Path(__file__).resolve().parents[1]/'scripts/verify-board-functions.mjs'
+            result=subprocess.run(['node',str(script),str(filename)],
+                capture_output=True,text=True,timeout=30)
+            self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+            report=json.loads((folder/'verification-report.json').read_text())
+            self.assertEqual(report['status'],'PASS_BOARD_JS_ONLY')
+            self.assertFalse(report['equivalence_verified'])
+            self.assertFalse(report['hardware_behavior_verified'])
+            self.assertFalse(report['entry_invariants_proven'])
+            self.assertEqual([len(x['accepted']) for x in report['routines']],[3,3])
+            self.assertEqual([len(x['rejected']) for x in report['routines']],[3,3])
+            self.assertEqual(len(report['routines'][0]['accepted'][0]['ioTrace']),2)
+            self.assertEqual(len(report['routines'][1]['accepted'][0]['ioTrace']),5)
+
+    def test_changed_artifact_digest_fails_closed(self):
+        raw,image=synthetic_image_and_raw()
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)
+            manifest=build(raw,image,folder)
+            filename=folder/'report.json'
+            filename.write_text(json.dumps(manifest))
+            Path(manifest['generated'][0]['javascript']).write_text('tampered module')
+            script=Path(__file__).resolve().parents[1]/'scripts/verify-board-functions.mjs'
+            result=subprocess.run(['node',str(script),str(filename)],
+                capture_output=True,text=True,timeout=30)
+            self.assertNotEqual(result.returncode,0)
+            report=json.loads((folder/'verification-report.json').read_text())
+            self.assertEqual(report['status'],'FAILED')
+            self.assertIn('digest mismatch',report['failures'][0]['reason'])
+
