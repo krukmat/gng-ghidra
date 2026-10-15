@@ -23,6 +23,18 @@ def add_candidate(raw,image,entry,pc_ops):
     return raw,bytes(data)
 
 
+
+def modeled_rts_ops():
+    """Synthetic P-code models an actual 6809 RTS: 2-byte S pop and RETURN."""
+    return [
+        {'op':'LOAD','space_name':'RAM','output':vn('unique',0x200,2),
+         'inputs':[vn('const',1,8),vn('register',24,2)]},
+        {'op':'INT_ADD','inputs':[vn('register',24,2),vn('const',2,2)],
+         'output':vn('register',24,2)},
+        {'op':'RETURN','output':None,'inputs':[vn('unique',0x200,2)]},
+    ]
+
+
 class ThirdRoutineRankingTests(unittest.TestCase):
     def test_real_previous_two_not_represented_as_third(self):
         raw,image=synthetic_image_and_raw()
@@ -47,10 +59,8 @@ class ThirdRoutineRankingTests(unittest.TestCase):
         raw,image=synthetic_image_and_raw()
         load={'op':'LOAD','space_name':'RAM','output':vn('register',0,1),
               'inputs':[vn('const',1,8),vn('register',18,2)]}
-        rts={'op':'RETURN','output':None,
-             'inputs':[vn('register',24,2)]}
         raw,image=add_candidate(raw,image,0x7930,[
-            (0x7930,[load]),(0x7931,[rts])])
+            (0x7930,[load]),(0x7931,modeled_rts_ops())])
         report=rank(raw,image)
         candidate=next(x for x in report['candidates']
                        if x['entry']=='0x7930')
@@ -64,10 +74,8 @@ class ThirdRoutineRankingTests(unittest.TestCase):
         raw,image=synthetic_image_and_raw()
         direct={'op':'COPY','inputs':[vn('RAM',0x40,1)],
                 'output':vn('register',0,1)}
-        rts={'op':'RETURN','output':None,
-             'inputs':[vn('register',24,2)]}
         raw,image=add_candidate(raw,image,0x7930,[
-            (0x7930,[direct]),(0x7931,[rts])])
+            (0x7930,[direct]),(0x7931,modeled_rts_ops())])
         report=rank(raw,image)
         selected=report['candidates'][0]
         self.assertEqual(selected['entry'],'0x7930')
@@ -77,14 +85,26 @@ class ThirdRoutineRankingTests(unittest.TestCase):
         self.assertFalse(selected['conditional_pure_eligibility_proven'])
         self.assertFalse(selected['game_reachability_proven'])
 
+    def test_forged_return_without_stack_pop_stays_structurally_blocked(self):
+        raw,image=synthetic_image_and_raw()
+        raw,image=add_candidate(raw,image,0x7930,[
+            (0x7930,[{'op':'COPY','inputs':[vn('RAM',0x40,1)],
+                      'output':vn('register',0,1)}]),
+            (0x7931,[{'op':'RETURN','inputs':[vn('register',24,2)],
+                      'output':None}]),
+        ])
+        item=next(x for x in rank(raw,image)['candidates']
+                  if x['entry']=='0x7930')
+        self.assertEqual(item['status'],'STRUCTURAL_BLOCK')
+        self.assertFalse(item['modeled_6809_rts_stack_pop'])
+        self.assertIn('no validated RTS P-code pop from S',item['blockers'])
+
     def test_unknown_io_and_mmio_store_are_separate_from_index_bounds(self):
         raw,image=synthetic_image_and_raw()
         direct_write={'op':'COPY','inputs':[vn('register',0,1)],
                       'output':vn('RAM',0x3b10,1)}
-        rts={'op':'RETURN','output':None,
-             'inputs':[vn('register',24,2)]}
         raw,image=add_candidate(raw,image,0x7930,[
-            (0x7930,[direct_write]),(0x7931,[rts])])
+            (0x7930,[direct_write]),(0x7931,modeled_rts_ops())])
         item=next(x for x in rank(raw,image)['candidates']
                   if x['entry']=='0x7930')
         self.assertEqual(item['status'],'NEEDS_BOARD_CONTRACT')
