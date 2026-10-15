@@ -245,3 +245,26 @@ cat out/generated-board/verification-report.json
 The output reports deterministic JS execution and exact I/O traces.
 **No behavioral equivalence with an independent MC6809 implementation
 is established by JS-only tests.** Pure output remains blocked.
+
+### T2.B.9-C — Independent CPU oracle (test-only)
+
+The two ROM-derived board functions have now passed the operator's
+controlled JS execution with 3 accepted and 3 rejected states each.
+The separate independent CPU differential is implemented but **not yet
+validated against the operator's real ROM**.
+
+Build a pinned third-party C++ MC6809 reference, execute actual ROM
+instruction bytes on synthetic input states, and compare complete
+register/CC/S, return boundaries, memory deltas, and ordered MMIO events:
+
+```bash
+git pull --ff-only
+python3 src/board_codegen.py
+bash scripts/build-mc6809-oracle.sh
+node scripts/compare-mc6809.mjs
+cat out/generated-board/differential-report.json
+```
+
+No proprietary ROM is transferred or committed. The test-only
+oracle is not a game emulator dependency. See
+[MC6809 differential verification](docs/t2b-mc6809-differential.md).

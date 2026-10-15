@@ -343,3 +343,12 @@ memory sites. The remaining seven are fixed MMIO accesses. The pure codegen
 gate correctly refuses them. See the [board-aware experimental plan](t2b-board-io.md)
 for the separate 7-site allowlist, generated JS event-trace semantics,
 real-ROM operator commands and pending MC6809 differential acceptance gate.
+
+## T2.B.9-C — Independent MC6809 differential integration
+
+A separate pinned external MC6809 C++ instruction engine is now
+compiled in a ROM-free CI smoke job. The test-only adapter and Node
+differential checker compare real CPU instructions (from the owner's
+local 64 KiB ROM image) against compiled P-code JS. The operator's
+real-ROM comparison is still pending; no behavioral equivalence is
+claimed. See [differential verification](t2b-mc6809-differential.md).
