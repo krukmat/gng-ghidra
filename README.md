@@ -204,18 +204,18 @@ modules, **not yet behaviorally equivalent** to the MC6809 CPU.
 
 Run a bounded, deterministic JS-only harness (no new Ghidra run):
 
-\`\`\`bash
+```bash
 git pull --ff-only
 python3 src/guarded_codegen.py
 node scripts/verify-guarded-functions.mjs
-\`\`\`
+```
 
 The harness requires SHA-256 of each generated file, checks three
 synthetic input cases per routine, replay determinism, no MMIO/ROM
 mutations, non-mutation of caller buffers, and invalid-DP/S rejection.
-It writes \`out/generated-guarded/verification-report.json\`.
+It writes `out/generated-guarded/verification-report.json`.
 
-Even a successful \`GNG_GUARDED_HARNESS=PASS_JS_CONTROLLED_ONLY\`
+Even a successful `GNG_GUARDED_HARNESS=PASS_JS_CONTROLLED_ONLY`
 is **not** a native 6809 comparison. See [T2.B.9 harness gate](docs/t2b.md).
 
 **T2.B.9 safety update (2026-10-13):** the previous conditional
@@ -225,3 +225,23 @@ and guarded pure-codegen gate now include those accesses; a BLOCKED
 result is expected until a hardware I/O test adapter is explicitly
 defined. See [T2.B discovery and memory safety](docs/t2b-discovery.md).
 
+### T2.B.9-A/B — Experimental board-aware ROM transpilation
+
+The previously unsafe routines remain BLOCKED under pure codegen. A separate
+[board-aware experiment](docs/t2b-board-io.md) now permits exactly seven
+verified MMIO sites: two injected one-byte reads in 0x622c and five recorded
+one-byte writes in 0x6755. The new generator never silently writes MMIO into
+the RAM buffer or simulates board behavior.
+
+With an existing verified local Ghidra export, execute:
+
+```bash
+git pull --ff-only
+python3 src/board_codegen.py
+node scripts/verify-board-functions.mjs
+cat out/generated-board/verification-report.json
+```
+
+The output reports deterministic JS execution and exact I/O traces.
+**No behavioral equivalence with an independent MC6809 implementation
+is established by JS-only tests.** Pure output remains blocked.

@@ -242,15 +242,15 @@ See [B.6–7 detailed design](t2b-discovery.md).
 0x622c and 0x6755 passed the conditional DP/S analysis (3/3 and 5/5
 addresses, respectively), and the experimental guarded JS generator
 produced **two modules, zero blocks**. Their status is
-\`EXPERIMENTAL_NOT_EQUIVALENCE_VERIFIED\`; there are no independent MC6809
+`EXPERIMENTAL_NOT_EQUIVALENCE_VERIFIED`; there are no independent MC6809
 state vectors yet.
 
-\`scripts/verify-guarded-functions.mjs\` now executes those *existing*
+`scripts/verify-guarded-functions.mjs` now executes those *existing*
 generated modules under three deterministic synthetic input states per
 routine (low/mid/high safe stack address). It checks:
 - the generated module's SHA-256 matches the manifest, and each module
   corresponds to the expected entry point and DP/S contract;
-- exactly bounded execution returning at the known source \`RTS\`
+- exactly bounded execution returning at the known source `RTS`
   instruction (0x6238 or 0x6771; this is NOT the CPU return PC);
 - registers, memory, steps and output fingerprints are reproducible;
 - no writes to MMIO/ROM (0x3000 and above);
@@ -264,24 +264,24 @@ must never report behavioral equivalence.
 
 Run in the repository directory (no new Ghidra execution):
 
-\`\`\`bash
+```bash
 git pull --ff-only
 python3 src/guarded_codegen.py
 node scripts/verify-guarded-functions.mjs
 cat out/generated-guarded/verification-report.json
-\`\`\`
+```
 
 Expected stdout marker if and **only if** the two real compiled modules
 complete all three controlled cases and reject invalid conditions:
 
-\`\`\`text
+```text
 GNG_GUARDED_HARNESS=PASS_JS_CONTROLLED_ONLY routines=2
 GNG_6809_EQUIVALENCE=NOT_ESTABLISHED synthetic inputs; no native CPU oracle
-\`\`\`
+```
 
 The harness writes detailed synthetic input seeds, stack values,
 changed-memory/register offsets, steps and SHA-256 output-state
-fingerprints into \`out/generated-guarded/verification-report.json\`.
+fingerprints into `out/generated-guarded/verification-report.json`.
 If a real routine fails, the harness writes a failure reason, returns
 nonzero and leaves T2.B.9 open. No ROM or extracted memory content
 is committed to the repository.
@@ -296,42 +296,50 @@ porting, IRQ, MMIO, dynamic banks and sound are outside this gate.
 ## T2.B.9 safety correction — direct RAM varnodes (October 13, 2026)
 
 The operator's real guarded JS execution FAILED:
-- \`0x622c\`: \`Direct RAM varnode read not implemented; use LOAD\`.
-- \`0x6755\`: \`Invalid register write\`.
+- `0x622c`: `Direct RAM varnode read not implemented; use LOAD`.
+- `0x6755`: `Invalid register write`.
 
 This is not just a missing JS emitter feature. Native Ghidra P-code
 may encode concrete memory accesses as **direct RAM-space varnodes**,
-not only \`LOAD\`/\`STORE\` operations. Previous 3/3 and 5/5 conditional
+not only `LOAD`/`STORE` operations. Previous 3/3 and 5/5 conditional
 bounds were therefore **incomplete access inventories**.
 
 Independent instruction bytes already recorded for the matching ROM
-indicate \`LDA $3003\`, \`LDA $3004\` in \`0x622c\` and stores to
-\`$3d00\`, \`$3b09\`, \`$3b08\` in \`0x6755\`. These addresses fall in
-the project's forbidden I/O window \`0x3000..0x3fff\`. Do not call
+indicate `LDA $3003`, `LDA $3004` in `0x622c` and stores to
+`$3d00`, `$3b09`, `$3b08` in `0x6755`. These addresses fall in
+the project's forbidden I/O window `0x3000..0x3fff`. Do not call
 these routines hardware-independent RAM leaves.
 
-The shared \`src/pcode_memory_sites.py\` now enumerates both explicit
+The shared `src/pcode_memory_sites.py` now enumerates both explicit
 and direct-varnode memory data accesses. Control-flow target varnodes
 to BRANCH/CBRANCH/CALL/RETURN are **not** counted as data accesses.
-\`memory_analysis.py\`, \`memory_contracts.py\`, and
-\`memory_provenance.py\` share this inventory. The compiler can emit
+`memory_analysis.py`, `memory_contracts.py`, and
+`memory_provenance.py` share this inventory. The compiler can emit
 direct RAM reads/writes through the existing guarded helpers, but the
-**pure** \`guarded_codegen.py\` blocks any unmodeled I/O access.
+**pure** `guarded_codegen.py` blocks any unmodeled I/O access.
 
 Recompute the real-ROM inventory without rerunning Ghidra:
 
-\`\`\`bash
+```bash
 git pull --ff-only
 python3 src/memory_contracts.py --entries 0x622c 0x6755
 python3 src/guarded_codegen.py
-\`\`\`
+```
 
 The local ROM/Ghidra export determines the exact access counts.
-\`GNG_GUARDED_CODEGEN=EXPERIMENTAL generated=0 blocked=2\` is a
+`GNG_GUARDED_CODEGEN=EXPERIMENTAL generated=0 blocked=2` is a
 **correct fail-closed result** if the known MMIO operands are present.
-The previous \`generated=2\` does not constitute equivalence.
+The previous `generated=2` does not constitute equivalence.
 
 Next: either select RAM-only leaf candidates, or introduce a separate
 explicit, narrowly allowlisted I/O port adapter for test fixtures with
 recorded reads/writes and a 6809 differential oracle. Never silently
 treat I/O as ordinary RAM to force a PASS. T2.B.9 remains open.
+
+## T2.B.9-A/B — board-aware experiment
+
+The real-ROM memory audit established 3/5 and 5/10 conditionally RAM-safe
+memory sites. The remaining seven are fixed MMIO accesses. The pure codegen
+gate correctly refuses them. See the [board-aware experimental plan](t2b-board-io.md)
+for the separate 7-site allowlist, generated JS event-trace semantics,
+real-ROM operator commands and pending MC6809 differential acceptance gate.

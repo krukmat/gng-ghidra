@@ -3,8 +3,8 @@
 ## Purpose and evidence boundary
 
 This is an experimental **transpiler extension**, not a 6809 emulator.
-Two routines generated from the owner's byte-matched \`gngb\` ROM
-depend on hardware I/O. The existing pure \`guarded_codegen.py\` correctly
+Two routines generated from the owner's byte-matched `gngb` ROM
+depend on hardware I/O. The existing pure `guarded_codegen.py` correctly
 rejects them; its eligibility is **unchanged**.
 
 Real Ghidra/ROM memory audit provided by the operator:
@@ -18,7 +18,7 @@ The labels here identify *address/direction/width*, **not** verified
 functional meanings of DIP switches, graphics scroll registers or other
 real-world board operations.
 
-\`src/board_codegen.py\` is a separate **board-aware** compilation gate.
+`src/board_codegen.py` is a separate **board-aware** compilation gate.
 It uses the same ROM-authenticated Ghidra P-code, normalized typed IR,
 and conditional DP/S hypothesis as pure compilation, with an exact MMIO
 allowlist tied to source-PC, direction, address and width. All five
@@ -36,29 +36,29 @@ precondition, nor that it suffices for arbitrary caller state.
 
 ## Execution model (zero implicit hardware emulation)
 
-Output is a standalone \`board_<entry>.mjs\` with:
+Output is a standalone `board_<entry>.mjs` with:
 
-\`\`\`js
+```js
 runRoutine(memory, registers, maxSteps, ioReads)
-\`\`\`
+```
 
-- \`memory\` is a caller-owned 65,536-byte buffer; \`registers\` is a
+- `memory` is a caller-owned 65,536-byte buffer; `registers` is a
   256-byte byte-addressed Ghidra register file. Both are copied before
   executing the generated core, including rejection paths.
-- \`ioReads\` is an **exact ordered array** of \`{addr,size,value}\`.
-  For \`0x622c\`, pass the values of addresses \`0x3003\` and \`0x3004\`
-  (each width 1); for \`0x6755\`, pass \`[]\`. Any missing, extra,
+- `ioReads` is an **exact ordered array** of `{addr,size,value}`.
+  For `0x622c`, pass the values of addresses `0x3003` and `0x3004`
+  (each width 1); for `0x6755`, pass `[]`. Any missing, extra,
   reordered, wrong-sized or out-of-range input is rejected.
-- \`memRead\` and \`memWrite\` continue to access normal RAM. Only
-  exact whitelisted I/O sites may invoke \`readBoard\`/\`writeBoard\`.
+- `memRead` and `memWrite` continue to access normal RAM. Only
+  exact whitelisted I/O sites may invoke `readBoard`/`writeBoard`.
   An I/O write **does not write the memory buffer**; it adds a recorded
-  effect to \`ioTrace\`. An I/O read consumes one injected value and
+  effect to `ioTrace`. An I/O read consumes one injected value and
   records it. No timers, sprites, registers or other board state is
   simulated.
-- The returned \`{registers,memory,steps,pc,ioTrace}\` includes all
+- The returned `{registers,memory,steps,pc,ioTrace}` includes all
   observed I/O effects, including their order, source instruction PC,
-  address, direction, width and byte value. A \`RETURN\` checks that
-  there are no unused read inputs. The \`pc\` is the source RTS
+  address, direction, width and byte value. A `RETURN` checks that
+  there are no unused read inputs. The `pc` is the source RTS
   instruction address, **not** the CPU return target.
 
 The source is compiled P-code operations, not an interpreter or
@@ -69,34 +69,34 @@ or MMIO order, T2.B.9 remains blocked.
 
 ## Operator: regenerate and exercise real ROM-derived board modules
 
-Use your **existing local** byte-matched \`out/functions.raw.json\`
-and \`out/gngb-flat.bin\` (Ghidra does not need to be rerun).
+Use your **existing local** byte-matched `out/functions.raw.json`
+and `out/gngb-flat.bin` (Ghidra does not need to be rerun).
 
-\`\`\`bash
+```bash
 git pull --ff-only
 python3 -m unittest discover -s tests -v
 python3 src/board_codegen.py
 node scripts/verify-board-functions.mjs
 cat out/generated-board/verification-report.json
-\`\`\`
+```
 
 Expected **only if actual P-code compiles and runs successfully**:
 
-\`\`\`text
+```text
 GNG_BOARD_CODEGEN=EXPERIMENTAL generated=2 blocked=0
 GNG_BOARD_HARNESS=PASS_BOARD_JS_ONLY routines=2
 GNG_MC6809_EQUIVALENCE=NOT_ESTABLISHED no independent CPU reference
-\`\`\`
+```
 
 If actual Ghidra P-code contains unsupported semantics, access paths,
 or byte mismatches, the generator/harness will fail explicitly. Do not
 report the synthetic CI PASS as a real-ROM PASS. Inspect:
 
-- \`out/generated-board/report.json\` for blocked compilation.
-- \`out/generated-board/verification-report.json\` for ordered I/O
+- `out/generated-board/report.json` for blocked compilation.
+- `out/generated-board/verification-report.json` for ordered I/O
   traces, register/memory deltas, replay hashes, individual failures.
 
-The report and all ROM-derived data are inside ignored \`out/\`.
+The report and all ROM-derived data are inside ignored `out/`.
 Do not commit the ROM, memory contents, generated code or vectors.
 
 ## Acceptance gates and next stages
@@ -115,4 +115,4 @@ Do not commit the ROM, memory contents, generated code or vectors.
    close the initial translation gate. Banks, interrupts, IRQ timing,
    sprites, sound and full-game functionality remain later milestones.
 
-CI has no proprietary ROM and must not claim to exercise \`gngb\`.
+CI has no proprietary ROM and must not claim to exercise `gngb`.
