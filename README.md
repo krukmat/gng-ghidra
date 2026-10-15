@@ -268,3 +268,27 @@ cat out/generated-board/differential-report.json
 No proprietary ROM is transferred or committed. The test-only
 oracle is not a game emulator dependency. See
 [MC6809 differential verification](docs/t2b-mc6809-differential.md).
+
+
+### Native MC6809 differential and third-routine selection (2026-10-15)
+
+**Operator-verified result:** `0x622c` and `0x6755` each matched
+3/3 real ROM opcode executions against the independent MC6809 CPU,
+under synthetic DP/S/board-read input states. The generated JS and
+native CPU agreed on registers, CC flags, RAM changes, RTS behavior
+and ordered MMIO effects. **No actual game entry-state/reachability
+proof exists yet.** See [audit evidence](docs/audit/t2b-mc6809-operator-evidence-2026-10-15.md).
+
+The independent differential test is now expanded to **60 states per
+routine**. For the next block (without rerunning Ghidra):
+
+```bash
+git pull --ff-only
+python3 src/board_codegen.py
+node scripts/compare-mc6809.mjs
+python3 src/third_routine_candidates.py --limit 8
+```
+
+The last command ranks the already-exported ROM functions, detects
+unknown X/U bounds, fixed MMIO, overlapping graphs and incomplete
+RTS stack models. Its shortlist is **static triage, not a certification**.

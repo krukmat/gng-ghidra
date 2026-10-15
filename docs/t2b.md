@@ -352,3 +352,21 @@ differential checker compare real CPU instructions (from the owner's
 local 64 KiB ROM image) against compiled P-code JS. The operator's
 real-ROM comparison is still pending; no behavioral equivalence is
 claimed. See [differential verification](t2b-mc6809-differential.md).
+
+
+## T2.B.9-C — Operator-verified six vectors
+
+On October 15, 2026, the operator executed the **actual ROM-derived**
+two board modules against the independently compiled MC6809 C++ CPU
+oracle: `GNG_MC6809_DIFFERENTIAL=PASS_DIFFERENTIAL_TEST_VECTORS`.
+The comparison matched 3/3 cases for 0x622c and 3/3 for 0x6755,
+with no deviations. This validates six reproducible laboratory entry
+states, not reachability during play or global CPU equivalence.
+Full evidence: [operator result](audit/t2b-mc6809-operator-evidence-2026-10-15.md).
+
+The next executable blocks are expanding to 60 native CPU vectors per
+routine and selecting a third genuine Ghidra-exported function using
+`src/third_routine_candidates.py`. The latter rejects overlapping
+exported CFGs, lacks-of-RTS-stack-pop evidence and unbounded index
+registers as independent-function proofs. Selection remains conditional
+until the operator's private ROM audit is examined.

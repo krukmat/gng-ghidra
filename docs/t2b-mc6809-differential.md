@@ -89,3 +89,32 @@ cases only; it does **not** establish that `DP=0` and
 IRQ, sound, sprites, timing, and full-game behavior. T2.B closure
 still requires a third genuine routine and verified runtime entry
 conditions, or an explicitly documented narrower acceptance criterion.
+
+
+## Operator's genuine ROM differential result — October 15, 2026
+
+The independent, third-party MC6809 CPU test **passed on the actual
+local ROM**, with synthetic initial states: `0x622c` had 3/3 matched
+vectors and `0x6755` had 3/3. Both generated without static board
+MMIO blockers. This is a **verified six-vector differential result**,
+not exhaustive equivalence and not evidence of actual game entry states.
+See [operator evidence](audit/t2b-mc6809-operator-evidence-2026-10-15.md).
+
+The differential suite now includes **60 deterministic vectors per
+routine** (boundary stacks, port extremes and seeded register/RAM
+states). These expanded real-ROM runs are still pending operator
+execution. The third-candidate ROM-backed triage is available through:
+
+```bash
+git pull --ff-only
+python3 src/board_codegen.py
+node scripts/compare-mc6809.mjs
+python3 src/third_routine_candidates.py --limit 8
+```
+
+The final command reuses `out/functions.raw.json` and
+`out/gngb-flat.bin`; it does not rerun Ghidra or expose the ROM.
+It writes `out/third-routine-candidates.json` (gitignored).
+`POTENTIAL_CONDITIONAL_PURE_LEAF` is **not** a proof: the tool
+requires native RTS P-code S-pop evidence, checks Ghidra graph
+overlap, and marks unproven decoded-call reachability separately.
