@@ -54,7 +54,7 @@ public:
     mutable std::vector<Event> trace;
     bool readOnlyRom=true;
     void init(uint16_t target,uint32_t randomSeed,uint16_t sp,
-              const std::string &filename) {
+              const std::string &filename,uint16_t forcedIndex=0) {
         std::ifstream in(filename,std::ios::binary);
         if (!in.read(reinterpret_cast<char *>(rom.data()),rom.size()))
             throw std::runtime_error("Need exactly 65536 ROM bytes");
@@ -72,6 +72,15 @@ public:
         r[17]=static_cast<uint8_t>(entry);
         r[24]=static_cast<uint8_t>(sp>>8);
         r[25]=static_cast<uint8_t>(sp);
+        if (target==0x6239) {
+            // The 3rd-candidate experiment sets X/Y/U to the same
+            // controlled RAM-domain value, exactly as JS does. No
+            // semantics are inferred about the game's actual state.
+            for (int offset : {18,20,22}) {
+                r[offset]=static_cast<uint8_t>(forcedIndex>>8);
+                r[offset+1]=static_cast<uint8_t>(forcedIndex);
+            }
+        }
         data[sp]=0x70;data[sp+1]=0x00;
         // reset reads the ROM reset vector before test-specific registers.
         reset();
@@ -120,15 +129,26 @@ public:
 };
 int main(int argc,char **argv) {
     try {
-        if (argc!=5)
+        if (argc!=5 && argc!=7)
             throw std::runtime_error(
-                "Usage: mc6809-reference <out/gngb-flat.bin> <entry> <seed> <stack>");
+                "Usage: mc6809-reference <flat-ROM> <entry> <seed> <stack> [source-RTS index-X/Y/U]");
         uint32_t e=parseNum(argv[2]),seed=parseNum(argv[3]),s=parseNum(argv[4]);
-        if ((e!=0x622c && e!=0x6755) || s<0x100 || s>0x2ffc)
-            throw std::runtime_error("Unsupported entry or stack contract");
+        if ((e!=0x622c && e!=0x6755 && e!=0x6239) ||
+                s<0x100 || s>0x2ffc ||
+                (e==0x6239 ? argc!=7 : argc!=5))
+            throw std::runtime_error("Unsupported entry, parameters or stack contract");
+        uint32_t rtsInput=e==0x6239?parseNum(argv[5]):
+                          (e==0x622c?0x6238u:0x6771u);
+        uint32_t indexInput=e==0x6239?parseNum(argv[6]):0u;
+        if (rtsInput>0xffff || (e==0x6239 && (
+                rtsInput<=0x6239 || indexInput<0x100 || indexInput>0x2ffc)))
+            throw std::runtime_error("Invalid third-routine RTS or index contract");
+        const uint16_t expectedRts=static_cast<uint16_t>(rtsInput);
         BoardCpu cpu;
-        cpu.init(static_cast<uint16_t>(e),seed,static_cast<uint16_t>(s),argv[1]);
-        const uint16_t expectedRts=e==0x622c?0x6238:0x6771;
+        cpu.init(static_cast<uint16_t>(e),seed,static_cast<uint16_t>(s),
+                 argv[1],static_cast<uint16_t>(indexInput));
+        if (e==0x6239 && cpu.rom[expectedRts]!=0x39)
+            throw std::runtime_error("Third-routine source RTS not backed by MC6809 opcode 0x39");
         uint32_t steps=0;
         bool rtsSeen=false;
         while(cpu.get_pc()!=0x7000 && steps<1000) {
@@ -139,7 +159,7 @@ int main(int argc,char **argv) {
         }
         if (!rtsSeen || cpu.get_pc()!=0x7000)
             throw std::runtime_error("Native CPU did not execute expected RTS to 0x7000");
-        const size_t expectedEvents=e==0x622c?2:5;
+        const size_t expectedEvents=e==0x622c?2:(e==0x6755?5:0);
         if (cpu.trace.size()!=expectedEvents || cpu.nextIoRead!=(e==0x622c?2u:0u))
             throw std::runtime_error("Native CPU board event count mismatch");
         // NOTE stdout is not pure JSON because upstream cpu.reset() and
@@ -152,6 +172,7 @@ int main(int argc,char **argv) {
                   << "\"seed\":"<<seed<<",\"stack\":"<<s<<","
                   << "\"return_address\":28672,"
                   << "\"source_rts\":"<<expectedRts<<","
+                  << "\"index_initial\":"<<indexInput<<","
                   << "\"steps\":"<<steps<<",\"registers\":{";
         std::cout << "\"A\":"<<(int)cpu.get_ac()<<",\"B\":"<<(int)cpu.get_br()
                   <<",\"CC\":"<<(int)cpu.get_cc()<<",\"DP\":"<<(int)cpu.get_dp()
