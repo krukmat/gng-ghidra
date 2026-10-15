@@ -20,9 +20,18 @@ const GATES={
            {kind:'write',pc:0x676b,addr:0x3b0b,size:1},
            {kind:'write',pc:0x676e,addr:0x3b0a,size:1}]},
 };
-const CASES=[{name:'low',seed:0x13572468,stack:0x200},
-  {name:'mid',seed:0x31415926,stack:0x1000},
-  {name:'high',seed:0x9abcdef0,stack:0x2ffc}];
+// Native/JS vectors exercise input-port extremes, CC/register randomness,
+// and lower/upper stack boundaries. Still synthetic entry states, not game
+// traces. Use distinct names and deterministic seeds for reproducibility.
+const SEEDS=[
+  0x00000000,0xffffffff,0x0000ff00,0x000000ff,
+  0x0000807f,0x00007f80,0x13572468,0x31415926,
+  0x9abcdef0,0xdeadbeef,0xff00ff00,0x00001234,
+];
+const STACKS=[0x0100,0x01ff,0x0200,0x1000,0x2ffc];
+export const CASES=SEEDS.flatMap((seed,i)=>STACKS.map((stack,j)=>({
+  name:'seed-'+i+'-stack-'+j,seed,stack,
+})));
 const sha256=v=>createHash('sha256').update(v).digest('hex');
 const word=(r,i)=>(r[i]<<8)|r[i+1];
 
