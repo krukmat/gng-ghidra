@@ -108,13 +108,13 @@ def instrument(guarded_js: str, register_names: list[str]) -> str:
     addition=('  function assertIndex() {\n'+
               '\n'.join(conditions)+'\n  }\n')
     result=guarded_js.replace(declaration,addition+declaration,1)
-    entry='  assertDpS();\n'
-    memory='    assertDpS();\n'
+    entry='\n  assertDpS();\n'
+    memory='\n    assertDpS();\n'
     # Exactly one entry guard plus read and write helpers.
     if result.count(entry)!=1 or result.count(memory)!=2:
         raise Unsupported('Missing/ambiguous DP/S runtime guard locations')
-    result=result.replace(entry,'  assertDpS(); assertIndex();\n',1)
-    result=result.replace(memory,'    assertDpS(); assertIndex();\n')
+    result=result.replace(entry,'\n  assertDpS(); assertIndex();\n',1)
+    result=result.replace(memory,'\n    assertDpS(); assertIndex();\n')
     return ('// CONDITIONAL INDEXED RAM EXPERIMENT; NO 6809 EQUIVALENCE\n'+
             result)
 
