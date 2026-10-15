@@ -26,5 +26,6 @@ jobs:
       - run: node --test tests/test_function_generated.mjs
       - run: node --test tests/test_guarded_execution_harness.mjs
       - run: node --test tests/test_mc6809_differential.mjs
+      - run: node --test tests/test_indexed_mc6809_differential.mjs
       - run: npm install --global typescript@5.9.3
       - run: tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution node out-synthetic/functions/generated/*.ts
