@@ -82,4 +82,40 @@ jobs:
           assert all(e['kind']=='write' and e['size']==1 for e in events)
           assert not observed['ramChanges']
           print('GNG_NATIVE_ORACLE_BOARD_SMOKE=PASS steps=19 MMIO_writes=5 ROM=synthetic')
+          # Indexed third routine, genuine 6809 LDA ,X; RTS (A6 84 39).
+          # Additional native args specify byte-verified source RTS and
+          # controlled X/Y/U initial value, without any board emulation.
+          third=bytearray(65536)
+          third[0x6239:0x623c]=bytes.fromhex('a68439')
+          third[0xfffe:0x10000]=bytes.fromhex('6000')
+          path3=out/'cpu-smoke-indexed.bin'
+          path3.write_bytes(third)
+          p3=subprocess.run([
+            str(out/'mc6809-reference'),str(path3),
+            '0x6239','0x13572468','0x200','0x623b','0x210'],
+            capture_output=True,text=True,timeout=10,check=True)
+          assert a in p3.stdout and b in p3.stdout,p3.stdout
+          result3=json.loads(p3.stdout.split(a)[1].split(b)[0])
+          assert result3['entry']=='0x6239'
+          assert result3['steps']==2,result3
+          assert result3['source_rts']==0x623b
+          assert result3['return_address']==0x7000
+          assert result3['index_initial']==0x210
+          assert result3['registers']['PC']==0x7000
+          assert result3['registers']['X']==0x210
+          assert result3['registers']['Y']==0x210
+          assert result3['registers']['U']==0x210
+          assert result3['registers']['S']==0x202
+          assert not result3['ioTrace']
+          assert not result3['ramChanges']
+          print('GNG_NATIVE_INDEXED_SMOKE=PASS steps=2 indexed_read=1 ROM=synthetic')
+          # A genuine CPU I/O read in the third routine is always rejected.
+          third[0x6239:0x623d]=bytes.fromhex('b6300339')
+          path3.write_bytes(third)
+          fail=subprocess.run([
+            str(out/'mc6809-reference'),str(path3),
+            '0x6239','0x13572468','0x200','0x623c','0x210'],
+            capture_output=True,text=True,timeout=10)
+          assert fail.returncode!=0 and 'unapproved I/O read' in fail.stderr
+          print('GNG_NATIVE_INDEXED_UNKNOWN_MMIO=BLOCKED_AS_EXPECTED')
           PY
