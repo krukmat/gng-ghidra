@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {initialState,readRegisters,readNative,compareState}
+import {initialState,readRegisters,readNative,compareState,CASES}
   from '../scripts/compare-mc6809.mjs';
 
 const entry='0x622c',spec={name:'synthetic',seed:0x13572468,stack:0x200};
@@ -70,4 +70,16 @@ test('generated writes to MMIO buffer never compare successfully',()=>{
   js.memory[0x3003]=input.memory[0x3003]^0xff;
   const diff=compareState(entry,spec,input,js,native);
   assert.ok(diff.some(x=>x.field==='generated MMIO/ROM memory mutation'));
+});
+
+test('real differential suite has 60 repeatable edge vectors per routine',()=>{
+  assert.equal(CASES.length,60);
+  assert.equal(new Set(CASES.map(x=>x.name)).size,60);
+  assert.deepEqual(new Set(CASES.map(x=>x.stack)),
+    new Set([0x100,0x1ff,0x200,0x1000,0x2ffc]));
+  assert.ok(CASES.some(x=>x.seed===0));
+  assert.ok(CASES.some(x=>x.seed===0xffffffff));
+  assert.ok(CASES.some(x=>x.seed===0x0000ff00));
+  assert.ok(CASES.some(x=>x.seed===0x000000ff));
+  assert.ok(CASES.every(x=>x.stack>=0x100 && x.stack<=0x2ffc));
 });

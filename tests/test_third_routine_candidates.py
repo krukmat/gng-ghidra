@@ -99,6 +99,33 @@ class ThirdRoutineRankingTests(unittest.TestCase):
         self.assertFalse(item['modeled_6809_rts_stack_pop'])
         self.assertIn('no validated RTS P-code pop from S',item['blockers'])
 
+    def test_shared_exported_instruction_blocks_independent_boundary(self):
+        raw,image=synthetic_image_and_raw()
+        direct={'op':'COPY','inputs':[vn('RAM',0x40,1)],
+                'output':vn('register',0,1)}
+        raw,image=add_candidate(raw,image,0x7930,[
+            (0x7930,[direct]),(0x7931,modeled_rts_ops())])
+        raw,image=add_candidate(raw,image,0x7931,[
+            (0x7931,modeled_rts_ops())])
+        by_entry={x['entry']:x for x in rank(raw,image)['candidates']}
+        for address in ('0x7930','0x7931'):
+            item=by_entry[address]
+            self.assertEqual(item['status'],'STRUCTURAL_BLOCK')
+            self.assertEqual(item['overlapping_exported_instruction_count'],1)
+            self.assertTrue(any('overlapping exported Ghidra CFG' in x
+                                for x in item['blockers']))
+
+    def test_unproven_manual_seed_not_claimed_as_incoming_call(self):
+        raw,image=synthetic_image_and_raw()
+        raw,image=add_candidate(raw,image,0x7930,[
+            (0x7930,[{'op':'COPY','inputs':[vn('RAM',0x40,1)],
+                      'output':vn('register',0,1)}]),
+            (0x7931,modeled_rts_ops())])
+        item=next(x for x in rank(raw,image)['candidates']
+                  if x['entry']=='0x7930')
+        self.assertFalse(item['decoded_incoming_call_provenance'])
+        self.assertFalse(item['game_reachability_proven'])
+
     def test_unknown_io_and_mmio_store_are_separate_from_index_bounds(self):
         raw,image=synthetic_image_and_raw()
         direct_write={'op':'COPY','inputs':[vn('register',0,1)],
