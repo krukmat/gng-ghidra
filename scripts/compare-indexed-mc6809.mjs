@@ -16,7 +16,7 @@ const STACKS=[0x0100,0x1000,0x2ffc];
 const INDEXES=[0x0100,0x0200,0x2ffc];
 export const VECTORS=SEEDS.flatMap((seed,i)=>STACKS.flatMap((stack,j)=>
     INDEXES.map((index,k)=>({name:'seed-'+i+'-stack-'+j+'-index-'+k,
-      seed,stack,index})));
+      seed,stack,index}))));
 
 // Do not trust attacker-supplied report fields to change board/RAM policy.
 export function checkManifest(m,rom,folder) {
