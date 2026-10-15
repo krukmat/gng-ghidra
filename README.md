@@ -292,3 +292,32 @@ python3 src/third_routine_candidates.py --limit 8
 The last command ranks the already-exported ROM functions, detects
 unknown X/U bounds, fixed MMIO, overlapping graphs and incomplete
 RTS stack models. Its shortlist is **static triage, not a certification**.
+
+
+## Expanded native differential and third indexed routine (2026-10-15)
+
+The operator ran the updated native MC6809 comparison against genuine
+local ROM bytes and observed **120/120 vector matches**:
+`0x622c: 60/60` and `0x6755: 60/60`. Game entry states remain
+unverified; this is independent lab-state equivalence only.
+
+The next third routine targets **0x6239**, selected from the operator's
+14-function ROM-backed triage (33 instructions, ten conditionally
+bounded RAM/stack operations, two unresolved indexed pointers and
+**no fixed MMIO**). A separate fail-closed generator enforces
+P-code-proven X/Y/U pointer origin, the existing DP/S contract,
+per-access memory checks and a conservative index range, without
+altering the previously certified routines. Its independent native
+comparison tests 54 new laboratory states. Nothing has been declared
+equivalent for this third routine yet.
+
+```bash
+git pull --ff-only
+python3 src/indexed_codegen.py
+bash scripts/build-mc6809-oracle.sh
+node scripts/compare-indexed-mc6809.mjs
+```
+
+Read [the third-routine gate](docs/t2b-third-indexed.md) for
+conditions, expected pass/block markers and limitations. No new Ghidra
+run is necessary unless the byte-verified export is stale.

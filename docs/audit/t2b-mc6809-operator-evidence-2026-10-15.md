@@ -64,3 +64,23 @@ those six inputs.
 3. Select and implement a third routine only after inspecting the
    operator's local candidate triage; never invent ROM-specific
    P-code or grant hardware permissions to force success.
+
+
+## Expanded operator outcome
+
+The operator subsequently reran the independent CPU reference
+against the same byte-authenticated local ROM with the 60-vector
+suite per entry:
+
+```text
+GNG_MC6809_DIFFERENTIAL=PASS_DIFFERENTIAL_TEST_VECTORS
+  0x622c vectors=60 matched=60 failed=0
+  0x6755 vectors=60 matched=60 failed=0
+GNG_REAL_GAME_ENTRY_STATES=UNPROVEN
+```
+
+This is **120 controlled differential comparisons, zero discrepancies**.
+It does not prove in-game call-state reachability, a full CPU emulator
+or behavior under every possible input. A third candidate `0x6239`
+was selected after the operator reported its genuine ROM triage.
+See [third-routine plan](../t2b-third-indexed.md).
