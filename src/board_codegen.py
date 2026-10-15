@@ -194,6 +194,7 @@ def build(raw: dict, image: bytes, output_dir: Path, entries=None) -> dict:
     funcs = {f['entry']: f for f in raw['functions']}
     report = {
         'schema': SCHEMA, 'contract': CONTRACT_NAME,
+        'rom_sha256': hashlib.sha256(image).hexdigest(),
         'status': 'EXPERIMENTAL_BOARD_IO_NO_6809_REFERENCE',
         'pure_codegen_eligibility_changed': False,
         'hardware_equivalence_verified': False,
