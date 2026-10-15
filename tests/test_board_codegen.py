@@ -128,7 +128,7 @@ class BoardCodegenTests(unittest.TestCase):
             self.assertFalse(report['hardware_equivalence_verified'])
             # The original pure generation contract MUST stay fail-closed.
             from guarded_codegen import build as pure_build
-            pure=pure_build(raw,image,folder / 'pure',['0x622c','0x6755'])
+            pure=pure_build(raw,image,Path(tmp) / 'pure',['0x622c','0x6755'])
             self.assertEqual(len(pure['generated']),0)
             self.assertEqual(len(pure['blocked']),2)
             self.assertTrue(all('mmio-forbidden' in x['reason']
