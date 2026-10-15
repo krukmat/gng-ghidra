@@ -1,0 +1,52 @@
+name: Independent MC6809 oracle smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/mc6809-native-oracle.cpp'
+      - 'scripts/build-mc6809-oracle.sh'
+      - '.github/workflows/mc6809-oracle-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cpu-library:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned independent MC6809 CPU library
+        run: bash scripts/build-mc6809-oracle.sh
+      - name: CPU smoke test on ROM-free synthetic 6809 opcodes
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          out=pathlib.Path('out/native-oracle')
+          memory=bytearray(65536)
+          # 6809 genuine instructions: LDA $3003; COMA; STA <$40;
+          # LDA $3004; COMA; STA <$41; RTS (not the game's ROM).
+          code=bytes.fromhex('b63003439740b6300443974139')
+          assert len(code)==13
+          memory[0x622c:0x622c+len(code)]=code
+          memory[0xfffe:0x10000]=bytes.fromhex('6000')
+          image=out/'cpu-smoke-image.bin'
+          image.write_bytes(memory)
+          p=subprocess.run([
+            str(out/'mc6809-reference'),str(image),
+            '0x622c','0x13572468','0x200'],
+            capture_output=True,text=True,timeout=10,check=True)
+          a='GNG_NATIVE_BEGIN\n';b='\nGNG_NATIVE_END'
+          assert a in p.stdout and b in p.stdout,p.stdout
+          result=json.loads(p.stdout.split(a)[1].split(b)[0])
+          assert result['entry']=='0x622c'
+          assert result['steps']==7,result
+          assert result['source_rts']==0x6238
+          assert result['registers']['PC']==0x7000
+          assert len(result['ioTrace'])==2
+          assert [e['addr'] for e in result['ioTrace']]==[0x3003,0x3004]
+          assert [e['value'] for e in result['ioTrace']]==[0x68,0x24]
+          for change in result['ramChanges']:
+            if change['addr']==0x40: assert change['after']==(0x68^255)
+            if change['addr']==0x41: assert change['after']==(0x24^255)
+          print('GNG_NATIVE_ORACLE_SMOKE=PASS steps=7 MMIO_reads=2 ROM=synthetic')
+          PY
