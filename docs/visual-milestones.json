@@ -1,0 +1,112 @@
+{
+  "schema": "gng.visual-progress.v1",
+  "scope": "main — evidencia visual local, ROM privada no versionada",
+  "last_reviewed": "2026-10-15",
+  "statuses": {
+    "READY_FOR_LOCAL_REVIEW": "Código implementado; pendiente verificar en Mac",
+    "PLANNED": "Pendiente de implementar",
+    "BLOCKED": "Bloqueado por dependencia técnica",
+    "ACCEPTED": "Aceptado visualmente por operador"
+  },
+  "milestones": [
+    {
+      "id": "V0",
+      "title": "Ver gráficos originales",
+      "status": "READY_FOR_LOCAL_REVIEW",
+      "stage": "ROM GRAPHICS (no gameplay)",
+      "deliverable": "out/graphics-preview.html",
+      "visible": "Un navegador muestra hojas de sprites, tiles y caracteres reales extraídos de los chips gráficos.",
+      "acceptance": "Se distinguen las tres capas, cambian las páginas y la ampliación refleja el elemento seleccionado; inspección realizada con ROM privada.",
+      "next": "Ejecutar graphics_preview.py y abrir la página en el Mac; adjuntar captura local antes de cerrar.",
+      "dependencies": [],
+      "screenshots": [
+        "after"
+      ]
+    },
+    {
+      "id": "V1.1",
+      "title": "Primer lienzo conectado a memoria",
+      "status": "PLANNED",
+      "stage": "VRAM FIXTURE (no CPU)",
+      "deliverable": "out/visual/vram-sprites.html",
+      "visible": "Una escena de diagnóstico muestra sprites cuya posición/imagen cambia cuando se alteran bytes de la memoria, sin dibujar elementos a mano.",
+      "acceptance": "Cambiar dos bytes del fixture de sprite RAM altera posición e índice de sprite; comparativa antes/después visible; píxeles proceden de ROM.",
+      "next": "Renderer Canvas de sprites + fixture escrito en RAM, sin fingir frames reales.",
+      "dependencies": [
+        "V0"
+      ],
+      "screenshots": [
+        "before",
+        "after"
+      ]
+    },
+    {
+      "id": "V1.2",
+      "title": "Escenario y atributos",
+      "status": "PLANNED",
+      "stage": "VRAM FIXTURE (no CPU)",
+      "deliverable": "out/visual/vram-scene.html",
+      "visible": "Fondo y primer plano con scroll y prioridad; controles de inspección alteran bytes del tilemap.",
+      "acceptance": "Capturas comparativas evidencian cambios de scroll, tile y atributos. Se identifica cada efecto como fixture y no como frame del juego.",
+      "next": "Añadir FG/BG, flips, atributos y paleta verificable a renderer V1.1.",
+      "dependencies": [
+        "V1.1"
+      ],
+      "screenshots": [
+        "before",
+        "after"
+      ]
+    },
+    {
+      "id": "V1.3",
+      "title": "Memoria modificada por JS generado",
+      "status": "PLANNED",
+      "stage": "TRANSLATED ROM CODE (boot prefix only)",
+      "deliverable": "out/visual/boot-visible.html",
+      "visible": "La inicialización original de sprite RAM se ejecuta por JS generado y sus efectos se observan en la misma vista del renderer.",
+      "acceptance": "Antes/después muestra los 384 bytes inicializados por el código traducido y efecto gráfico verificable, sin inventar una escena jugable.",
+      "next": "Conectar al renderer la rutina 0x6000..0x6016 ya generada y trazas de memoria.",
+      "dependencies": [
+        "V1.2"
+      ],
+      "screenshots": [
+        "before",
+        "after"
+      ]
+    },
+    {
+      "id": "V2",
+      "title": "Primer frame auténtico",
+      "status": "BLOCKED",
+      "stage": "TRANSLATED GAME FRAME",
+      "deliverable": "out/visual/game-frame.html",
+      "visible": "Primer fotograma causado por lógica original traducida, no por fixtures manuales.",
+      "acceptance": "Se registra procedencia de estado de vídeo, interrupciones y banco ROM; CPU independiente contrasta efectos, sin intérprete MC6809 en el producto.",
+      "next": "Resolver SYNC/IRQ, dispatch y bank switching; ampliar Ghidra según CFG realmente ejecutado.",
+      "dependencies": [
+        "V1.3"
+      ],
+      "screenshots": [
+        "before",
+        "after"
+      ]
+    },
+    {
+      "id": "V3",
+      "title": "Interacción original",
+      "status": "BLOCKED",
+      "stage": "GAMEPLAY",
+      "deliverable": "out/visual/playable.html",
+      "visible": "Arthur responde a controles por lógica traducida con animación y escenario.",
+      "acceptance": "Controles, colisiones y avance reproducible comparados con referencia independiente; controles visibles y grabación/captura local.",
+      "next": "Tras V2: loop determinista + lectura de controles y rutinas de física/colisión.",
+      "dependencies": [
+        "V2"
+      ],
+      "screenshots": [
+        "before",
+        "after"
+      ]
+    }
+  ]
+}
