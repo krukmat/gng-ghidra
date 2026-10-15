@@ -39,6 +39,16 @@ def assess(function: dict) -> dict:
     unsafe = len(mmio) + len(rom_writes) + len(unknown)
     conditional = obligations['conditionally_in_range']
 
+    # A decoded RTS with a P-code RETURN but no S-derived stack read is
+    # an incomplete/fabricated model. The 6809 RTS must pop a 16-bit return
+    # address. Keep this separate from merely compiling a RETURN opcode.
+    modeled_rts = any(
+        ins['raw'].casefold() == '39' and
+        any(p['op'] == 'RETURN' for p in ins.get('pcode', [])) and
+        any(x['address'] == ins['address'] and x['operation'] == 'LOAD'
+            and x['bucket'] == 'stack-S' for x in provenance)
+        for ins in instructions
+    )
     opcodes = Counter(p['op'] for i in instructions for p in i.get('pcode', []))
     calls = opcodes['CALL'] + opcodes['CALLIND']
     interrupts = [i for i in instructions if
@@ -66,6 +76,8 @@ def assess(function: dict) -> dict:
         blockers.append('writes-bank-select-register')
     if compile_blocker:
         blockers.append('P-code/CFG compiler: ' + compile_blocker)
+    if not modeled_rts:
+        blockers.append('no validated RTS P-code pop from S')
     if mmio:
         blockers.append(f'{len(mmio)} fixed/dynamic MMIO access(es): needs board contract')
     if rom_writes:
@@ -75,7 +87,8 @@ def assess(function: dict) -> dict:
 
     # These classifications are *experimental candidate priorities*, not
     # assertions about game entry conditions or CPU functional equivalence.
-    structurally_ready = not compile_blocker and not calls and not interrupts and not bank_switch
+    structurally_ready = (not compile_blocker and not calls and
+                          not interrupts and not bank_switch and modeled_rts)
     conditional_pure = (structurally_ready and not blockers and
                         conditional == len(accesses))
     if entry in PREVIOUSLY_DIFFERENTIALLY_TESTED:
@@ -112,6 +125,7 @@ def assess(function: dict) -> dict:
         'instruction_count': len(instructions),
         'pcode_ops': dict(sorted(opcodes.items())),
         'structural_compile_possible': compile_blocker is None,
+        'modeled_6809_rts_stack_pop': modeled_rts,
         'structural_block_reason': compile_blocker,
         'conditional_hypothesis': 'DP=0 at every instruction; 0x100<=S<=0x2ffc',
         'memory_total': len(accesses),
