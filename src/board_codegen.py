@@ -110,25 +110,25 @@ def board_source(pure_guarded: str, entry: str) -> str:
     result = once(result, WRAPPER_SIGNATURE,
                   'export function runRoutine(memory, registers=new Uint8Array(256), maxSteps=10000, ioReads=[]) {')
     init = (
-        '  const ioTrace=[];\\n'
-        '  let ioReadIndex=0;\\n'
-        '  const boardSites=' + json.dumps(policy, separators=(',', ':')) + ';\\n'
-        '  function approvedIO(kind,addr,size) {\\n'
-        '    if (!boardSites.some(x=>x.pc===pc && x.kind===kind && x.addr===addr && x.size===size))\\n'
-        "      throw new RangeError('Unapproved board MMIO site or width');\\n"
-        '  }\\n'
-        '  function readBoard(addr,size) {\\n'
-        "    approvedIO('read',addr,size);\\n"
-        "    if (ioReadIndex>=ioReads.length) throw new RangeError('Missing board input read');\\n"
-        '    const item=ioReads[ioReadIndex++];\\n'
-        "    if (item.addr!==addr || item.size!==size) throw new RangeError('Board input read-order mismatch');\\n"
-        "    ioTrace.push({kind:'read',pc,addr,size,value:item.value});\\n"
-        '    return item.value;\\n'
-        '  }\\n'
-        '  function writeBoard(addr,size,value) {\\n'
-        "    approvedIO('write',addr,size);\\n"
-        "    ioTrace.push({kind:'write',pc,addr,size,value:mask(value,size)});\\n"
-        '  }\\n'
+        '  const ioTrace=[];\n'
+        '  let ioReadIndex=0;\n'
+        '  const boardSites=' + json.dumps(policy, separators=(',', ':')) + ';\n'
+        '  function approvedIO(kind,addr,size) {\n'
+        '    if (!boardSites.some(x=>x.pc===pc && x.kind===kind && x.addr===addr && x.size===size))\n'
+        "      throw new RangeError('Unapproved board MMIO site or width');\n"
+        '  }\n'
+        '  function readBoard(addr,size) {\n'
+        "    approvedIO('read',addr,size);\n"
+        "    if (ioReadIndex>=ioReads.length) throw new RangeError('Missing board input read');\n"
+        '    const item=ioReads[ioReadIndex++];\n'
+        "    if (item.addr!==addr || item.size!==size) throw new RangeError('Board input read-order mismatch');\n"
+        "    ioTrace.push({kind:'read',pc,addr,size,value:item.value});\n"
+        '    return item.value;\n'
+        '  }\n'
+        '  function writeBoard(addr,size,value) {\n'
+        "    approvedIO('write',addr,size);\n"
+        "    ioTrace.push({kind:'write',pc,addr,size,value:mask(value,size)});\n"
+        '  }\n'
     )
     result = once(result, '  const tmp=new Map();', init + '  const tmp=new Map();')
     replacement_read = """  function memRead(addr,size) {
@@ -168,23 +168,23 @@ def board_source(pure_guarded: str, entry: str) -> str:
         "return { registers, steps, pc, memory, ioTrace:ioTrace.slice() };")
     wrapper_anchor = '  return runRoutineCore(memory.slice(),registers.slice(),maxSteps);'
     wrapper_replacement = (
-        "  if (!Array.isArray(ioReads) || ioReads.length!==" + str(len(reads)) + ")\\n"
-        "    throw new RangeError('Exact approved board reads required');\\n"
-        "  const expectedReads=" + json.dumps(reads, separators=(',', ':')) + ";\\n"
-        "  const readInputs=ioReads.map((x,i)=>{\\n"
-        "    if (x===null || typeof x!=='object' || Array.isArray(x) ||\\n"
-        "        !Number.isSafeInteger(x.addr) || !Number.isSafeInteger(x.size) ||\\n"
-        "        !Number.isSafeInteger(x.value) || x.value<0 ||\\n"
-        "        x.value>maxSize(x.size) ||\\n"
-        "        x.addr!==expectedReads[i].addr || x.size!==expectedReads[i].size ||\\n"
-        "        Object.keys(x).sort().join(',')!=='addr,size,value')\\n"
-        "      throw new RangeError('Invalid/unapproved board read input');\\n"
-        "    return {addr:x.addr,size:x.size,value:x.value};\\n"
-        "  });\\n"
+        "  if (!Array.isArray(ioReads) || ioReads.length!==" + str(len(reads)) + ")\n"
+        "    throw new RangeError('Exact approved board reads required');\n"
+        "  const expectedReads=" + json.dumps(reads, separators=(',', ':')) + ";\n"
+        "  const readInputs=ioReads.map((x,i)=>{\n"
+        "    if (x===null || typeof x!=='object' || Array.isArray(x) ||\n"
+        "        !Number.isSafeInteger(x.addr) || !Number.isSafeInteger(x.size) ||\n"
+        "        !Number.isSafeInteger(x.value) || x.value<0 ||\n"
+        "        x.value>maxSize(x.size) ||\n"
+        "        x.addr!==expectedReads[i].addr || x.size!==expectedReads[i].size ||\n"
+        "        Object.keys(x).sort().join(',')!=='addr,size,value')\n"
+        "      throw new RangeError('Invalid/unapproved board read input');\n"
+        "    return {addr:x.addr,size:x.size,value:x.value};\n"
+        "  });\n"
         "  return runRoutineCore(memory.slice(),registers.slice(),maxSteps,readInputs);"
     )
     result = once(result, wrapper_anchor, wrapper_replacement)
-    return '// BOARD-MMIO EXPERIMENT ONLY. NO 6809 EQUIVALENCE.\\n' + result
+    return '// BOARD-MMIO EXPERIMENT ONLY. NO 6809 EQUIVALENCE.\n' + result
 
 def build(raw: dict, image: bytes, output_dir: Path, entries=None) -> dict:
     verify_raw(raw, image)
