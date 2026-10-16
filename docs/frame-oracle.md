@@ -90,3 +90,50 @@ Documentación del hardware:
 API Lua: [memory shares/CPU write taps](https://docs.mamedev.org/luascript/ref-mem.html),
 [screens/palette](https://docs.mamedev.org/luascript/ref-devices.html),
 [frame notifiers](https://docs.mamedev.org/luascript/ref-common.html).
+
+## Error corregido: gng.zip puede ser en realidad el set gngb
+
+El primer intento del operador falló al ejecutar MAME con
+`GNG_MAME_REFERENCE_DRIVER=gng`:
+
+```text
+mm_c_04 NOT FOUND (tried in gng)
+mm_c_03 NOT FOUND (tried in gng)
+mm_c_05 NOT FOUND (tried in gng)
+```
+
+Eso **no** demuestra que faltan ROMs de la revisión de nuestro
+proyecto. Ocurrió porque el wrapper elegía driver **por el nombre**
+del ZIP (gng.zip), pese a que `src/poc.py` y Ghidra trabajan con
+`gg4.bin/gg3.bin/gg5.bin` de **gngb**.
+
+La corrección implementada usa
+`scripts/prepare_mame_rom.py` para identificar el programa por
+tamaño+CRC32 de los archivos internos. Verifica también gráficos,
+Z80 de audio y chips auxiliares que necesita el set MAME actual.
+El script crea un **enlace simbólico** local
+`out/reference/mame-roms/gngb.zip` apuntando a la ROM existente
+`roms/gng.zip`, sin modificar ni duplicar los bytes. El wrapper
+pasa ese directorio como ROMPATH y selecciona el driver de forma
+consistente con la ROM.
+
+Comando recomendado (después de actualizar `main`):
+
+```bash
+git pull --ff-only
+bash scripts/visual-real-frame.sh
+```
+
+Si el preflight identifica chips auxiliares ausentes, imprime
+sus nombres/CRC reales y **bloquea**: no se descargan, sintetizan
+ni sustituyen archivos para forzar un frame. Esas ROMs deben
+estar en un set propio completo antes de que MAME pueda iniciar.
+El script se puede ejecutar aisladamente para diagnosticar:
+
+```bash
+python3 scripts/prepare_mame_rom.py --rom roms/gng.zip
+```
+
+El error de elección del driver queda corregido; la captura Lua
+y la igualdad pixel-perfect **no están validadas todavía** en
+el Mac del operador.

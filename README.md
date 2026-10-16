@@ -18,13 +18,10 @@ diff objetivo contra la imagen de referencia.
 
 ```bash
 git pull --ff-only
-python3 scripts/capture_real_frame.py --system gngb --rompath roms --frame 600
-python3 src/reference_frame_view.py --rom roms/gng.zip
-open out/visual/frame-compare.html
+bash scripts/visual-real-frame.sh
 ```
 
-Si solo tienes `roms/gng.zip` y no gngb.zip,
-usar `--system gng` en captura (revisión distinta).
+La revisión se determina por los CRC de los chips *dentro* del ZIP, no por su nombre. El wrapper crea un alias privado en `out/` para que MAME cargue `gngb` cuando `roms/gng.zip` contiene `gg4.bin`, `gg3.bin` y `gg5.bin`; no exige renombrar el original.
 MAME se usa **solo como oráculo**; no forma parte de
 la aplicación nativa JS. Hace falta MAME en el Mac.
 [R0 completo](docs/frame-oracle.md).
