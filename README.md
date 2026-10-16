@@ -48,6 +48,27 @@ Los botones de la página descargan `v1.1-before.png` y
 buffer solo tras una copia explícita, como el hardware.
 **No es un frame del juego.** [Criterios de aceptación](docs/roadmap.md).
 
+
+### V1.2 — Composición BG/FG/sprites desde VRAM + scroll
+
+Nuevo visor diagnóstico con **escena comparativa ANTES/DESPUÉS**,
+ahora con gráficos ROM de fondo 16×16, foreground 8×8 y sprites.
+Permite variar registros de scroll, tile y posición.
+El mapa de tiles es un **fixture de memoria determinista**,
+no el escenario de una partida. La paleta sigue siendo de
+inspección; es un progreso visual, no gameplay.
+
+```bash
+git pull --ff-only
+python3 src/vram_scene.py --rom roms/gng.zip
+open out/visual/vram-scene.html
+```
+
+Si faltan ROMs gráficos, usar
+`--shared /ruta/local/zip-padre.zip`.
+La página muestra los cambios byte a byte y descarga PNG
+ANTES/DESPUÉS para el [dashboard visual](docs/roadmap.md).
+
 ## Status
 
 - **PASS locally (Python + Node):** real reset-loop ROM bytes → 7 decoded

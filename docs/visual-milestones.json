@@ -31,7 +31,7 @@
       "deliverable": "out/visual/vram-sprites.html",
       "visible": "Una escena de diagnóstico muestra sprites cuya posición/imagen cambia cuando se alteran bytes de la memoria, sin dibujar elementos a mano.",
       "acceptance": "Con chips gráficos gngb auténticos, ANTES/DESPUÉS muestran cambios visibles causados por cambios de bytes 0x1e00..0x1e03 (posición X/Y, índice de sprite y atributos); la copia del buffer es explícita; dos capturas locales revisadas. No hay gameplay.",
-      "next": "Abrir out/visual/vram-sprites.html con gráficos privados, mover X y cambiar índice de sprite, pulsar aplicar para copiar RAM al buffer y guardar los PNG ANTES/DESPUÉS.",
+      "next": "Captura recibida: demuestra un cambio de sprites, pero los gráficos son fragmentos pequeños; mantener pendiente la aceptación completa del estado RAM mostrado y usar V1.2 para visualizar capas completas.",
       "dependencies": [
         "V0"
       ],
@@ -43,12 +43,12 @@
     {
       "id": "V1.2",
       "title": "Escenario y atributos",
-      "status": "PLANNED",
+      "status": "READY_FOR_LOCAL_REVIEW",
       "stage": "VRAM FIXTURE (no CPU)",
       "deliverable": "out/visual/vram-scene.html",
       "visible": "Fondo y primer plano con scroll y prioridad; controles de inspección alteran bytes del tilemap.",
-      "acceptance": "Capturas comparativas evidencian cambios de scroll, tile y atributos. Se identifica cada efecto como fixture y no como frame del juego.",
-      "next": "Añadir FG/BG, flips, atributos y paleta verificable a renderer V1.1.",
+      "acceptance": "La vista muestra píxeles BG/FG/sprites de ROM real, compositados desde 0x2800..0x2fff y 0x2000..0x27ff, con buffer sprite 0x1e00..0x1fff, prioridad BG detrás/sprites/BG delante/FG y scroll X/Y 0x3b08..0x3b0b. Los cambios de bytes y registros producen diferencias visibles ANTES/DESPUÉS; verificar con capturas de la ROM privada. No es un frame de gameplay.",
+      "next": "Ejecutar src/vram_scene.py con ZIP gngb privado, abrir los lienzos ANTES/DESPUÉS, variar scroll X/Y, índice tile y sprite, activar foreground y adjuntar dos PNG del navegador.",
       "dependencies": [
         "V1.1"
       ],

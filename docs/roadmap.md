@@ -211,3 +211,65 @@ visual real con la ROM del operador**, aunque CI pase.
   paleta/flip; los RGB son **paleta de inspección**.
 - Aún falta: capas FG/BG, paleta real y ejecución de código
   traducido. Eso corresponde a V1.2 y V1.3.
+
+
+## V1.1 — Primera captura privada recibida, sin cerrar la estética
+
+La captura aportada por el operador muestra la misma página con
+tres fragmentos gráficos visibles: al cambiar el registro, una
+pieza cambia de posición/índice entre ANTES y DESPUÉS.
+**Esto confirma la reacción visual**, pero no prueba la
+correcta interpretación de un escenario ni presenta todavía
+una pantalla útil del juego. No se sube la captura ni material
+ROM a GitHub. El hito queda pendiente de aceptación formal.
+
+## V1.2 — BG/FG/sprites con scroll, ahora implementado para revisión
+
+El siguiente artefacto disponible reúne las capas de vídeo en la
+**misma vista comparativa**, y enlaza los píxeles de ROM auténtica
+con registros de memoria del arcade. No tiene lógica de partida.
+
+```bash
+git pull --ff-only
+python3 src/vram_scene.py --rom roms/gng.zip
+open out/visual/vram-scene.html
+```
+
+Para set *split*, añadir
+`--shared /ruta/al/zip-padre.zip` al segundo comando.
+El generador verifica tamaño y CRC32 de los 13 componentes gráficos.
+
+- **FG** (`0x2000–0x27ff`): 32×32 de 8×8, recorrido por filas,
+  2bpp, bits altos de código, flips y transparencia `pen=3`.
+  La visibilidad de FG es un conmutador **diagnóstico**;
+  no equivale a activar/desactivar FG en una partida.
+- **BG** (`0x2800–0x2fff`): 32×32 de 16×16,
+  recorrido por columnas, 3bpp, paleta 0–7, bit de split
+  priority y dos mitades de color/transparencia:
+  BG detrás → sprites → BG delante.
+- **Scroll BG**: `0x3b08/09` y `0x3b0a/0b` como
+  pares de bytes low/high, con wrap 512×512.
+- **Sprites**: `0x1e00–0x1fff` de CPU RAM más copia
+  explícita al buffer, misma decodificación y transparencia
+  de V1.1.
+- **Visual**: dos frames Canvas 256×240, uno inmutable
+  y otro alterado mediante sliders; tabla de cambios
+  en direcciones de RAM/MMIO. Los gráficos provienen
+  de la ROM, pero la **disposición de los tiles es un
+  collage determinista de laboratorio** y el color
+  es una paleta de inspección. No se recrea ni
+  se afirma recrear un nivel real del juego.
+
+Pulsa los botones **Guardar PNG** de los dos paneles y
+deposita las capturas bajo
+`out/visual-evidence/v1.2/before.png` y
+`out/visual-evidence/v1.2/after.png`.
+El tablero `out/visual-progress.html` las mostrará
+al regenerarlo con `python3 scripts/visual-progress.py`.
+
+**Puerta para V1.3:** la revisión local de V1.2 debe
+mostrar desplazamiento visual cuando cambian scroll,
+código y atributos del tile y posición del sprite.
+Solo entonces se conecta el arranque traducido
+al renderer. No desplazar el objetivo hacia otra rutina
+aislada.
