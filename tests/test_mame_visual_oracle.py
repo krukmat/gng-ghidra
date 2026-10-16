@@ -70,6 +70,19 @@ def reference_fixture(folder:Path,driver="gngb",frame=600):
 
 
 class MameCaptureTests(unittest.TestCase):
+    def test_mac_one_command_wrapper_has_valid_shell_syntax(self):
+        shell=ROOT/"scripts/visual-real-frame.sh"
+        source=shell.read_text()
+        self.assertIn("capture_real_frame.py",source)
+        self.assertIn("reference_frame_view.py",source)
+        self.assertIn("GNG_JS_PIXEL_EQUIVALENCE=UNVERIFIED",source)
+        self.assertNotIn("curl ",source)
+        self.assertNotIn("wget ",source)
+        if shutil.which("bash"):
+            checked=subprocess.run(["bash","-n",str(shell)],
+                capture_output=True,text=True,timeout=10)
+            self.assertEqual(checked.returncode,0,checked.stderr)
+
     def test_native_png_size_validation(self):
         with tempfile.TemporaryDirectory() as tmp:
             image=Path(tmp)/"native.png"
