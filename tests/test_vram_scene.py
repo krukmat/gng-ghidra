@@ -108,6 +108,15 @@ class VramSceneTests(unittest.TestCase):
                 check=subprocess.run(["node","--check",str(tmp_js)],
                                      capture_output=True,text=True,timeout=15)
                 self.assertEqual(check.returncode,0,check.stderr)
+                # Exercise the actual generated renderer/event handlers
+                # with mocked DOM and pixel memory. No ROM is published.
+                smoke=Path(__file__).resolve().parent/"vram_dom_smoke.mjs"
+                browser=subprocess.run(
+                    ["node",str(smoke),str(output)],
+                    capture_output=True,text=True,timeout=60)
+                self.assertEqual(browser.returncode,0,
+                                 browser.stdout+"\n"+browser.stderr)
+                self.assertIn("GNG_V1_2_DOM_PIXEL_SMOKE=PASS",browser.stdout)
             report=json.loads((output.parent/"vram-scene.report.json").read_text())
             self.assertEqual(report["sha256"],result["sha256"])
 
