@@ -27,7 +27,7 @@ test('BG 3bpp and FG 2bpp exact ROM bitplane offsets',()=>{
  assert.equal(readTilePen('bg',bg,0,1,0),0);
  bg[128/8]=0x80;  // second 8-pixel half uses +128 bit
  assert.equal(readTilePen('bg',bg,0,8,0),4);
- fg[0]=0x88;fg[1]=0x80;
+ fg[0]=0x88;fg[1]=0x88;
  assert.equal(readTilePen('fg',fg,0,0,0),3);
  assert.equal(readTilePen('fg',fg,0,4,0),3);
  assert.throws(()=>readTilePen('bg',fg,0,0,0),/Missing graphics region/);
