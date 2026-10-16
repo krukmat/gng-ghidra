@@ -14,16 +14,17 @@ if [[ ! -f roms/gng.zip ]]; then
   echo "No se descarga ningún archivo ROM; usa tu copia local." >&2
   exit 2
 fi
+# The existing file may be named gng.zip but contain gngb program ROMs.
+# Never choose the CPU program revision from the ZIP filename!
+source_rom=roms/gng.zip
 if [[ -f roms/gngb.zip ]]; then
-  system=gngb
-else
-  system=gng
+  source_rom=roms/gngb.zip
 fi
-echo "GNG_MAME_REFERENCE_DRIVER=$system"
-if [[ "$system" == "gng" ]]; then
-  echo "Aviso: usando revisión gng original porque falta gngb.zip; no afirmar equivalencia de CPU gngb."
-fi
-python3 scripts/capture_real_frame.py --system "$system" --rompath roms --frame "${GNG_FRAME:-600}"
+python3 scripts/prepare_mame_rom.py --rom "$source_rom"
+system="$(python3 -c 'import json; print(json.load(open("out/reference/mame-roms/rom-set.json"))["machine"])')"
+echo "GNG_MAME_REFERENCE_DRIVER=$system (verified from chip CRCs)"
+python3 scripts/capture_real_frame.py --system "$system" \
+  --rompath out/reference/mame-roms --frame "${GNG_FRAME:-600}"
 python3 src/reference_frame_view.py --rom roms/gng.zip
 if command -v open >/dev/null 2>&1; then
   open out/visual/frame-compare.html
