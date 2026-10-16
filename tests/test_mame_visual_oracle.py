@@ -130,14 +130,17 @@ class MameCaptureTests(unittest.TestCase):
 
     def test_preview_command_is_test_only_and_output_confined(self):
         root=ROOT
-        plan=capture.capture("mame","gngb",root/"roms",
-            root/"out/reference/mame",600,dry_run=True)
-        self.assertEqual(plan["status"],"DRY_RUN_NOT_CAPTURED")
-        self.assertIn("-autoboot_script",plan["command"])
-        self.assertIn("-rompath",plan["command"])
-        with self.assertRaisesRegex(ValueError,"inside ignored out"):
-            capture.capture("mame","gngb",root/"roms",
-                root/"docs",600,dry_run=True)
+        with tempfile.TemporaryDirectory() as rom_directory:
+            # CI never has a proprietary ROM; an existing empty directory
+            # suffices for a command-construction smoke without MAME.
+            plan=capture.capture("mame","gngb",Path(rom_directory),
+                root/"out/reference/mame",600,dry_run=True)
+            self.assertEqual(plan["status"],"DRY_RUN_NOT_CAPTURED")
+            self.assertIn("-autoboot_script",plan["command"])
+            self.assertIn("-rompath",plan["command"])
+            with self.assertRaisesRegex(ValueError,"inside ignored out"):
+                capture.capture("mame","gngb",Path(rom_directory),
+                    root/"docs",600,dry_run=True)
 
 
 class ReferenceFrameViewTests(unittest.TestCase):
