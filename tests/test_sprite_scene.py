@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import json
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -52,6 +54,18 @@ class SpriteSceneTests(unittest.TestCase):
             self.assertIn('id="after"',content)
             self.assertIn('v1.1-before.png',content)
             self.assertIn('v1.1-after.png',content)
+            # The browser uses an inline IIFE-style script, no local
+            # module fetches (file:// is supported). Syntax-check the actual
+            # emitted script rather than only the source library.
+            if shutil.which("node"):
+                scripts=re.findall(r'<script>(.*?)</script>',content,re.S)
+                self.assertEqual(len(scripts),1)
+                generated=dst.parent/'verify-inline-syntax.mjs'
+                generated.write_text(scripts[0])
+                checked=subprocess.run(
+                    ['node','--check',str(generated)],
+                    capture_output=True,text=True,timeout=15)
+                self.assertEqual(checked.returncode,0,checked.stderr)
             match=re.search(r'const imageBytes=atob\((".*?")\);',content)
             self.assertIsNotNone(match)
             encoded=json.loads(match.group(1))
