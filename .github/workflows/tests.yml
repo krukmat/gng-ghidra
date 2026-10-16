@@ -28,5 +28,6 @@ jobs:
       - run: node --test tests/test_mc6809_differential.mjs
       - run: node --test tests/test_indexed_mc6809_differential.mjs
       - run: node --test tests/test_sprite_memory.mjs
+      - run: node --test tests/test_video_memory.mjs
       - run: npm install --global typescript@5.9.3
       - run: tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution node out-synthetic/functions/generated/*.ts
