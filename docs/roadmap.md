@@ -1,3 +1,40 @@
+## Reorientación R0 — V1.2 rechazado visualmente (16/10/2026)
+
+El operador mostró una captura de V1.2 donde el collage
+determinista produce tiles repetidos sin sentido. **Ese
+resultado NO está aceptado** y no se arreglará pintando una
+escena más bonita ni eligiendo tiles distintos.
+
+**R0 es el próximo gate, NO V1.3.** Capturamos un frame
+real de MAME como referencia de laboratorio (PNG,
+FG/BG VRAM, paleta RGB real, scroll y sprites bufferizados
+con DMA), y producimos **ese mismo estado** con nuestro
+renderer JavaScript. El MAME externo no forma parte
+del producto, solo de los tests.
+
+Comandos locales (MAME instalado, ROM privada):
+
+```bash
+git pull --ff-only
+python3 scripts/capture_real_frame.py --system gngb --rompath roms --frame 600
+python3 src/reference_frame_view.py --rom roms/gng.zip
+open out/visual/frame-compare.html
+```
+
+Para un único set `roms/gng.zip`, usar
+`--system gng` en el comando de MAME; gngb y gng
+son revisiones de programa diferentes y se documentará
+la seleccionada. Si falta MAME, indicarlo como bloqueo,
+no volver a un fixture inventado.
+
+[Diseño, evidencias y límites de R0](frame-oracle.md).
+**No hay equivalencia visual comprobada hasta ejecutar
+este flujo en el Mac**. La referencia real sirve para
+detectar errores y hacer un avance reconocible; no
+implica un motor de juego funcional.
+
+---
+
 # Roadmap orientado a resultados visibles — Ghosts 'n Goblins (gngb)
 
 Actualizado: 15 de octubre de 2026. Fuente de verdad para la siguiente

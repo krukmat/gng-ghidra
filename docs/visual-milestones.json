@@ -43,14 +43,31 @@
     {
       "id": "V1.2",
       "title": "Escenario y atributos",
-      "status": "READY_FOR_LOCAL_REVIEW",
+      "status": "BLOCKED",
       "stage": "VRAM FIXTURE (no CPU)",
       "deliverable": "out/visual/vram-scene.html",
       "visible": "Fondo y primer plano con scroll y prioridad; controles de inspección alteran bytes del tilemap.",
-      "acceptance": "La vista muestra píxeles BG/FG/sprites de ROM real, compositados desde 0x2800..0x2fff y 0x2000..0x27ff, con buffer sprite 0x1e00..0x1fff, prioridad BG detrás/sprites/BG delante/FG y scroll X/Y 0x3b08..0x3b0b. Los cambios de bytes y registros producen diferencias visibles ANTES/DESPUÉS; verificar con capturas de la ROM privada. No es un frame de gameplay.",
-      "next": "Ejecutar src/vram_scene.py con ZIP gngb privado, abrir los lienzos ANTES/DESPUÉS, variar scroll X/Y, índice tile y sprite, activar foreground y adjuntar dos PNG del navegador.",
+      "acceptance": "NO ACEPTADO: captura 2026-10-16 muestra combinación aleatoria, no evidencia de escenario original. Sustituido por R0 con datos reales.",
+      "next": "Rechazado visualmente por el operador: fixture de tiles arbitrario produce un mosaico ilegible. NO rediseñar collage; pasar a R0: memoria y paleta de un frame auténtico.",
       "dependencies": [
         "V1.1"
+      ],
+      "screenshots": [
+        "before",
+        "after"
+      ]
+    },
+    {
+      "id": "R0",
+      "title": "Fotograma auténtico contra renderer JS",
+      "status": "READY_FOR_LOCAL_REVIEW",
+      "stage": "MAME REFERENCE VIDEO RAM (test-only, NO JS CPU)",
+      "deliverable": "out/visual/frame-compare.html",
+      "visible": "Izquierda: PNG original del arcade obtenido por ejecución independiente. Derecha: el mismo estado de BG/FG/sprites/scroll/paleta reconstruido con JS, más diff de píxeles.",
+      "acceptance": "La referencia externa captura al menos un frame con PNG 256×224, 0x800 BG, 0x800 FG, 0x200 buffer sprites observados por DMA, 256 RGB y scroll real; JS muestra escena reconocible y comparación con la referencia. Corregir discrepancias importantes antes de avanzar. No es lógica CPU traducida.",
+      "next": "Ejecutar capture_real_frame.py con MAME y la ROM local, generar reference_frame_view.py, comparar lado a lado y compartir únicamente captura de las dos imágenes (no ROM ni archivos VRAM).",
+      "dependencies": [
+        "V0"
       ],
       "screenshots": [
         "before",
@@ -65,9 +82,9 @@
       "deliverable": "out/visual/boot-visible.html",
       "visible": "La inicialización original de sprite RAM se ejecuta por JS generado y sus efectos se observan en la misma vista del renderer.",
       "acceptance": "Antes/después muestra los 384 bytes inicializados por el código traducido y efecto gráfico verificable, sin inventar una escena jugable.",
-      "next": "Conectar al renderer la rutina 0x6000..0x6016 ya generada y trazas de memoria.",
+      "next": "Sólo después de aceptar R0: ejecutar la inicialización original ya traducida y llevar sus escrituras RAM/MMIO al renderer real. No reintroducir mosaicos inventados.",
       "dependencies": [
-        "V1.2"
+        "R0"
       ],
       "screenshots": [
         "before",

@@ -4,6 +4,32 @@ First **ROM-derived, testable** migration experiment for Ghosts 'n Goblins
 (`gngb`, Motorola 6809), deliberately **without MAME automation, video capture,
 or gameplay recording**.
 
+### Corrección del rumbo visual — R0 (primero)
+
+La imagen V1.2 enviada por el operador mostró un mosaico
+aleatorio e ilegible. **V1.2 queda rechazado visualmente.**
+No se intentará mejorar el collage con más fixtures.
+
+En su lugar se captura un **frame original real**
+externamente (MAME solo en test), junto con memoria
+FG/BG/sprites, scroll y paleta auténticos. Nuestro
+JavaScript recompone esos bytes y muestra un
+diff objetivo contra la imagen de referencia.
+
+```bash
+git pull --ff-only
+python3 scripts/capture_real_frame.py --system gngb --rompath roms --frame 600
+python3 src/reference_frame_view.py --rom roms/gng.zip
+open out/visual/frame-compare.html
+```
+
+Si solo tienes `roms/gng.zip` y no gngb.zip,
+usar `--system gng` en captura (revisión distinta).
+MAME se usa **solo como oráculo**; no forma parte de
+la aplicación nativa JS. Hace falta MAME en el Mac.
+[R0 completo](docs/frame-oracle.md).
+
+
 ## Qué puedes ejecutar y ver hoy
 
 **Seguimiento visual:** seis checkpoints verificables ([roadmap](docs/roadmap.md)),

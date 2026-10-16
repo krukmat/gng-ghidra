@@ -20,7 +20,7 @@ class VisualProgressTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             out=Path(temp)/"out"/"visual-progress.html"
             result=progress.build(MANIFEST,Path(temp)/"visual-evidence",out)
-            self.assertEqual(result["milestones"],6)
+            self.assertEqual(result["milestones"],7)
             self.assertEqual(result["accepted"],0)
             self.assertEqual(result["local_screenshots"],0)
             page=out.read_text()
