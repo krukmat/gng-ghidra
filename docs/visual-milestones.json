@@ -1,7 +1,7 @@
 {
   "schema": "gng.visual-progress.v1",
   "scope": "main — evidencia visual local, ROM privada no versionada",
-  "last_reviewed": "2026-10-15",
+  "last_reviewed": "2026-10-16",
   "statuses": {
     "READY_FOR_LOCAL_REVIEW": "Código implementado; pendiente verificar en Mac",
     "PLANNED": "Pendiente de implementar",
@@ -26,12 +26,12 @@
     {
       "id": "V1.1",
       "title": "Primer lienzo conectado a memoria",
-      "status": "PLANNED",
+      "status": "READY_FOR_LOCAL_REVIEW",
       "stage": "VRAM FIXTURE (no CPU)",
       "deliverable": "out/visual/vram-sprites.html",
       "visible": "Una escena de diagnóstico muestra sprites cuya posición/imagen cambia cuando se alteran bytes de la memoria, sin dibujar elementos a mano.",
-      "acceptance": "Cambiar dos bytes del fixture de sprite RAM altera posición e índice de sprite; comparativa antes/después visible; píxeles proceden de ROM.",
-      "next": "Renderer Canvas de sprites + fixture escrito en RAM, sin fingir frames reales.",
+      "acceptance": "Con chips gráficos gngb auténticos, ANTES/DESPUÉS muestran cambios visibles causados por cambios de bytes 0x1e00..0x1e03 (posición X/Y, índice de sprite y atributos); la copia del buffer es explícita; dos capturas locales revisadas. No hay gameplay.",
+      "next": "Abrir out/visual/vram-sprites.html con gráficos privados, mover X y cambiar índice de sprite, pulsar aplicar para copiar RAM al buffer y guardar los PNG ANTES/DESPUÉS.",
       "dependencies": [
         "V0"
       ],

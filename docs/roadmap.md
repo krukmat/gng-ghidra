@@ -159,3 +159,55 @@ overlay explícito de los bytes modificados, sin inventar gameplay.
 Solo después V2 aborda SYNC, IRQ, bank switching y control-flow para
 un primer frame auténtico. Las rutinas adicionales deben justificar
 cómo habilitan ese frame.
+
+
+## V1.1 implementado — escena controlada con RAM real de sprites
+
+**Estado: código preparado, pendiente de validación con ROM privada.**
+A diferencia de V0, hay dos lienzos lado a lado y un estado
+diferente **por bytes de sprite RAM**. No inventamos la escena del juego:
+los bitplanes son los de la ROM original y la memoria inicial es
+explícitamente un fixture de pruebas.
+
+```bash
+git pull --ff-only
+python3 src/sprite_scene.py --rom roms/gng.zip
+open out/visual/vram-sprites.html
+```
+
+Si el ZIP es un *split set*, agregar
+`--shared /ruta/local/parent.zip` a la generación. Ambos ZIPs
+son privados; el HTML resultante también incluye bytes ROM.
+
+El navegador debe mostrar **ANTES** y **DESPUÉS** simultáneamente.
+El panel permite cambiar X, Y, gráfico (0–1023), paleta de
+inspección y flips. La edición solo aparece al pulsar
+**Aplicar cambios · copiar RAM → buffer**, porque el hardware
+usa una transferencia explícita de sprite RAM; en esta prueba
+se reproduce solo el contrato de snapshot, no los temporizadores
+de placa. La tabla informa qué bytes han cambiado, con direcciones
+originales `0x1e00..0x1fff`.
+
+Haz clic en **Guardar ANTES PNG** y **Guardar DESPUÉS PNG**,
+y mueve los archivos descargados a:
+
+```text
+out/visual-evidence/v1.1/before.png
+out/visual-evidence/v1.1/after.png
+```
+
+Después `python3 scripts/visual-progress.py` y
+`open out/visual-progress.html` mostrarán ambas capturas en
+el tablero. **No marcar el hito ACCEPTED sin inspección
+visual real con la ROM del operador**, aunque CI pase.
+
+- Fuente: `src/graphics_preview.py` verifica tamaño y CRC32 de
+  los 13 chips gfx gngb; `src/sprite_memory.mjs` aplica
+  el spritelayout (planos, transparencia 15) y el registro
+  hardware de 4 bytes (código/atributos/Y/X).
+- Mapa CPU: `0x1e00–0x1fff` (128 sprites), dirección
+  `0x3c00` como evento DMA conceptual, sin simular IRQ.
+  Se respeta el orden inverso de dibujo y la semántica de
+  paleta/flip; los RGB son **paleta de inspección**.
+- Aún falta: capas FG/BG, paleta real y ejecución de código
+  traducido. Eso corresponde a V1.2 y V1.3.

@@ -29,6 +29,25 @@ open out/graphics-preview.html
 
 Muestra sprites, tiles y caracteres desde los chips gráficos originales si están presentes en tu ZIP. Si la ROM está dividida, añade `--shared /ruta/al/parent.zip`. Los colores son diagnósticos, no la paleta real del arcade. **No es todavía un frame ni una partida ejecutada.** El HTML generado contiene píxeles de tu ROM y solo debe permanecer local.
 
+
+### V1.1: comparación visual de sprite RAM
+
+El primer renderer diagnóstico de sprites (sin CPU ni gameplay)
+está implementado. Es un artefacto **local con bytes derivados
+de la ROM** que muestra ANTES/DESPUÉS y los bytes alterados:
+
+```bash
+git pull --ff-only
+python3 src/sprite_scene.py --rom roms/gng.zip
+open out/visual/vram-sprites.html
+```
+
+Los botones de la página descargan `v1.1-before.png` y
+`v1.1-after.png` para el seguimiento. El panel cambia
+índice gráfico, atributos y posición X/Y, y actualiza el
+buffer solo tras una copia explícita, como el hardware.
+**No es un frame del juego.** [Criterios de aceptación](docs/roadmap.md).
+
 ## Status
 
 - **PASS locally (Python + Node):** real reset-loop ROM bytes → 7 decoded
