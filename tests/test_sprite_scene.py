@@ -52,7 +52,7 @@ class SpriteSceneTests(unittest.TestCase):
             self.assertIn('id="after"',content)
             self.assertIn('v1.1-before.png',content)
             self.assertIn('v1.1-after.png',content)
-            match=re.search(r'const imageBytes=atob\\((".*?")\\);',content)
+            match=re.search(r'const imageBytes=atob\((".*?")\);',content)
             self.assertIsNotNone(match)
             encoded=json.loads(match.group(1))
             self.assertEqual(len(base64.b64decode(encoded)),0x20000)
