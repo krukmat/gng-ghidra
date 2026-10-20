@@ -15,6 +15,8 @@ import shutil
 import struct
 import subprocess
 
+BOT_CHECKPOINTS=(920,980,1060,1300,1510,1660)
+
 # Both direct CLI invocation and importlib-loaded ROM-free tests work.
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parent))
@@ -82,6 +84,18 @@ def validate_capture(directory:Path,requested_frame:int,system:str,
     digest["reference"]={
         "filename":"reference.png","width":width,"height":height,
         "sha256":hashlib.sha256(png.read_bytes()).hexdigest()}
+    bot_checkpoint_evidence=[]
+    if expected_replay is not None:
+        for number in BOT_CHECKPOINTS:
+            if number>=requested_frame:
+                raise ValueError("Bot final frame must be after all checkpoints")
+            filename=f"frame-{number:04d}.png"
+            checkpoint=directory/"checkpoints"/filename
+            if not checkpoint.is_file() or png_size(checkpoint)!=(256,224):
+                raise ValueError("Missing/wrong-sized MAME boot checkpoint: "+filename)
+            bot_checkpoint_evidence.append({
+                "frame":number,"file":filename,
+                "sha256":hashlib.sha256(checkpoint.read_bytes()).hexdigest()})
     return {
         "schema":SCHEMA,"status":"NATIVE_REFERENCE_CAPTURED_NOT_JS_EQUIVALENCE",
         "system":system,"frame":state["frame"],"sprite_dma_count":state["dma_count"],
@@ -91,6 +105,7 @@ def validate_capture(directory:Path,requested_frame:int,system:str,
         "native_video_state_validated":True,
         "generated_js_frame_equivalent":False,
         "input_replay":replay,
+        "bot_checkpoints":bot_checkpoint_evidence,
         "product_uses_mame":False,
         "notes":"MAME frame callback and last DMA state may differ at raster precision",
     }
@@ -131,8 +146,14 @@ def capture(mame:str,system:str,rompath:Path,directory:Path,frame:int,
         raise ValueError("MAME not installed/on PATH. Check command -v mame on macOS. "
                          "This is a test-only reference tool.")
     directory.mkdir(parents=True,exist_ok=True)
-    for filename in [*FILES.values(),"reference.png","state.json","manifest.json"]:
+    for filename in [*FILES.values(),"reference.png","state.json",
+                     "manifest.json","bot-checkpoints.html","mame.log",
+                     "reproducibility.json"]:
         (directory/filename).unlink(missing_ok=True)
+    if replay:
+        (directory/"checkpoints").mkdir(exist_ok=True)
+        for number in BOT_CHECKPOINTS:
+            (directory/"checkpoints"/f"frame-{number:04d}.png").unlink(missing_ok=True)
     env=os.environ.copy()
     env["GNG_CAPTURE_DIR"]=str(directory)
     env["GNG_CAPTURE_FRAME"]=str(frame)
@@ -146,10 +167,30 @@ def capture(mame:str,system:str,rompath:Path,directory:Path,frame:int,
                               timeout=timeout,check=False)
     except subprocess.TimeoutExpired as exc:
         raise ValueError("MAME timed out; no reference accepted") from exc
+    (directory/"mame.log").write_text(result.stdout+"\n"+result.stderr)
     if result.returncode!=0:
         raise ValueError("MAME reference capture failed:\n"+
                          (result.stderr+"\n"+result.stdout)[-3000:])
+    if replay and "GNG_BOT_FIELDS=RESOLVED_MAME_NAMES" not in result.stdout:
+        raise ValueError("MAME bot Lua did not report initialized fields; see private mame.log")
     manifest=validate_capture(directory,frame,system,replay)
+    if replay:
+        pictures="\n".join(
+            f'<figure><img src="checkpoints/{item["file"]}" '
+            f'width="256" height="224" loading="eager">'
+            f'<figcaption>Frame {item["frame"]}</figcaption></figure>'
+            for item in manifest["bot_checkpoints"])
+        pictures+=f'<figure><img src="reference.png" width="256" height="224">'
+        pictures+=f'<figcaption>Frame {frame} (final)</figcaption></figure>'
+        page=('<html lang="es"><meta charset="utf-8"><title>GNG — arranque real</title>'
+              '<style>body{background:#111;color:white;font:16px system-ui}'
+              'main{display:flex;flex-wrap:wrap;gap:16px}'
+              'figure{margin:8px}img{image-rendering:pixelated;width:256px;height:224px}'
+              '</style><h1>Arranque GNG — capturas reales de MAME</h1>'
+              '<p>Coin/Start han sido leídos en los puertos. Eso no demuestra '
+              'que el juego haya empezado. Revisa cada etapa.</p>'
+              '<main>'+pictures+'</main></html>')
+        (directory/"bot-checkpoints.html").write_text(page)
     (directory/"manifest.json").write_text(
         json.dumps(manifest,indent=2,sort_keys=True)+"\n")
     return manifest
@@ -200,7 +241,12 @@ def main()->None:
               " scroll="+str([result["scroll_x"],result["scroll_y"]]))
         print("GNG_MAME_CAPTURE_MANIFEST="+str(args.out/"manifest.json"))
         if result["input_replay"]:
-            print("GNG_BOT_REPLAY=APPLIED sha256="+result["input_replay"]["sha256"])
+            replay=result["input_replay"]
+            print("GNG_BOT_INPUTS=OBSERVED coin_frames="+str(replay["effective_coin_frames"])+
+                  " start_frames="+str(replay["effective_start_frames"]))
+            print("GNG_BOT_VISUAL_GATE=PENDING_REVIEW")
+            print("GNG_BOT_CHECKPOINTS="+str(args.out/"bot-checkpoints.html"))
+            print("GNG_MAME_PRIVATE_LOG="+str(args.out/"mame.log"))
     print("GNG_JS_VISUAL_EQUIVALENCE=NOT_ESTABLISHED")
 
 
