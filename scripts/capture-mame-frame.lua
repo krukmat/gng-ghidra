@@ -41,13 +41,18 @@ local completed = false
 local bot_wire = os.getenv("GNG_BOT_EVENTS")
 local bot_sha = os.getenv("GNG_BOT_SHA256")
 local bot_events = {}
-local bot_fields = {}
+local bot_fields = nil
 local bot_active_frame_actions = 0
+local bot_effective_coin_frames = 0
+local bot_effective_start_frames = 0
+
+-- Real MAME 0.287 gngb field names, verified in blackbox_mame_game_abstraction:
+-- scripts/mame_autoboot.lua (not numerical-mask lookups).
 local INPUTS = {
-    coin={":SYSTEM",0x40}, start={":SYSTEM",0x01},
-    right={":P1",0x01}, left={":P1",0x02},
-    down={":P1",0x04}, up={":P1",0x08},
-    attack={":P1",0x10}, jump={":P1",0x20}
+    coin={":SYSTEM","Coin 1"}, start={":SYSTEM","1 Player Start"},
+    right={":P1","P1 Right"}, left={":P1","P1 Left"},
+    down={":P1","P1 Down"}, up={":P1","P1 Up"},
+    attack={":P1","P1 Button 1"}, jump={":P1","P1 Button 2"}
 }
 if bot_wire then
     assert(bot_sha and bot_sha:match("^[0-9a-f]+$") and #bot_sha == 64,
@@ -61,28 +66,43 @@ if bot_wire then
         bot_events[#bot_events+1] = {a=a,b=b,action=action}
     end
     assert(#bot_events > 0 and #bot_events <= 100, "invalid bot event count")
+end
+
+local function initialize_bot_fields()
+    if bot_fields or not bot_wire then return end
+    local resolved = {}
     for action, locator in pairs(INPUTS) do
         local port = assert(machine.ioport.ports[locator[1]],
-                            "MAME I/O port missing for bot action: " .. action)
-        local field = assert(port:field(locator[2]),
-                             "MAME input field missing for bot action: " .. action)
-        assert(field.mask == locator[2], "unexpected MAME input mask for " .. action)
-        bot_fields[action] = field
-        field:set_value(0)  -- ignore keyboard/controller inputs in bot mode
+                            "MAME I/O port missing for " .. action)
+        local field = assert(port.fields[locator[2]],
+                             "MAME input field missing for " .. action)
+        resolved[action] = {field=field,port=port,mask=field.mask,
+                            defvalue=field.defvalue}
     end
+    bot_fields = resolved
+    print("GNG_BOT_FIELDS=RESOLVED_MAME_NAMES")
 end
 
 local function step_bot(frame)
     if not bot_wire then return end
-    for action, field in pairs(bot_fields) do field:set_value(0) end
+    initialize_bot_fields()
+    for _, entry in pairs(bot_fields) do entry.field:clear_value() end
     for _, event in ipairs(bot_events) do
         if frame >= event.a and frame < event.b then
-            bot_fields[event.action]:set_value(1)
+            bot_fields[event.action].field:set_value(1)
             bot_active_frame_actions = bot_active_frame_actions + 1
         end
     end
+    -- Ground truth from MAME input ports, not only from our requested schedule.
+    -- Mirrors blackbox's (read ~ defvalue) & mask active-state contract.
+    for action, entry in pairs(bot_fields) do
+        local value = entry.port:read()
+        if ((value ~ entry.defvalue) & entry.mask) ~= 0 then
+            if action == "coin" then bot_effective_coin_frames = bot_effective_coin_frames + 1 end
+            if action == "start" then bot_effective_start_frames = bot_effective_start_frames + 1 end
+        end
+    end
 end
-
 
 local function readshare(share, len)
     local data = {}
@@ -120,7 +140,7 @@ local dma_tap = space:install_write_tap(
 assert(scroll_tap and dma_tap, "MAME write-tap installation failed")
 
 local function snapshot()
-    if completed or screen.frame_number < target then return end
+    if completed or screen:frame_number() < target then return end
     -- A missing DMA is not equivalent to the current source RAM.
     assert(sprite_buffer and dma_count > 0,
         "No observed sprite DMA at 0x3c00; choose a later capture frame")
@@ -148,10 +168,14 @@ local function snapshot()
     local replay_json = "null"
     if bot_wire then
         assert(bot_active_frame_actions > 0, "bot schedule did not activate inputs")
+        assert(bot_effective_coin_frames > 0, "Coin not observed on MAME input port")
+        assert(bot_effective_start_frames > 0, "Start not observed on MAME input port")
         replay_json = string.format(
             '{"schema":"gng.mame-input-replay.v1","sha256":"%s",' ..
-            '"events":%d,"active_frame_actions":%d}',
-            bot_sha, #bot_events, bot_active_frame_actions)
+            '"events":%d,"active_frame_actions":%d,' ..
+            '"effective_coin_frames":%d,"effective_start_frames":%d}',
+            bot_sha, #bot_events, bot_active_frame_actions,
+            bot_effective_coin_frames, bot_effective_start_frames)
     end
     dumpbytes(dir .. "/state.json", string.format(
         '{"schema":"gng.mame-video-state.v1",' ..
@@ -161,18 +185,18 @@ local function snapshot()
         '"input_replay":%s,' ..
         '"source":"MAME independent native frame, not translated JS",' ..
         '"sprite_buffer_source":"CPU write tap 0x3c00"}\n',
-        system.name, screen.frame_number, dma_count,
+        system.name, screen:frame_number(), dma_count,
         x, y, scroll[1], scroll[2], scroll[3], scroll[4], pc_json,
         replay_json))
     completed = true
-    print("GNG_MAME_REFERENCE=CAPTURED frame=" .. screen.frame_number ..
+    print("GNG_MAME_REFERENCE=CAPTURED frame=" .. screen:frame_number() ..
         " dma=" .. dma_count .. " scroll_x=" .. x .. " scroll_y=" .. y)
     machine:exit()
 end
 
 -- The machine frame notifier is a reference capture, not a product loop.
 local subscription = emu.add_machine_frame_notifier(function()
-    step_bot(screen.frame_number)
+    step_bot(screen:frame_number())
     snapshot()
 end)
 assert(subscription, "MAME machine frame notifier unavailable")

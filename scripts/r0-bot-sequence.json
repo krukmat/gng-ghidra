@@ -1,10 +1,30 @@
 {
   "schema": "gng.mame-input-replay.v1",
   "events": [
-    {"from": 120, "to": 126, "action": "coin"},
-    {"from": 185, "to": 191, "action": "start"},
-    {"from": 260, "to": 300, "action": "right"},
-    {"from": 280, "to": 286, "action": "jump"},
-    {"from": 322, "to": 328, "action": "attack"}
+    {
+      "from": 950,
+      "to": 960,
+      "action": "coin"
+    },
+    {
+      "from": 1020,
+      "to": 1025,
+      "action": "start"
+    },
+    {
+      "from": 1505,
+      "to": 1565,
+      "action": "right"
+    },
+    {
+      "from": 1570,
+      "to": 1600,
+      "action": "jump"
+    },
+    {
+      "from": 1630,
+      "to": 1650,
+      "action": "attack"
+    }
   ]
 }

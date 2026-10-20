@@ -25,8 +25,10 @@ system="$(python3 -c 'import json; print(json.load(open("out/reference/mame-roms
 echo "GNG_MAME_REFERENCE_DRIVER=$system (verified from chip CRCs)"
 # MAME itself must accept the ROM revision before replaying any inputs.
 mame -verifyroms "$system" -rompath out/reference/mame-roms
+default_frame=600
+if [[ -n "${GNG_BOT_SEQUENCE:-}" ]]; then default_frame=1680; fi
 capture_args=(--system "$system" --rompath out/reference/mame-roms
-              --frame "${GNG_FRAME:-600}" --repeats "${GNG_REPEATS:-1}")
+              --frame "${GNG_FRAME:-$default_frame}" --repeats "${GNG_REPEATS:-1}")
 if [[ -n "${GNG_BOT_SEQUENCE:-}" ]]; then
   capture_args+=(--bot-sequence "$GNG_BOT_SEQUENCE")
 fi

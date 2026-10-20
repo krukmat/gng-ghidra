@@ -39,16 +39,16 @@ original de Pyjamada no controla MAME ni se copia aquí.
 # Primero R0 normal, para verificar el ROM set y el capturador:
 bash scripts/visual-real-frame.sh
 
-# Después: COIN → START → RIGHT → JUMP → ATTACK en MAME, 3 ejecuciones:
-GNG_BOT_SEQUENCE=scripts/r0-bot-sequence.json GNG_REPEATS=3 \
+# Después: COIN desde ~950, START ~1020, movimiento desde ~1505.\n# Un run primero; después añadir GNG_REPEATS=3 si la captura es correcta.
+GNG_BOT_SEQUENCE=scripts/r0-bot-sequence.json \
   bash scripts/visual-real-frame.sh
 ```
 
-El segundo comando exige `mame -verifyroms` satisfactorio, aplica entradas
+El segundo comando captura por defecto el frame 1680 (sin bot: 600).\nLa secuencia y las APIs de campos de MAME se han contrastado con\n[`blackbox_mame_game_abstraction`](https://github.com/krukmat/blackbox_mame_game_abstraction/blob/main/docs/gng_execution_process.md).\nEl segundo comando exige `mame -verifyroms` satisfactorio, aplica entradas
 de `scripts/r0-bot-sequence.json` y guarda un reporte privado en
-`out/reference/mame/reproducibility.json` **solo si coinciden todos los
+`out/reference/mame/reproducibility.json` al repetir con\n`GNG_REPEATS=3`, **solo si coinciden todos los
 hashes de PNG y memoria de vídeo**, PC y contadores DMA en los tres runs.
-La secuencia es un guion de inputs, no una prueba de partida jugable;
+Se valida además que Coin y Start aparezcan activos al leer los puertos de MAME.\nLa secuencia es un guion de inputs, no una prueba de partida jugable;
 **hay que inspeccionar la imagen**. No publicar el HTML ni los snapshots.
 La captura normal sin bot se mantiene para aislar fallos.
 

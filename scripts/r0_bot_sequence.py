@@ -53,7 +53,11 @@ def check_replay(state: dict, expected: dict | None) -> dict | None:
         return None
     if not isinstance(replay, dict):
         raise ValueError("MAME bot replay evidence missing")
-    if (replay.get("schema") != SCHEMA or
+    if (type(replay.get("effective_coin_frames")) is not int or
+            replay["effective_coin_frames"] <= 0 or
+            type(replay.get("effective_start_frames")) is not int or
+            replay["effective_start_frames"] <= 0 or
+            replay.get("schema") != SCHEMA or
             replay.get("sha256") != expected["sha256"] or
             replay.get("events") != expected["event_count"] or
             type(replay.get("active_frame_actions")) is not int or
