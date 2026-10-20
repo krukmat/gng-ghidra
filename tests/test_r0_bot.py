@@ -55,12 +55,15 @@ class MameBotSequenceTests(TestCase):
     def test_replay_evidence_must_match_schedule(self):
         expected = self.sequence([{"from": 1, "to": 2, "action": "coin"}])
         evidence = {"schema": SCHEMA, "sha256": expected["sha256"],
-                    "events": 1, "active_frame_actions": 1}
+                    "events": 1, "active_frame_actions": 1,
+                    "effective_coin_frames": 1, "effective_start_frames": 1}
         self.assertEqual(check_replay({"input_replay": evidence}, expected),
                          evidence)
         for broken in (
             None, {}, {**evidence, "sha256": "0"*64},
             {**evidence, "active_frame_actions": 0},
+            {**evidence, "effective_coin_frames": 0},
+            {**evidence, "effective_start_frames": 0},
         ):
             with self.subTest(broken=broken):
                 with self.assertRaisesRegex(ValueError, "replay evidence"):
@@ -70,10 +73,12 @@ class MameBotSequenceTests(TestCase):
             check_replay({"input_replay": evidence}, None)
 
     def test_example_is_valid(self):
-        sequence = prepare_sequence(ROOT/"scripts/r0-bot-sequence.json", 600)
+        sequence = prepare_sequence(ROOT/"scripts/r0-bot-sequence.json", 1680)
         self.assertEqual(sequence["event_count"], 5)
         self.assertIn("coin", sequence["wire"])
         self.assertIn("jump", sequence["wire"])
+        self.assertIn("950:960:coin", sequence["wire"])
+        self.assertIn("1020:1025:start", sequence["wire"])
 
     def test_capture_integration_is_explicit(self):
         capture = (ROOT/"scripts/capture_real_frame.py").read_text()
@@ -83,6 +88,9 @@ class MameBotSequenceTests(TestCase):
         self.assertIn("GNG_BOT_EVENTS", capture)
         self.assertIn("bot_fields[event.action]:set_value(1)", lua)
         self.assertIn("active_frame_actions", lua)
+        self.assertIn("screen:frame_number()", lua)
+        self.assertIn("port.fields[locator[2]]", lua)
+        self.assertIn("field:clear_value()", lua)
         self.assertIn("-verifyroms", wrapper)
 
 
