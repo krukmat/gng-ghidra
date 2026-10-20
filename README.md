@@ -1,8 +1,10 @@
 # gng-ghidra — ROM → IR → JavaScript / TypeScript proof of concept
 
-First **ROM-derived, testable** migration experiment for Ghosts 'n Goblins
-(`gngb`, Motorola 6809), deliberately **without MAME automation, video capture,
-or gameplay recording**.
+**ROM-derived, testable** migration experiment for Ghosts 'n Goblins
+(`gngb`, Motorola 6809). MAME is used **only as an external test oracle**
+for video capture and differential validation; it is not part of the JS product.
+
+**[Plan operativo actual R0–R6: tareas, subtareas y criterios STOP/GO](docs/plan-ejecucion.md)** · [Issues de seguimiento](https://github.com/krukmat/gng-ghidra/issues). La prioridad inmediata es validar el frame real R0 en el Mac; la recompilación directa 6809→JS es una hipótesis con gate de dos semanas, no una solución ya demostrada.
 
 ### Corrección del rumbo visual — R0 (primero)
 
