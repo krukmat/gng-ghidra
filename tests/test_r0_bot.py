@@ -92,6 +92,9 @@ class MameBotSequenceTests(TestCase):
         self.assertIn("port.fields[locator[2]]", lua)
         self.assertIn("field:clear_value()", lua)
         self.assertIn("-verifyroms", wrapper)
+        self.assertIn("capture_checkpoint(screen:frame_number())", lua)
+        self.assertIn("bot-checkpoints.html", capture)
+        self.assertIn("GNG_BOT_VISUAL_GATE=PENDING_REVIEW", capture)
 
 
 if __name__ == "__main__":
