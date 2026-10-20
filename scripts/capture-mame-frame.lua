@@ -35,6 +35,55 @@ local sprite_buffer = nil
 local dma_count = 0
 local completed = false
 
+-- A minimal fixed-frame input driver inspired by the Pyjamada QA bot.
+-- It controls only MAME test inputs, not the generated JS game engine.
+-- All input windows are strictly validated by Python before launch.
+local bot_wire = os.getenv("GNG_BOT_EVENTS")
+local bot_sha = os.getenv("GNG_BOT_SHA256")
+local bot_events = {}
+local bot_fields = {}
+local bot_active_frame_actions = 0
+local INPUTS = {
+    coin={":SYSTEM",0x40}, start={":SYSTEM",0x01},
+    right={":P1",0x01}, left={":P1",0x02},
+    down={":P1",0x04}, up={":P1",0x08},
+    attack={":P1",0x10}, jump={":P1",0x20}
+}
+if bot_wire then
+    assert(bot_sha and bot_sha:match("^[0-9a-f]+$") and #bot_sha == 64,
+           "missing/corrupt bot schedule SHA-256")
+    assert(#bot_wire > 0 and #bot_wire < 8192, "invalid bot input schedule")
+    for token in bot_wire:gmatch("[^;]+") do
+        local a,b,action = token:match("^(%d+):(%d+):([a-z]+)$")
+        a,b = tonumber(a),tonumber(b)
+        assert(a and b and a >= 0 and a < b and b <= target and INPUTS[action],
+               "invalid bot action/frame window: " .. token)
+        bot_events[#bot_events+1] = {a=a,b=b,action=action}
+    end
+    assert(#bot_events > 0 and #bot_events <= 100, "invalid bot event count")
+    for action, locator in pairs(INPUTS) do
+        local port = assert(machine.ioport.ports[locator[1]],
+                            "MAME I/O port missing for bot action: " .. action)
+        local field = assert(port:field(locator[2]),
+                             "MAME input field missing for bot action: " .. action)
+        assert(field.mask == locator[2], "unexpected MAME input mask for " .. action)
+        bot_fields[action] = field
+        field:set_value(0)  -- ignore keyboard/controller inputs in bot mode
+    end
+end
+
+local function step_bot(frame)
+    if not bot_wire then return end
+    for action, field in pairs(bot_fields) do field:set_value(0) end
+    for _, event in ipairs(bot_events) do
+        if frame >= event.a and frame < event.b then
+            bot_fields[event.action]:set_value(1)
+            bot_active_frame_actions = bot_active_frame_actions + 1
+        end
+    end
+end
+
+
 local function readshare(share, len)
     local data = {}
     for i = 0, len - 1 do
@@ -96,15 +145,25 @@ local function snapshot()
     local y = scroll[3] + scroll[4] * 256
     local pc = cpu.state["PC"] and cpu.state["PC"].value or nil
     local pc_json = pc and tostring(pc) or "null"
+    local replay_json = "null"
+    if bot_wire then
+        assert(bot_active_frame_actions > 0, "bot schedule did not activate inputs")
+        replay_json = string.format(
+            '{"schema":"gng.mame-input-replay.v1","sha256":"%s",' ..
+            '"events":%d,"active_frame_actions":%d}',
+            bot_sha, #bot_events, bot_active_frame_actions)
+    end
     dumpbytes(dir .. "/state.json", string.format(
         '{"schema":"gng.mame-video-state.v1",' ..
         '"driver":"%s","frame":%d,"dma_count":%d,' ..
         '"scroll_x":%d,"scroll_y":%d,' ..
         '"scroll_bytes":[%d,%d,%d,%d],"pc":%s,' ..
+        '"input_replay":%s,' ..
         '"source":"MAME independent native frame, not translated JS",' ..
         '"sprite_buffer_source":"CPU write tap 0x3c00"}\n',
         system.name, screen.frame_number, dma_count,
-        x, y, scroll[1], scroll[2], scroll[3], scroll[4], pc_json))
+        x, y, scroll[1], scroll[2], scroll[3], scroll[4], pc_json,
+        replay_json))
     completed = true
     print("GNG_MAME_REFERENCE=CAPTURED frame=" .. screen.frame_number ..
         " dma=" .. dma_count .. " scroll_x=" .. x .. " scroll_y=" .. y)
@@ -112,5 +171,8 @@ local function snapshot()
 end
 
 -- The machine frame notifier is a reference capture, not a product loop.
-local subscription = emu.add_machine_frame_notifier(snapshot)
+local subscription = emu.add_machine_frame_notifier(function()
+    step_bot(screen.frame_number)
+    snapshot()
+end)
 assert(subscription, "MAME machine frame notifier unavailable")
