@@ -104,6 +104,24 @@ local function step_bot(frame)
     end
 end
 
+
+-- Private screenshots at boot boundaries. This is a diagnostic, not a game-start proof.
+local bot_checkpoints = {920, 980, 1060, 1300, 1510, 1660}
+local bot_checkpoint_count = 0
+local function capture_checkpoint(frame)
+    if not bot_wire then return end
+    for _, requested in ipairs(bot_checkpoints) do
+        if frame == requested and requested < target then
+            local filename = string.format("%s/checkpoints/frame-%04d.png", dir, frame)
+            local err = screen:snapshot(filename)
+            assert(err == nil, "MAME boot checkpoint screenshot failed: " .. tostring(err))
+            bot_checkpoint_count = bot_checkpoint_count + 1
+            print("GNG_BOT_CHECKPOINT=frame_" .. frame)
+            return
+        end
+    end
+end
+
 local function readshare(share, len)
     local data = {}
     for i = 0, len - 1 do
@@ -170,6 +188,7 @@ local function snapshot()
         assert(bot_active_frame_actions > 0, "bot schedule did not activate inputs")
         assert(bot_effective_coin_frames > 0, "Coin not observed on MAME input port")
         assert(bot_effective_start_frames > 0, "Start not observed on MAME input port")
+        assert(bot_checkpoint_count == #bot_checkpoints, "Missing MAME boot checkpoints")
         replay_json = string.format(
             '{"schema":"gng.mame-input-replay.v1","sha256":"%s",' ..
             '"events":%d,"active_frame_actions":%d,' ..
@@ -197,6 +216,7 @@ end
 -- The machine frame notifier is a reference capture, not a product loop.
 local subscription = emu.add_machine_frame_notifier(function()
     step_bot(screen:frame_number())
+    capture_checkpoint(screen:frame_number())
     snapshot()
 end)
 assert(subscription, "MAME machine frame notifier unavailable")
