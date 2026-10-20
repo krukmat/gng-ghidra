@@ -86,7 +86,7 @@ class MameBotSequenceTests(TestCase):
         wrapper = (ROOT/"scripts/visual-real-frame.sh").read_text()
         self.assertIn("--bot-sequence", capture)
         self.assertIn("GNG_BOT_EVENTS", capture)
-        self.assertIn("bot_fields[event.action]:set_value(1)", lua)
+        self.assertIn("bot_fields[event.action].field:set_value(1)", lua)
         self.assertIn("active_frame_actions", lua)
         self.assertIn("screen:frame_number()", lua)
         self.assertIn("port.fields[locator[2]]", lua)
