@@ -15,6 +15,8 @@ import shutil
 import struct
 import subprocess
 
+from r0_bot_sequence import prepare_sequence, check_replay
+
 SCHEMA="gng.mame-video-capture.v1"
 FILES={
     "foreground":"foreground.bin",
@@ -32,7 +34,8 @@ def png_size(path:Path)->tuple[int,int]:
     return struct.unpack(">II",raw[16:24])
 
 
-def validate_capture(directory:Path,requested_frame:int,system:str)->dict:
+def validate_capture(directory:Path,requested_frame:int,system:str,
+                     expected_replay:dict|None=None)->dict:
     state_path=directory/"state.json"
     if not state_path.is_file():
         raise ValueError("MAME did not write state.json: capture script may have failed")
@@ -55,6 +58,7 @@ def validate_capture(directory:Path,requested_frame:int,system:str)->dict:
     if (sx!=state.get("scroll_x") or sy!=state.get("scroll_y") or
             not 0<=sx<=65535 or not 0<=sy<=65535):
         raise ValueError("Scroll register reconstruction mismatch")
+    replay=check_replay(state,expected_replay)
     digest={}
     for key,name in FILES.items():
         path=directory/name
@@ -83,6 +87,7 @@ def validate_capture(directory:Path,requested_frame:int,system:str)->dict:
         "sprite_dma_observed":True,
         "native_video_state_validated":True,
         "generated_js_frame_equivalent":False,
+        "input_replay":replay,
         "product_uses_mame":False,
         "notes":"MAME frame callback and last DMA state may differ at raster precision",
     }
@@ -96,7 +101,8 @@ def command(mame:str,system:str,rompath:Path,lua:Path)->list[str]:
 
 
 def capture(mame:str,system:str,rompath:Path,directory:Path,frame:int,
-            *,dry_run:bool=False,timeout:int=180)->dict:
+            *,dry_run:bool=False,timeout:int=180,
+            bot_sequence:Path|None=None)->dict:
     if not 2<=frame<=7200:
         raise ValueError("Capture frame must be between 2 and 7200")
     root=Path(__file__).resolve().parents[1]
@@ -111,10 +117,13 @@ def capture(mame:str,system:str,rompath:Path,directory:Path,frame:int,
         raise ValueError("Reference evidence must remain inside this repo")
     if "out" not in directory.relative_to(root).parts:
         raise ValueError("Reference evidence MUST be written inside ignored out/")
+    replay=prepare_sequence(bot_sequence,frame) if bot_sequence else None
     plan=command(mame,system,rompath,lua)
     if dry_run:
         return {"status":"DRY_RUN_NOT_CAPTURED","command":plan,
-                "output":str(directory),"frame":frame}
+                "output":str(directory),"frame":frame,
+                "input_replay":None if not replay else {
+                    "sha256":replay["sha256"],"events":replay["event_count"]}}
     if not shutil.which(mame) and not Path(mame).is_file():
         raise ValueError("MAME not installed/on PATH. Check command -v mame on macOS. "
                          "This is a test-only reference tool.")
@@ -124,6 +133,11 @@ def capture(mame:str,system:str,rompath:Path,directory:Path,frame:int,
     env=os.environ.copy()
     env["GNG_CAPTURE_DIR"]=str(directory)
     env["GNG_CAPTURE_FRAME"]=str(frame)
+    env.pop("GNG_BOT_EVENTS",None)
+    env.pop("GNG_BOT_SHA256",None)
+    if replay:
+        env["GNG_BOT_EVENTS"]=replay["wire"]
+        env["GNG_BOT_SHA256"]=replay["sha256"]
     try:
         result=subprocess.run(plan,env=env,capture_output=True,text=True,
                               timeout=timeout,check=False)
@@ -132,7 +146,7 @@ def capture(mame:str,system:str,rompath:Path,directory:Path,frame:int,
     if result.returncode!=0:
         raise ValueError("MAME reference capture failed:\n"+
                          (result.stderr+"\n"+result.stdout)[-3000:])
-    manifest=validate_capture(directory,frame,system)
+    manifest=validate_capture(directory,frame,system,replay)
     (directory/"manifest.json").write_text(
         json.dumps(manifest,indent=2,sort_keys=True)+"\n")
     return manifest
@@ -146,10 +160,32 @@ def main()->None:
     parser.add_argument("--out",type=Path,default=Path("out/reference/mame"))
     parser.add_argument("--frame",type=int,default=600)
     parser.add_argument("--dry-run",action="store_true")
+    parser.add_argument("--bot-sequence",type=Path,help="JSON frame/input schedule (lab-only)")
+    parser.add_argument("--repeats",type=int,default=1,choices=(1,2,3),
+                        help="Capture 1–3 independent runs; compare private artifact hashes")
     args=parser.parse_args()
     try:
         result=capture(args.mame,args.system,args.rompath,args.out,args.frame,
-                       dry_run=args.dry_run)
+                       dry_run=args.dry_run,bot_sequence=args.bot_sequence)
+        if args.repeats>1 and not args.dry_run:
+            keys=("foreground","background","sprites","palette","reference")
+            first={k:result["artifacts"][k]["sha256"] for k in keys}
+            for i in range(2,args.repeats+1):
+                trial=capture(args.mame,args.system,args.rompath,
+                              args.out/f"repeat-{i:02d}",args.frame,
+                              bot_sequence=args.bot_sequence)
+                other={k:trial["artifacts"][k]["sha256"] for k in keys}
+                if (first!=other or result["cpu_pc"]!=trial["cpu_pc"] or
+                        result["sprite_dma_count"]!=trial["sprite_dma_count"] or
+                        result["input_replay"]!=trial["input_replay"]):
+                    raise ValueError(f"MAME replay diverged on repetition {i}")
+            (args.out/"reproducibility.json").write_text(json.dumps({
+                "schema":"gng.mame-replay-reproducibility.v1",
+                "status":"IDENTICAL_ARTIFACT_HASHES",
+                "repeats":args.repeats,"sha256":first,
+                "bot_sha256":result["input_replay"]["sha256"] if result["input_replay"] else None
+            },sort_keys=True,indent=2)+"\n")
+            print("GNG_MAME_REPLAY=IDENTICAL_ARTIFACT_HASHES runs="+str(args.repeats))
     except (OSError,ValueError,json.JSONDecodeError) as exc:
         parser.error(str(exc))
     print("GNG_MAME_CAPTURE="+result["status"])
@@ -160,6 +196,8 @@ def main()->None:
               str(result["sprite_dma_count"])+
               " scroll="+str([result["scroll_x"],result["scroll_y"]]))
         print("GNG_MAME_CAPTURE_MANIFEST="+str(args.out/"manifest.json"))
+        if result["input_replay"]:
+            print("GNG_BOT_REPLAY=APPLIED sha256="+result["input_replay"]["sha256"])
     print("GNG_JS_VISUAL_EQUIVALENCE=NOT_ESTABLISHED")
 
 
