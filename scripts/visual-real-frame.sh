@@ -23,8 +23,14 @@ fi
 python3 scripts/prepare_mame_rom.py --rom "$source_rom"
 system="$(python3 -c 'import json; print(json.load(open("out/reference/mame-roms/rom-set.json"))["machine"])')"
 echo "GNG_MAME_REFERENCE_DRIVER=$system (verified from chip CRCs)"
-python3 scripts/capture_real_frame.py --system "$system" \
-  --rompath out/reference/mame-roms --frame "${GNG_FRAME:-600}"
+# MAME itself must accept the ROM revision before replaying any inputs.
+mame -verifyroms "$system" -rompath out/reference/mame-roms
+capture_args=(--system "$system" --rompath out/reference/mame-roms
+              --frame "${GNG_FRAME:-600}" --repeats "${GNG_REPEATS:-1}")
+if [[ -n "${GNG_BOT_SEQUENCE:-}" ]]; then
+  capture_args+=(--bot-sequence "$GNG_BOT_SEQUENCE")
+fi
+python3 scripts/capture_real_frame.py "${capture_args[@]}"
 python3 src/reference_frame_view.py --rom roms/gng.zip
 if command -v open >/dev/null 2>&1; then
   open out/visual/frame-compare.html
