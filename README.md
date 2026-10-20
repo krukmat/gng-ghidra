@@ -29,6 +29,29 @@ la aplicación nativa JS. Hace falta MAME en el Mac.
 [R0 completo](docs/frame-oracle.md).
 
 
+### Bot de capturas deterministas (R0, inspiración Pyjamada)
+
+Se reutiliza el **patrón** del QA bot de Pyjamada: secuencia de acciones
+por frames + referencia visual + verificación de repetibilidad. El bot
+original de Pyjamada no controla MAME ni se copia aquí.
+
+```bash
+# Primero R0 normal, para verificar el ROM set y el capturador:
+bash scripts/visual-real-frame.sh
+
+# Después: COIN → START → RIGHT → JUMP → ATTACK en MAME, 3 ejecuciones:
+GNG_BOT_SEQUENCE=scripts/r0-bot-sequence.json GNG_REPEATS=3 \
+  bash scripts/visual-real-frame.sh
+```
+
+El segundo comando exige `mame -verifyroms` satisfactorio, aplica entradas
+de `scripts/r0-bot-sequence.json` y guarda un reporte privado en
+`out/reference/mame/reproducibility.json` **solo si coinciden todos los
+hashes de PNG y memoria de vídeo**, PC y contadores DMA en los tres runs.
+La secuencia es un guion de inputs, no una prueba de partida jugable;
+**hay que inspeccionar la imagen**. No publicar el HTML ni los snapshots.
+La captura normal sin bot se mantiene para aislar fallos.
+
 ## Qué puedes ejecutar y ver hoy
 
 **Seguimiento visual:** seis checkpoints verificables ([roadmap](docs/roadmap.md)),
