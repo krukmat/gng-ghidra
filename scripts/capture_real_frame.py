@@ -15,6 +15,9 @@ import shutil
 import struct
 import subprocess
 
+# Both direct CLI invocation and importlib-loaded ROM-free tests work.
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parent))
 from r0_bot_sequence import prepare_sequence, check_replay
 
 SCHEMA="gng.mame-video-capture.v1"
