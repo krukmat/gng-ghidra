@@ -34,10 +34,15 @@ if [[ -n "${GNG_BOT_SEQUENCE:-}" ]]; then
 fi
 python3 scripts/capture_real_frame.py "${capture_args[@]}"
 python3 src/reference_frame_view.py --rom roms/gng.zip
+visual_page=out/visual/frame-compare.html
+if [[ -n "${GNG_BOT_SEQUENCE:-}" ]]; then
+  visual_page=out/reference/mame/bot-checkpoints.html
+  echo "GNG_BOT_GAMEPLAY=UNVERIFIED — revisar seis etapas del arranque."
+fi
 if command -v open >/dev/null 2>&1; then
-  open out/visual/frame-compare.html
+  open "$visual_page"
 else
-  echo "Abre out/visual/frame-compare.html en tu navegador."
+  echo "Abre $visual_page en tu navegador."
 fi
 echo "GNG_REAL_FRAME=READY_TO_INSPECT"
 echo "GNG_JS_PIXEL_EQUIVALENCE=UNVERIFIED — revisa el diff visual, no declares PASS solo por generar HTML."
