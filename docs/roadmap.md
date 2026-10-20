@@ -1,3 +1,7 @@
+> **PLAN OPERATIVO VIGENTE (20/10/2026):** [Plan R0–R6 con tareas, subtareas, plazos y criterios STOP/GO](plan-ejecucion.md) · [Backlog en GitHub Issues](https://github.com/krukmat/gng-ghidra/issues). Este archivo conserva la evolución técnica y visual de V0–V1.3 como **historial**, no como orden de ejecución vigente. R0 debe verificarse primero en el Mac con ROM privada.
+
+---
+
 ## Reorientación R0 — V1.2 rechazado visualmente (16/10/2026)
 
 El operador mostró una captura de V1.2 donde el collage
@@ -37,9 +41,9 @@ implica un motor de juego funcional.
 
 # Roadmap orientado a resultados visibles — Ghosts 'n Goblins (gngb)
 
-Actualizado: 15 de octubre de 2026. Fuente de verdad para la siguiente
-entrega. **No es un roadmap de «más rutinas verificadas».** Su métrica es
-qué puede abrir y comprobar el operador en su Mac.
+Histórico: 15 de octubre de 2026. La priorización actual se encuentra en
+[plan-ejecucion.md](plan-ejecucion.md). Se mantiene este texto para documentar
+los hitos previos y sus limitaciones, no para ordenar trabajo nuevo.
 
 ## Objetivo final
 
