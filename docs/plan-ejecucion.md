@@ -1,6 +1,6 @@
 # Plan operativo v2 — del fotograma real al juego recompilado
 
-**Fecha de revisión:** 2026-10-20  
+**Fecha de revisión:** 2026-10-21  
 **Fuente de verdad de tareas:** [issues R0–R6](https://github.com/krukmat/gng-ghidra/issues?q=is%3Aissue+is%3Aopen) y este documento.  
 **Historial de visores V0–V1.3:** [roadmap anterior](roadmap.md); **contrato técnico R0:** [frame-oracle.md](frame-oracle.md).
 
@@ -12,13 +12,31 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Actualización operativa R0 — 21/10/2026
+
+**Evidencia del operador:** `bash scripts/r0-blackbox-baseline.sh`
+ya ejecuta la partida real de GNGb y **Arthur se mueve**.
+La ruta funcional usa el plan gameplay y el Lua original de Blackbox fijado
+al commit `99722c3900b63e13185c52824c0adec3df7f44c1`, con la única
+adaptación conocida de botones ataque/salto. **No volver al bot
+experimental** de `scripts/visual-real-frame.sh`.
+
+**Siguiente tarea R0:** ejecutar `bash scripts/r0-blackbox-frame.sh`.
+Este modo conserva el autoplayer original y añade un observador de
+vídeo/FG/BG/DMA/paleta/scroll para producir
+`out/reference/mame/manifest.json` y
+`out/visual/frame-compare.html` a partir del **mismo** run.
+El addon Lua y la igualdad JS/MAME aún requieren verificación local.
+R0 se cierra solo tras validar los datos de vídeo reales.
+El baseline sin addon permanece reproducible con su comando original.
+
 ## 2. Estado comprobado al redactar este plan
 
 | Elemento | Estado | Interpretación |
 | --- | --- | --- |
 | V0/V1.1 | Visores implementados, revisión local parcial | Gráficos ROM / sprites diagnósticos; no gameplay |
 | V1.2 | Código implementado, **rechazado visualmente** | Mosaico sintético; no se mejora como objetivo |
-| R0 | Capturador MAME, preflight por CRC y comparador JS **implementados** | **Falta ejecutar y validar con ROM/MAME privados en el Mac** |
+| R0 | Baseline Blackbox con partida y movimiento **verificado por operador**; observador nativo integrado en modo opcional | Pendiente validar screenshot + FG/BG/scroll/DMA/paleta reales y su replay JS |
 | R1 | Renderer para memoria capturada disponible | **Equivalencia visual NO establecida** |
 | R2 | No demostrado | No hay todavía traza completa de ejecución real con IRQ/bancos |
 | R3 | No demostrado | No hay recompilador directo validado de un tramo real significativo |
@@ -35,7 +53,7 @@ Los plazos son **timeboxes orientativos en días laborables desde el inicio**, n
 **Tarea:** obtener un fotograma auténtico y su memoria de vídeo asociada.
 
 - **R0.1:** verificar MAME, driver gngb/gng y chips ROM por CRC; no elegir driver por nombre ZIP.
-- **R0.2:** ejecutar `bash scripts/visual-real-frame.sh` en el Mac; diagnosticar fallos sin sustituir ROM ni VRAM.
+- **R0.2:** ejecutar `bash scripts/r0-blackbox-frame.sh` usando como base el gameplay verificado; no utilizar el bot previo. Diagnosticar fallos en la captura sin volver a cambiar Coin/Start.
 - **R0.3:** validar PNG 256×224, FG/BG, buffer DMA de sprites, paleta, scroll, manifest y hashes.
 - **R0.4:** repetir captura en condiciones idénticas y comprobar reproducibilidad.
 - **R0.5:** revisar fotograma auténtico y registrar resultado sin subir recursos privados.
