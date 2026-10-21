@@ -77,8 +77,8 @@ class NativePretraceTests(unittest.TestCase):
     def test_all_markers_malformed_reports_only_redacted_structure(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            raw, out = files(root, "GNG_R2_PRE PC=0x6000 A=%02X B=FE" + "\\n" +
-                             "GNG_R2_PRE PC=0x6001 A=%02X B=FD" + "\\n")
+            raw, out = files(root, "GNG_R2_PRE PC=0x6000 A=%02X B=FE" + "\n" +
+                             "GNG_R2_PRE PC=0x6001 A=%02X B=FD" + "\n")
             result = module.extract(raw, out)
             self.assertEqual(result["status"], "INSTRUMENTATION_BLOCKED")
             self.assertEqual(result["markers_seen"], 2)
