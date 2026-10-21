@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
+import subprocess
+from unittest.mock import patch
 from pathlib import Path
 import sys
 import tempfile
@@ -48,6 +51,7 @@ class BlackboxCaptureReviewTests(unittest.TestCase):
             session = self.make_session(Path(tmp))
             result = review.analyze(session)
             self.assertEqual(result["input_gate"], "MATCHED")
+            self.assertEqual(result["coin_start_gate"], "MATCHED")
             self.assertEqual(result["buttons"]["coin"]["actual_count"], 10)
             self.assertEqual(result["buttons"]["start"]["actual_count"], 5)
             self.assertEqual(result["boot_mismatch_count"], 0)
@@ -70,12 +74,16 @@ class BlackboxCaptureReviewTests(unittest.TestCase):
             self.assertEqual(result["input_gate"], "BLOCKED")
             self.assertEqual(result["buttons"]["start"]["actual_count"], 0)
             self.assertGreater(result["boot_mismatch_count"], 0)
+            self.assertEqual(result["coin_start_gate"], "BLOCKED")
 
     def test_unexpected_boot_input_blocks_gate(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = review.analyze(self.make_session(Path(tmp), mismatch=True))
             self.assertEqual(result["input_gate"], "BLOCKED")
             self.assertEqual(result["first_boot_mismatch"], 20)
+            self.assertEqual(result["coin_start_gate"], "MATCHED")
+            self.assertEqual(result["boot_mismatch_samples"][0], {
+                "frame":20,"planned":[],"observed":["left"]})
 
     def test_explicit_mame_lua_fault_blocks_gate(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -97,6 +105,53 @@ class BlackboxCaptureReviewTests(unittest.TestCase):
                             {"frame": 7, "buttons": ["coin"]}]))
             with self.assertRaisesRegex(ValueError, "duplicate"):
                 review.analyze(session)
+
+
+    def test_ffmpeg_error_is_exposed_without_replaying_mame(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            session = self.make_session(root)
+            dest = root/"frames"
+            fake_probe = subprocess.CompletedProcess(
+                ["ffprobe"], 0,
+                stdout=json.dumps({"streams":[{"width":256,"height":224,
+                    "avg_frame_rate":"60/1","nb_frames":"1700"}],
+                    "format":{"duration":"28.3"}}), stderr="")
+            fake_error = subprocess.CompletedProcess(
+                ["ffmpeg"], 1, stdout="", stderr="decoder failed: bogus codec")
+            report = {"last_observed_frame":1599}
+            with patch.object(review.shutil, "which", return_value="/usr/bin/tool"), \
+                 patch.object(review.subprocess, "run",
+                              side_effect=[fake_probe]+[fake_error]*7):
+                frames = review.collect_video(session, dest, report)
+            self.assertEqual(frames, [])
+            self.assertEqual(report["video_inspection"], "FFMPEG_EXTRACT_FAILED")
+            self.assertIn("decoder failed", report["ffmpeg_error"])
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"),
+                         "ffmpeg/ffprobe not installed")
+    def test_extract_frames_from_small_synthetic_avi(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            session = root/"session"
+            session.mkdir()
+            command = ["ffmpeg","-hide_banner","-loglevel","error",
+                       "-f","lavfi","-i",
+                       "testsrc=size=64x64:rate=30:duration=1.5",
+                       "-frames:v","40","-c:v","ffv1","-y",
+                       str(session/"capture.avi")]
+            created = subprocess.run(command, capture_output=True,
+                                     text=True, timeout=45, check=False)
+            self.assertEqual(created.returncode, 0, created.stderr)
+            report = {"last_observed_frame":39}
+            with patch.object(review, "VISUAL_FRAMES", (0, 9, 21, 35)):
+                frames = review.collect_video(session, root/"frames", report)
+            self.assertEqual(report["video_inspection"],
+                             "FRAMES_EXTRACTED_FOR_HUMAN_REVIEW",
+                             report.get("ffmpeg_error"))
+            self.assertEqual([num for num, _ in frames], [0,9,21,35])
+            for _, filename in frames:
+                self.assertTrue((root/"frames"/filename).stat().st_size > 0)
 
     def test_empty_and_malformed_frames_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
