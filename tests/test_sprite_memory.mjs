@@ -40,14 +40,25 @@ test('RGBA graphics are not invented: four planar bits yield pen 0..15, 15 trans
   assert.equal(readSpritePen(rom,0,0,0),15);
   assert.equal(readSpritePen(rom,0,4,0),0);
   rom[1]=0x80;
-  assert.equal(readSpritePen(rom,0,4,0),8);
+  assert.equal(readSpritePen(rom,0,4,0),1);
   rom[0x10000]=0x80;
-  assert.equal(readSpritePen(rom,0,0,0),14);
+  assert.equal(readSpritePen(rom,0,0,0),7);
   // Plane/sample address changes when selecting a new 64-byte sprite.
   rom[64]=0x80;
-  assert.equal(readSpritePen(rom,1,0,0),8);
+  assert.equal(readSpritePen(rom,1,0,0),1);
   assert.throws(()=>readSpritePen(rom,1024,0,0),/outside/);
   assert.throws(()=>readSpritePen(rom,0,16,0),/outside/);
+});
+test('MAME sprite graphics layout assigns bit 3 to first plane and bit 0 to last',()=>{
+ const rom=new Uint8Array(SPRITE_REGION_SIZE);
+ rom[0x10000]=0x08; // first plane, offset +4
+ assert.equal(readSpritePen(rom,0,0,0),8);
+ rom[0x10000]=0x80; // second plane, offset +0
+ assert.equal(readSpritePen(rom,0,0,0),4);
+ rom[0x10000]=0;rom[0]=0x08; // third plane, offset +4
+ assert.equal(readSpritePen(rom,0,0,0),2);
+ rom[0]=0x80; // fourth plane, offset +0
+ assert.equal(readSpritePen(rom,0,0,0),1);
 });
 test('sprite drawing order is reversed and invisible y=248 entries are culled',()=>{
   const mem=empty();
