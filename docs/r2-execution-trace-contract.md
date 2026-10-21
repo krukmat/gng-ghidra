@@ -91,6 +91,40 @@ Eventos permitidos: `RESET`, `FRAME_BOUNDARY`, `SYNC_ENTER`, `SYNC_EXIT`, `IRQ_A
 
 El ejemplo entero es **ilustrativo**: no simula ni prueba un arranque válido. Para R2 PASS, el footer tendrá `status=COMPLETE`, `reset_observed=true`, `sync_observed=true` y `first_irq_entry_observed=true`, coherentes con los eventos y el log real. Una captura interrumpida puede ser útil como diagnóstico, nunca como gate aprobado.
 
+## R2.2.B1 — Preestado real por instrucción, controlado (22/10/2026)
+
+**Resultado de la prueba R2.2.A del operador** (`gngb` real): `PARTIAL_NATIVE_INSTRUMENTATION`; traza nativa **314.999 bytes**, **4 frames**, **100 lecturas** y **12 escrituras MMIO**, registros y banco observables. Falta callback de reset inicial, estados de entrada/salida por instrucción, bus completo, cambios de banco y señales SYNC/IRQ.
+
+**Nuevo código**: el launcher añade una acción `tracelog` a cada instrucción en `-debugscript`:
+
+```text
+trace <private-path>,:maincpu,noloop,{tracelog "GNG_R2_PRE PC=%04X A=%02X B=%02X X=%04X Y=%04X U=%04X S=%04X DP=%02X CC=%02X",pc,a,b,x,y,u,s,dp,cc}
+g
+```
+
+La [documentación oficial MAME](https://docs.mamedev.org/debugger/execution.html#trace) asegura la ejecución de la acción antes de escribir cada instrucción y `noloop` evita condensar bucles. El [comando `tracelog`](https://docs.mamedev.org/debugger/general.html#tracelog) usa el mecanismo nativo de expresiones de registros del debugger. El script `scripts/r2_pretrace_report.py` analiza **únicamente** los marcadores `GNG_R2_PRE`, captura `PC,A,B,X,Y,U,S,DP,CC` y conserva el resultado privado en `out/r2/mame-probe/pre-instruction.jsonl`, separado del esquema `gng.r2.cpu-trace.v1`.
+
+El parseo aislado devuelve `PRE_INSTRUCTION_FORMAT_PARSED`, pero mantiene `provenance_authenticated=false`. Solo una ejecución genuina de MAME con `EXIT=0`, el informe de sonda y el archivo nativo de trace permite considerar auténticos los marcadores; las pruebas sintéticas de CI **no** lo demuestran. Sin marcadores o con marcadores incompletos reporta `INSTRUMENTATION_BLOCKED`.
+
+### Reset auténtico después de enganchar Lua (opcional)
+
+La sonda puede programar **una vez** `machine:soft_reset()` después de su primer frame mediante `GNG_R2_PROBE_SOFT_RESET=1`. El notificador `emu.add_machine_reset_notifier` debe corroborar el evento. Si ocurre, `controlled_soft_reset_observed=true`; **no se presenta como reset frío inicial** y no prueba por sí solo el tramo contiguo reset → IRQ. Si el callback no aparece, la sonda conserva el bloqueo.
+
+**Validación en el Mac (no subir los bytes de instrucciones ni las trazas):**
+
+```bash
+git pull --ff-only
+GNG_R2_PROBE_SOFT_RESET=1 bash scripts/r2-mame-probe.sh
+cat out/r2/mame-probe/pretrace-report.json
+cat out/r2/mame-probe/capabilities.json
+```
+
+Entregar solo estos **dos resúmenes JSON** o errores textuales de MAME. `cpu.trace` y `pre-instruction.jsonl` permanecen en `out/`.
+
+**Todavía NO verificamos:** `after` por instrucción, cada efecto del bus en orden, transición de banco por instrucción, fase exacta de IRQ/FIRQ, SYNC y reset frío inicial. Resolverlos exige R2.2.B2: capturar señales en las APIs de debugger o introducir un adaptador independiente de laboratorio con eventos de inicio/fin de instrucción y bus. Se mantiene **R2.2 ABIERTA** y R2.3 **NO INICIADA**.
+
+---
+
 ## R2.2.A — Sonda de capacidades nativas (implementada, NO aceptada en MAME real)
 
 Implementación en `main` (ROM-free CI): `scripts/r2-mame-probe.sh`,
