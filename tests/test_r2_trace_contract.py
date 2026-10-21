@@ -113,7 +113,7 @@ class R2TraceContractTests(unittest.TestCase):
 
     def test_incomplete_trace_can_only_pass_structural_gate(self):
         partial = sample()
-        partial[5]["status"] = "INCOMPLETE"
+        partial[-1]["status"] = "INCOMPLETE"
         report = validator.validate_records(partial)
         self.assertEqual(report["capture_status"], "INCOMPLETE")
         self.assertFalse(report["reference_execution_verified"])
