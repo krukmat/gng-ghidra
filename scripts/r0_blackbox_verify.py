@@ -36,6 +36,7 @@ def verify(timeline_path: Path, video_path: Path, *, expect_gameplay: bool=False
         raise ValueError("BLACKBOX_START_NOT_OBSERVED_AT_1020")
     if max(frames) < 1505:
         raise ValueError("BLACKBOX_RECORDING_ENDED_BEFORE_STAGE_INTRO")
+    input_phase_offset=0
     if plan_path is not None:
         # Verify what MAME READ, not just which keys Python requested.
         # Compare recorded frames only: the script may stop before its plan ends.
@@ -52,10 +53,22 @@ def verify(timeline_path: Path, video_path: Path, *, expect_gameplay: bool=False
                 raise ValueError("BLACKBOX_INPUT_PLAN_INVALID")
             expected[row["frame"]]=set(row["buttons"])
         bad=[f for f,buttons in frames.items()
-             if f in expected and buttons!=expected[f]]
+             if buttons != expected.get(f,set())]
         if bad:
-            raise ValueError("BLACKBOX_INPUT_TIMELINE_PLAN_MISMATCH first="+
-                             str(min(bad))+" count="+str(len(bad)))
+            # MAME's effective port read may reflect the previous frame's
+            # injected keys. Accept ONLY a complete, contiguous trace
+            # identical to the entire plan shifted by precisely +1 frame.
+            # No guessed timing, per-action tolerance, or dropped events.
+            contiguous=(min(frames)==0 and len(frames)==max(frames)+1 and
+                        min(expected)==0 and len(expected)==max(expected)+1)
+            phase_one=contiguous and all(
+                buttons==expected.get(f-1,set())
+                for f,buttons in frames.items())
+            if phase_one:
+                input_phase_offset=1
+            else:
+                raise ValueError("BLACKBOX_INPUT_TIMELINE_PLAN_MISMATCH first="+
+                                 str(min(bad))+" count="+str(len(bad)))
     if expect_gameplay:
         # The trace is the effective MAME port reading, not merely a script plan.
         for name,minimum,first_frame in (
@@ -71,6 +84,10 @@ def verify(timeline_path: Path, video_path: Path, *, expect_gameplay: bool=False
         "source":"original-blackbox-lua-and-boot-plan",
         "status":("AUTOPLAY_INPUTS_OBSERVED_GAMEPLAY_UNVERIFIED" if expect_gameplay
                   else "INPUTS_OBSERVED_VIDEO_RECORDED_GAMEPLAY_UNVERIFIED"),
+        "input_phase_offset_frames":input_phase_offset,
+        "input_alignment":("MATCHED_ONE_FRAME_READBACK_DELAY"
+                           if input_phase_offset else "MATCHED_EXACT"
+                           if plan_path is not None else "NOT_COMPARED"),
         "coin_observed_frames":len(coin),
         "start_observed_frames":len(start),
         "last_frame":max(frames),
@@ -102,6 +119,7 @@ def main()->None:
     print("GNG_BLACKBOX_INPUTS=OBSERVED"+
           " coin_frames="+str(result["coin_observed_frames"])+
           " start_frames="+str(result["start_observed_frames"]))
+    print("GNG_BLACKBOX_INPUT_ALIGNMENT="+result["input_alignment"])
     print("GNG_BLACKBOX_VIDEO=RECORDED"+
           " last_frame="+str(result["last_frame"]))
     if args.expect_gameplay:
