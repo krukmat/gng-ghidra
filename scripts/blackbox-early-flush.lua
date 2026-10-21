@@ -9,7 +9,9 @@ assert(type(write_timeline) == "function",
        "Pinned Blackbox Lua changed: cannot resolve original write_timeline")
 assert(type(input_timeline) == "table",
        "Pinned Blackbox Lua changed: cannot resolve original input_timeline")
-local gng_blackbox_flush_subscription = emu.add_machine_frame_notifier(function()
+-- The notifier subscription is a C++ userdata; keep a global root for the
+-- full emulation run. A lexical local in the autoboot chunk can be GC'd.
+gng_blackbox_flush_subscription = emu.add_machine_frame_notifier(function()
     if gng_blackbox_flush_done then return end
     local scr = assert(manager.machine.screens[":screen"],
                        "MAME GNG screen not found during pre-exit flush")
@@ -26,3 +28,4 @@ local gng_blackbox_flush_subscription = emu.add_machine_frame_notifier(function(
 end)
 assert(gng_blackbox_flush_subscription,
        "MAME frame notifier missing for Blackbox early timeline flush")
+print("GNG_BLACKBOX_DIAG=EARLY_FLUSH_CALLBACK_REGISTERED target=" .. gng_blackbox_flush_target)
