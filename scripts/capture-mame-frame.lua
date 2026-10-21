@@ -141,7 +141,9 @@ end
 
 -- install_write_tap callback sees the CPU address, data and mask and must
 -- return original data unmodified. Retain subscriptions until process exits.
-local scroll_tap = space:install_write_tap(
+-- Keep pass-through tap handles alive across frame callbacks; local
+-- autoboot chunk variables can be garbage-collected before gameplay.
+gng_capture_scroll_tap = space:install_write_tap(
     0x3b08, 0x3b0b, "gng-capture-scroll",
     function(address, data, mask)
         if address >= 0x3b08 and address <= 0x3b0b then
@@ -149,7 +151,7 @@ local scroll_tap = space:install_write_tap(
         end
         return data
     end)
-local dma_tap = space:install_write_tap(
+gng_capture_dma_tap = space:install_write_tap(
     0x3c00, 0x3c00, "gng-capture-buffered-sprites",
     function(address, data, mask)
         -- Sprite DMA stores a COPY of source RAM, not a view of mutable RAM.
@@ -157,7 +159,7 @@ local dma_tap = space:install_write_tap(
         dma_count = dma_count + 1
         return data
     end)
-assert(scroll_tap and dma_tap, "MAME write-tap installation failed")
+assert(gng_capture_scroll_tap and gng_capture_dma_tap, "MAME write-tap installation failed")
 
 local function snapshot()
     if completed or capture_attempted or screen:frame_number() < target then return end
