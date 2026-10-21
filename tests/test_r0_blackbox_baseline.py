@@ -66,7 +66,10 @@ class BlackboxBaselineTests(unittest.TestCase):
         self.assertIn("99722c3900b63e13185c52824c0adec3df7f44c1",s)
         self.assertIn("plans/generated/gng_gameplay.yaml",s)
         self.assertIn("original_blackbox_gameplay_runtime_failed",s)
-        self.assertNotIn("capture-mame-frame.lua",s)
+        self.assertIn('MAME_SCRIPT="$BB/scripts/mame_autoboot.lua"',s)
+        self.assertIn('if [[ -n "$R0_FRAME" ]]',s)
+        self.assertIn('cat "$ROOT/scripts/capture-mame-frame.lua"',s)
+        self.assertIn('-autoboot_script "$MAME_SCRIPT"',s)
         self.assertNotIn("r0-bot-sequence.json",s)
         if shutil.which("bash"):
             completed=subprocess.run(["bash","-n",str(path)],
