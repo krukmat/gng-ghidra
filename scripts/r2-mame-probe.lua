@@ -22,6 +22,7 @@ local screen = assert(machine.screens[":screen"], "R2 screen unavailable")
 local path = output .. "/observations.tsv"
 local file = assert(io.open(path, "w"), "Cannot create R2 observations")
 file:setvbuf("line")
+local finished, file_closed, finishing = false, false, false
 local function record(...)
     if file_closed or finished and not finishing then return end
     local values = {...}
@@ -78,9 +79,6 @@ gng_r2_probe_write_tap = space:install_write_tap(
     end)
 assert(gng_r2_probe_read_tap and gng_r2_probe_write_tap,
        "Cannot retain real MMIO taps")
-local finished = false
-local file_closed = false
-local finishing = false
 local function finish(reason)
     if finished then return end
     finished = true
