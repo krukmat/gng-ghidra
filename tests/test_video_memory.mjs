@@ -26,12 +26,25 @@ test('BG 3bpp and FG 2bpp exact ROM bitplane offsets',()=>{
  assert.equal(readTilePen('bg',bg,0,0,0),7);
  assert.equal(readTilePen('bg',bg,0,1,0),0);
  bg[128/8]=0x80;  // second 8-pixel half uses +128 bit
- assert.equal(readTilePen('bg',bg,0,8,0),4);
+ assert.equal(readTilePen('bg',bg,0,8,0),1);
  fg[0]=0x88;fg[1]=0x88;
  assert.equal(readTilePen('fg',fg,0,0,0),3);
  assert.equal(readTilePen('fg',fg,0,4,0),3);
  assert.throws(()=>readTilePen('bg',fg,0,0,0),/Missing graphics region/);
  assert.throws(()=>readTilePen('fg',fg,1024,0,0),/out of bounds/);
+});
+test('MAME drawgfx plane order uses most-significant bit first, independently per plane',()=>{
+ const bg=new Uint8Array(BG_REGION_SIZE),fg=new Uint8Array(FG_REGION_SIZE);
+ bg[0x10000]=0x80; // first declared plane -> bit 2
+ assert.equal(readTilePen('bg',bg,0,0,0),4);
+ bg[0x10000]=0; bg[0x8000]=0x80;
+ assert.equal(readTilePen('bg',bg,0,0,0),2);
+ bg[0x8000]=0; bg[0]=0x80;
+ assert.equal(readTilePen('bg',bg,0,0,0),1);
+ fg[0]=0x08; // first char plane offset +4 -> bit 1
+ assert.equal(readTilePen('fg',fg,0,0,0),2);
+ fg[0]=0x80; // second char plane offset +0 -> bit 0
+ assert.equal(readTilePen('fg',fg,0,0,0),1);
 });
 test('BG/FG attributes preserve MAME code high bits, flips and group',()=>{
  const memory=mem();
