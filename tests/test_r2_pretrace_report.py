@@ -39,7 +39,7 @@ class NativePretraceTests(unittest.TestCase):
                 "6001: LDA #01\n" + NEXT + "\n",
             )
             result = module.extract(raw, output)
-            self.assertEqual(result["status"], "PRE_INSTRUCTION_STATES_OBSERVED")
+            self.assertEqual(result["status"], "PRE_INSTRUCTION_FORMAT_PARSED")
             self.assertEqual(result["snapshots"], 2)
             self.assertEqual(result["distinct_pc_count"], 2)
             self.assertFalse(result["full_r2_trace_verified"])
@@ -52,7 +52,8 @@ class NativePretraceTests(unittest.TestCase):
             self.assertEqual(rows[0]["before"]["CC"], 0xD0)
             self.assertEqual(rows[0]["before"]["S"], 0x2FFC)
             self.assertEqual(rows[1]["before"]["Y"], 0xCAFE)
-            self.assertTrue(result["genuine_cpu_execution_verified"])
+            self.assertFalse(result["genuine_cpu_execution_verified"])
+            self.assertFalse(result["provenance_authenticated"])
 
     def test_absent_action_is_not_a_preinstruction_pass(self):
         with tempfile.TemporaryDirectory() as folder:
