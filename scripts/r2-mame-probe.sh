@@ -44,7 +44,9 @@ mame gngb -rompath "$ROMPATH" -debug -debugscript "$DEBUGSCRIPT" \
 EXIT_CODE=$?
 set -e
 echo "GNG_R2_PROBE_MAME_EXIT=$EXIT_CODE"
+LUA_FAULT=0
 if grep -q '\[LUA ERROR\]' "$OUTPUT/mame.log"; then
+  LUA_FAULT=1
   echo "GNG_R2_PROBE=LUA_ERROR" >&2
   grep '\[LUA ERROR\]' "$OUTPUT/mame.log" | tail -n 8 >&2
 fi
@@ -55,10 +57,16 @@ python3 scripts/r2_probe_report.py --dir "$OUTPUT"
 # Return nonzero unless we can authenticate the minimal probe fields,
 # but a valid probe is NEVER an R2 equivalence PASS.
 if [[ $EXIT_CODE -ne 0 ]]; then fail mame_debugger_runtime_failed; fi
-python3 - "$OUTPUT/capabilities.json" <<'PY'
+if [[ $LUA_FAULT -ne 0 ]]; then fail lua_callback_error_despite_zero_mame_exit; fi
+python3 - "$OUTPUT/capabilities.json" "$OUTPUT/pretrace-report.json" <<'PY'
 import json,sys
-report=json.load(open(sys.argv[1],encoding="utf-8"))
+with open(sys.argv[1],encoding="utf-8") as stream:
+    report=json.load(stream)
+with open(sys.argv[2],encoding="utf-8") as stream:
+    pretrace=json.load(stream)
 if report["status"] != "PARTIAL_NATIVE_INSTRUMENTATION":
     raise SystemExit("GNG_R2_PROBE=INSTRUMENTATION_BLOCKED see capabilities.json")
-print("GNG_R2_PROBE=OBSERVED_PARTIAL_ONLY R2.3_NOT_STARTED")
+if pretrace["status"] != "PRE_INSTRUCTION_FORMAT_PARSED" or pretrace["snapshots"] < 2:
+    raise SystemExit("GNG_R2_PRETRACE=INSTRUMENTATION_BLOCKED see redacted malformed_shapes_redacted")
+print("GNG_R2_PROBE=OBSERVED_NATIVE_PRESTATE_ONLY R2.3_NOT_STARTED")
 PY
