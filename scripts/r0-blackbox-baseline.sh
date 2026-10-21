@@ -70,6 +70,31 @@ AVI="$EVIDENCE/video/capture.avi"
 LOG="$ROOT/out/blackbox-baseline/mame.log"
 MP4="$ROOT/out/blackbox-baseline/gameplay.mp4"
 
+# Opt-in only: compose original Blackbox Lua with the existing R0 video observer.
+# No changes to the known-working Blackbox bot or its generated input plan.
+MAME_SCRIPT="$BB/scripts/mame_autoboot.lua"
+R0_FRAME="${GNG_BLACKBOX_CAPTURE_FRAME:-}"
+if [[ -n "$R0_FRAME" ]]; then
+  [[ "$R0_FRAME" =~ ^[0-9]+$ ]] || fail invalid_capture_frame
+  (( R0_FRAME > 1505 && R0_FRAME < 2200 )) || fail capture_frame_outside_gameplay_window
+  REF="$ROOT/out/reference/mame"
+  mkdir -p "$REF"
+  # Stale screenshots/VRAM must never count as evidence for a fresh run.
+  rm -f "$REF/foreground.bin" "$REF/background.bin" "$REF/sprites-buffered.bin"
+  rm -f "$REF/palette-rgba.bin" "$REF/reference.png" "$REF/state.json" "$REF/manifest.json"
+  MAME_SCRIPT="$ROOT/out/blackbox-baseline/combined-autoboot.lua"
+  {
+    cat "$BB/scripts/mame_autoboot.lua"
+    printf '\n\n-- GNG R0 addon: independent video/memory observer (not inputs)\n'
+    cat "$ROOT/scripts/capture-mame-frame.lua"
+  } > "$MAME_SCRIPT"
+  export GNG_CAPTURE_DIR="$REF"
+  export GNG_CAPTURE_FRAME="$R0_FRAME"
+  export GNG_CAPTURE_KEEP_RUNNING=1
+  unset GNG_BOT_EVENTS GNG_BOT_SHA256
+  echo "GNG_BLACKBOX_R0=CAPTURE_ADDON_ENABLED frame=$R0_FRAME"
+fi
+
 # Generate the actual original Blackbox gameplay schedule, not boot_only.
 # Remap the two MAME action buttons without modifying the pinned checkout.
 BB_ROOT="$BB" PLAN_PATH="$PLAN" GNG_ROOT="$ROOT" "$VENV/bin/python" - <<'PY'
@@ -100,7 +125,7 @@ if ! (
     BLACKBOX_INPUT_TIMELINE_PATH="$TIMELINE" \
     mame "$MACHINE" -rompath "$MAME_ROMPATH" \
     -aviwrite "$AVI" -seconds_to_run 40 \
-    -autoboot_script "$BB/scripts/mame_autoboot.lua"
+    -autoboot_script "$MAME_SCRIPT"
 ) >"$LOG" 2>&1; then
   tail -n 35 "$LOG" >&2
   fail original_blackbox_gameplay_runtime_failed
@@ -111,6 +136,16 @@ fi
   --expect-gameplay \
   --report "$ROOT/out/blackbox-baseline/result.json" ||
   { tail -n 20 "$LOG" >&2; fail gameplay_inputs_not_observed; }
+if [[ -n "$R0_FRAME" ]]; then
+  "$PYTHON" "$ROOT/scripts/r0_blackbox_capture_validate.py" \
+    --reference "$REF" --frame "$R0_FRAME" --system "$MACHINE" \
+    --timeline "$TIMELINE" --baseline "$ROOT/out/blackbox-baseline/result.json" ||
+    { tail -n 20 "$LOG" >&2; fail native_gameplay_snapshot_invalid; }
+  "$PYTHON" "$ROOT/src/reference_frame_view.py" --rom "$ROM" \
+    --reference "$REF" || fail js_renderer_replay_build_failed
+  echo "GNG_BLACKBOX_R0=VIDEO_FRAME_AND_VRAM_CAPTURED_RENDERER_NOT_YET_VERIFIED"
+  echo "GNG_BLACKBOX_R0_HTML=$ROOT/out/visual/frame-compare.html"
+fi
 echo "GNG_BLACKBOX_PRIVATE_AVI=$AVI"
 if command -v ffmpeg >/dev/null 2>&1; then
   if ffmpeg -y -hide_banner -loglevel error -i "$AVI" \
