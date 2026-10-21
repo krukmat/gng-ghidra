@@ -34,6 +34,7 @@ local scroll = {0, 0, 0, 0}
 local sprite_buffer = nil
 local dma_count = 0
 local completed = false
+local capture_attempted = false
 local keep_running = os.getenv("GNG_CAPTURE_KEEP_RUNNING") == "1"
 
 -- A minimal fixed-frame input driver inspired by the Pyjamada QA bot.
@@ -159,10 +160,26 @@ local dma_tap = space:install_write_tap(
 assert(scroll_tap and dma_tap, "MAME write-tap installation failed")
 
 local function snapshot()
-    if completed or screen:frame_number() < target then return end
-    -- A missing DMA is not equivalent to the current source RAM.
-    assert(sprite_buffer and dma_count > 0,
-        "No observed sprite DMA at 0x3c00; choose a later capture frame")
+    if completed or capture_attempted or screen:frame_number() < target then return end
+    capture_attempted = true
+    -- Missing DMA means no authenticated buffered sprite state; never fake it
+    -- with the unbuffered CPU RAM. In Blackbox addon mode, fail only the video
+    -- capture and let the upstream bot finish and write its input timeline.
+    if not sprite_buffer or dma_count <= 0 then
+        print("GNG_R0_VIDEO_CAPTURE=BLOCKED_DMA_NOT_OBSERVED frame=" ..
+              screen:frame_number() .. " dma=" .. dma_count)
+        if keep_running then
+            local err = screen:snapshot(dir .. "/reference.png")
+            if err ~= nil then
+                print("GNG_R0_VIDEO_SCREENSHOT=FAILED " .. tostring(err))
+            else
+                print("GNG_R0_VIDEO_SCREENSHOT=UNVERIFIED_NO_DMA")
+            end
+            completed = true
+            return
+        end
+        error("No observed sprite DMA at 0x3c00; reference frame not complete")
+    end
 
     local pal = {}
     for i = 0, 255 do
