@@ -12,6 +12,32 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## R2.2.B1 — Corrección del soft reset y diagnóstico privado del trace
+
+La primera ejecución MAME con soft reset informó `[LUA ERROR] attempt to use a closed file`, duplicación de contadores y **16.892 marcadores nativos** no parseables. **R2.2.B1 BLOCKED**, independientemente de `MAME_EXIT=0`. Se añadió cierre idempotente/guardia de reentrada y validación shell fail-closed; parser ahora informa anchos y nombres de campos sin revelar valores.
+
+**Próximo paso no destructivo** (aprovecha `out/r2/mame-probe/cpu.trace` existente sin iniciar MAME):
+
+```bash
+git pull --ff-only
+python3 scripts/r2_pretrace_report.py --dir out/r2/mame-probe
+python3 - <<'PY'
+import json
+from pathlib import Path
+r=json.loads(Path("out/r2/mame-probe/pretrace-report.json").read_text())
+print(json.dumps({
+  "status":r["status"],
+  "markers_seen":r.get("markers_seen"),
+  "malformed_markers":r.get("malformed_markers"),
+  "malformed_shapes_redacted":r.get("malformed_shapes_redacted",[])
+},indent=2))
+PY
+```
+
+Si el informe contiene shapes útiles, corregir parser según formato **real** y no adivinar anchuras. **No volver a correr MAME con reset** hasta fijar eso. Conservar `cpu.trace`, ROM y `pre-instruction.jsonl` solo localmente en `out/`.
+
+---
+
 ## Actualización R2.2.B1 — 22/10/2026: trazas preinstrucción estructuradas
 
 La sonda R2.2.A fue probada por el operador en MAME real: instrucciones, CPU y MMIO observables, pero `INSTRUMENTATION_BLOCKED` para reset inicial, registros por instrucción, bus completo, bancos, SYNC e IRQ.
