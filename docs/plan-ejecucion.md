@@ -1,6 +1,6 @@
 # Plan operativo v2 — del fotograma real al juego recompilado
 
-**Fecha de revisión:** 2026-10-21  
+**Fecha de revisión:** 2026-10-22  
 **Fuente de verdad de tareas:** [issues R0–R6](https://github.com/krukmat/gng-ghidra/issues?q=is%3Aissue+is%3Aopen) y este documento.  
 **Historial de visores V0–V1.3:** [roadmap anterior](roadmap.md); **contrato técnico R0:** [frame-oracle.md](frame-oracle.md).
 
@@ -11,6 +11,18 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 **Se congela la expansión de rutinas aisladas del pipeline Ghidra P-code → IR → JS.** No se elimina el trabajo realizado ni se descarta Ghidra: el pipeline existente sigue como referencia y Ghidra ayuda a descubrir bloques, CFG y bancos. Se evalúa una **vía alternativa de recompilación directa instrucción 6809 → bloques JS** contra el mismo oráculo. La elección final dependerá de evidencia diferencial, no de preferencias arquitectónicas.
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
+
+## Actualización operativa — 22/10/2026: R1 primer fotograma exacto
+
+**Evidencia del operador en Mac:** el navegador comparó un fotograma auténtico `gngb` frame **1660** de MAME, contra el renderer JS alimentado con FG/BG, DMA sprites, scroll X=12/Y=0, paleta y gráficos de la ROM original, y registró **0 / 57.344 píxeles diferentes (0,00%)**. Antes de corregir los bitplanes eran **9.813 / 57.344 (17,11%)**. Se corrigió la prioridad de bits de plano 2/3/4 bpp para seguir `src/emu/drawgfx.cpp` de MAME. Una captura del comparador visual valida el primer frame, no todo el juego.
+
+**Estado del gate:** R0.1–R0.3 y revisión visual R0.5 probadas; **R0.4 reproducibilidad con hashes en una segunda corrida pendiente**. R1.1–R1.4 (primer frame) verificadas; **R1.5 segundo fotograma distinto pendiente**. Mantener [R0 #1](https://github.com/krukmat/gng-ghidra/issues/1) y [R1 #2](https://github.com/krukmat/gng-ghidra/issues/2) **abiertas** hasta completar sus gates. R2 (diferencial de ejecución MC6809) y posteriores siguen sin demostrar.
+
+**Siguiente secuencia operativa:** (1) archivar la carpeta privada `out/reference/mame/` del frame 1660, (2) repetir una vez el frame 1660 usando el plan inmovilizado y comparar hashes nativos, (3) conservar esa evidencia y capturar un frame distinto de gameplay (p. ej. 1700), comparar 256×224 en JS. No subir ni ROM ni PNG ni VRAM ni HTML con bytes privados a Git.
+
+**Aviso:** el contenido de la sección de 21/10/2026 siguiente es histórico y sus instrucciones de repetir el primer intento de captura ya no son la acción prioritaria.
+
+---
 
 ## Actualización operativa R0 — 21/10/2026
 
