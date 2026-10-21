@@ -91,11 +91,11 @@ class R2MameProbeTests(unittest.TestCase):
             path = root / "observations.tsv"
             path.write_text(
                 path.read_text().replace(
-                    "RESET_NOTIFICATION\\t0\\t24576\\n",
-                    "SOFT_RESET_REQUESTED\\t1\\t24576\\n" +
-                    "RESET_NOTIFICATION\\t0\\t24576\\n").replace(
-                    "OBSERVED_RESET_COUNT\\t1",
-                    "CONTROLLED_SOFT_RESET_REQUESTED\\t1\\nOBSERVED_RESET_COUNT\\t1"
+                    "RESET_NOTIFICATION\t0\t24576\n",
+                    "SOFT_RESET_REQUESTED\t1\t24576\n" +
+                    "RESET_NOTIFICATION\t0\t24576\n").replace(
+                    "OBSERVED_RESET_COUNT\t1",
+                    "CONTROLLED_SOFT_RESET_REQUESTED\t1\nOBSERVED_RESET_COUNT\t1"
                 )
             )
             result = probe.classify(path, root / "cpu.trace")
