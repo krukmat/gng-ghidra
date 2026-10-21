@@ -29,32 +29,31 @@ la aplicación nativa JS. Hace falta MAME en el Mac.
 [R0 completo](docs/frame-oracle.md).
 
 
-### R0 / T1 — Recuperación del arranque original de Blackbox
+### R0 / T1 — Blackbox conectado a gameplay (no solo coin/start)
 
-**Ruta de recuperación vigente:** usar el *runner real de Blackbox* antes de
-volver al capturador/renderer de Ghidra. El bot experimental de
-`gng-ghidra` queda **suspendido**: Coin/Start observados no certifican
-que el juego haya comenzado.
+**Causa del bloqueo corregida:** la ejecución anterior usaba el plan
+\`gng_boot_only.yaml\`: después de Coin/Start no enviaba movimiento.
+La ruta operativa ahora importa el **plan original**
+\`plans/generated/gng_gameplay.yaml\` del checkout fijado de Blackbox,
+lo convierte a un input-plan por frame con su planificador, y ejecuta
+su \`scripts/mame_autoboot.lua\` original. Sólo invierte las etiquetas
+Button 1/2 del plan exportado para respetar GNGb:
+**Button 1 = ataque**, **Button 2 = salto**.
 
-```bash
+\`\`\`bash
 git pull --ff-only
 bash scripts/r0-blackbox-baseline.sh
-```
+\`\`\`
 
-El comando prepara un checkout **fijado** de
-[`blackbox_mame_game_abstraction`](https://github.com/krukmat/blackbox_mame_game_abstraction)
-en `out/tools/`, instala únicamente PyYAML en su entorno virtual aislado,
-verifica la ROM privada como `gngb` y ejecuta **sin modificar** el
-`launch_manual_capture_autoboot.sh` original junto con
-`mame_autoboot.lua` y su plan `gng_boot_only.yaml`.
-MAME queda abierto para inspeccionar a Arthur; pulsa **Esc** al terminar.
-Se guarda un AVI y una traza **privados**, nunca en Git.
+MAME ejecuta automáticamente ~40 s y graba la sesión en un AVI privado;
+si hay ffmpeg disponible, crea y abre
+\`out/blackbox-baseline/gameplay.mp4\`. No hay que jugar manualmente.
+La traza de **inputs efectivos leídos por MAME** debe mostrar Coin,
+Start, Right, Jump y Attack para que el script avance; una partida
+visualmente correcta **sigue pendiente de comprobar el vídeo**.
+El ROM/AVI/trazas nunca se incluyen en Git. No usar el bot experimental
+\`GNG_BOT_SEQUENCE\` para esta fase.
 
-El validador local comprueba los inputs que MAME leyó, la duración y
-el AVI, e informa `GNG_BLACKBOX_GAMEPLAY=UNVERIFIED_REQUIRES_VISUAL_REVIEW`.
-La partida solo queda confirmada **tras observarla**: el CI no la prueba.
-Si falla la instalación o el lanzamiento, el comando muestra un
-`GNG_BLACKBOX_T1=BLOCKED` preciso. **No repetir el bot anterior.**
 
 ## Qué puedes ejecutar y ver hoy
 

@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 
-def verify(timeline_path: Path, video_path: Path) -> dict:
+def verify(timeline_path: Path, video_path: Path, *, expect_gameplay: bool=False) -> dict:
     if not timeline_path.is_file():
         raise ValueError("BLACKBOX_TIMELINE_MISSING")
     if not video_path.is_file() or video_path.stat().st_size < 1024:
@@ -35,14 +35,29 @@ def verify(timeline_path: Path, video_path: Path) -> dict:
         raise ValueError("BLACKBOX_START_NOT_OBSERVED_AT_1020")
     if max(frames) < 1505:
         raise ValueError("BLACKBOX_RECORDING_ENDED_BEFORE_STAGE_INTRO")
+    if expect_gameplay:
+        # The trace is the effective MAME port reading, not merely a script plan.
+        for name,minimum,first_frame in (
+            ("right",10,1505),("button2",10,1565),("button1",5,1635)):
+            active=sum(name in buttons and f>=first_frame
+                       for f,buttons in frames.items())
+            if active<minimum:
+                raise ValueError(f"BLACKBOX_GAMEPLAY_INPUT_MISSING_{name.upper()}")
+        if max(frames)<1800:
+            raise ValueError("BLACKBOX_RECORDING_ENDED_BEFORE_GAMEPLAY")
     return {
         "schema":"gng.blackbox-baseline.v1",
         "source":"original-blackbox-lua-and-boot-plan",
-        "status":"INPUTS_OBSERVED_VIDEO_RECORDED_GAMEPLAY_UNVERIFIED",
+        "status":("AUTOPLAY_INPUTS_OBSERVED_GAMEPLAY_UNVERIFIED" if expect_gameplay
+                  else "INPUTS_OBSERVED_VIDEO_RECORDED_GAMEPLAY_UNVERIFIED"),
         "coin_observed_frames":len(coin),
         "start_observed_frames":len(start),
         "last_frame":max(frames),
         "video_bytes":video_path.stat().st_size,
+        "gameplay_inputs_observed":bool(expect_gameplay),
+        "right_frames":sum("right" in b for b in frames.values()),
+        "jump_frames":sum("button2" in b for b in frames.values()) if expect_gameplay else 0,
+        "attack_frames":sum("button1" in b for b in frames.values()) if expect_gameplay else 0,
         "gameplay_verified":False,
         "requires_operator_video_review":True
     }
@@ -52,10 +67,11 @@ def main()->None:
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--timeline",type=Path,required=True)
     p.add_argument("--video",type=Path,required=True)
+    p.add_argument("--expect-gameplay",action="store_true")
     p.add_argument("--report",type=Path,required=True)
     args=p.parse_args()
     try:
-        result=verify(args.timeline,args.video)
+        result=verify(args.timeline,args.video,expect_gameplay=args.expect_gameplay)
     except (ValueError,OSError,json.JSONDecodeError) as exc:
         p.error(str(exc))
     args.report.parent.mkdir(parents=True,exist_ok=True)
@@ -65,6 +81,9 @@ def main()->None:
           " start_frames="+str(result["start_observed_frames"]))
     print("GNG_BLACKBOX_VIDEO=RECORDED"+
           " last_frame="+str(result["last_frame"]))
+    if args.expect_gameplay:
+        print("GNG_BLACKBOX_MOVEMENT_INPUTS=OBSERVED right="+str(result["right_frames"])+
+              " jump="+str(result["jump_frames"])+" attack="+str(result["attack_frames"]))
     print("GNG_BLACKBOX_GAMEPLAY=UNVERIFIED_REQUIRES_VISUAL_REVIEW")
 
 

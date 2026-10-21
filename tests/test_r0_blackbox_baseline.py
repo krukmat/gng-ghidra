@@ -64,8 +64,8 @@ class BlackboxBaselineTests(unittest.TestCase):
         path=ROOT/"scripts/r0-blackbox-baseline.sh"
         s=path.read_text()
         self.assertIn("99722c3900b63e13185c52824c0adec3df7f44c1",s)
-        self.assertIn("scripts/launch_manual_capture_autoboot.sh",s)
-        self.assertIn("original_blackbox_runtime_failed",s)
+        self.assertIn("plans/generated/gng_gameplay.yaml",s)
+        self.assertIn("original_blackbox_gameplay_runtime_failed",s)
         self.assertNotIn("capture-mame-frame.lua",s)
         self.assertNotIn("r0-bot-sequence.json",s)
         if shutil.which("bash"):
