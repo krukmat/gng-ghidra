@@ -1,0 +1,130 @@
+"""R2.2.A ROM-free smoke: never represents synthetic probe samples as gameplay."""
+from __future__ import annotations
+
+import importlib.util
+import json
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location(
+    "r2_probe_report", ROOT / "scripts/r2_probe_report.py")
+probe = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(probe)
+
+
+def evidence(dir: Path, with_trace: bool = True):
+    observations = [
+        ("PROBE", "r2-mame-capability-v1"),
+        ("DRIVER", "gngb"),
+        ("DEBUGGER_AVAILABLE", "1"),
+        ("CPU_DEBUGGER_AVAILABLE", "1"),
+        ("CPU_PROGRAM_WIDTH", "8"),
+        ("BANK_ENTRY_AVAILABLE", "1"),
+        ("BANK_INITIAL_OBSERVED", "0"),
+    ]
+    observations.extend(("REGISTER_AVAILABLE", reg, "1") for reg in
+                        ("PC", "A", "B", "X", "Y", "U", "S", "DP", "CC"))
+    observations += [
+        ("FRAME_SAMPLE", "1", "24576", "0"),
+        ("FRAME_SAMPLE", "2", "24578", "0"),
+        ("RESET_NOTIFICATION", "0", "24576"),
+        ("MMIO_READ_SAMPLE", "1", "24576", "12288", "255"),
+        ("MMIO_WRITE_SAMPLE", "2", "24578", "15104", "0"),
+        ("OBSERVED_RESET_COUNT", "1"),
+        ("OBSERVED_FRAME_COUNT", "2"),
+        ("OBSERVED_MMIO_READ_COUNT", "1"),
+        ("OBSERVED_MMIO_WRITE_COUNT", "1"),
+        ("PROBE_END", "frame-limit"),
+    ]
+    (dir / "observations.tsv").write_text(
+        "".join("\t".join(x) + "\n" for x in observations), encoding="utf-8")
+    if with_trace:
+        (dir / "cpu.trace").write_text(
+            ("6000: 12 NOP  A=00 B=00 X=0000\n" * 4), encoding="utf-8")
+
+
+class R2MameProbeTests(unittest.TestCase):
+    def test_synthetic_probe_can_only_establish_partial_instrumentation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            evidence(root)
+            result = probe.classify(root / "observations.tsv", root / "cpu.trace")
+            self.assertEqual(result["status"], "PARTIAL_NATIVE_INSTRUMENTATION")
+            self.assertTrue(result["real_mame_execution_observed"])
+            self.assertFalse(result["reference_execution_verified"])
+            self.assertFalse(result["r2_instruction_trace_complete"])
+            self.assertTrue(result["capabilities"]["instruction_log"])
+            self.assertTrue(result["capabilities"]["mmio_read_taps"])
+            self.assertFalse(result["capabilities"]["observed_irq_assert_entry"])
+            self.assertFalse(result["capabilities"]["exhaustive_ordered_bus"])
+
+    def test_missing_native_trace_never_qualifies(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            evidence(root, with_trace=False)
+            result = probe.classify(root / "observations.tsv", root / "cpu.trace")
+            self.assertEqual(result["status"], "INSTRUMENTATION_BLOCKED")
+            self.assertIn("MAME debugger noloop instruction trace not authenticated",
+                          result["blockers"])
+
+    def test_absent_reset_stays_explicitly_blocked_not_implicitly_passed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            evidence(root)
+            path = root / "observations.tsv"
+            path.write_text(path.read_text().replace(
+                "OBSERVED_RESET_COUNT\t1", "OBSERVED_RESET_COUNT\t0"
+            ).replace("RESET_NOTIFICATION\t0\t24576\n", ""))
+            result = probe.classify(path, root / "cpu.trace")
+            self.assertFalse(result["capabilities"]["reset_notifier"])
+            self.assertIn("initial reset notifier not observed (possible late Lua attachment)",
+                          result["blockers"])
+
+    def test_duplicate_or_forged_provenance_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            evidence(root)
+            path = root / "observations.tsv"
+            path.write_text(path.read_text() + "DRIVER\tgngb\n")
+            self.assertEqual(probe.classify(path, root / "cpu.trace")["status"],
+                             "INSTRUMENTATION_BLOCKED")
+            evidence(root)
+            path.write_text(path.read_text().replace("DRIVER\tgngb", "DRIVER\tunknown"))
+            self.assertEqual(probe.classify(path, root / "cpu.trace")["status"],
+                             "INSTRUMENTATION_BLOCKED")
+
+    def test_launcher_and_lua_probe_do_not_modify_blackbox_or_assert_equivalence(self):
+        script = (ROOT / "scripts/r2-mame-probe.sh").read_text()
+        lua = (ROOT / "scripts/r2-mame-probe.lua").read_text()
+        self.assertIn("-debugscript", script)
+        self.assertIn(",:maincpu,noloop", script)
+        self.assertIn("-seconds_to_run 8", script)
+        self.assertIn("R2.3_NOT_STARTED", script)
+        self.assertNotIn("r0-blackbox-baseline.sh", script)
+        self.assertIn("install_read_tap(", lua)
+        self.assertIn("install_write_tap(", lua)
+        self.assertIn("add_machine_reset_notifier", lua)
+        self.assertIn("manager.machine", lua)
+        self.assertNotIn("GNG_R2_TRACE_CONTRACT=PASS", lua)
+        if shutil.which("bash"):
+            proc = subprocess.run(["bash", "-n", str(ROOT / "scripts/r2-mame-probe.sh")],
+                                  capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_trace_report_does_not_invent_cpu_irq(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            evidence(root)
+            result = probe.classify(root / "observations.tsv", root / "cpu.trace")
+            self.assertNotIn("COMPLETE", json.dumps(result))
+            for key in ("per_instruction_register_before_after",
+                        "observed_bank_switch_edges", "observed_sync_enter_exit"):
+                self.assertFalse(result["capabilities"][key])
+
+
+if __name__ == "__main__":
+    unittest.main()
