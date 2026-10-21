@@ -12,6 +12,14 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Estado de verificación 22/10/2026 — R0 cerrado, R1.5 pendiente
+
+El operador repitió la captura real `gngb` frame `1660` y contrastó los manifests privados: `foreground`, `background`, `sprites`, `palette` y `reference` dieron **MATCH** SHA-256 en dos ejecuciones independientes. Por tanto, se aceptan R0.1–R0.5 y se cierra [R0 #1](https://github.com/krukmat/gng-ghidra/issues/1). El resultado JS del frame 1660 permanece **0/57.344** píxeles distintos (revisión visual del operador).
+
+**Única tarea abierta antes de pasar a R2:** R1.5, repetir la comparación JavaScript↔MAME con un segundo estado auténtico de gameplay (frame sugerido `1700`), conservando `out/reference/frame-1660-original/` localmente. Si el segundo frame no alcanza pixel-perfect, depurar con un diff real y mantener R1 abierto. No se ha demostrado todavía ejecución de lógica MC6809 recompilada.
+
+---
+
 ## Actualización operativa — 22/10/2026: R1 primer fotograma exacto
 
 **Evidencia del operador en Mac:** el navegador comparó un fotograma auténtico `gngb` frame **1660** de MAME, contra el renderer JS alimentado con FG/BG, DMA sprites, scroll X=12/Y=0, paleta y gráficos de la ROM original, y registró **0 / 57.344 píxeles diferentes (0,00%)**. Antes de corregir los bitplanes eran **9.813 / 57.344 (17,11%)**. Se corrigió la prioridad de bits de plano 2/3/4 bpp para seguir `src/emu/drawgfx.cpp` de MAME. Una captura del comparador visual valida el primer frame, no todo el juego.
