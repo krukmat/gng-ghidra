@@ -46,7 +46,8 @@ export function readSpritePen(rom,index,x,y){
     const bitpos=index*512+PLANE_OFFSETS[plane]+
       X_OFFSETS[x]+(y<8?y*16:128+(y-8)*16);
     const bit=(rom[bitpos>>>3]>>>(7-(bitpos&7)))&1;
-    pen|=bit<<plane;
+    // MAME draws plane 0 into bit 3 and plane 3 into bit 0.
+    pen|=bit<<(3-plane);
   }
   return pen;
 }
