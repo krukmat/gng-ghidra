@@ -32,6 +32,7 @@ def extract(trace: Path, snapshots: Path) -> dict:
         "status": "INSTRUMENTATION_BLOCKED",
         "origin": "MAME native debugger tracelog (no generated code)",
         "genuine_cpu_execution_verified": False,
+        "provenance_authenticated": False,
         "full_r2_trace_verified": False,
         "after_state_available": False,
         "ordered_instruction_bus_available": False,
@@ -42,7 +43,8 @@ def extract(trace: Path, snapshots: Path) -> dict:
     if not trace.is_file() or trace.stat().st_size < 1:
         report["blockers"].append("native MAME trace missing/empty")
         return report
-    report["trace_sha256"] = hashlib.file_digest(trace.open("rb"), "sha256").hexdigest()
+    with trace.open("rb") as binary:
+        report["trace_sha256"] = hashlib.file_digest(binary, "sha256").hexdigest()
     records = []
     seen = 0
     malformed = []
@@ -87,8 +89,10 @@ def extract(trace: Path, snapshots: Path) -> dict:
     snapshots.write_text(
         "".join(json.dumps(v, separators=(",", ":")) + "\n" for v in records),
         encoding="utf-8")
-    report["status"] = "PRE_INSTRUCTION_STATES_OBSERVED"
-    report["genuine_cpu_execution_verified"] = True
+    report["status"] = "PRE_INSTRUCTION_FORMAT_PARSED"
+    # Parsing is not provenance: even a synthetically created text file can
+    # contain valid markers. The invoking native MAME process must be checked
+    # separately before treating this as genuine CPU observation.
     report["snapshots_file"] = str(snapshots)
     report["blockers"].extend((
         "opcode bytes and post-instruction registers not observed here",
@@ -117,6 +121,7 @@ def main() -> None:
     print("GNG_R2_PRETRACE=" + report["status"])
     print("GNG_R2_PRETRACE_SNAPSHOTS=" + str(report["snapshots"]))
     print("GNG_R2_PRETRACE_REPORT=" + str(report_path))
+    print("GNG_R2_PRETRACE_PROVENANCE=PARSER_ONLY_NOT_AUTHENTICATED")
     print("GNG_R2_FULL_CPU_TRACE=NOT_VERIFIED")
     for msg in report["blockers"]:
         print("  BLOCKER: " + msg)
