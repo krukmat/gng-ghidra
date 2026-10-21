@@ -74,6 +74,26 @@ class NativePretraceTests(unittest.TestCase):
             self.assertEqual(r["malformed_markers"], 1)
             self.assertFalse(out.exists())
 
+    def test_all_markers_malformed_reports_only_redacted_structure(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            raw, out = files(root, "GNG_R2_PRE PC=0x6000 A=%02X B=FE" + "\\n" +
+                             "GNG_R2_PRE PC=0x6001 A=%02X B=FD" + "\\n")
+            result = module.extract(raw, out)
+            self.assertEqual(result["status"], "INSTRUMENTATION_BLOCKED")
+            self.assertEqual(result["markers_seen"], 2)
+            self.assertEqual(result["snapshots"], 0)
+            self.assertEqual(result["malformed_markers"], 2)
+            shape = result["malformed_shapes_redacted"][0]
+            self.assertEqual(shape["fields_present"], 3)
+            self.assertTrue(shape["field_shapes"]["PC"]["prefix_0x"])
+            self.assertTrue(shape["field_shapes"]["A"]["literal_percent_format"])
+            self.assertFalse(shape["field_shapes"]["CC"]["present"])
+            diagnostic = json.dumps(result)
+            self.assertNotIn("6000", diagnostic)
+            self.assertNotIn("%02X", diagnostic)
+            self.assertFalse(out.exists())
+
     def test_duplicated_marker_per_line_is_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
