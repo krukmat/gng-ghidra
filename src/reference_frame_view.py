@@ -247,7 +247,7 @@ function compare(){
       ", dy="+best.dy+" · "+best.wrong+" errores vs "+
       direct.wrong+" sin offset · mejora="+(direct.wrong-best.wrong),
     "Los offsets y la distribución son hipótesis diagnósticas; no prueban equivalencia."
-  ].join("\\n");
+  ].join("\n");
   const percent=(wrong/(W*H)*100).toFixed(2);
   document.getElementById("compare").textContent=
    wrong+" / "+(W*H)+" píxeles diferentes ("+percent+"%)";
