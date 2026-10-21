@@ -45,12 +45,13 @@ export function readTilePen(kind,rom,index,x,y){
   requireIndex(y,max,"tile y");
   if(kind==="fg"){
     const offset=index*128+y*16+(x<4?x:x+4);
-    return (bit(rom,offset+4)<<0)|(bit(rom,offset)<<1);
+    // MAME drawgfx.cpp: first layout plane is MOST significant pen bit.
+    return (bit(rom,offset+4)<<1)|(bit(rom,offset)<<0);
   }
   const offset=index*256+y*8+(x<8?x:128+x-8);
-  return (bit(rom,offset+0x10000*8)<<0) |
+  return (bit(rom,offset+0x10000*8)<<2) |
          (bit(rom,offset+0x8000*8)<<1) |
-         (bit(rom,offset)<<2);
+         (bit(rom,offset)<<0);
 }
 /** Source RAM address for a tile; bg is COLUMN-MAJOR, fg ROW-MAJOR. */
 export function tileAddress(kind,col,row){
