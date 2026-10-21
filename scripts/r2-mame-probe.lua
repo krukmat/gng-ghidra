@@ -44,6 +44,8 @@ end
 -- Taps may be lost when the memory map is replaced; they are not proof
 -- of exhaustive RAM/ROM/stack/fetch coverage.
 local readCount, writeCount, resetCount, frameCount = 0, 0, 0, 0
+local reset_requested = false
+local controlled_reset = os.getenv("GNG_R2_PROBE_SOFT_RESET") == "1"
 local limit = 20
 gng_r2_probe_read_tap = space:install_read_tap(
     0x3000, 0x3fff, "r2-mmio-read-probe",
@@ -71,6 +73,7 @@ local finished = false
 local function finish(reason)
     if finished then return end
     finished = true
+    record("CONTROLLED_SOFT_RESET_REQUESTED", reset_requested and "1" or "0")
     record("OBSERVED_RESET_COUNT", resetCount)
     record("OBSERVED_FRAME_COUNT", frameCount)
     record("OBSERVED_MMIO_READ_COUNT", readCount)
@@ -88,6 +91,14 @@ gng_r2_frame_subscription = emu.add_machine_frame_notifier(function()
     frameCount = frameCount + 1
     record("FRAME_SAMPLE", screen:frame_number(), pc(),
            bank and tostring(bank.entry) or "unavailable")
+    -- A late-attached Lua script cannot witness the power-on reset. Optionally
+    -- schedule a genuine, independently observed SOFT reset after the first
+    -- frame. It is NOT evidence of the initial cold reset.
+    if controlled_reset and not reset_requested then
+        reset_requested = true
+        record("SOFT_RESET_REQUESTED", screen:frame_number(), pc())
+        machine:soft_reset()
+    end
     if frameCount >= target then
         finish("frame-limit")
         machine:exit()
