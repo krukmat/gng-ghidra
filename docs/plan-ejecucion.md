@@ -12,6 +12,25 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Actualización R2.2.B1 — 22/10/2026: trazas preinstrucción estructuradas
+
+La sonda R2.2.A fue probada por el operador en MAME real: instrucciones, CPU y MMIO observables, pero `INSTRUMENTATION_BLOCKED` para reset inicial, registros por instrucción, bus completo, bancos, SYNC e IRQ.
+
+Se añadió [R2.2.B1](r2-execution-trace-contract.md#r22b1--preestado-real-por-instrucción-controlado-22102026): `tracelog` del debugger para todos los nueve registros **preinstrucción**, parser `r2_pretrace_report.py` fail-closed y soft reset **opcional** observado tras enganchar Lua. CI ROM-free PASS; no hay traza real de B1 validada todavía. Su salida estructurada `gng.r2.pre-instruction.v1` **no** sustituye el contrato completo `gng.r2.cpu-trace.v1`.
+
+**Siguiente comando del operador:**
+
+```bash
+git pull --ff-only
+GNG_R2_PROBE_SOFT_RESET=1 bash scripts/r2-mame-probe.sh
+cat out/r2/mame-probe/pretrace-report.json
+cat out/r2/mame-probe/capabilities.json
+```
+
+Conservar `cpu.trace` y `pre-instruction.jsonl` dentro de `out/`. Bloque siguiente R2.2.B2: instrumentar `after`, bus e IRQ/SYNC realmente observados; no fingirlos.
+
+---
+
 ## Actualización R2.2.A — 22/10/2026: sonda independiente preparada
 
 Se implementó el diagnóstico `scripts/r2-mame-probe.sh`: proceso MAME separado con `-debug`, traza nativa `noloop` y observaciones Lua de registros, MMIO, banco y frame; `scripts/r2_probe_report.py` genera una matriz de capacidades **sin afirmar equivalencia CPU**. CI ROM-free valida el analizador y casos fail-closed. La prueba real en Mac sigue pendiente.
