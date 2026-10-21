@@ -23,21 +23,28 @@ git pull --ff-only
 bash scripts/r0-blackbox-frame.sh
 ```
 
-**Actualización R0 (21/10/2026):** el operador comprobó que
-`scripts/r0-blackbox-baseline.sh` **inicia y mueve a Arthur**.
-El siguiente paso es capturar un fotograma real de **esa misma ejecución**
-en lugar de volver al bot experimental. El nuevo wrapper
-`scripts/r0-blackbox-frame.sh` activa opcionalmente los observadores
-de VRAM/scroll/paleta/sprites a partir del fotograma 1550, conserva
-el vídeo original y crea `out/visual/frame-compare.html`.
-Si la captura fallase, el baseline probado sigue disponible sin cambios:
+**Diagnóstico actualizado (21/10/2026):** el intento de capturar
+el frame 1550 dentro de la sesión de Blackbox produjo
+`BLACKBOX_TIMELINE_MISSING` y errores Lua repetidos por no detectar
+DMA en `0x3c00`. Esa combinación **NO** ha validado R0.
+
+El nuevo `scripts/r0-blackbox-frame.sh` ejecuta **dos sesiones
+independientes**: primero Blackbox original sin observadores para verificar
+inputs efectivos y generar el vídeo privado; solo si pasa, realiza otra
+ejecución con captura de memoria. La ausencia de DMA en esta segunda
+sesión **se registra una sola vez y no interrumpe el bot**. Es posible
+que el segundo paso siga bloqueado: no se sustituye el buffer DMA por RAM.
 
 ```bash
-bash scripts/r0-blackbox-baseline.sh
+git pull --ff-only
+bash scripts/r0-blackbox-frame.sh
 ```
 
-**No está validada todavía la combinación de los observadores Lua con MAME
-en el Mac, ni la equivalencia visual del renderer JS.**
+El primer paso puede producir
+`out/reference/blackbox-video/gameplay-frame.png` desde el AVI
+auténtico, aunque todavía no tengamos la memoria de sprites bufferizados.
+**Ese PNG NO prueba equivalencia JS**. Si falla la traza del primer paso,
+la ejecución termina con un diagnóstico específico y no intenta R0.
 ROM, AVI, PNG y volcados permanecen en `out/` (privados).
 
 La revisión se determina por los CRC de los chips *dentro* del ZIP, no por su nombre. El wrapper crea un alias privado en `out/` para que MAME cargue `gngb` cuando `roms/gng.zip` contiene `gg4.bin`, `gg3.bin` y `gg5.bin`; no exige renombrar el original.
