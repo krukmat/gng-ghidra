@@ -82,18 +82,28 @@ if [[ -n "$R0_FRAME" ]]; then
   # Stale screenshots/VRAM must never count as evidence for a fresh run.
   rm -f "$REF/foreground.bin" "$REF/background.bin" "$REF/sprites-buffered.bin"
   rm -f "$REF/palette-rgba.bin" "$REF/reference.png" "$REF/state.json" "$REF/manifest.json"
-  MAME_SCRIPT="$ROOT/out/blackbox-baseline/combined-autoboot.lua"
-  {
-    cat "$BB/scripts/mame_autoboot.lua"
-    printf '\n\n-- GNG R0 addon: independent video/memory observer (not inputs)\n'
-    cat "$ROOT/scripts/capture-mame-frame.lua"
-  } > "$MAME_SCRIPT"
   export GNG_CAPTURE_DIR="$REF"
   export GNG_CAPTURE_FRAME="$R0_FRAME"
   export GNG_CAPTURE_KEEP_RUNNING=1
   unset GNG_BOT_EVENTS GNG_BOT_SHA256
   echo "GNG_BLACKBOX_R0=CAPTURE_ADDON_ENABLED frame=$R0_FRAME"
 fi
+
+# Keep the upstream bot and plan UNCHANGED, in one Lua lexical chunk.
+# Its shutdown notifier did not emit input_timeline.json in the operator run
+# (MAME reached frame 2334 and exited). Force a checkpoint at frame 2100,
+# AFTER all 2045 planned game inputs and BEFORE the timed MAME exit.
+# The private addon calls the *original* local write_timeline(), then exits.
+MAME_SCRIPT="$ROOT/out/blackbox-baseline/combined-autoboot.lua"
+{
+  cat "$BB/scripts/mame_autoboot.lua"
+  if [[ -n "$R0_FRAME" ]]; then
+    printf '\n-- R0 video/VRAM observer (does not drive inputs)\n'
+    cat "$ROOT/scripts/capture-mame-frame.lua"
+  fi
+  printf '\n-- GNG: early-flush original Blackbox timeline before timed exit\n'
+  cat "$ROOT/scripts/blackbox-early-flush.lua"
+} > "$MAME_SCRIPT"
 
 # Generate the actual original Blackbox gameplay schedule, not boot_only.
 # Remap the two MAME action buttons without modifying the pinned checkout.
@@ -136,8 +146,9 @@ fi
 if [[ ! -s "$TIMELINE" ]]; then
   if grep -q '\[LUA ERROR\]' "$LOG"; then
     echo "GNG_BLACKBOX_DIAG=LUA_CALLBACK_ERROR_PREVENTED_CLEAN_CAPTURE" >&2
-  elif ! grep -q 'blackbox_harness:input_timeline:written:' "$LOG"; then
-    echo "GNG_BLACKBOX_DIAG=INPUT_TIMELINE_STOP_FLUSH_NOT_OBSERVED" >&2
+  elif ! grep -q 'GNG_BLACKBOX_DIAG=INPUT_TIMELINE_EARLY_FLUSH' "$LOG" &&
+       ! grep -q 'blackbox_harness:input_timeline:written:' "$LOG"; then
+    echo "GNG_BLACKBOX_DIAG=INPUT_TIMELINE_FLUSH_NOT_OBSERVED" >&2
   else
     echo "GNG_BLACKBOX_DIAG=INPUT_TIMELINE_FILE_NOT_WRITTEN" >&2
   fi
@@ -145,10 +156,11 @@ if [[ ! -s "$TIMELINE" ]]; then
   fail blackbox_effective_input_timeline_missing
 fi
 "$PYTHON" "$ROOT/scripts/r0_blackbox_verify.py" \
-  --timeline "$TIMELINE" --video "$AVI" \
+  --timeline "$TIMELINE" --video "$AVI" --plan "$PLAN" \
   --expect-gameplay \
   --report "$ROOT/out/blackbox-baseline/result.json" ||
   { tail -n 20 "$LOG" >&2; fail gameplay_inputs_not_observed; }
+echo "GNG_BLACKBOX_R0=EFFECTIVE_INPUT_TIMELINE_VERIFIED"
 # Always allow a genuine gameplay still from the ORIGINAL Blackbox AVI.
 # This provides visual evidence even when the optional buffered-sprite RAM
 # observer fails; never label it as JS pixel equivalence or memory capture.
