@@ -26,6 +26,36 @@ PATTERN = re.compile(
 )
 
 
+def safe_marker_shape(line: str) -> dict:
+    """Describe field delimiters/widths without exposing ROM or CPU values.
+
+    This intentionally redacts every numeric value, opcode and disassembly
+    text. It is safe to share the resulting JSON shape in a bug report.
+    """
+    tail = line.split(MARKER, 1)[1][:350]
+    fields = {}
+    for name in FIELDS:
+        match = re.search(r"(?<![A-Za-z0-9_])" + name +
+                          r"\\s*=\\s*([^\\s,;]+)", tail, re.I)
+        if not match:
+            fields[name] = {"present": False}
+            continue
+        token = match.group(1)
+        raw = token[2:] if token.lower().startswith("0x") else token
+        fields[name] = {
+            "present": True,
+            "characters": len(token),
+            "hex_characters": len(raw) if re.fullmatch(r"[0-9a-fA-F]+", raw) else None,
+            "prefix_0x": token.lower().startswith("0x"),
+            "literal_percent_format": token.startswith("%"),
+        }
+    return {
+        "marker_count_on_line": line.count(MARKER),
+        "field_shapes": fields,
+        "fields_present": sum(v["present"] for v in fields.values()),
+    }
+
+
 def extract(trace: Path, snapshots: Path) -> dict:
     report = {
         "schema": "gng.r2.pretrace-report.v1",
@@ -48,6 +78,7 @@ def extract(trace: Path, snapshots: Path) -> dict:
     records = []
     seen = 0
     malformed = []
+    diagnostic_shapes = []
     lines = 0
     with trace.open("r", encoding="utf-8", errors="replace") as fh:
         for line_no, line in enumerate(fh, 1):
@@ -58,6 +89,8 @@ def extract(trace: Path, snapshots: Path) -> dict:
             m = PATTERN.search(line)
             if not m or line.count(MARKER) != 1:
                 malformed.append(line_no)
+                if len(diagnostic_shapes) < 3:
+                    diagnostic_shapes.append(safe_marker_shape(line))
                 continue
             state = {key: int(raw, 16) for key, raw in zip(FIELDS, m.groups())}
             records.append({
@@ -74,7 +107,8 @@ def extract(trace: Path, snapshots: Path) -> dict:
                    "first_pc": records[0]["pc"] if records else None,
                    "last_pc": records[-1]["pc"] if records else None,
                    "distinct_pc_count": len({r["pc"] for r in records}),
-                   "malformed_markers": len(malformed)})
+                   "malformed_markers": len(malformed),
+                   "malformed_shapes_redacted": diagnostic_shapes})
     if malformed:
         report["blockers"].append(
             "malformed/ambiguous native tracelog records at line(s): " +
