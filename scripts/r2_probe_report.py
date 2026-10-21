@@ -14,7 +14,8 @@ from pathlib import Path
 SCHEMA = "gng.r2.probe.v1"
 SINGLES = frozenset(("PROBE", "DRIVER", "DEBUGGER_AVAILABLE",
     "CPU_DEBUGGER_AVAILABLE", "CPU_PROGRAM_WIDTH", "BANK_ENTRY_AVAILABLE",
-    "BANK_INITIAL_OBSERVED", "OBSERVED_RESET_COUNT", "OBSERVED_FRAME_COUNT",
+    "BANK_INITIAL_OBSERVED", "CONTROLLED_SOFT_RESET_REQUESTED",
+    "OBSERVED_RESET_COUNT", "OBSERVED_FRAME_COUNT",
     "OBSERVED_MMIO_READ_COUNT", "OBSERVED_MMIO_WRITE_COUNT", "PROBE_END"))
 REGS = ("PC", "A", "B", "X", "Y", "U", "S", "DP", "CC")
 
@@ -30,6 +31,7 @@ def classify(probe: Path, trace: Path) -> dict:
         "capabilities": {
             "instruction_log": False, "registers_observable": False,
             "frame_clock": False, "reset_notifier": False,
+            "controlled_soft_reset_observed": False,
             "mmio_read_taps": False, "mmio_write_taps": False,
             "bank_entry_observable": False,
             "per_instruction_register_before_after": False,
@@ -81,6 +83,14 @@ def classify(probe: Path, trace: Path) -> dict:
     cap["reset_notifier"] = count["OBSERVED_RESET_COUNT"] > 0 and (
         len(observations.get("RESET_NOTIFICATION", [])) ==
         count["OBSERVED_RESET_COUNT"])
+    controlled = single("CONTROLLED_SOFT_RESET_REQUESTED")
+    requests = observations.get("SOFT_RESET_REQUESTED", [])
+    if controlled not in (None, "0", "1"):
+        blockers.append("unexpected controlled reset marker")
+        return report
+    cap["controlled_soft_reset_observed"] = (
+        controlled == "1" and len(requests) == 1 and
+        cap["reset_notifier"] and count["OBSERVED_RESET_COUNT"] >= 1)
     cap["frame_clock"] = count["OBSERVED_FRAME_COUNT"] > 0 and (
         len(observations.get("FRAME_SAMPLE", [])) ==
         count["OBSERVED_FRAME_COUNT"])
@@ -119,7 +129,11 @@ def classify(probe: Path, trace: Path) -> dict:
     if not cap["frame_clock"]:
         blockers.append("no continuous frame samples")
     if not cap["reset_notifier"]:
-        blockers.append("initial reset notifier not observed (possible late Lua attachment)")
+        blockers.append("reset notifier not observed (late Lua attachment)")
+    if controlled == "1" and not cap["controlled_soft_reset_observed"]:
+        blockers.append("controlled soft reset requested but notification not observed")
+    if controlled == "1" and cap["controlled_soft_reset_observed"]:
+        blockers.append("observed soft reset is NOT proof of initial cold-boot reset")
     if not cap["bank_entry_observable"]:
         blockers.append("MAME mainbank entry not observed")
     if not cap["mmio_read_taps"] or not cap["mmio_write_taps"]:
