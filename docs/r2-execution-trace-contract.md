@@ -91,6 +91,62 @@ Eventos permitidos: `RESET`, `FRAME_BOUNDARY`, `SYNC_ENTER`, `SYNC_EXIT`, `IRQ_A
 
 El ejemplo entero es **ilustrativo**: no simula ni prueba un arranque válido. Para R2 PASS, el footer tendrá `status=COMPLETE`, `reset_observed=true`, `sync_observed=true` y `first_irq_entry_observed=true`, coherentes con los eventos y el log real. Una captura interrumpida puede ser útil como diagnóstico, nunca como gate aprobado.
 
+## R2.2.A — Sonda de capacidades nativas (implementada, NO aceptada en MAME real)
+
+Implementación en `main` (ROM-free CI): `scripts/r2-mame-probe.sh`,
+`scripts/r2-mame-probe.lua`, `scripts/r2_probe_report.py` y
+`tests/test_r2_mame_probe.py`.
+
+**Fuentes de APIs reales:** [MAME debugger `trace`](https://docs.mamedev.org/debugger/execution.html)
+(documenta `trace <file>,<CPU>,noloop` y que `-debugscript` permite
+iniciar comandos de depuración), [MAME Lua memory taps](https://docs.mamedev.org/luascript/ref-mem.html)
+(documenta `install_read_tap`/`install_write_tap` y sus limitaciones)
+y [MAME Lua callbacks](https://docs.mamedev.org/luascript/ref-common.html)
+(`add_machine_reset_notifier`, `add_machine_frame_notifier`).
+
+### Instrumentación y cobertura prometida
+
+| Campo | Fuente disponible en sonda | Limitación / aceptación |
+| --- | --- | --- |
+| driver / revisión | MAME system `gngb` / debugger | Debe ser confirmado en MAME real, no por nombre ZIP |
+| Instrucciones / PC | debugger nativo `trace ...,:maincpu,noloop` | Raw trace ≠ `step` JSONL con `opcode_bytes`, `before/after` y bus |
+| Registros A/B/X/Y/U/S/DP/CC/PC | Lua `cpu.state` | La sonda detecta disponibilidad; muestras fuera del callback de instrucción, por lo tanto NO prueba registros por step |
+| RAM/MMIO | taps de lectura/escritura, sonda MMIO 0x3000–0x3fff | Muestras acotadas y contadores; NO prueba cobertura completa de RAM, ROM, fetch, pila ni orden por instrucción |
+| Banco 0x4000–0x5fff | `machine.memory.banks[":mainbank"].entry` | Observa muestras; no todos los flancos de `BANK_SWITCH` |
+| Frames | `screen:frame_number()` | Observación al concluir cada frame, no etiqueta atómica por instrucción |
+| Reset | `emu.add_machine_reset_notifier` | Si la Lua se engancha tras reset, el campo queda explícitamente ausente; NUNCA se sintetiza |
+| SYNC / IRQ / FIRQ | no instrumentado con fidelidad de evento | **INSTRUMENTATION_BLOCKED**, necesidad de una fuente fiable de instrucción/IRQ |
+
+La sonda deliberadamente corre en **otro proceso MAME**, sin Blackbox y sin sustituir la
+ROM original. Su resultado no es un replay de la sesión de gameplay R0/R1. El
+resultado `PARTIAL_NATIVE_INSTRUMENTATION` indica únicamente que pudieron observarse
+datos nativos de CPU/frames; **no cumple** `gng.r2.cpu-trace.v1`, no produce `COMPLETE`
+y no abre R2.3.
+
+### Primera prueba local en Mac (solo si CI ROM-free PASS)
+
+```bash
+git pull --ff-only
+bash scripts/r2-mame-probe.sh
+cat out/r2/mame-probe/capabilities.json
+```
+
+La sonda utiliza la ROM del operador verificada por
+`scripts/prepare_mame_rom.py` y la instalación local de MAME con
+`-debug -debugscript`. La ventana del debugger en macOS puede abrirse
+separadamente; el `debugscript` intenta continuar la ejecución con `g`.
+El comando escribe `out/r2/mame-probe/{cpu.trace,observations.tsv,mame.log,capabilities.json}`.
+Si debugger, Lua, ROM o captura no funcionan, se informa un bloqueo sin generar
+un archivo de traza R2 falsamente completo. La salida privada no debe subirse a GitHub.
+
+**Siguiente sub-bloque R2.2.B:** validar esta sonda en MAME real y luego resolver
+la correlación de inicio/fin de instrucción, cobertura de bus y
+`SYNC/IRQ_ENTRY`; si la API pública no es suficiente, diseñar un adaptador
+C++ de laboratorio o extensión del oráculo independiente, sin cambiar la
+política de fidelidad. R2.2 no se considera terminada antes de ello.
+
+---
+
 ## Reglas de aceptación R2.1 y de R2.2
 
 1. Fijar esta versión de formato sin modificar la política del emulador ni relajar los eventos requeridos.
