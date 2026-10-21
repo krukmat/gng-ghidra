@@ -12,6 +12,16 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Actualización R2.2.A — 22/10/2026: sonda independiente preparada
+
+Se implementó el diagnóstico `scripts/r2-mame-probe.sh`: proceso MAME separado con `-debug`, traza nativa `noloop` y observaciones Lua de registros, MMIO, banco y frame; `scripts/r2_probe_report.py` genera una matriz de capacidades **sin afirmar equivalencia CPU**. CI ROM-free valida el analizador y casos fail-closed. La prueba real en Mac sigue pendiente.
+
+**Próxima validación local:** `git pull --ff-only && bash scripts/r2-mame-probe.sh`; devolver solo `out/r2/mame-probe/capabilities.json` o el resumen textual y las líneas de error de MAME, **no el archivo `cpu.trace` ni memoria/ROM**.
+
+Si la sonda confirma datos nativos, abordar R2.2.B (correlación por instrucción y detección IRQ/SYNC); hasta ello R2.2 no está aceptada. [Contrato y cobertura](r2-execution-trace-contract.md).
+
+---
+
 ## Estado de verificación 22/10/2026 — R0 y R1 cerrados, inicio de R2
 
 El operador aportó screenshot del frame **1700** `gngb`: el comparador entre MAME original y JavaScript devuelve **0/57.344 píxeles diferentes (0,00%)**. El frame **1660** también mostró **0/57.344** y se reprodujo en dos corridas con hashes SHA-256 **MATCH** en PNG, FG, BG, sprites DMA y paleta. El vídeo privado (256×224, 2.102 frames) muestra transición hasta gameplay.
@@ -189,13 +199,14 @@ R2 puede prepararse durante la depuración R1, pero **R4 exige R1 y R3 aceptados
 
 ## 6. Próxima acción exacta
 
-**Ingeniería:** implementar R2.2, instrumentando un oráculo CPU externo conforme a [contrato JSONL de R2](r2-execution-trace-contract.md), y demostrar que puede capturar PC, registros, bus, bancos y SYNC/IRQ desde reset. Ninguna llamada a la ROM del operador es necesaria para el smoke de estructura.
+**Ingeniería:** R2.2.A ha entregado una sonda MAME real y verificación ROM-free. R2.2.B requiere aún instrumentación fiable de cada instrucción y señales SYNC/IRQ. No confundir una muestra de MMIO o un fichero debugger `trace` con equivalencia CPU.
 
-**Operador (opcional, solo smoke de esquema ROM-free):**
+**Operador — ahora, primer test de capacidades MAME con ROM local:**
 
 ```bash
 git pull --ff-only
-python3 -m unittest discover -s tests -p 'test_r2_trace_contract.py' -v
+bash scripts/r2-mame-probe.sh
+cat out/r2/mame-probe/capabilities.json
 ```
 
-**No se solicita una nueva captura MAME todavía.** R2.2 anunciará su comando cuando el observador esté implementado, probado y sus límites explícitos. No confundir `STRUCTURE_VALID` con ejecución real capturada.
+La sonda es independiente del bot y se ejecuta por separado; devuelve `PARTIAL_NATIVE_INSTRUMENTATION` o `INSTRUMENTATION_BLOCKED`, **nunca** `R2=PASS`. Evidencia en `out/`, no subir `cpu.trace`, ROM o memoria al repositorio.
