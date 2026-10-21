@@ -10,7 +10,8 @@ import json
 from pathlib import Path
 
 
-def verify(timeline_path: Path, video_path: Path, *, expect_gameplay: bool=False) -> dict:
+def verify(timeline_path: Path, video_path: Path, *, expect_gameplay: bool=False,
+           plan_path: Path | None=None) -> dict:
     if not timeline_path.is_file():
         raise ValueError("BLACKBOX_TIMELINE_MISSING")
     if not video_path.is_file() or video_path.stat().st_size < 1024:
@@ -35,6 +36,26 @@ def verify(timeline_path: Path, video_path: Path, *, expect_gameplay: bool=False
         raise ValueError("BLACKBOX_START_NOT_OBSERVED_AT_1020")
     if max(frames) < 1505:
         raise ValueError("BLACKBOX_RECORDING_ENDED_BEFORE_STAGE_INTRO")
+    if plan_path is not None:
+        # Verify what MAME READ, not just which keys Python requested.
+        # Compare recorded frames only: the script may stop before its plan ends.
+        plan=json.loads(plan_path.read_text(encoding="utf-8"))
+        if not isinstance(plan,list) or not plan:
+            raise ValueError("BLACKBOX_INPUT_PLAN_INVALID")
+        expected={}
+        for row in plan:
+            if (not isinstance(row,dict) or
+                    type(row.get("frame")) is not int or
+                    not isinstance(row.get("buttons"),list) or
+                    not all(isinstance(v,str) for v in row["buttons"]) or
+                    row["frame"] in expected):
+                raise ValueError("BLACKBOX_INPUT_PLAN_INVALID")
+            expected[row["frame"]]=set(row["buttons"])
+        bad=[f for f,buttons in frames.items()
+             if f in expected and buttons!=expected[f]]
+        if bad:
+            raise ValueError("BLACKBOX_INPUT_TIMELINE_PLAN_MISMATCH first="+
+                             str(min(bad))+" count="+str(len(bad)))
     if expect_gameplay:
         # The trace is the effective MAME port reading, not merely a script plan.
         for name,minimum,first_frame in (
@@ -67,11 +88,13 @@ def main()->None:
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--timeline",type=Path,required=True)
     p.add_argument("--video",type=Path,required=True)
+    p.add_argument("--plan",type=Path,help="Optional exported per-frame Blackbox plan")
     p.add_argument("--expect-gameplay",action="store_true")
     p.add_argument("--report",type=Path,required=True)
     args=p.parse_args()
     try:
-        result=verify(args.timeline,args.video,expect_gameplay=args.expect_gameplay)
+        result=verify(args.timeline,args.video,expect_gameplay=args.expect_gameplay,
+                      plan_path=args.plan)
     except (ValueError,OSError,json.JSONDecodeError) as exc:
         p.error(str(exc))
     args.report.parent.mkdir(parents=True,exist_ok=True)
