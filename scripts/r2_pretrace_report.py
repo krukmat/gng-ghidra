@@ -36,7 +36,7 @@ def safe_marker_shape(line: str) -> dict:
     fields = {}
     for name in FIELDS:
         match = re.search(r"(?<![A-Za-z0-9_])" + name +
-                          r"\\s*=\\s*([^\\s,;]+)", tail, re.I)
+                          r"\s*=\s*([^\s,;]+)", tail, re.I)
         if not match:
             fields[name] = {"present": False}
             continue
