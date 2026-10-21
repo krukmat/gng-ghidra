@@ -64,9 +64,13 @@ def analyze(session: Path) -> dict:
     # an interrupted or manually closed session, and keyboard play after the
     # scripted boot is expected and must not be treated as an injection failure.
     boot_differences = []
-    for frame, buttons in actual.items():
-        if frame < 1505 and buttons != plan.get(frame, frozenset()):
-            boot_differences.append(frame)
+    for frame, buttons in sorted(actual.items()):
+        planned = plan.get(frame, frozenset())
+        if frame < 1505 and buttons != planned:
+            boot_differences.append({
+                "frame": frame, "planned": sorted(planned),
+                "observed": sorted(buttons),
+            })
     faults = (
         "blackbox_harness:input_plan:missing",
         "blackbox_harness:input_plan:invalid_json",
@@ -76,16 +80,20 @@ def analyze(session: Path) -> dict:
         "blackbox_harness:input_button:unmapped",
     )
     log_faults = [fault for fault in faults if fault in log]
-    input_ok = (
+    coin_start_ok = (
         bool(stats["coin"]["actual_count"]) and
         bool(stats["start"]["actual_count"]) and
-        bool(stats["coin"]["plan_count"]) and
-        bool(stats["start"]["plan_count"]) and
-        not boot_differences and not log_faults
+        {f for f, buttons in plan.items() if "coin" in buttons} ==
+        {f for f, buttons in actual.items() if "coin" in buttons} and
+        {f for f, buttons in plan.items() if "start" in buttons} ==
+        {f for f, buttons in actual.items() if "start" in buttons} and
+        not log_faults
     )
+    input_ok = coin_start_ok and not boot_differences
     return {
         "schema": "gng.blackbox-session-review.v1",
         "input_gate": "MATCHED" if input_ok else "BLOCKED",
+        "coin_start_gate": "MATCHED" if coin_start_ok else "BLOCKED",
         "gameplay_gate": "VISUAL_UNVERIFIED",
         "rom_state_gate": "NOT_CAPTURED_BY_AVI",
         "video_bytes": (session / "capture.avi").stat().st_size,
@@ -94,7 +102,9 @@ def analyze(session: Path) -> dict:
         "last_observed_frame": max(actual),
         "buttons": stats,
         "boot_mismatch_count": len(boot_differences),
-        "first_boot_mismatch": min(boot_differences) if boot_differences else None,
+        "first_boot_mismatch": (boot_differences[0]["frame"]
+                                if boot_differences else None),
+        "boot_mismatch_samples": boot_differences[:12],
         "log_faults": log_faults,
         "log_plan_loaded": "blackbox_harness:input_plan:loaded:" in log,
         "log_start_marker": "blackbox_harness:start" in log,
@@ -115,6 +125,7 @@ def collect_video(session: Path, dest: Path, report: dict) -> list[tuple[int, st
     )
     if probe.returncode != 0:
         report["video_inspection"] = "VIDEO_UNREADABLE"
+        report["ffprobe_error"] = probe.stderr[-2500:]
         return []
     try:
         metadata = json.loads(probe.stdout)
@@ -127,6 +138,7 @@ def collect_video(session: Path, dest: Path, report: dict) -> list[tuple[int, st
         frame_count = int(stream["nb_frames"]) if str(stream.get("nb_frames", "")).isdigit() else None
     except (ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError):
         report["video_inspection"] = "VIDEO_METADATA_INVALID"
+        report["ffprobe_error"] = probe.stderr[-2500:]
         return []
     observed_max = report["last_observed_frame"]
     targets = [f for f in VISUAL_FRAMES if f <= observed_max and
@@ -139,25 +151,55 @@ def collect_video(session: Path, dest: Path, report: dict) -> list[tuple[int, st
         stale.unlink()
     expression = "+".join("eq(n\\," + str(n) + ")" for n in targets)
     command = [
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
         "-i", str(session / "capture.avi"),
         "-vf", "select=" + expression,
-        "-vsync", "0", str(dest / "frame-%02d.png"),
+        "-fps_mode", "vfr", "-frames:v", str(len(targets)),
+        str(dest / "frame-%02d.png"),
     ]
     try:
         rendered = subprocess.run(command, capture_output=True, text=True,
-                                  timeout=90, check=False)
+                                  timeout=120, check=False)
     except subprocess.TimeoutExpired:
         report["video_inspection"] = "FFMPEG_TIMEOUT"
+        report["ffmpeg_error"] = "single-pass extraction timed out"
         return []
-    if rendered.returncode != 0:
-        report["video_inspection"] = "FFMPEG_EXTRACT_FAILED"
-        return []
-    evidence = [(frame, f"frame-{i:02d}.png") for i, frame in enumerate(targets, 1)
-                if (dest / f"frame-{i:02d}.png").is_file()]
+    first_pass = [(frame, f"frame-{i:02d}.png") for i, frame in enumerate(targets, 1)
+                  if (dest / f"frame-{i:02d}.png").is_file()]
+    if rendered.returncode == 0 and len(first_pass) == len(targets):
+        evidence = first_pass
+    else:
+        # Fallback: independently seek by decoded frame index. Slower, but
+        # preserves correct frame labels and survives image-sequence failures.
+        report["ffmpeg_first_pass_error"] = rendered.stderr[-2500:]
+        for old in dest.glob("frame-*.png"):
+            old.unlink()
+        evidence = []
+        problems = []
+        for frame in targets:
+            filename = f"frame-{frame:04d}.png"
+            output = dest / filename
+            retry = [
+                "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                "-i", str(session / "capture.avi"),
+                "-vf", f"select=eq(n\\,{frame})",
+                "-frames:v", "1", "-update", "1", str(output),
+            ]
+            try:
+                attempt = subprocess.run(retry, capture_output=True, text=True,
+                                         timeout=90, check=False)
+            except subprocess.TimeoutExpired:
+                problems.append(f"frame {frame}: ffmpeg timeout")
+                continue
+            if attempt.returncode == 0 and output.is_file() and output.stat().st_size:
+                evidence.append((frame, filename))
+            else:
+                problems.append(f"frame {frame}: " + attempt.stderr[-700:])
+        if problems:
+            report["ffmpeg_error"] = "\\n".join(problems)[-2500:]
     report["video_inspection"] = (
         "FRAMES_EXTRACTED_FOR_HUMAN_REVIEW" if len(evidence) == len(targets)
-        else "PARTIAL_VIDEO_FRAMES"
+        else "FFMPEG_EXTRACT_FAILED" if not evidence else "PARTIAL_VIDEO_FRAMES"
     )
     report["video_frame_indices"] = [number for number, _ in evidence]
     return evidence
@@ -173,7 +215,16 @@ def write_review(report: dict, out: Path, frames: list[tuple[int, str]]) -> None
         for index, name in frames
     )
     if not cards:
-        cards = "<p>No se pudieron extraer fotogramas: comprueba ffmpeg y el AVI.</p>"
+        cards = ("<p>No se pudieron extraer fotogramas: comprueba FFmpeg "
+                 "y el AVI. El error específico aparece debajo.</p>")
+    errors = report.get("ffmpeg_error") or report.get("ffmpeg_first_pass_error") or report.get("ffprobe_error") or ""
+    mismatch_rows = "".join(
+        "<li>Frame " + str(row["frame"]) + ": esperado " +
+        html.escape(",".join(row["planned"]) or "(ninguno)") +
+        "; observado " +
+        html.escape(",".join(row["observed"]) or "(ninguno)") + "</li>"
+        for row in report["boot_mismatch_samples"]
+    )
     page = (
         '<!doctype html><html lang="es"><meta charset="utf-8">'
         '<title>Blackbox T1 — revisión real</title>'
@@ -186,10 +237,15 @@ def write_review(report: dict, out: Path, frames: list[tuple[int, str]]) -> None
         '</strong>. ¿Arthur comenzó a jugar? <strong>SIN VERIFICAR VISUALMENTE</strong>.'
         ' Las imágenes son del vídeo existente, no generadas artificialmente.'
         ' Los índices del AVI pueden no corresponder exactamente a los frames de MAME.</p>'
+        '<p>Coin/Start según plan: <strong>' +
+        html.escape(report["coin_start_gate"]) +
+        '</strong>. Otras discrepancias pueden bloquear el gate completo.</p>'
         '<p>Coin observado: ' + str(report["buttons"]["coin"]["actual_count"]) +
         ' frames; Start observado: ' + str(report["buttons"]["start"]["actual_count"]) +
         ' frames. Discrepancias antes de frame 1505: ' +
         str(report["boot_mismatch_count"]) + '</p>'
+        '<ol>' + mismatch_rows + '</ol>'
+        '<p>Diagnóstico FFmpeg:</p><pre>' + html.escape(errors) + '</pre>'
         '<section>' + cards + '</section></html>'
     )
     (out / "index.html").write_text(page, encoding="utf-8")
@@ -219,6 +275,13 @@ def main() -> None:
     print("BLACKBOX_T1_COIN_FRAMES=" + str(report["buttons"]["coin"]["actual_count"]))
     print("BLACKBOX_T1_START_FRAMES=" + str(report["buttons"]["start"]["actual_count"]))
     print("BLACKBOX_T1_BOOT_MISMATCHES=" + str(report["boot_mismatch_count"]))
+    print("BLACKBOX_T1_COIN_START_GATE=" + report["coin_start_gate"])
+    if report["boot_mismatch_samples"]:
+        print("BLACKBOX_T1_MISMATCH_SAMPLES=" +
+              json.dumps(report["boot_mismatch_samples"][:6], separators=(",", ":")))
+    if report.get("ffmpeg_error") or report.get("ffmpeg_first_pass_error"):
+        reason = report.get("ffmpeg_error") or report.get("ffmpeg_first_pass_error")
+        print("BLACKBOX_T1_FFMPEG_ERROR=" + reason.replace("\\n", " ")[-700:])
     print("BLACKBOX_T1_VIDEO=" + report["video_inspection"])
     print("BLACKBOX_T1_GAMEPLAY=VISUAL_UNVERIFIED")
     print("BLACKBOX_T1_REPORT=" + str(out / "summary.json"))
