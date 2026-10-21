@@ -53,6 +53,23 @@ la aplicación nativa JS. Hace falta MAME en el Mac.
 [R0 completo](docs/frame-oracle.md).
 
 
+### Revisar la carpeta Blackbox T1 existente sin volver a ejecutar MAME
+
+Si `out/reference/blackbox-t1/` ya contiene `capture.avi`,
+`input_plan.json`, `input_timeline.json` y `mame.log`, utilizar su
+evidencia **antes** de hacer otra captura:
+
+```bash
+python3 scripts/review_blackbox_capture.py --session out/reference/blackbox-t1
+open out/blackbox-t1-review/index.html
+```
+
+El inspector compara inputs realmente registrados con el plan (Coin/Start),
+detecta errores Lua y extrae fotogramas auténticos del AVI mediante ffmpeg.
+La salida está en `out/` (privado). **Coin/Start válidos no equivalen a
+partida confirmada**: revisar la secuencia visual. Un AVI tampoco contiene
+por sí solo los snapshots VRAM, DMA, scroll o paleta necesarios para R0.
+
 ### R0 / T1 — Blackbox conectado a gameplay (no solo coin/start)
 
 **Causa del bloqueo corregida:** la ejecución anterior usaba el plan
