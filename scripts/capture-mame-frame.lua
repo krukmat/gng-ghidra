@@ -34,6 +34,7 @@ local scroll = {0, 0, 0, 0}
 local sprite_buffer = nil
 local dma_count = 0
 local completed = false
+local keep_running = os.getenv("GNG_CAPTURE_KEEP_RUNNING") == "1"
 
 -- A minimal fixed-frame input driver inspired by the Pyjamada QA bot.
 -- It controls only MAME test inputs, not the generated JS game engine.
@@ -210,13 +211,13 @@ local function snapshot()
     completed = true
     print("GNG_MAME_REFERENCE=CAPTURED frame=" .. screen:frame_number() ..
         " dma=" .. dma_count .. " scroll_x=" .. x .. " scroll_y=" .. y)
-    machine:exit()
+    if not keep_running then machine:exit() end
 end
 
 -- The machine frame notifier is a reference capture, not a product loop.
-local subscription = emu.add_machine_frame_notifier(function()
+gng_capture_frame_subscription = emu.add_machine_frame_notifier(function()
     step_bot(screen:frame_number())
     capture_checkpoint(screen:frame_number())
     snapshot()
 end)
-assert(subscription, "MAME machine frame notifier unavailable")
+assert(gng_capture_frame_subscription, "MAME machine frame notifier unavailable")
