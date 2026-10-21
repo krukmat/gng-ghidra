@@ -81,7 +81,27 @@ class R2MameProbeTests(unittest.TestCase):
             ).replace("RESET_NOTIFICATION\t0\t24576\n", ""))
             result = probe.classify(path, root / "cpu.trace")
             self.assertFalse(result["capabilities"]["reset_notifier"])
-            self.assertIn("initial reset notifier not observed (possible late Lua attachment)",
+            self.assertIn("reset notifier not observed (late Lua attachment)",
+                          result["blockers"])
+
+    def test_scheduled_soft_reset_is_not_misrepresented_as_power_on_reset(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            evidence(root)
+            path = root / "observations.tsv"
+            path.write_text(
+                path.read_text().replace(
+                    "RESET_NOTIFICATION\\t0\\t24576\\n",
+                    "SOFT_RESET_REQUESTED\\t1\\t24576\\n" +
+                    "RESET_NOTIFICATION\\t0\\t24576\\n").replace(
+                    "OBSERVED_RESET_COUNT\\t1",
+                    "CONTROLLED_SOFT_RESET_REQUESTED\\t1\\nOBSERVED_RESET_COUNT\\t1"
+                )
+            )
+            result = probe.classify(path, root / "cpu.trace")
+            self.assertTrue(result["capabilities"]["controlled_soft_reset_observed"])
+            self.assertFalse(result["reference_execution_verified"])
+            self.assertIn("observed soft reset is NOT proof of initial cold-boot reset",
                           result["blockers"])
 
     def test_duplicate_or_forged_provenance_rejected(self):
