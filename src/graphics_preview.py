@@ -162,19 +162,19 @@ function pixel(kind,index,x,y){
  const buf=regions[kind];
  if(kind==="chars"){
   const pos=index*128+y*16+(x<4?x:x+4);
-  return (oneBit(buf,pos+4)<<0)|(oneBit(buf,pos)<<1);
+  return (oneBit(buf,pos+4)<<1)|(oneBit(buf,pos)<<0);
  }
  if(kind==="tiles"){
   const p=index*256+y*8+(x<8?x:128+x-8);
-  return (oneBit(buf,p+0x10000*8)<<0)|
+  return (oneBit(buf,p+0x10000*8)<<2)|
          (oneBit(buf,p+0x8000*8)<<1)|
-         (oneBit(buf,p)<<2);
+         (oneBit(buf,p)<<0);
  }
  const p=index*512+y*16+(x<8?(x<4?x:x+4):256+(x<12?x-8:x-4));
- return (oneBit(buf,p+0x10000*8+4)<<0)|
-        (oneBit(buf,p+0x10000*8)<<1)|
-        (oneBit(buf,p+4)<<2)|
-        (oneBit(buf,p)<<3);
+ return (oneBit(buf,p+0x10000*8+4)<<3)|
+        (oneBit(buf,p+0x10000*8)<<2)|
+        (oneBit(buf,p+4)<<1)|
+        (oneBit(buf,p)<<0);
 }
 function drawElement(ctx,kind,index,dx,dy){
  const n=dims[kind],colors=palettes[kind];
