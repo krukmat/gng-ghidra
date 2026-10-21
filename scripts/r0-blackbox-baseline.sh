@@ -131,11 +131,38 @@ if ! (
   fail original_blackbox_gameplay_runtime_failed
 fi
 
+# The upstream Lua writes the effective input timeline on machine stop.
+# An AVI alone does NOT prove it was written. Diagnose without hiding Lua errors.
+if [[ ! -s "$TIMELINE" ]]; then
+  if grep -q '\[LUA ERROR\]' "$LOG"; then
+    echo "GNG_BLACKBOX_DIAG=LUA_CALLBACK_ERROR_PREVENTED_CLEAN_CAPTURE" >&2
+  elif ! grep -q 'blackbox_harness:input_timeline:written:' "$LOG"; then
+    echo "GNG_BLACKBOX_DIAG=INPUT_TIMELINE_STOP_FLUSH_NOT_OBSERVED" >&2
+  else
+    echo "GNG_BLACKBOX_DIAG=INPUT_TIMELINE_FILE_NOT_WRITTEN" >&2
+  fi
+  tail -n 15 "$LOG" >&2
+  fail blackbox_effective_input_timeline_missing
+fi
 "$PYTHON" "$ROOT/scripts/r0_blackbox_verify.py" \
   --timeline "$TIMELINE" --video "$AVI" \
   --expect-gameplay \
   --report "$ROOT/out/blackbox-baseline/result.json" ||
   { tail -n 20 "$LOG" >&2; fail gameplay_inputs_not_observed; }
+# Always allow a genuine gameplay still from the ORIGINAL Blackbox AVI.
+# This provides visual evidence even when the optional buffered-sprite RAM
+# observer fails; never label it as JS pixel equivalence or memory capture.
+if [[ -z "$R0_FRAME" ]] && command -v ffmpeg >/dev/null 2>&1; then
+  mkdir -p "$ROOT/out/reference/blackbox-video"
+  STILL="$ROOT/out/reference/blackbox-video/gameplay-frame.png"
+  if ffmpeg -y -hide_banner -loglevel error -i "$AVI" \
+       -vf 'select=eq(n\,1550)' -fps_mode vfr -frames:v 1 "$STILL" &&
+       [[ -s "$STILL" ]]; then
+    echo "GNG_BLACKBOX_REAL_VIDEO_FRAME=$STILL (AVI frame index; NO VRAM evidence)"
+  else
+    echo "GNG_BLACKBOX_REAL_VIDEO_FRAME=UNAVAILABLE; original AVI remains valid" >&2
+  fi
+fi
 if [[ -n "$R0_FRAME" ]]; then
   "$PYTHON" "$ROOT/scripts/r0_blackbox_capture_validate.py" \
     --reference "$REF" --frame "$R0_FRAME" --system "$MACHINE" \
