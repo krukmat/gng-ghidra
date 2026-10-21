@@ -23,7 +23,11 @@ rm -f "$OUTPUT/observations.tsv" "$OUTPUT/cpu.trace" "$OUTPUT/capabilities.json"
 DEBUGSCRIPT="$OUTPUT/start-debugger.txt"
 # MAME's debugger starts stopped. 'g' continues execution after enabling
 # its native instruction trace (with loop suppression disabled).
-printf 'trace %s,:maincpu,noloop\ng\n' "$OUTPUT/cpu.trace" > "$DEBUGSCRIPT"
+# MAME executes tracelog before writing each instruction. Capture all nine
+# architectural MC6809 registers, independent of generated/P-code JS.
+# The raw trace and extracted snapshots remain private in out/r2/.
+TRACE_ACTION='{tracelog "GNG_R2_PRE PC=%04X A=%02X B=%02X X=%04X Y=%04X U=%04X S=%04X DP=%02X CC=%02X",pc,a,b,x,y,u,s,dp,cc}'
+printf 'trace %s,:maincpu,noloop,%s\ng\n' "$OUTPUT/cpu.trace" "$TRACE_ACTION" > "$DEBUGSCRIPT"
 export GNG_R2_PROBE_DIR="$OUTPUT" GNG_R2_PROBE_FRAMES=4
 echo "GNG_R2_PROBE=START_MAME_DEBUGGER_NOT_GAMEPLAY"
 # Run in its own MAME process: startup/reset and instruction timing here
@@ -40,6 +44,9 @@ if grep -q '\[LUA ERROR\]' "$OUTPUT/mame.log"; then
   echo "GNG_R2_PROBE=LUA_ERROR" >&2
   grep '\[LUA ERROR\]' "$OUTPUT/mame.log" | tail -n 8 >&2
 fi
+# Independently analyze real per-instruction pre-state markers: fail-closed,
+# never calculate synthetic post-state/IRQ or replace missing instructions.
+python3 scripts/r2_pretrace_report.py --dir "$OUTPUT"
 python3 scripts/r2_probe_report.py --dir "$OUTPUT"
 # Return nonzero unless we can authenticate the minimal probe fields,
 # but a valid probe is NEVER an R2 equivalence PASS.
