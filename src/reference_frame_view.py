@@ -71,7 +71,7 @@ p{line-height:1.55;color:#bccde3}
 .panes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:22px}
 .panel{background:#131f33;border:1px solid #344b68;border-radius:13px;padding:18px}
 h2{font-size:18px;margin:6px 0 5px}
-img,canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;width:100%;max-width:512px;aspect-ratio:256/224;margin:16px auto;background:#060a12}
+img,canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;width:100%;height:auto;max-width:512px;aspect-ratio:256/224;margin:16px auto;background:#060a12}
 .meta{font:12px ui-monospace,monospace;color:#a8bed9;line-height:1.7}
 button{border:1px solid #66b6a5;background:#22464b;color:#f0f6ff;font:600 13px system-ui;padding:10px 14px;border-radius:7px;cursor:pointer}
 .metrics{margin:22px 0;padding:18px;background:#112337;border:1px solid #2e5062;border-radius:13px}
