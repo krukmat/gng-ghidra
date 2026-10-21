@@ -29,28 +29,32 @@ la aplicación nativa JS. Hace falta MAME en el Mac.
 [R0 completo](docs/frame-oracle.md).
 
 
-### Bot de capturas deterministas (R0, inspiración Pyjamada)
+### R0 / T1 — Recuperación del arranque original de Blackbox
 
-Se reutiliza el **patrón** del QA bot de Pyjamada: secuencia de acciones
-por frames + referencia visual + verificación de repetibilidad. El bot
-original de Pyjamada no controla MAME ni se copia aquí.
+**Ruta de recuperación vigente:** usar el *runner real de Blackbox* antes de
+volver al capturador/renderer de Ghidra. El bot experimental de
+`gng-ghidra` queda **suspendido**: Coin/Start observados no certifican
+que el juego haya comenzado.
 
 ```bash
-# Primero R0 normal, para verificar el ROM set y el capturador:
-bash scripts/visual-real-frame.sh
-
-# Después: COIN desde ~950, START ~1020, movimiento desde ~1505.\n# Un run primero; después añadir GNG_REPEATS=3 si la captura es correcta.
-GNG_BOT_SEQUENCE=scripts/r0-bot-sequence.json \
-  bash scripts/visual-real-frame.sh
+git pull --ff-only
+bash scripts/r0-blackbox-baseline.sh
 ```
 
-El segundo comando captura por defecto el frame 1680 (sin bot: 600).\nLa secuencia y las APIs de campos de MAME se han contrastado con\n[`blackbox_mame_game_abstraction`](https://github.com/krukmat/blackbox_mame_game_abstraction/blob/main/docs/gng_execution_process.md).\nEl segundo comando exige `mame -verifyroms` satisfactorio, aplica entradas
-de `scripts/r0-bot-sequence.json` y guarda un reporte privado en
-`out/reference/mame/reproducibility.json` al repetir con\n`GNG_REPEATS=3`, **solo si coinciden todos los
-hashes de PNG y memoria de vídeo**, PC y contadores DMA en los tres runs.
-Se valida además que Coin y Start aparezcan activos al leer los puertos de MAME.\nLa secuencia es un guion de inputs, no una prueba de partida jugable;
-**hay que inspeccionar la imagen**. No publicar el HTML ni los snapshots.
-La captura normal sin bot se mantiene para aislar fallos.
+El comando prepara un checkout **fijado** de
+[`blackbox_mame_game_abstraction`](https://github.com/krukmat/blackbox_mame_game_abstraction)
+en `out/tools/`, instala únicamente PyYAML en su entorno virtual aislado,
+verifica la ROM privada como `gngb` y ejecuta **sin modificar** el
+`launch_manual_capture_autoboot.sh` original junto con
+`mame_autoboot.lua` y su plan `gng_boot_only.yaml`.
+MAME queda abierto para inspeccionar a Arthur; pulsa **Esc** al terminar.
+Se guarda un AVI y una traza **privados**, nunca en Git.
+
+El validador local comprueba los inputs que MAME leyó, la duración y
+el AVI, e informa `GNG_BLACKBOX_GAMEPLAY=UNVERIFIED_REQUIRES_VISUAL_REVIEW`.
+La partida solo queda confirmada **tras observarla**: el CI no la prueba.
+Si falla la instalación o el lanzamiento, el comando muestra un
+`GNG_BLACKBOX_T1=BLOCKED` preciso. **No repetir el bot anterior.**
 
 ## Qué puedes ejecutar y ver hoy
 
