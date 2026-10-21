@@ -12,7 +12,21 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
-## Estado de verificación 22/10/2026 — R0 cerrado, R1.5 pendiente
+## Estado de verificación 22/10/2026 — R0 y R1 cerrados, inicio de R2
+
+El operador aportó screenshot del frame **1700** `gngb`: el comparador entre MAME original y JavaScript devuelve **0/57.344 píxeles diferentes (0,00%)**. El frame **1660** también mostró **0/57.344** y se reprodujo en dos corridas con hashes SHA-256 **MATCH** en PNG, FG, BG, sprites DMA y paleta. El vídeo privado (256×224, 2.102 frames) muestra transición hasta gameplay.
+
+**R0 #1 y R1 #2 CERRADOS.** La equivalencia es del renderer a partir de VRAM original; NO significa que la lógica del juego esté recompilada.
+
+**R2.1 CONTRACT_DEFINED:** [especificación versionada JSONL](r2-execution-trace-contract.md) y validador ROM-free `python3 scripts/r2_trace_contract.py <ruta-a-trace.jsonl>` (siempre reporte `reference_execution_verified=false`). Las pruebas sintéticas fallan de forma cerrada ante secuencias discontinuas, campos falsos y bus/IRQ incompleto.
+
+**R2.2 PENDIENTE:** instrumentar una fuente CPU independiente que capture reset → SYNC → primera IRQ con PC, registros, RAM/MMIO, banco y eventos de frame. El comparador independiente previo de rutinas 0x622c/0x6755 (120 vectores con entrada sintética) es antecedente útil pero NO es la traza continua de runtime exigida en R2.
+
+**Único siguiente bloque:** construir el capturador de laboratorio R2.2 sin alterar el bot Blackbox ni incluir MAME/ROM en el runtime JS. No repetir R0/R1 por rutina.
+
+---
+
+## Estado de verificación 22/10/2026 — historial R0 cerrado, R1.5 pendiente (superado)
 
 El operador repitió la captura real `gngb` frame `1660` y contrastó los manifests privados: `foreground`, `background`, `sprites`, `palette` y `reference` dieron **MATCH** SHA-256 en dos ejecuciones independientes. Por tanto, se aceptan R0.1–R0.5 y se cierra [R0 #1](https://github.com/krukmat/gng-ghidra/issues/1). El resultado JS del frame 1660 permanece **0/57.344** píxeles distintos (revisión visual del operador).
 
@@ -56,9 +70,9 @@ El baseline sin addon permanece reproducible con su comando original.
 | --- | --- | --- |
 | V0/V1.1 | Visores implementados, revisión local parcial | Gráficos ROM / sprites diagnósticos; no gameplay |
 | V1.2 | Código implementado, **rechazado visualmente** | Mosaico sintético; no se mejora como objetivo |
-| R0 | Baseline Blackbox con partida y movimiento **verificado por operador**; observador nativo integrado en modo opcional | Pendiente validar screenshot + FG/BG/scroll/DMA/paleta reales y su replay JS |
-| R1 | Renderer para memoria capturada disponible | **Equivalencia visual NO establecida** |
-| R2 | No demostrado | No hay todavía traza completa de ejecución real con IRQ/bancos |
+| R0 | **CERRADO** | Imagen, FG/BG/DMA/paleta auténticos; frame 1660 reproducible (cinco hashes MATCH) |
+| R1 | **CERRADO (renderer)** | Dos fotogramas auténticos 1660 y 1700: **0/57.344** píxeles de diferencia en ambos |
+| R2 | **R2.1 contrato y validador; R2.2+ pendientes** | Falta instrumentación y traza genuina reset → SYNC → primera IRQ |
 | R3 | No demostrado | No hay recompilador directo validado de un tramo real significativo |
 | R4/V2–R6/V4 | Bloqueados | No existe primer frame generado, interacción ni juego jugable |
 
@@ -175,12 +189,13 @@ R2 puede prepararse durante la depuración R1, pero **R4 exige R1 y R3 aceptados
 
 ## 6. Próxima acción exacta
 
-En el Mac, desde la raíz del repositorio:
+**Ingeniería:** implementar R2.2, instrumentando un oráculo CPU externo conforme a [contrato JSONL de R2](r2-execution-trace-contract.md), y demostrar que puede capturar PC, registros, bus, bancos y SYNC/IRQ desde reset. Ninguna llamada a la ROM del operador es necesaria para el smoke de estructura.
+
+**Operador (opcional, solo smoke de esquema ROM-free):**
 
 ```bash
 git pull --ff-only
-bash scripts/visual-real-frame.sh
+python3 -m unittest discover -s tests -p 'test_r2_trace_contract.py' -v
 ```
 
-**Si falla:** registrar el mensaje textual exacto y bloquear R0; no volver al mosaico sintético.  
-**Si funciona:** abrir `out/visual/frame-compare.html`, revisar MAME vs JS y su diff; solo entonces continuar con R1. **El resultado local aún no está certificado en este plan.**
+**No se solicita una nueva captura MAME todavía.** R2.2 anunciará su comando cuando el observador esté implementado, probado y sus límites explícitos. No confundir `STRUCTURE_VALID` con ejecución real capturada.
