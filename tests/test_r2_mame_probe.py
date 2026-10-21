@@ -135,6 +135,18 @@ class R2MameProbeTests(unittest.TestCase):
                                   capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_soft_reset_reentry_and_closed_callbacks_are_idempotent(self):
+        lua = (ROOT / "scripts/r2-mame-probe.lua").read_text()
+        shell = (ROOT / "scripts/r2-mame-probe.sh").read_text()
+        self.assertIn('rawget(_G, "gng_r2_probe_bootstrapped")', lua)
+        self.assertIn('_G.gng_r2_probe_bootstrapped = true', lua)
+        self.assertIn("if finished or file_closed then return end", lua)
+        self.assertIn("local finished, file_closed, finishing = false, false, false", lua)
+        self.assertIn("if file_closed or finished and not finishing then return end", lua)
+        self.assertIn("if [[ $LUA_FAULT -ne 0 ]]; then fail", shell)
+        self.assertIn('pretrace["status"] != "PRE_INSTRUCTION_FORMAT_PARSED"', shell)
+        self.assertNotIn('GNG_R2_PROBE=OBSERVED_PARTIAL_ONLY', shell)
+
     def test_trace_report_does_not_invent_cpu_irq(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
