@@ -87,7 +87,10 @@ class BlackboxGameplayTests(unittest.TestCase):
         self.assertIn("--expect-gameplay",source)
         self.assertIn("-seconds_to_run 40",source)
         self.assertNotIn("r0-bot-sequence.json",source)
-        self.assertNotIn("capture-mame-frame.lua",source)
+        self.assertIn("if [[ -n \"$R0_FRAME\" ]]",source)
+        self.assertIn("combined-autoboot.lua",source)
+        self.assertIn("capture-mame-frame.lua",source)
+        self.assertIn("MAME_SCRIPT=\"$BB/scripts/mame_autoboot.lua\"",source)
 
 
 if __name__ == "__main__":
