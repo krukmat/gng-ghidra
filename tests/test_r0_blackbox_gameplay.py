@@ -67,6 +67,34 @@ class BlackboxGameplayTests(unittest.TestCase):
             self.assertGreaterEqual(report["attack_frames"],20)
             self.assertFalse(report["gameplay_verified"])
 
+    def test_mame_one_frame_port_readback_delay_is_explicit_and_exact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            plan,_=remap_gameplay_plan(self.mock_plan())
+            original=root/"plan.json"
+            original.write_text(json.dumps(plan))
+            delayed=[{"frame":f,"buttons":(
+                list(plan[f-1]["buttons"]) if f>0 and f<=len(plan) else [])}
+                for f in range(2101)]
+            timeline=root/"timeline.json"
+            timeline.write_text(json.dumps(delayed))
+            avi=root/"capture.avi"
+            avi.write_bytes(b"0"*2048)
+            result=module.verify(timeline,avi,expect_gameplay=True,plan_path=original)
+            self.assertEqual(result["input_phase_offset_frames"],1)
+            self.assertEqual(result["input_alignment"],"MATCHED_ONE_FRAME_READBACK_DELAY")
+            self.assertFalse(result["gameplay_verified"])
+            # One unrelated button or omitted frame must still hard fail.
+            delayed[1770]["buttons"].append("left")
+            timeline.write_text(json.dumps(delayed))
+            with self.assertRaisesRegex(ValueError,"PLAN_MISMATCH"):
+                module.verify(timeline,avi,expect_gameplay=True,plan_path=original)
+            delayed[1770]["buttons"].remove("left")
+            delayed.pop(1400)
+            timeline.write_text(json.dumps(delayed))
+            with self.assertRaisesRegex(ValueError,"PLAN_MISMATCH"):
+                module.verify(timeline,avi,expect_gameplay=True,plan_path=original)
+
     def test_credit_without_player_motion_does_not_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
