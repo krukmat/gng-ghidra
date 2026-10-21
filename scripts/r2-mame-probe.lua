@@ -1,6 +1,14 @@
 -- R2.2.A: observe real MAME instruction trace readiness and sampled MMIO.
 -- NEVER a complete CPU/oracle trace. Never reconstruct instruction state here.
 -- Run ONLY in an independent, private gngb MAME test process.
+-- -autoboot_script can be re-entered on a MAME soft reset.  The Lua VM
+-- retains callback subscriptions; never open/truncate a second TSV or
+-- register duplicate callbacks for one diagnostic process.
+if rawget(_G, "gng_r2_probe_bootstrapped") then
+    print("GNG_R2_PROBE=AUTOboot_REENTRY_IGNORED")
+    return
+end
+_G.gng_r2_probe_bootstrapped = true
 local output = assert(os.getenv("GNG_R2_PROBE_DIR"), "GNG_R2_PROBE_DIR missing")
 local target = tonumber(os.getenv("GNG_R2_PROBE_FRAMES") or "4")
 assert(target and target >= 2 and target <= 30 and target % 1 == 0,
@@ -15,6 +23,7 @@ local path = output .. "/observations.tsv"
 local file = assert(io.open(path, "w"), "Cannot create R2 observations")
 file:setvbuf("line")
 local function record(...)
+    if file_closed or finished and not finishing then return end
     local values = {...}
     for i, value in ipairs(values) do
         local str = tostring(value):gsub("[\r\n\t]", " ")
@@ -70,9 +79,12 @@ gng_r2_probe_write_tap = space:install_write_tap(
 assert(gng_r2_probe_read_tap and gng_r2_probe_write_tap,
        "Cannot retain real MMIO taps")
 local finished = false
+local file_closed = false
+local finishing = false
 local function finish(reason)
     if finished then return end
     finished = true
+    finishing = true
     record("CONTROLLED_SOFT_RESET_REQUESTED", reset_requested and "1" or "0")
     record("OBSERVED_RESET_COUNT", resetCount)
     record("OBSERVED_FRAME_COUNT", frameCount)
@@ -80,9 +92,14 @@ local function finish(reason)
     record("OBSERVED_MMIO_WRITE_COUNT", writeCount)
     record("PROBE_END", reason)
     assert(file:close())
+    file_closed = true
+    finishing = false
     print("GNG_R2_PROBE=OBSERVATIONS_RECORDED_NOT_CPU_EQUIVALENCE")
 end
 gng_r2_reset_subscription = emu.add_machine_reset_notifier(function()
+    -- MAME may deliver callbacks around machine shutdown/soft reset after
+    -- machine:exit(); never attempt writes on an already closed handle.
+    if finished or file_closed then return end
     resetCount = resetCount + 1
     record("RESET_NOTIFICATION", screen:frame_number(), pc())
 end)
