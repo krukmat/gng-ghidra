@@ -100,6 +100,7 @@ footer{font-size:12px;color:#8da5c4;margin-top:22px;line-height:1.55}
 <p class="note" id="details">Se compara cada pixel RGBA cuando la imagen PNG esté cargada. Las diferencias de tiempo del snapshot DMA/paleta se consideran errores pendientes, no éxitos.</p>
 <canvas id="difference" width="256" height="224" aria-label="Mapa de diferencia de píxeles"></canvas>
 <div class="meta" id="state">Estado: sin procesar</div>
+<pre id="diagnostics" class="meta" style="white-space:pre-wrap;overflow-wrap:anywhere">Diagnóstico espacial/color pendiente</pre>
 </section>
 <footer>Datos: FG CPU 0x2000..0x27ff, BG CPU 0x2800..0x2fff, buffer de sprites desde DMA 0x3c00, MMIO scroll 0x3b08..0x3b0b, paleta RGBx_444 interpretada por MAME. Gráficos originales gngb verificados por CRC. La imagen izquierda sirve solo como oráculo de prueba; la aplicación final NO utilizará un emulador.</footer>
 </main><script>
@@ -202,6 +203,51 @@ function compare(){
    overlay.data[i+3]=255;
   }
   diffCtx.putImageData(overlay,0,0);
+  // Diagnostic-only, fixed crop for fair translation comparison. Never
+  // shift the actual JS renderer to conceal misalignment.
+  const channelMax=(a,b)=>Math.max(Math.abs(a[0]-b[0]),
+                                  Math.abs(a[1]-b[1]),
+                                  Math.abs(a[2]-b[2]));
+  const paletteColors=new Set();
+  for(let i=0;i<colors.length;i+=4)
+   paletteColors.add(colors[i]+(colors[i+1]<<8)+(colors[i+2]<<16));
+  const refColor=(i)=>pixels[i]+(pixels[i+1]<<8)+(pixels[i+2]<<16);
+  let refNotInPalette=0;
+  const bands=[];
+  for(let start=0;start<H;start+=32){
+   const stop=Math.min(start+32,H);
+   let mismatches=0;
+   for(let y=start;y<stop;y++)for(let x=0;x<W;x++){
+    const i=(y*W+x)*4;
+    if(channelMax(pixels.subarray(i,i+3),jsFrame.data.subarray(i,i+3))>0)
+     mismatches++;
+    if(!paletteColors.has(refColor(i)))refNotInPalette++;
+   }
+   bands.push({start,stop:stop-1,wrong:mismatches,total:(stop-start)*W});
+  }
+  const crop=2, shifts=[];
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+   let n=0;
+   for(let y=crop;y<H-crop;y++)for(let x=crop;x<W-crop;x++){
+    const i=(y*W+x)*4,j=((y+dy)*W+x+dx)*4;
+    if(channelMax(pixels.subarray(i,i+3),jsFrame.data.subarray(j,j+3))>0)n++;
+   }
+   shifts.push({dx,dy,wrong:n});
+  }
+  const direct=shifts.find(s=>s.dx===0&&s.dy===0);
+  shifts.sort((a,b)=>a.wrong-b.wrong || Math.abs(a.dx)+Math.abs(a.dy)-Math.abs(b.dx)-Math.abs(b.dy));
+  const best=shifts[0];
+  document.getElementById("diagnostics").textContent=[
+    "R1.2 · Diagnóstico (solo lectura, no corrige el renderer)",
+    ...bands.map(b=>"Filas "+b.start+"-"+b.stop+": "+
+      b.wrong+"/"+b.total+" ("+(100*b.wrong/b.total).toFixed(2)+"%)"),
+    "RGB de MAME ausente de la paleta capturada: "+
+      refNotInPalette+"/"+(W*H),
+    "Offset JS óptimo en ±2 px (crop fijo): dx="+best.dx+
+      ", dy="+best.dy+" · "+best.wrong+" errores vs "+
+      direct.wrong+" sin offset · mejora="+(direct.wrong-best.wrong),
+    "Los offsets y la distribución son hipótesis diagnósticas; no prueban equivalencia."
+  ].join("\\n");
   const percent=(wrong/(W*H)*100).toFixed(2);
   document.getElementById("compare").textContent=
    wrong+" / "+(W*H)+" píxeles diferentes ("+percent+"%)";
