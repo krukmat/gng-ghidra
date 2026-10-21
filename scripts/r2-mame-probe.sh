@@ -19,7 +19,8 @@ mame -verifyroms gngb -rompath "$ROMPATH" >/dev/null || fail rom_verify_failed
 OUTPUT="$ROOT/out/r2/mame-probe"
 mkdir -p "$OUTPUT"
 # Fresh evidence required; never accept an old trace on a failed debug run.
-rm -f "$OUTPUT/observations.tsv" "$OUTPUT/cpu.trace" "$OUTPUT/capabilities.json"
+rm -f "$OUTPUT/observations.tsv" "$OUTPUT/cpu.trace" "$OUTPUT/capabilities.json" \
+  "$OUTPUT/pretrace-report.json" "$OUTPUT/pre-instruction.jsonl"
 DEBUGSCRIPT="$OUTPUT/start-debugger.txt"
 # MAME's debugger starts stopped. 'g' continues execution after enabling
 # its native instruction trace (with loop suppression disabled).
@@ -29,6 +30,9 @@ DEBUGSCRIPT="$OUTPUT/start-debugger.txt"
 TRACE_ACTION='{tracelog "GNG_R2_PRE PC=%04X A=%02X B=%02X X=%04X Y=%04X U=%04X S=%04X DP=%02X CC=%02X",pc,a,b,x,y,u,s,dp,cc}'
 printf 'trace %s,:maincpu,noloop,%s\ng\n' "$OUTPUT/cpu.trace" "$TRACE_ACTION" > "$DEBUGSCRIPT"
 export GNG_R2_PROBE_DIR="$OUTPUT" GNG_R2_PROBE_FRAMES=4
+export GNG_R2_PROBE_SOFT_RESET="${GNG_R2_PROBE_SOFT_RESET:-0}"
+[[ "$GNG_R2_PROBE_SOFT_RESET" == "0" || "$GNG_R2_PROBE_SOFT_RESET" == "1" ]] ||
+  fail invalid_soft_reset_option
 echo "GNG_R2_PROBE=START_MAME_DEBUGGER_NOT_GAMEPLAY"
 # Run in its own MAME process: startup/reset and instruction timing here
 # intentionally differs from the Blackbox autoplay sessions.
