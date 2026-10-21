@@ -26,7 +26,7 @@ def read_frames(path: Path) -> dict[int, frozenset[str]]:
         raise ValueError(path.name + " must be an array")
     frames: dict[int, frozenset[str]] = {}
     for n, row in enumerate(raw):
-        if not isinstance(row, dict) or set(row) < {"frame", "buttons"}:
+        if not isinstance(row, dict) or not {"frame", "buttons"}.issubset(row):
             raise ValueError(f"{path.name} entry {n}: missing fields")
         frame, buttons = row["frame"], row["buttons"]
         if type(frame) is not int or frame < 0 or frame in frames:
@@ -135,6 +135,8 @@ def collect_video(session: Path, dest: Path, report: dict) -> list[tuple[int, st
         report["video_inspection"] = "NO_REVIEW_FRAMES_IN_CAPTURE"
         return []
     dest.mkdir(parents=True, exist_ok=True)
+    for stale in dest.glob("frame-*.png"):
+        stale.unlink()
     expression = "+".join("eq(n\\," + str(n) + ")" for n in targets)
     command = [
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
