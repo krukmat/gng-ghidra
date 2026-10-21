@@ -95,6 +95,10 @@ class BlackboxNativeCaptureTests(unittest.TestCase):
         lua=(ROOT/"scripts/capture-mame-frame.lua").read_text()
         self.assertIn("if not keep_running then machine:exit() end",lua)
         self.assertIn("gng_capture_frame_subscription",lua)
+        self.assertIn("gng_capture_scroll_tap = space:install_write_tap(",lua)
+        self.assertIn("gng_capture_dma_tap = space:install_write_tap(",lua)
+        self.assertNotIn("local scroll_tap =",lua)
+        self.assertNotIn("local dma_tap =",lua)
         if shutil.which("bash"):
             for path in ("scripts/r0-blackbox-baseline.sh","scripts/r0-blackbox-frame.sh"):
                 result=subprocess.run(["bash","-n",str(ROOT/path)],
