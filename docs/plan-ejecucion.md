@@ -12,6 +12,35 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Estado vigente — 22/10/2026: R2.2.B1 PASS y B2.a desarrollado
+
+**R2.2.B1 validado en MAME real:** soft reset observado una vez, 17.135 snapshots MC6809 sin errores sintácticos, 100 lecturas/12 escrituras MMIO; las barreras de `after`, bus por instrucción, banco post-handler, SYNC e IRQ permanecen abiertas.
+
+**R2.2.B2.a listo para validar en Mac:** se observa el bus de selección de banco `0x3e00` con el tap MMIO existente y se cuentan sus escrituras; **no** se afirma cambio de banco completado. El contrato técnico está en [R2 Execution Trace Contract](r2-execution-trace-contract.md#r22b2a--bank-select-mmio-instrumentación-preparada-validación-real-pendiente). Tras conservar los datos previos, ejecutar una sola sonda nueva:
+
+```bash
+git pull --ff-only
+mkdir -p out/r2/mame-probe-soft-reset-pass
+cp -R out/r2/mame-probe/. out/r2/mame-probe-soft-reset-pass/
+GNG_R2_PROBE_SOFT_RESET=1 bash scripts/r2-mame-probe.sh
+python3 - <<'PY'
+import json
+from pathlib import Path
+j=json.loads(Path("out/r2/mame-probe/capabilities.json").read_text())
+print(json.dumps({
+    "status": j["status"],
+    "bank_control": j.get("bank_control"),
+    "bank_control_writes_observed": j["capabilities"].get("bank_control_writes_observed"),
+    "observed_bank_switch_edges": j["capabilities"]["observed_bank_switch_edges"],
+    "blockers": j["blockers"]
+},indent=2))
+PY
+```
+
+Los archivos privados del debugger, ROM y JSONL se conservan bajo `out/` y no se comparten. Un valor cero de escrituras a `0x3e00` en 4 frames es un hallazgo legítimo, no un error inventado. R2.2 no está cerrada.
+
+---
+
 ## Estado verificado R2.2.B1 — 22/10/2026: `tracesym` operativo
 
 El operador confirmó una ejecución real de la sonda nativa MAME `gngb` **sin soft reset**: `17.281` preestados / `17.281` marcadores válidos, `0` malformados, `61` PC distintos. `PRE_INSTRUCTION_FORMAT_PARSED` y `PARTIAL_NATIVE_INSTRUMENTATION` superan el gate de **preestado**, pero no el contrato integral R2.1. El parser aislado no certifica procedencia por sí mismo. La ejecución R2.2.B2 está pendiente.
