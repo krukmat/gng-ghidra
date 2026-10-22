@@ -36,3 +36,11 @@ if [[ "${GNG_R36_CAPTURE_UNMAP_POLICY:-0}" == "1" ]]; then
 else
   node scripts/r3_mmio_read_gate.mjs
 fi
+# A0.4 runs only after a successful B4 same-run MMIO policy comparison.
+if [[ "${GNG_A04_VIDEO_WRITE_TAP:-0}" == "1" ]]; then
+  [[ "${GNG_R36_CAPTURE_UNMAP_POLICY:-0}" == "1" ]] || {
+    echo "A04_CAPTURE=BLOCKED requires_same_run_b4_policy" >&2
+    exit 2
+  }
+  node scripts/r3_native_video_write_gate.mjs
+fi
