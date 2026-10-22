@@ -14,16 +14,43 @@ sin usar MAME ni intérprete MC6809 como runtime. La ROM original sigue privada.
 | R3.3 (RAM de sprites) | PASS acotado: 768/768 bytes nativos comparados en dos arranques |
 | R3.4 (frontera) | PASS: primer PC sin compilar 0x6016 |
 | R3.5.A (SYNC estático) | Código y ROM contrastados: entrada SYNC_WAIT; causa del wake NO verificada |
-| R3.5.B1 | Código + CI PASS; análisis real del reset/causalidad aún pendiente en Mac |
+| R3.5.B1 | PASS real: reset diferenciado del wake de SYNC, causa de línea aún desconocida |
 | R3.5.B2 (IRQ/SYNCACK nativo) | Instrumentación de fuente y parser PREPARADOS; sin binario compilado/captura real |
-| R3.6.A (después de 0x6017) | Explorador offline PREPARADO; resultado real pendiente |
-| R3.6.B (continuación JS) | PENDIENTE: requiere opcode y efecto observado |
+| R3.6.A (después de 0x6017) | PASS real: primer opcode = LDA extended, en 0x6017 |
+| R3.6.B (continuación JS) | B1 implementado: LDA extended estático con fuente de memoria estricta; validación real pendiente |
 | R4 (primer frame calculado por JS) | PENDIENTE: memoria/MMIO y CPU entre VBLANK |
 
 La primera época de SYNC acaba observando PC=0x6000 bajo el soft reset
 controlado. La segunda observa PC=0x6017, con I/F enmascaradas. El segundo
 resultado **no** demuestra por sí solo una señal de IRQ.
 
+## R3.6.B1 — primera instrucción post-SYNC traducida (22/10/2026)
+
+El operador confirmó **R3.5.B1** `RESET_BOUNDARY_CONFIRMED_MASKED_WAKE_CAUSE_NOT_OBSERVED` y **R3.6.A** `POST_SYNC_OPCODE_FRONTIER_IDENTIFIED`: primer PC post-SYNC = `0x6017` e instrucción `LDA extended`, precedida por espera `SYNC` con IRQ/FIRQ enmascaradas. La causa efectiva del wake continúa sin certificarse.
+
+**Implementado en `main`:** `scripts/r3_lda_extended_gate.mjs` valida byte opcode `0xB6` en PC `0x6017` dentro de la imagen 64KiB privada, y genera un módulo estático `executeLdaExt` (sin decoder) cuyo operando extendido queda embebido de los bytes auténticos. La ejecución exige una función `readByte` explícita y actualiza A, N/Z/V y PC según MC6809; rechaza PC/callback/valor incorrectos. No copia nunca el registro A de MAME como dato leído.
+
+**Modelo de procedencia de memoria:**
+
+- Si lee ROM fija `0x6000..0xffff`, el valor se obtiene de la propia imagen validada.
+- Si lee sprite RAM `0x1e00..0x1fff` **y** la dirección fue escrita en el bucle inicial, se reconstruye del historial del JavaScript que ya pasó R3.3 (192 palabras por boot, comparadas como 768 bytes nativos en total). No se presupone valor para el resto.
+- Si lee RAM de trabajo desconocida, video RAM, MMIO de entrada/paleta u otra región dinámica o ROM bancaria, se devuelve `BLOCKED_UNVERIFIED_MEMORY_READ` hasta observar directamente la dirección y valor en MAME con una captura específica; no se inventa memoria.
+- Solo si existe un preestado nativo posterior se coteja el resultado JS de una instrucción contra PC/A/B/X/Y/U/S/DP/CC; no se presume que la línea que despertó SYNC fue una IRQ.
+
+Tests ROM-free cubren N/Z/V, lectura fija, sprite RAM validada, rechazo de MMIO/otros bancos/RAM no inicializada y ausencia de fake reads. [CI PASS](https://github.com/krukmat/gng-ghidra/actions/runs/39766056369). **Validación con ROM y pretrace reales aún pendiente en el Mac**.
+
+**Siguiente ejecución sin MAME adicional:**
+
+```bash
+git pull --ff-only
+node scripts/r3_lda_extended_gate.mjs
+```
+
+Reportar el JSON `operand_region`, `status`, `native_next_pc`, `generated_js_step_compared`. El script no imprime ni exporta el operando crudo o bytes ROM; todo lo derivado queda en `out/r3/lda-extended/` privado. Un resultado `BLOCKED_UNVERIFIED_MEMORY_READ` identifica exactamente la necesidad de instrumentar la siguiente lectura; es un bloqueo esperado, no una divergencia de CPU.
+
+**Próximos gates:** captar valor MMIO/RAM dinámico real si hace falta; ampliar el siguiente bloque de instrucciones después de `0x601a`; certificar `SYNC` wake con el binario MAME instrumentado por B2 para conseguir ruta continua real. R4 no está cerrado.
+
+---
 ## Bloque crítico A — avanzar en el ROM con la evidencia actual
 
 **A1. Reset vs SYNC (B1)**
