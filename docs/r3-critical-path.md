@@ -1,5 +1,36 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## A0.6.1/2 real PASS → A0.6.3 banco por instrucción + A0.6.4 AOT bancario (22/10/2026)
+
+**Confirmado por operador Mac:** 55/55 pruebas Node y 6/6 Python PASS. Inventario autenticó **5×8192 bytes = 40.960**, empaquetados desde el ZIP original con CRC; ROM fija sin cambios. Captura existente: **17.135** prestates, **7.434** en ventana bancaria, solo **7 PCs distintos**, banco inicial del debugger observado 0, dos frames con banco 0 y dos con banco 3; **una** escritura registrada al selector `0x3e00` que seleccionaría banco 3. **No se puede atribuir el banco por PC con esas muestras**. A0.6.1/2 aceptados, sin hacer equivalencia CPU o IRQ.
+
+**A0.6.3 — captura por instrucción implementada, validación Mac pendiente:**
+
+- `scripts/r3_bank_provenance.py`: elige dos offsets `0x4000–0x5fff` cuya **pareja de bytes distingue de forma única** los 5 bancos autenticados (búsqueda determinista de patrones, fallo cerrado sin pareja única). Produce configuración privada en `out/r3/banked-provenance`; **no** comparte bytes ROM ni firmas.
+- `scripts/r2-mame-probe.sh`: opt-in, en el **mismo** callback `trace` por instrucción MAME, imprime los nueve registros CPU y dos valores `b@ADDR` sin efectos secundarios. [MAME debugger expressions](https://docs.mamedev.org/debugger/index.html) documenta `b@` como acceso byte al programa con efectos laterales suprimidos. **No requiere un binario MAME recompilado.** El parser exige los dos `GNG_A06_BANKSIG` en la MISMA línea que el preestado, firma única, exactamente un registro por instrucción y PC/seq alineados.
+- Reporte `gng.a06.native-bank-per-instruction.v1`: identifica el banco visible para **cada preestado**, cuenta combinaciones (banco,PC) y detecta transiciones, distinguiendo reset suave de cambios consecutivos. **No equivale a traza nativa de fetch ni a certificación de todas las escrituras del selector**. Se guarda un witness privado `private-bank-per-prestate.jsonl` y un manifiesto SHA256 de los archivos nativos y ROM para prevenir mezclar distintas corridas.
+- `scripts/r3-bank-provenance-capture.sh`: **una sola ejecución MAME local**, reutiliza backups del wrapper R3 y mantiene los gates B4 lectura sin handler + A0.4 escrituras VRAM. Luego ejecuta el diagnóstico bancario y la recompilación A0.6.4.
+
+**A0.6.4 — compilación bancaria ya implementada pero depende estrictamente del reporte A0.6.3 real:**
+
+- `compileAt` acepta opcionalmente `{banked:true}` solo sobre un *view* de ROM preparada para una entrada. El modo por defecto **sigue rechazando PCs bancarios**. Se rechazan instrucciones que crucen el límite `0x5fff`.
+- `scripts/r3_banked_static_gate.mjs` exige hashes idénticos de ROM, CPU debugger trace, TSV y witness, revalida arranque/sprites R3.3 y SYNC con la misma captura, y genera **un módulo JS estático por banco** a partir de las parejas (banco,PC) autenticadas. Evalúa opcodes sin efectos RAM desde un preestado MAME **por instrucción**, compara el siguiente checkpoint y señala familias faltantes, divergencias o efectos de memoria sin certificar. Nunca incorpora un intérprete CPU en runtime ni declara CPU autónoma.
+- Tests ROM-free nuevos: `test_r3_bank_provenance.py` (capturas corruptas, firmas y transiciones) y `test_r3_banked_static_gate.mjs` (mismo PC en bancos distintos, límites y desvíos). Incorporados al runner local; **todavía no validados por el operador**. Los workflows de GitHub Actions siguen eliminados.
+
+**Ejecutar en el Mac (primero tests sin ROM; después UNA captura MAME):**
+
+```bash
+git pull --ff-only
+bash scripts/r3-local-regression.sh
+bash scripts/r3-bank-provenance-capture.sh
+```
+
+Si la captura nativa funciona, el último comando emite dos JSON agregados (A0.6.3 y A0.6.4), nunca bytes ROM ni estados CPU. Si se necesita repetir **solo el análisis offline sin ejecutar MAME**: `bash scripts/r3-banked-critical-path.sh`. No compartir `cpu.trace`, `private-bank-per-prestate.jsonl`, imágenes ROM ni código generado bajo `out/`.
+
+**Próxima dependencia:** las familias de opcodes bancarios más frecuentes según ese análisis, luego modelar `0x3e00` como escritura en la board y demostrar el despertar IRQ/SYNCACK con el hook nativo de R3.5.B2 o evidencia equivalente. **R4 sigue bloqueado**: no hay CPU autónoma desde reset, ni primer frame JS reproducido.
+
+---
+
 ## A0.5.B PASS real → A0.6 banco de ROM auténtico (22/10/2026)
 
 **Nueva evidencia aportada por el operador:** `bash scripts/r3-local-regression.sh` **52/52 PASS**; `r3_video_board_integration.mjs` devuelve **`NATIVE_VRAM_IMAGE_MATCHED_STATIC_JS_BOARD_AND_TILE_DECODER`**. La board JS reproduce **4.096/4.096** bytes VRAM finales independientes del tap MAME, comprueba 2.048 registros de tile FG/BG y utiliza los 4.096 preestados MAME como *inputs individuales* (no CPU autónoma). **A0.5.B aceptado dentro de ese alcance; R4 aún no.**
