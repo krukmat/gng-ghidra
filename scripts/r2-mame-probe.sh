@@ -27,8 +27,23 @@ DEBUGSCRIPT="$OUTPUT/start-debugger.txt"
 # MAME executes tracelog before writing each instruction. Capture all nine
 # architectural MC6809 registers, independent of generated/P-code JS.
 # The raw trace and extracted snapshots remain private in out/r2/.
-TRACE_ACTION='{tracelog "GNG_R2_PRE PC=%04X A=%02X B=%02X X=%04X Y=%04X U=%04X S=%04X DP=%02X CC=%02X",pc,a,b,x,y,u,s,dp,cc}'
+# Prefer MAME's own symbol formatting. This avoids nine printf arguments
+# and preserves the debugger's native widths. The parser validates every
+# register's architectural range; unknown formats fail closed.
+# Keep legacy tracelog available for controlled diagnosis, never auto-fallback
+# after a failed trace (which would mix incompatible evidence).
+GNG_R2_TRACE_MODE="${GNG_R2_TRACE_MODE:-tracesym}"
+case "$GNG_R2_TRACE_MODE" in
+  tracesym)
+    TRACE_ACTION='{tracelog "GNG_R2_PRE ";tracesym pc,a,b,x,y,u,s,dp,cc}'
+    ;;
+  printf)
+    TRACE_ACTION='{tracelog "GNG_R2_PRE PC=%04X A=%02X B=%02X X=%04X Y=%04X U=%04X S=%04X DP=%02X CC=%02X",pc,a,b,x,y,u,s,dp,cc}'
+    ;;
+  *) fail invalid_native_trace_mode ;;
+esac
 printf 'trace %s,:maincpu,noloop,%s\ng\n' "$OUTPUT/cpu.trace" "$TRACE_ACTION" > "$DEBUGSCRIPT"
+echo "GNG_R2_TRACE_MODE=$GNG_R2_TRACE_MODE"
 export GNG_R2_PROBE_DIR="$OUTPUT" GNG_R2_PROBE_FRAMES=4
 export GNG_R2_PROBE_SOFT_RESET="${GNG_R2_PROBE_SOFT_RESET:-0}"
 [[ "$GNG_R2_PROBE_SOFT_RESET" == "0" || "$GNG_R2_PROBE_SOFT_RESET" == "1" ]] ||
