@@ -104,6 +104,52 @@ class R2MameProbeTests(unittest.TestCase):
             self.assertIn("observed soft reset is NOT proof of initial cold-boot reset",
                           result["blockers"])
 
+    def test_soft_reset_request_must_precede_exactly_one_notification(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            evidence(root)
+            path = root / "observations.tsv"
+            base = path.read_text()
+            base = base.replace(
+                "OBSERVED_RESET_COUNT\t1",
+                "CONTROLLED_SOFT_RESET_REQUESTED\t1\nOBSERVED_RESET_COUNT\t1"
+            )
+            # Reset notification before the first request is not valid.
+            misplaced = base.replace(
+                "FRAME_SAMPLE\t1\t24576\t0",
+                "SOFT_RESET_REQUESTED\t1\t24576\nFRAME_SAMPLE\t1\t24576\t0"
+            )
+            # Normal insertion is also after an old RESET_NOTIFICATION, so
+            # the sequence is notification -> request rather than causal.
+            path.write_text(misplaced)
+            bad = probe.classify(path, root / "cpu.trace")
+            self.assertFalse(bad["capabilities"]["controlled_soft_reset_observed"])
+            self.assertIn(
+                "controlled soft reset requested but notification not observed",
+                bad["blockers"]
+            )
+            # Exactly one request followed by one observed notification.
+            valid = base.replace(
+                "RESET_NOTIFICATION\t0\t24576",
+                "SOFT_RESET_REQUESTED\t1\t24576\nRESET_NOTIFICATION\t0\t24576"
+            )
+            path.write_text(valid)
+            good = probe.classify(path, root / "cpu.trace")
+            self.assertTrue(good["capabilities"]["controlled_soft_reset_observed"])
+            # A duplicate notification is not a stronger confirmation.
+            dupe = valid.replace(
+                "OBSERVED_RESET_COUNT\t1",
+                "OBSERVED_RESET_COUNT\t2"
+            ).replace(
+                "RESET_NOTIFICATION\t0\t24576",
+                "RESET_NOTIFICATION\t0\t24576\nRESET_NOTIFICATION\t0\t24576"
+            )
+            path.write_text(dupe)
+            duplicate = probe.classify(path, root / "cpu.trace")
+            self.assertFalse(
+                duplicate["capabilities"]["controlled_soft_reset_observed"]
+            )
+
     def test_duplicate_or_forged_provenance_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
