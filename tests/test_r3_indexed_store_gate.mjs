@@ -134,7 +134,7 @@ test('no external byte-write sink means no successful indexed instruction',async
 test('one register mismatch blocks and does not present predicted writes as native',async()=>{
   const image=rom();
   await generated(image,compiledStep=>{
-    const bad=rows();bad[5].before.X=0x2003;
+    const bad=rows();bad[9].before.X=0x2803;
     const report=inspectIndexedStores({rom:image,rows:bad,sync:sync(),compiledStep});
     assert.equal(report.status,'BLOCKED_GENERATED_INDEXED_REGISTER_DIVERGENCE');
     assert.equal(report.register_divergences,1);
