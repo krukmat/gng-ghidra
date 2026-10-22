@@ -167,4 +167,3 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))
     console.error('GNG_R36_B3_DIAGNOSTIC=BLOCKED '+error.message);
     process.exitCode=2;
   });
-}
