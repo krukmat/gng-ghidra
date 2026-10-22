@@ -12,6 +12,26 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Prioridad actual: R3.0, primer paso real de JS compilado contra MAME
+
+En lugar de seguir ampliando el observador sin demostrar recompilación, se preparó una prueba acotada **ROM → JS estático por PC → comparación del resultado con preestados consecutivos MAME**. El compilador `scripts/r3_static_trace_probe.mjs` solo admite instrucciones de registros, inmediatos y saltos en ROM fija; no interpreta opcodes durante runtime y falla cerrado ante registros/trazas inválidas. La CI ROM-free está integrada.
+
+**El gate G1 sobre ROM y sesión real está PENDIENTE** y puede ejecutarse sobre los archivos privados ya existentes, sin repetir MAME:
+
+```bash
+git pull --ff-only
+node scripts/r3_static_trace_probe.mjs \
+  --rom out/gngb-flat.bin \
+  --trace out/r2/mame-probe/pre-instruction.jsonl \
+  --out out/r3/static-mame-prestate
+```
+
+Informe en `out/r3/static-mame-prestate/report.json`, código estático generado en `out/r3/static-mame-prestate/static-rom-slice.mjs`. No compartir el módulo ni JSONL original. Comparar pares preinstrucción es **una evidencia parcial**, no certifica por sí solo bus/IRQ ni CPU equivalente. Más detalles en [R3.0](r3-first-native-prestate-slice.md) e [issue #4](https://github.com/krukmat/gng-ghidra/issues/4).
+
+R2.2.B2 sigue abierto (bank post-handler, bus y IRQ/SYNC) y el análisis offline de banco queda disponible en paralelo; no hace falta repetirlo para ejecutar este experimento.
+
+---
+
 ## Estado vigente 22/10/2026 — R2.2.B2.a validado, B2.b offline listo
 
 **Resultado MAME del operador:** exactamente **1/1 escritura** a `0x3e00` del banco, `bank_control_writes_observed=true`, sin evidencia de cambio efectivo por instrucción. Aceptar B2.a sin cerrar B2.
