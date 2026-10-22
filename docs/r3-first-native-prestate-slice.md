@@ -1,10 +1,35 @@
 # R3.0 — Primer gate real de lógica MC6809 → JavaScript estático
 
-**Estado:** G1 PASS (616/616) y G2 PASS (3 segmentos de 4 pasos); R3.2 BOOT_MEMORY_REGISTER_GATE IMPLEMENTADO, VALIDACIÓN REAL PENDIENTE  
+**Estado:** G1 PASS; G2 PASS; R3.2 REGISTROS REALES PASS (1192/1192, 389 pasos); R3.3 WRITES NATIVAS IMPLEMENTADO, VALIDACIÓN REAL PENDIENTE  
 **Fecha:** 2026-10-22  
 **Código:** `scripts/r3_static_trace_probe.mjs`  
 **Pruebas:** `tests/test_r3_static_trace_probe.mjs`  
 **Dependencias:** R0 y R1 finalizados; R2.2.B1 (17.281 y 17.135 preestados MAME válidos en ejecuciones reales). El gate R2 integral permanece abierto.
+
+## R3.3 — Contrastar las escrituras de sprite RAM con MAME (22/10/2026)
+
+**Nueva evidencia real R3.2 del operador:** `MATCHED_SUPPORTED_PRESTATE_PAIRS` **1192/1192**; **28 PC estáticos** generados; `first_divergence=null`. **389 pasos continuos** con estado JS acumulado desde `0x6000`, y **388** desde `0x6002`, ambos detenidos en `UNCOMPILED_INSTRUCTION`. El contador `modeled_ram_word_writes=384` son **192 escrituras de palabra en cada uno de DOS ciclos de boot independientes**; no 384 en un solo bucle. **R3.2: PASS de registros; escrituras RAM todavía sin contrastar.**
+
+**R3.3 implementado** para adquirir esa evidencia:
+
+- `scripts/r2-mame-probe.lua` añade `GNG_R2_PROBE_SPRITE_RAM=1` (desactivado por defecto): instala un tap independiente sobre **0x1e00–0x1fff**, captura cada **byte escrito**, dirección, dato y máscara, con tope 4096 y contador que detecta truncamientos. Captura dos ciclos de arranque antes/después de un soft reset controlado. **No es captura exhaustiva del bus**.
+- `scripts/r3_compare_sprite_writes.mjs` parte de `r3_static_trace_probe.mjs`, recompila a JS estático desde los bytes locales autenticados y exige **dos bucles completos**, cada uno con **192 escrituras de palabra / 384 bytes** y registros coincidentes en todos los checkpoints. Contrasta en orden las 384 muestras por boot con el tap nativo de MAME; rechaza muestras ausentes, distinto valor, dirección incorrecta, orden distinto, contador truncado, ausencia de reset causal, evidencia ambigua y bucles parciales. No usa PC leído dentro del tap como límite de instrucción: ese PC puede ser posterior al fetch.
+- Reporte `out/r3/sprite-native/sprite-native-report.json` resume únicamente conteos/estados, **sin registros, bytes de ROM, direcciones ni valores de RAM**. `PASS_BOOT_SPRITE_RAM_WRITE_BYTES` significará que los **bytes reales escritos en los dos bucles boot** coinciden con los generados, no que todo el sistema de memoria coincida.
+- El wrapper `scripts/r3-native-sprite-verify.sh` hace copia privada de la sonda R2 previa bajo `out/r3/probe-before-sprite.XXXXXXXX/` antes de capturar con MAME. Reutiliza la ROM ya validada y ejecuta el diferencial.
+- Pruebas sintéticas ROM-free ejercitan el orden, bytes, valores/mascaras erróneos, truncamientos, duplicados, otros accesos ajenos al boot y prohibición de afirmar equivalencia total.
+
+**Ejecutar una sola captura nativa cuando corresponda:**
+
+```bash
+git pull --ff-only
+bash scripts/r3-native-sprite-verify.sh
+```
+
+La salida incluirá `boot_runs_compared`, `compiled_sprite_ram_word_writes`, `native_sprite_byte_samples`, los dos `per_boot` y el estado. No compartir `cpu.trace`, `observations.tsv`, `pre-instruction.jsonl`, ROM ni `static-rom-slice.mjs`; todo queda en `out/`. Si MAME no emite la máscara esperada, el verificador **bloquea** en lugar de reinterpretar silenciosamente el bus.
+
+**Pendiente tras R3.3:** estado de memoria completo, flancos banco post-handler, SYNC/IRQ y demo ejecutable de juego. El gate R3 definitivo permanece abierto.
+
+---
 
 ## Gate G2 real superado y siguiente prueba R3.2 (22/10/2026)
 
