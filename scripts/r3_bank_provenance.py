@@ -27,11 +27,11 @@ from r3_bank_inventory import (BANK_COUNT, BANK_SIZE, PACKED_SIZE,
                                count_trace_banked_pcs, analyze_native_bank_samples)
 
 MARK = "GNG_A06_BANKSIG"
-# tracelog width is a MINIMUM, not an exact length. Accept 1-8
+# tracelog width is a MINIMUM, not an exact length. Accept 1-16
 # hexadecimal digits (optionally 0x-prefixed), then enforce BYTE range.
 # Do not silently truncate a debugger expression exceeding 8 bits.
-SIG = re.compile(r"\bGNG_A06_BANKSIG\s+S0=\s*(?:0[xX])?([0-9A-Fa-f]{1,8})"
-                 r"\s+S1=\s*(?:0[xX])?([0-9A-Fa-f]{1,8})(?=\s|$|[^0-9A-Za-z_])")
+SIG = re.compile(r"\bGNG_A06_BANKSIG\s+S0=\s*(?:0[xX])?([0-9A-Fa-f]{1,16})"
+                 r"\s+S1=\s*(?:0[xX])?([0-9A-Fa-f]{1,16})(?=\s|$|[^0-9A-Za-z_])")
 PC = re.compile(r"\bGNG_R2_PRE\s+PC=\s*(?:0[xX])?([0-9A-Fa-f]{1,4})(?=\s|$|[^0-9A-Za-z_])")
 SCHEMA = "gng.a06.native-bank-per-instruction.v1"
 
