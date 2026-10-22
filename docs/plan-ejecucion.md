@@ -12,6 +12,21 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## R3.3 PASS real — 768/768 bytes; R3.4 diagnóstico post-boot (22/10/2026)
+
+**Aceptado por evidencia operador:** `PASS_BOOT_SPRITE_RAM_WRITE_BYTES`: 2 ciclos de inicialización MC6809, 384 bytes escritos por ciclo observados directamente en MAME, **768/768** en total, cero diferencias de dirección, valor y orden, cero otras escrituras capturadas en sprite RAM. Los registros del bucle JS ya coincidían durante 389 pasos continuos. Esta es equivalencia acotada del bloque de boot, **no de todo el sistema de memoria**.
+
+**Siguiente trabajo de código**: `r3_next_frontier.mjs` identifica cuál es el primer PC no compilado después de `0x6014` usando la ROM y la traza privadas del mismo operador; exige la prueba RAM exitosa y dos boots completos. Incluye clasificación tentativa por familia, nunca emite bytes ni registros. CI ROM-free PASS.
+
+```bash
+git pull --ff-only
+node scripts/r3_next_frontier.mjs
+```
+
+Compartir exclusivamente el reporte resumido. Con esa evidencia, seleccionar R3.5: confirmar instrucción/semántica con Ghidra o CPU independiente, implementar el mínimo necesario y repetir diff. Bus completo, reset frío, IRQ/SYNC y banco post-handler siguen abiertos.
+
+---
+
 ## R3.3 — Boot sprite RAM, capturador MAME y diferencial nativo preparados (22/10/2026)
 
 **Estado real confirmado:** R3.2 ejecutó **1.192/1.192** pares soportados sin divergencias de registros, máximo **389 pasos continuos**, 28 PC compilados, 192 escrituras de palabra modeladas en cada uno de dos bucles boot (384 escrituras de palabra totales). **No equivale a RAM verificada.**
