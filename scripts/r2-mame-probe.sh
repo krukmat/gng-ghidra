@@ -6,7 +6,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 fail() { echo "GNG_R2_PROBE=BLOCKED reason=$1" >&2; exit 2; }
 command -v python3 >/dev/null || fail python_missing
-command -v mame >/dev/null || fail mame_missing
+MAME_BIN="${GNG_R3_MAME_BIN:-mame}"
+command -v "$MAME_BIN" >/dev/null || fail mame_missing
+NATIVE_LOG_ARGS=()
+if [[ "${GNG_R3_MAME_NATIVE_EVENTS:-0}" == "1" ]]; then
+  [[ "$MAME_BIN" != "mame" ]] || fail native_hook_requires_explicit_custom_mame_binary
+  # -oslog routes native logerror messages into the private mame.log.
+  NATIVE_LOG_ARGS=(-oslog)
+fi
 ROM="$ROOT/roms/gng.zip"
 if [[ -f "$ROOT/roms/gngb.zip" ]]; then ROM="$ROOT/roms/gngb.zip"; fi
 [[ -f "$ROM" ]] || fail local_private_rom_missing
@@ -14,7 +21,7 @@ python3 scripts/prepare_mame_rom.py --rom "$ROM" || fail rom_preflight_failed
 ROMPATH="$ROOT/out/reference/mame-roms"
 MACHINE="$(python3 -c 'import json;print(json.load(open("out/reference/mame-roms/rom-set.json"))["machine"])')"
 [[ "$MACHINE" == "gngb" ]] || fail requires_gngb
-mame -verifyroms gngb -rompath "$ROMPATH" >/dev/null || fail rom_verify_failed
+"$MAME_BIN" -verifyroms gngb -rompath "$ROMPATH" >/dev/null || fail rom_verify_failed
 
 OUTPUT="$ROOT/out/r2/mame-probe"
 mkdir -p "$OUTPUT"
@@ -52,9 +59,9 @@ echo "GNG_R2_PROBE=START_MAME_DEBUGGER_NOT_GAMEPLAY"
 # Run in its own MAME process: startup/reset and instruction timing here
 # intentionally differs from the Blackbox autoplay sessions.
 set +e
-mame gngb -rompath "$ROMPATH" -debug -debugscript "$DEBUGSCRIPT" \
+"$MAME_BIN" gngb -rompath "$ROMPATH" -debug -debugscript "$DEBUGSCRIPT" \
   -autoboot_script "$ROOT/scripts/r2-mame-probe.lua" \
-  -seconds_to_run 8 -skip_gameinfo \
+  "${NATIVE_LOG_ARGS[@]}" -seconds_to_run 8 -skip_gameinfo \
   >"$OUTPUT/mame.log" 2>&1
 EXIT_CODE=$?
 set -e
