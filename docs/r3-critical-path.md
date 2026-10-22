@@ -17,12 +17,35 @@ sin usar MAME ni intérprete MC6809 como runtime. La ROM original sigue privada.
 | R3.5.B1 | PASS real: reset diferenciado del wake de SYNC, causa de línea aún desconocida |
 | R3.5.B2 (IRQ/SYNCACK nativo) | Instrumentación de fuente y parser PREPARADOS; sin binario compilado/captura real |
 | R3.6.A (después de 0x6017) | PASS real: primer opcode = LDA extended, en 0x6017 |
-| R3.6.B (continuación JS) | B1 LDA compilado, lectura MMIO bloqueada correctamente; B2 captura exacta preparada, pendiente de MAME real |
+| R3.6.B (continuación JS) | B1 compilado; B2 captura real (100 lecturas) ambigua; B3 análisis offline de uniformidad y mapeo preparado |
 | R4 (primer frame calculado por JS) | PENDIENTE: memoria/MMIO y CPU entre VBLANK |
 
 La primera época de SYNC acaba observando PC=0x6000 bajo el soft reset
 controlado. La segunda observa PC=0x6017, con I/F enmascaradas. El segundo
 resultado **no** demuestra por sí solo una señal de IRQ.
+
+## R3.6.B3 — Diagnóstico offline de 100 lecturas nativas (22/10/2026)
+
+**Captura real Mac R3.6.B2:** MAME terminó correctamente y conservó `17135` preestados; se registraron exactamente **100 lecturas** del operando MMIO de `LDA_EXT` en `0x6017`, todas **después del reset** y ninguna antes. El verificador rechazó `BLOCKED_AMBIGUOUS_NATIVE_MMIO_READ_SAMPLES`. **No es fallo del compilador ni prueba de divergencia CPU.** No seleccionar arbitrariamente un byte entre las 100 lecturas.
+
+**Revisión del driver gngb:** [`gng_state::gng_main_map`](https://github.com/mamedev/mame/blob/master/src/mame/capcom/gng.cpp) tiene en `0x3800–0x3fff` mapeos explícitos **de escritura** (paleta extendida/base, sound latch, scroll, sprite DMA, main latch, bank select) y direcciones sin mapping; en ese rango **no declara un handler explícito de lectura**. Esto **no demuestra** que el resultado de la lectura sea constante ni cuál sea el valor de bus no mapeado.
+
+**R3.6.B3 implementado:** `scripts/r3_mmio_read_diagnostics.mjs` relee **los mismos artefactos privados** `out/r2/mame-probe/`, revalida de forma independiente las 768 escrituras de sprites del boot y los dos SYNC nativos. Obtiene el operando de la ROM privada, clasifica el mapeo de escritura correspondiente, cuenta los valores distintos de las 100 lecturas y los tipos de máscara. Ejecuta la instrucción JS estática **para cada valor distinto** y compara con el preestado MAME de `0x601a`; no usa A como valor de entrada, no confía en el PC de callback Lua y no imprime valor alguno.
+
+- Lecturas todas iguales y compatibles con el checkpoint: `UNIFORM_NATIVE_READS_REGISTER_CONSISTENT_BUS_CAUSE_UNVERIFIED`, **solo indicio de valor estable**. No implementa un literal constante como regla del hardware.
+- Lecturas variables, máscaras parciales, sin muestras o inconsistentes: diagnóstico/bloqueo explícito, sin elegir el valor conveniente.
+- Todos los estados conservan `native_bus_read_to_instruction_provenance_verified=false`, `autonomous_device_read_model_implemented=false` y `game_playable=false`. Los fixtures ROM-free deben pasar CI.
+
+**Próximo paso en Mac, SIN ejecutar MAME de nuevo:**
+
+```bash
+git pull --ff-only
+node scripts/r3_mmio_read_diagnostics.mjs
+```
+
+Compartir exclusivamente el resumen JSON. Luego decidir si instrumentar la regla de bus sin handler y su correlación CPU, o si los valores variables requieren modelar hardware. El gate de R4 sigue pendiente.
+
+---
 
 ## R3.6.B2 — Lectura MMIO nativa acotada (22/10/2026)
 
