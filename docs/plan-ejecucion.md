@@ -12,6 +12,24 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## A0.4 PASS real; A0.5.B native VRAM → board → renderer tile decoder (22/10/2026)
+
+El operador completó **47/47 tests locales**, nueva captura MAME y el gate A0.4 con `NATIVE_VIDEO_WRITES_MATCH_GENERATED_STATIC_JS`: 4096 escrituras generadas y 4096 nativas, misma dirección, byte, máscara y orden, **0** eventos extra, **4096** registros coincidentes, sin divergencia. B4 (lectura no mapeada) sigue PASS. Esto valida la secuencia de VRAM dentro del laboratorio, pero **no la CPU autónoma desde reset**.
+
+**Nuevo A0.5.B implementado:** `src/gngb_video_bridge.mjs` y `scripts/r3_video_board_integration.mjs`. Revalidan R3.3/SYNC/A0.4 con la misma captura, ejecutan los cuatro sites ya compilados mediante el **adaptador RAM/VRAM existente**, y contrastan la imagen final de 4096 bytes con la de MAME, además de 2048 decodificaciones de tiles mediante `readTile`/ `board.tile`. Se exigen direcciones únicas, máscara completa, cobertura total y registros CPU correctos; ninguna ROM o valor de imagen privado sale en reportes. **Se reutiliza el renderer, no hay intérprete MC6809 ni Github Actions**.
+
+Prueba ROM-free sintética A0.5.B: 5/5 PASSED en el laboratorio parcial local; pendiente la ejecución integrada en el Mac:
+
+```bash
+git pull --ff-only
+bash scripts/r3-local-regression.sh
+node scripts/r3_video_board_integration.mjs
+```
+
+El último comando **no arranca MAME** ni cambia los archivos de captura originales. Su PASS es un puente RAM→tile decoder, **no R4**. Próximo bloque: procedencia y selección de ROM bancaria para 7.434 preestados y causa IRQ/SYNCACK independiente. Ver [ruta crítica](r3-critical-path.md).
+
+---
+
 ## A0.5-LAB — Board RAM/VRAM mínimo, sin CI remota (22/10/2026)
 
 **Se conserva el compilador estático R3 y toda la evidencia R0–A0.3.** El nuevo módulo `src/gngb_board_memory.mjs` integra los sinks byte/word con RAM principal, sprite RAM y FG/BG; reutiliza `video_memory.mjs` / `sprite_memory.mjs`. Exige que cada byte haya sido escrito antes de permitir leerlo, genera copias aisladas para el renderer, y rechaza ROM bancaria, MMIO sin modelar y escritura DMA no certificada. Las escrituras de instrucciones generadas tienen commit atómico. No asume cold boot ni interrupciones.
