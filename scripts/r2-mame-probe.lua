@@ -97,6 +97,24 @@ record("R36_TARGETED_READ_ENABLED", target_read_address and "1" or "0")
 if target_read_address then
     record("R36_TARGETED_READ_ADDR", target_read_address)
 end
+-- R3.6.B4 (opt-in): read the actual configured unmapped-read policy
+-- from the native MAME address map. This is independent of the returned
+-- byte observed by the read tap and of the post-LDA A register.
+local capture_unmap_policy = os.getenv("GNG_R36_CAPTURE_UNMAP_POLICY") == "1"
+record("R36_UNMAP_POLICY_ENABLED", capture_unmap_policy and "1" or "0")
+if capture_unmap_policy then
+    assert(target_read_address == 0x3c00,
+           "R36 map-policy certification is limited to gngb 0x3c00")
+    local map = assert(space.map, "R36 native program address map unavailable")
+    local value = assert(map.unmap_value,
+                         "R36 native unmapped-read policy unavailable")
+    assert(type(value) == "number" and value % 1 == 0 and
+           value >= 0 and value <= 255 and space.data_width == 8,
+           "R36 expected 8-bit native unmapped read policy")
+    record("R36_UNMAP_POLICY", value)
+    -- This property is the address-map configuration, NOT instruction-specific
+    -- evidence of a bus read. The independent tap is recorded separately.
+end
 local limit = 20
 gng_r2_probe_read_tap = space:install_read_tap(
     0x3000, 0x3fff, "r2-mmio-read-probe",
