@@ -77,7 +77,7 @@ export function planPostLdaCandidates(rom,rows,sync,b4,limit=24){
       stopped='NON_FIXED_ROM_CODE';break;
     }
     const spec=compileAt(rom,pc);
-    const sideEffect=!!spec?.writesSpriteWord;
+    const sideEffect=!!(spec?.writesSpriteWord||spec?.writesRamByte);
     candidates.push({seq:i,pc:hex(pc),
       family:spec?.name??FAMILY.get(rom[pc])??'REQUIRES_GHIDRA_DECODE',
       supported:!!spec&&!sideEffect,effects_verified:false});
