@@ -12,6 +12,22 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## R3.6.B4 real PASS; R3.6.B5 post-LDA frontier (22/10/2026)
+
+**Operador Mac:** `MAME_UNMAPPED_POLICY_MATCHES_NATIVE_TAPS_AND_STATIC_LDA` para `LDA_EXT` PC `0x6017`, operando `0x3C00`; 100 lecturas reales, todas iguales al `space.map.unmap_value` obtenido independientemente del mapa MAME; el JS estático reproduce registros del checkpoint `0x601A` (`first_divergence=null`). B4 **validado en alcance acotado**. El wake IRQ/SYNC, causalidad CPU bus y R4 siguen pendientes.
+
+Nuevo `r3_post_lda_frontier.mjs`: revalida todos los artefactos privados B4 actuales, genera JS estático para los opcodes conocidos después de `0x601A` y coteja registros de pasos sucesivos desde una sola semilla de CPU. Para efectos de RAM no certificados o instrucciones sin compilar, detiene la ejecución en lugar de inventar memoria, sin declararla jugable.
+
+```bash
+git pull --ff-only
+node --test tests/test_r3_post_lda_frontier.mjs
+node scripts/r3_post_lda_frontier.mjs
+```
+
+Compartir únicamente JSON agregado. Ver [ruta crítica](r3-critical-path.md).
+
+---
+
 ## R3.6.B4 — Política nativa de lectura sin handler, PC 0x6017 (22/10/2026)
 
 **B3 Mac confirmado:** 6/6 tests, `UNIFORM_NATIVE_READS_REGISTER_CONSISTENT_BUS_CAUSE_UNVERIFIED`; 100/100 lecturas iguales tras reset, compatibles con preestado `0x601A`. Operando de `LDA extended` = **0x3C00**, que `gng_main_map` solo mapea para **escribir y disparar DMA**, sin handler CPU de lectura. No inferimos el byte por repetición.
