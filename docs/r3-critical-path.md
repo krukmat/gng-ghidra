@@ -17,12 +17,30 @@ sin usar MAME ni intérprete MC6809 como runtime. La ROM original sigue privada.
 | R3.5.B1 | PASS real: reset diferenciado del wake de SYNC, causa de línea aún desconocida |
 | R3.5.B2 (IRQ/SYNCACK nativo) | Instrumentación de fuente y parser PREPARADOS; sin binario compilado/captura real |
 | R3.6.A (después de 0x6017) | PASS real: primer opcode = LDA extended, en 0x6017 |
-| R3.6.B (continuación JS) | B3 PASS real: 100 lecturas uniformes en 0x3C00; B4 regla MAME de read-unmapped + JS estático implementada, captura nativa pendiente |
+| R3.6.B (continuación JS) | B4 PASS real: mapa MAME + 100 taps + LDA estático concuerdan; B5 escaneo post-0x601A implementado, validación Mac pendiente |
 | R4 (primer frame calculado por JS) | PENDIENTE: memoria/MMIO y CPU entre VBLANK |
 
 La primera época de SYNC acaba observando PC=0x6000 bajo el soft reset
 controlado. La segunda observa PC=0x6017, con I/F enmascaradas. El segundo
 resultado **no** demuestra por sí solo una señal de IRQ.
+
+## R3.6.B4 PASS real → R3.6.B5 siguiente frontera tras LDA (22/10/2026)
+
+**Validación nativa aportada por el operador:** `MAME_UNMAPPED_POLICY_MATCHES_NATIVE_TAPS_AND_STATIC_LDA`, tests 6/6. MAME reportó `space.map.unmap_value` directamente, **100/100** lecturas en la época posterior al soft reset iguales a esa política, exactamente **un valor distinto**, y el JS estático `LDA_EXT` en `0x6017` produjo el checkpoint nativo de `0x601A` con `first_divergence=null`. No se exportaron el valor ni bytes ROM. **R3.6.B4 aceptado dentro del alcance de lectura autónoma de `0x3C00`**, cuyo handler MAME es solo escritura para disparar DMA de sprites. No equivale a demostrar la causalidad del acceso por instrucción, la señal de IRQ o el runtime completo.
+
+**R3.6.B5 implementado:** `scripts/r3_post_lda_frontier.mjs` identifica el siguiente PC y familia de instrucción tras `0x601A` a partir de la ROM/traza privadas existentes. El CLI **revalida primero B4 usando de nuevo la misma ROM, prestates, tap MMIO y política nativa**, nunca acepta un JSON PASS antiguo ni marcador provisional. Después genera JS estático para los opcodes que el compilador actual ya soporta (sin lecturas ni escrituras RAM adicionales) y mide un segmento continuo: un único preestado semilla en `0x6017` → ejecución JS de LDA con `readGngbUnmappedByte` nativo-certificado → checkpoints sucesivos de registros. Se detiene en la primera instrucción no compilada, efecto RAM sin prueba, divergencia o límite de 24 pasos; **no copia registros MAME en pasos intermedios**. El reporte agregado no incluye bytes ROM, operandos ni valores de registros.
+
+**Sin nueva captura MAME:**
+
+```bash
+git pull --ff-only
+node --test tests/test_r3_post_lda_frontier.mjs
+node scripts/r3_post_lda_frontier.mjs
+```
+
+Compartir solo JSON agregado, en especial `status`, `first_unsupported`, `statically_compiled_steps_compared`, `first_divergence`. R3.5.B2 sigue pendiente de observación directa IRQ/SYNCACK; B5 no se permite presentar como equivalencia del wake de SYNC ni del bus completo. El siguiente paso B6 será traducir la primera instrucción real no soportada y medir el tramo.
+
+---
 
 ## R3.6.B4 — Oráculo nativo de lectura sin handler para 0x3C00 (22/10/2026)
 
