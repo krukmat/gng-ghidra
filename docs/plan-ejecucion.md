@@ -12,6 +12,24 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## A0.5.B real PASS → A0.6 private five-bank ROM (22/10/2026)
+
+**Último resultado Mac:** regresión local 52/52 PASS y `r3_video_board_integration.mjs`: `NATIVE_VRAM_IMAGE_MATCHED_STATIC_JS_BOARD_AND_TILE_DECODER`, con 4096 bytes RAM de vídeo finales idénticos al tap independiente MAME y 2048 registros de tile decodificados sin divergencia. **A0.5.B aceptado**, con preestados MAME por instrucción; todavía no equivale a fotograma ni a CPU autónoma desde reset.
+
+**A0.6.1–A0.6.2 implementados** en el repositorio actual: `scripts/r3_bank_inventory.py` usa la autenticación ROM previa del ZIP `roms/gng.zip` (CRC, tamaño, vector reset) y conserva el `out/gngb-flat.bin` ya verificado; extrae una imagen privada de **5 bancos × 8 KiB** exclusivamente bajo `out/r3/banked-rom/`. Entradas 0–3: cuatro porciones de `gg5.bin`; entrada 4: primera porción de `gg4.bin`. Contrato `gngb`: ventana CPU `0x4000–0x5fff`, escritura de selección en `0x3e00`, `data===4 ? 4 : data&3` (MAME `gng.cpp`). `src/gngb_banked_rom.mjs` implementa solo lectura de ROM e identifica banco inicial como **desconocido hasta que se seleccione explícitamente**; no usa un intérprete ni supone que un tap en `0x3e00` ya procesó su handler.
+
+El inventario cuenta PCs de la traza y observa bancos por frame/escritura, pero **no atribuye automáticamente un banco a cada PC**. Las 7434 muestras en `0x4000–0x5fff` siguen sin demostrar identidad de ROM por instrucción ni transición post-handler. No se proclama recompilación de esos bancos con datos de frame. Se añaden 9 tests ROM-free (6 Python + 3 Node) al runner local; **GitHub Actions sigue eliminado**.
+
+```bash
+git pull --ff-only
+bash scripts/r3-local-regression.sh
+python3 scripts/r3_bank_inventory.py
+```
+
+Compartir solo el reporte JSON. **A0.6.3**: instrumentar identificador de banco activo en la frontera de cada preinstrucción y transición real post-`bankswitch_w`, enlazado con secuencia/PC; requerirá una captura nativa *solo después* de preparar esa instrumentación. IRQ/SYNCACK (R3.5.B2) permanece en paralelo. Ver [ruta crítica](r3-critical-path.md).
+
+---
+
 ## A0.4 PASS real; A0.5.B native VRAM → board → renderer tile decoder (22/10/2026)
 
 El operador completó **47/47 tests locales**, nueva captura MAME y el gate A0.4 con `NATIVE_VIDEO_WRITES_MATCH_GENERATED_STATIC_JS`: 4096 escrituras generadas y 4096 nativas, misma dirección, byte, máscara y orden, **0** eventos extra, **4096** registros coincidentes, sin divergencia. B4 (lectura no mapeada) sigue PASS. Esto valida la secuencia de VRAM dentro del laboratorio, pero **no la CPU autónoma desde reset**.
