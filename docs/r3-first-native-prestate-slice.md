@@ -1,10 +1,32 @@
 # R3.0 — Primer gate real de lógica MC6809 → JavaScript estático
 
-**Estado:** G1 PASS; G2 PASS; R3.2 REGISTROS REALES PASS (1192/1192, 389 pasos); R3.3 NATIVE SPRITE RAM PASS (768/768 bytes); R3.4 FRONTIER OFFLINE PREPARADO  
+**Estado:** G1 PASS; G2 PASS; R3.2 REGISTROS REALES PASS (1192/1192, 389 pasos); R3.3 NATIVE SPRITE RAM PASS (768/768 bytes); R3.4 FRONTIER 0x6016 SYNC VALIDADO EN ROM/TRAZA; R3.5 BARRERA SYNC IMPLEMENTADA, IRQ NATIVA PENDIENTE  
 **Fecha:** 2026-10-22  
 **Código:** `scripts/r3_static_trace_probe.mjs`  
 **Pruebas:** `tests/test_r3_static_trace_probe.mjs`  
 **Dependencias:** R0 y R1 finalizados; R2.2.B1 (17.281 y 17.135 preestados MAME válidos en ejecuciones reales). El gate R2 integral permanece abierto.
+
+## R3.5 — Frontera SYNC 0x6016: espera compilada, evento aún no demostrado (22/10/2026)
+
+**Prueba real R3.4 aportada por el operador:** `FRONTIER_IDENTIFIED_NOT_COMPILED` en dos boots, PC no compilado **`0x6016`**, familia probable **SYNC**, primera época `seq=388` y segunda `seq=778` después de una instrucción ya compilada en `0x6014`. Ambas parten de la misma ROM privada SHA-256 `fe14e127586245fd4dd0842cd09acdcab44c7ac91cfeff45a8bfccbd03e1b535`, y R3.3 mantiene 768/768 bytes nativos comparados. **El resultado de R3.4 era una pista por familia, no descodificación ni prueba IRQ.**
+
+**Fuente de semántica independiente:** el núcleo MC6809 de MAME implementa [`SYNC` en `base6x09.lst`](https://github.com/mamedev/mame/blob/master/src/devices/cpu/m6809/base6x09.lst). Opcode `0x13` en tabla `m6809.lst`; SYNC consume el byte y espera a que se afirme NMI, FIRQ o IRQ **incluso si está enmascarada**. Si la señal está enmascarada, se reanuda en la siguiente instrucción; si está habilitada, corresponde procesar la entrada de interrupción (pila, vector, CC), lo cual aún NO se ha implementado.
+
+**Código R3.5:**
+- `scripts/r3_sync_boundary.mjs` solo compila el byte `0x13` **cuando el ROM real lo contiene exactamente en `0x6016`**. Emite `out/r3/sync-boundary/generated-sync.mjs` con dos funciones estáticas: `enterSync` retorna `SYNC_WAIT` con PC de reanudación `0x6017`; `wakeSync` **requiere una señal externa afirmada** NMI/FIRQ/IRQ para abandonar la espera. No interpreta opcodes, no emite un timer ficticio y no implementa entrada IRQ.
+- La máscara `CC.I` y `CC.F` determina `RUNNABLE_AFTER_MASKED_WAKE` frente a `INTERRUPT_ENTRY_REQUIRED`. Esta última **NO** modifica RAM/pila/vector ni afirma handler ejecutado; el origen de la señal siempre se marca `signal_provenance_authenticated=false` si lo proporciona un operador.
+- El diagnóstico offline reutiliza `runNativeBootWriteGate`, revalida ROM + pretrace + taps de MAME del mismo proceso, verifica el byte del ROM y los dos preestados en `0x6016` y **clasifica la siguiente dirección vista en el debugger** sin inferir cuál fue la señal externa. `cpu_post_sync_equivalence_verified=false` y `irq_or_firq_or_nmi_assertion_observed=false` permanecen invariantes.
+- Tests ROM-free para byte equivocado, PC incorrecto, espera sin señal, wake por IRQ/FIRQ enmascaradas, entrada pendiente por señales habilitadas, ausencia de stack/vector y clasificación que nunca acredita IRQ solo por el PC. [CI PASS](https://github.com/krukmat/gng-ghidra/actions/runs/39756151981).
+- **Próximo gate real no destructivo** (usa la misma captura MAME, sin nuevo MAME):
+  ```bash
+  git pull --ff-only
+  node scripts/r3_sync_boundary.mjs
+  ```
+  Compartir **solo** el resumen JSON (`epochs`, máscara observada, `next_debugger_pc`, `generated_static_js_wait_entered_from_real_prestates`). No compartir ROM, JSONL ni código JS generado.
+
+**Pendiente R3.5.B:** evidencia independiente del momento en que una línea IRQ/FIRQ/NMI se afirma y de su aceptación por CPU (IRQ entry y stack). Hasta entonces `SYNC` es una **barrera correcta implementada**, no un tramo ejecutable validado que cruce una IRQ. El boot R3.3 permanece PASS acotado.
+
+---
 
 ## R3.3 PASS real — escrituras nativas del boot (22/10/2026)
 
