@@ -12,6 +12,23 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## R3.3 — Boot sprite RAM, capturador MAME y diferencial nativo preparados (22/10/2026)
+
+**Estado real confirmado:** R3.2 ejecutó **1.192/1.192** pares soportados sin divergencias de registros, máximo **389 pasos continuos**, 28 PC compilados, 192 escrituras de palabra modeladas en cada uno de dos bucles boot (384 escrituras de palabra totales). **No equivale a RAM verificada.**
+
+R3.3 ya incluye observador de escrituras de byte en sprite RAM de MAME (tap opt-in), comparador estricto contra **dos bucles JS con 192 escrituras de palabra cada uno**, respaldo previo de evidencia privada y pruebas ROM-free de bloqueos. Una coincidencia certificará únicamente los bytes/orden de esas escrituras concretas. No simular RAM faltante ni cerrar IRQ/bancos.
+
+**Prueba real siguiente (primera nueva captura MAME en este subbloque):**
+
+```bash
+git pull --ff-only
+bash scripts/r3-native-sprite-verify.sh
+```
+
+Compartir solo el JSON resumido `PASS_BOOT_SPRITE_RAM_WRITE_BYTES` o el texto del bloqueo, nunca los trazados y datos ROM de `out/`. Ver [R3.3](r3-first-native-prestate-slice.md). Luego extender a memoria/bus relevante si el diferencial coincide.
+
+---
+
 ## Estado R3.2 — 22/10/2026: G2 real PASS, bucle boot ampliado en JS
 
 El operador confirmó **G2 real**: 616/616 checkpoints de registros, 3 segmentos continuos de 4 pasos, 108 de al menos 2, ningún primer error. La frontera real son instrucciones no compiladas, especialmente en el arranque `0x6000`.
