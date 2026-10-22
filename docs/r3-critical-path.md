@@ -17,12 +17,40 @@ sin usar MAME ni intérprete MC6809 como runtime. La ROM original sigue privada.
 | R3.5.B1 | PASS real: reset diferenciado del wake de SYNC, causa de línea aún desconocida |
 | R3.5.B2 (IRQ/SYNCACK nativo) | Instrumentación de fuente y parser PREPARADOS; sin binario compilado/captura real |
 | R3.6.A (después de 0x6017) | PASS real: primer opcode = LDA extended, en 0x6017 |
-| R3.6.B (continuación JS) | B1 compilado; B2 captura real (100 lecturas) ambigua; B3 análisis offline de uniformidad y mapeo preparado |
+| R3.6.B (continuación JS) | B3 PASS real: 100 lecturas uniformes en 0x3C00; B4 regla MAME de read-unmapped + JS estático implementada, captura nativa pendiente |
 | R4 (primer frame calculado por JS) | PENDIENTE: memoria/MMIO y CPU entre VBLANK |
 
 La primera época de SYNC acaba observando PC=0x6000 bajo el soft reset
 controlado. La segunda observa PC=0x6017, con I/F enmascaradas. El segundo
 resultado **no** demuestra por sí solo una señal de IRQ.
+
+## R3.6.B4 — Oráculo nativo de lectura sin handler para 0x3C00 (22/10/2026)
+
+**B3 PASS acotado con evidencia Mac:** sintaxis y 6/6 tests locales correctos. El diagnóstico sobre la misma captura de 100 lecturas devuelve `UNIFORM_NATIVE_READS_REGISTER_CONSISTENT_BUS_CAUSE_UNVERIFIED`. Las 100 muestras posteriores al reset tienen valor idéntico, máscara de byte completa y cada valor observado reproduce el preestado de `LDA_EXT` en `0x6017→0x601A`. El mapa del driver identifica el operando ROM privado como **`0x3C00`: registro de escritura para disparar DMA de sprites**, sin `read` handler explícito. No se ha probado el valor de una lectura no mapeada ni la correlación causal de la instrucción.
+
+**Fuente técnica independiente:** [MAME memory mappings](https://docs.mamedev.org/techspecs/memory.html) describe `map.unmap_value(...)` para lecturas sin handler; [MAME Lua Address map](https://docs.mamedev.org/luascript/ref-mem.html) expone el `space.map.unmap_value` **real de la máquina configurada**. [`gng_main_map`](https://github.com/mamedev/mame/blob/master/src/mame/capcom/gng.cpp) confirma `0x3C00` solo escritura. No deducimos 0x00 ni 0xFF sin observación del valor configurado.
+
+**B4 implementado en `main`, verificación nativa pendiente:**
+
+- `r2-mame-probe.lua`: con `GNG_R36_CAPTURE_UNMAP_POLICY=1` registra `R36_UNMAP_POLICY` directamente del mapa de programa MAME (opt-in, ancho 8 bits), separadamente del tap original. No cambia el valor leído ni instala un handler sustituto.
+- `r3-unmapped-policy-capture.sh`: reutiliza la captura exacta, un soft reset y respaldo automático de evidencia anterior; una sola ejecución nativa. Evita el gate antiguo de muestra única que había rechazado correctamente las 100 lecturas.
+- `r3_unmapped_read_policy.mjs`: revalida en la **misma captura** la ROM, los preestados CPU, las 768 escrituras sprite y SYNC; compara **cada uno** de los 100 bytes observados con la política que devuelve el mapa MAME. Solo entonces genera JS estático de bus **para lectura de la dirección exacta `0x3C00`** y lo usa como `readByte` del LDA generado, cotejando el checkpoint. El JS no usa el valor A del debugger ni el dato de una muestra seleccionada. Un acceso a otra dirección es error. La lectura NO ejecuta el DMA de sprites (efecto de escritura únicamente).
+- `MAME_UNMAPPED_POLICY_MATCHES_NATIVE_TAPS_AND_STATIC_LDA` confirma **solo** la regla de lectura de ese registro en el modelo MAME y el resultado de esa instrucción con preestado inyectado. No comprueba la temporización, atribución precisa del tap a la instrucción, reanudación real de SYNC, IRQ, pila, ni autonomía continua hasta un frame. Nunca promocionar esto a R4.
+- Tests ROM-free de política de lectura independiente, coincidencia de 100 muestras, pérdida de procedencia, duplicación de etiquetas, valores inconsistentes y límites del bus. CI incluye `node --check`.
+
+**Ejecución Mac (una nueva captura MAME únicamente porque el TSV anterior NO registraba `space.map.unmap_value`):**
+
+```bash
+git pull --ff-only
+node --test tests/test_r3_unmapped_read_policy.mjs
+bash scripts/r3-unmapped-policy-capture.sh
+```
+
+Compartir solo `report.json` impreso, nunca ROM, los archivos `out/r2/` ni los módulos JS generados. La propiedad MAME de origen y la coincidencia de 100 muestras se informan como **booleanos**, sin volcar bytes privados al chat.
+
+**Próximo hito B5:** localizar el primer PC real después de `0x601A`, ampliar el bloque estático según el CFG y al mismo tiempo certificar SYNC/IRQ con la instrumentación nativa preparada. El juego autónomo todavía no se ejecuta.
+
+---
 
 ## R3.6.B3 — Diagnóstico offline de 100 lecturas nativas (22/10/2026)
 
