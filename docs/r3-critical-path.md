@@ -1,5 +1,31 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## A0 — Medir cobertura antes de ampliar opcodes (22/10/2026)
+
+**Decisión de aceleración:** evolucionar **el mismo compilador R3**, sin migraciones ni reescrituras. La unidad de priorización será una **familia recurrente de opcodes / bloque candidato**, no una captura manual por PC. Ningún gate R0–R3.6.B4 se elimina.
+
+**A0.1 (implementada, pendiente de validar con la ROM en Mac):** `scripts/r3_dynamic_coverage.mjs` procesa los mismos `17.135` preestados existentes, revalida **en el mismo run** la ROM, las escrituras de sprite RAM R3.3 y la frontera real SYNC/R3.5. Agrupa la frecuencia de PC por familias y la disponibilidad de generación desde `compileAt`, `compileLdaAt` y `compileSyncAt`. Separa ROM fija de ROM bancaria no autenticada y da prioridad a los opcodes sin soporte más frecuentemente observados; señala el primer PC/familia después de `0x601A`.
+
+Se distinguen estrictamente **codegen available** (el compilador actual podría emitir ese opcode) de **behavior validated** (comparación nativa real por registros/bus/IRQ). La tasa ponderada por frecuencia corresponde **solo a las instrucciones muestreadas**, no al porcentaje del juego completo. Los pares de PCs vecinos son preestados observados, **no un CFG causal certificado**. No exporta bytes ROM, valores de memoria, registros, módulos privados ni un porcentaje engañoso de juego recompilado.
+
+**A0.2 (siguiente task, depende del resultado Mac):** clasificar de los 10–12 hotspots más repetidos qué instrucciones comparten semántica MC6809 y qué hardware necesitan; comparar el coste incremental de implementar la familia completa frente a ampliar PCs específicos. No hacer refactor amplio antes de conocer datos.
+
+**A0.3 (posterior):** factorizar de manera incremental semánticas duplicadas en el compilador existente y ejecutar por lotes los gates actuales. Los tests R3.2, R3.3, B4 y B5 permanecen obligatorios.
+
+**Ejecución A0.1 en el Mac, sin nueva captura MAME ni cambios de ROM:**
+
+```bash
+git pull --ff-only
+node --test tests/test_r3_dynamic_coverage.mjs
+node scripts/r3_dynamic_coverage.mjs
+```
+
+Compartir únicamente el JSON agregado. Campos decisivos: `distinct_observed_pcs`, `aot_codegen_eligible_share_of_observed_samples`, `most_repeated_unsupported_families`, `highest_frequency_unsupported_pcs`, `post_lda_first_family`. El script produce el archivo privado `out/r3/dynamic-coverage/report.json`. **No se compromete cobertura funcional ni equivalencia IRQ.**
+
+**En paralelo:** B5 mantiene su gate sin modificaciones: `node scripts/r3_post_lda_frontier.mjs`; R3.5.B2 mantiene pendiente captura nativa IRQ/SYNCACK, que no se sustituye por profiling.
+
+---
+
 ## Estado y condiciones de verdad
 
 Objetivo: ejecutar Ghosts 'n Goblins con **código MC6809 recompilado a JS**,
