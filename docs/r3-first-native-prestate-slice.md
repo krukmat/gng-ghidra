@@ -1,10 +1,31 @@
 # R3.0 — Primer gate real de lógica MC6809 → JavaScript estático
 
-**Estado:** G1 REAL_ROM_MAME_PASS (616/616 pares admitidos); G2 REPLAY_CONTIGUO_IMPLEMENTADO, PENDIENTE_DE_VALIDACIÓN_REAL  
+**Estado:** G1 PASS (616/616) y G2 PASS (3 segmentos de 4 pasos); R3.2 BOOT_MEMORY_REGISTER_GATE IMPLEMENTADO, VALIDACIÓN REAL PENDIENTE  
 **Fecha:** 2026-10-22  
 **Código:** `scripts/r3_static_trace_probe.mjs`  
 **Pruebas:** `tests/test_r3_static_trace_probe.mjs`  
 **Dependencias:** R0 y R1 finalizados; R2.2.B1 (17.281 y 17.135 preestados MAME válidos en ejecuciones reales). El gate R2 integral permanece abierto.
+
+## Gate G2 real superado y siguiente prueba R3.2 (22/10/2026)
+
+**G2 real validado por el operador:** `MATCHED_SUPPORTED_PRESTATE_PAIRS`, **616/616** comparaciones de registros, `401` segmentos, `108` con dos o más pasos y **tres** segmentos con cuatro pasos consecutivos, `first_divergence=null`. Arrancan entre otras direcciones en `0x6000`, `0x6036` y `0x604a`, terminando en `UNCOMPILED_INSTRUCTION`. Esto confirma el G2 *preliminar* de registros/control, pero no la equivalencia de memoria/bus/IRQ.
+
+**R3.2 implementado**: las posiciones de boot `0x600c` y `0x600e` del ROM `gngb` contienen `STD ,X++` (`ED 81`), y `0x6010` contiene `LEAY -1,Y` (`31 3F`), ya descodificadas antes por `src/poc.py`. El compilador R3 reconoce **exclusivamente** estas direcciones y bytes; genera escrituras de palabra de 16 bits para sprite RAM `0x1e00..0x1fff` con comprobación estricta de límites y sink obligatorio, y actualiza los registros/CC de acuerdo con el MC6809. El renderizado y Blackbox no se modifican.
+
+Cada instrucción `STD` produce el *efecto de memoria que esperamos* en el JS generado, pero MAME aún no exporta una lista comparable de escrituras RAM. El reporte mantiene **`ram_writes_compared_with_mame=false`** y **`generated_sprite_ram_writes_unverified_by_reference=true`**. No rellenamos RAM desconocida con cero ni afirmamos un `BANK_SWITCH` o una IRQ.
+
+**Pruebas ROM-free** sobre un pequeño bucle sintético: doce pasos JS continuos de registros, cuatro escrituras de palabra modeladas, incremento del puntero X, CC N/Z/V y LEAY Z, guardas de rango y divergencias. [GitHub CI PASS](https://github.com/krukmat/gng-ghidra/actions/runs/39748424402).
+
+**Único siguiente comando con la ROM y la traza reales ya disponibles en Mac:**
+
+```bash
+git pull --ff-only
+bash scripts/r3-first-real-slice.sh
+```
+
+Informar `status`, `matching_pairs`, `contiguous.longest_segment_steps`, `contiguous.modeled_ram_word_writes`, `top_segments` y `first_divergence`, o fallo textual. Sin volver a ejecutar MAME ni Ghidra y sin divulgar ROM, JS generado, snapshots ni datos de memoria. Si el reset loop llega más lejos que cuatro instrucciones, hemos aumentado *cobertura de registros* real, no equivalencia de RAM.
+
+---
 
 ## Validación real R3.0 G1 — 22 de octubre de 2026
 
