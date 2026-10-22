@@ -12,6 +12,28 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Ruta crítica ejecutada: A0.6.3 → A0.6.4 (22/10/2026)
+
+**A0.6.1–A0.6.2 cerradas con evidencia real Mac:** 55 tests Node y 6 Python PASS; 5 imágenes de banco CRC auténticas (40.960 B), 7.434 prestates bancarios/7 PCs distintos; banco inicial observado 0 y un control write a `0x3e00` hacia banco 3. No convertir muestras por frame en atribución de banco por instrucción.
+
+**Implementado en `main` sin GitHub Actions y sin rehacer el compilador:**
+
+- **A0.6.3:** `r3_bank_provenance.py` identifica una pareja de offsets donde los 5 bancos ROM se diferencian. `r2-mame-probe.sh` incorpora opcionalmente ambos valores en la **misma instrucción** del debugger que PC + registros mediante accesos `b@` (sin efectos secundarios). El parser exige 1:1 PC/seq/firma y compara con bytes autenticados. Los datos completos permanecen privados. Se emite witness privado por prestate y manifiesto SHA256 vinculado a los archivos de esa captura; se separan cambios de reset de transiciones normales y se identifica qué cambio viene después de un STB/STA ROM-attested a `0x3e00`. La captura nativa aún NO está verificada.
+- **A0.6.4:** `compileAt(...,{banked:true})` permite codegen AOT **solo si** el caller le proporciona la imagen concreta del banco, con límite 0x5fff y rechazo default de PCs bancarios. `r3_banked_static_gate.mjs` exige A0.6.3 + manifiesto de la misma traza, revalida sprites/SYNC del mismo run y genera módulos JS privados independientes por banco, comparando instrucciones sin efectos RAM desde cada preestado MAME. Informa familias sin soporte y divergencias, no CPU autónoma ni MMIO/IRQ equivalentes.
+- Tests sintéticos nuevos Python y Node para ambigüedad, truncamiento, procedencia, selector, mismo PC con distintos bancos y límite de imagen. Añadidos a `r3-local-regression.sh`. **Sin GitHub Actions.**
+
+```bash
+git pull --ff-only
+bash scripts/r3-local-regression.sh
+bash scripts/r3-bank-provenance-capture.sh
+```
+
+El tercero realiza **una nueva captura MAME**, con backup privado del R2 anterior y gates B4/A0.4, y después genera informes agregados A0.6.3 y A0.6.4. Para repetir solo el análisis: `bash scripts/r3-banked-critical-path.sh` (sin MAME). Comparte solo los JSON, nunca `out/` ni firmas/bytes ROM.
+
+**No se puede completar R4 con el acceso actual al Mac:** las evidencias bancarias por instrucción y señal IRQ/SYNCACK requieren ejecución nativa del operador; R3.5.B2 sigue siendo dependencia paralela. A0.6.4 está implementado, no certificado con datos reales.
+
+---
+
 ## A0.5.B real PASS → A0.6 private five-bank ROM (22/10/2026)
 
 **Último resultado Mac:** regresión local 52/52 PASS y `r3_video_board_integration.mjs`: `NATIVE_VRAM_IMAGE_MATCHED_STATIC_JS_BOARD_AND_TILE_DECODER`, con 4096 bytes RAM de vídeo finales idénticos al tap independiente MAME y 2048 registros de tile decodificados sin divergencia. **A0.5.B aceptado**, con preestados MAME por instrucción; todavía no equivale a fotograma ni a CPU autónoma desde reset.
