@@ -27,8 +27,12 @@ from r3_bank_inventory import (BANK_COUNT, BANK_SIZE, PACKED_SIZE,
                                count_trace_banked_pcs, analyze_native_bank_samples)
 
 MARK = "GNG_A06_BANKSIG"
-SIG = re.compile(r"\bGNG_A06_BANKSIG\s+S0=([0-9A-Fa-f]{2})\s+S1=([0-9A-Fa-f]{2})(?=\s|$)")
-PC = re.compile(r"\bGNG_R2_PRE\s+PC=([0-9A-Fa-f]{4})(?=\s)")
+# tracelog width is a MINIMUM, not an exact length. Accept 1-8
+# hexadecimal digits (optionally 0x-prefixed), then enforce BYTE range.
+# Do not silently truncate a debugger expression exceeding 8 bits.
+SIG = re.compile(r"\bGNG_A06_BANKSIG\s+S0=\s*(?:0[xX])?([0-9A-Fa-f]{1,8})"
+                 r"\s+S1=\s*(?:0[xX])?([0-9A-Fa-f]{1,8})(?=\s|$|[^0-9A-Za-z_])")
+PC = re.compile(r"\bGNG_R2_PRE\s+PC=\s*(?:0[xX])?([0-9A-Fa-f]{1,4})(?=\s|$|[^0-9A-Za-z_])")
 SCHEMA = "gng.a06.native-bank-per-instruction.v1"
 
 def choose_signature_offsets(packed: bytes) -> tuple[int, int]:
@@ -79,6 +83,8 @@ def parse_debugger_bank_signatures(raw_trace: str, rows: list[dict],
             raise ValueError("A063_TRACE_MARKERS_NOT_SAME_INSTRUCTION")
         position=int(pmatches[0].group(1),16)
         signature=tuple(int(x,16) for x in smatches[0].groups())
+        if any(value < 0 or value > 255 for value in signature):
+            raise ValueError("A063_NATIVE_SIGNATURE_EXCEEDS_BYTE")
         if len(entries)>=len(rows) or rows[len(entries)].get("pc")!=position:
             raise ValueError("A063_PRESTATE_AND_SIGNATURE_PC_NOT_ALIGNED")
         if rows[len(entries)].get("seq")!=len(entries):
@@ -90,6 +96,70 @@ def parse_debugger_bank_signatures(raw_trace: str, rows: list[dict],
     if len(entries)!=len(rows):
         raise ValueError("A063_INCOMPLETE_PER_INSTRUCTION_BANK_TRACE")
     return entries
+
+def diagnose_trace_signatures(raw_trace: str, rows: list[dict]) -> dict:
+    """Redacted source-shape diagnostics only: never show CPU or ROM data."""
+    if not isinstance(raw_trace, str) or not isinstance(rows, list):
+        raise ValueError("A063_TRACE_DIAGNOSTIC_INPUT_INVALID")
+    pre_lines = sig_lines = same = formatted_pairs = 0
+    line_samples = 0
+    pc_alignment_mismatches = 0
+    byte_width_exceeds_8 = 0
+    missing_signature_on_pre_line = 0
+    signature_without_pre_on_line = 0
+    malformed_sample_shapes = []
+    for line in raw_trace.splitlines():
+        has_pre = "GNG_R2_PRE" in line
+        has_sig = MARK in line
+        if has_pre:
+            pre_lines += 1
+        if has_sig:
+            sig_lines += 1
+        if has_pre and not has_sig:
+            missing_signature_on_pre_line += 1
+        if has_sig and not has_pre:
+            signature_without_pre_on_line += 1
+        if not (has_pre and has_sig):
+            continue
+        same += 1
+        pcs = list(PC.finditer(line))
+        signatures = list(SIG.finditer(line))
+        if len(pcs) == len(signatures) == 1:
+            formatted_pairs += 1
+            values = [int(value, 16) for value in signatures[0].groups()]
+            if any(value > 255 for value in values):
+                byte_width_exceeds_8 += 1
+            if line_samples < len(rows) and int(pcs[0].group(1),16) != rows[line_samples]["pc"]:
+                pc_alignment_mismatches += 1
+            line_samples += 1
+        elif len(malformed_sample_shapes) < 3:
+            # Shape-only, no disassembly, addresses, register or byte values.
+            malformed_sample_shapes.append({
+                "pc_match_count": len(pcs),
+                "signature_match_count": len(signatures),
+                "s0_token_present": bool(re.search(r"\bS0\s*=", line)),
+                "s1_token_present": bool(re.search(r"\bS1\s*=", line)),
+                "literal_format_specifier_present": "%02X" in line,
+                "comma_after_s0": bool(re.search(r"\bS0\s*=\s*\S+,", line)),
+                "line_has_0x_prefix": bool(re.search(r"\bS[01]=0[xX]",line)),
+                "trace_line_length": len(line),
+            })
+    return {
+        "schema": "gng.a06.bank-trace-shape-diagnostic.v1",
+        "status": "TRACE_SHAPE_ONLY_NOT_PROVENANCE",
+        "native_prestate_count": len(rows),
+        "trace_lines_with_cpu_pre_marker": pre_lines,
+        "trace_lines_with_bank_signature_marker": sig_lines,
+        "trace_lines_with_both_markers": same,
+        "trace_lines_with_formatted_cpu_pc_and_pair": formatted_pairs,
+        "pre_lines_without_signature": missing_signature_on_pre_line,
+        "signature_lines_without_pre": signature_without_pre_on_line,
+        "native_pair_width_out_of_byte_range": byte_width_exceeds_8,
+        "matched_format_pc_mismatch_count": pc_alignment_mismatches,
+        "first_malformed_line_shapes_redacted": malformed_sample_shapes,
+        "raw_native_cpu_registers_bank_signature_bytes_or_rom_exported": False,
+    }
+
 
 def analyze_bank_provenance(rows: list[dict], entries: list[int],
                             packed: bytes, fixed: bytes,
@@ -224,7 +294,7 @@ def run_report(args):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("mode",choices=("prepare","report"))
+    p.add_argument("mode",choices=("prepare","report","diagnose"))
     p.add_argument("--zip",type=Path,default=ROOT/"roms/gng.zip")
     p.add_argument("--flat",type=Path,default=ROOT/"out/gngb-flat.bin")
     p.add_argument("--banks",type=Path,default=ROOT/"out/r3/banked-rom/private-banked-rom.bin")
@@ -234,7 +304,12 @@ def main():
     p.add_argument("--output",type=Path,default=ROOT/"out/r3/banked-provenance")
     args=p.parse_args()
     try:
-        (run_prepare if args.mode=="prepare" else run_report)(args)
+        if args.mode=="diagnose":
+            rows=[json.loads(line) for line in args.trace.read_text().splitlines() if line]
+            report=diagnose_trace_signatures(args.rawtrace.read_text(),rows)
+            print(json.dumps(report,indent=2))
+        else:
+            (run_prepare if args.mode=="prepare" else run_report)(args)
     except (ValueError,OSError,KeyError,TypeError,json.JSONDecodeError) as ex:
         p.error(str(ex))
 if __name__=="__main__":
