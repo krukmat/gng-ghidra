@@ -12,6 +12,22 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## R3.6.B4 — Política nativa de lectura sin handler, PC 0x6017 (22/10/2026)
+
+**B3 Mac confirmado:** 6/6 tests, `UNIFORM_NATIVE_READS_REGISTER_CONSISTENT_BUS_CAUSE_UNVERIFIED`; 100/100 lecturas iguales tras reset, compatibles con preestado `0x601A`. Operando de `LDA extended` = **0x3C00**, que `gng_main_map` solo mapea para **escribir y disparar DMA**, sin handler CPU de lectura. No inferimos el byte por repetición.
+
+**B4:** sonda Lua opcional lee la **configuración `space.map.unmap_value`** de MAME (independiente del tap y del registro A); se exigen todas las lecturas de la dirección exacta iguales a esa política antes de generar un `readGngbUnmappedByte` estático para 0x3C00. El JS de lectura nunca dispara DMA. Aun con todos los checks, IRQ/SYNC wake, causalidad fetch/read y bus completo siguen PENDIENTES.
+
+```bash
+git pull --ff-only
+node --test tests/test_r3_unmapped_read_policy.mjs
+bash scripts/r3-unmapped-policy-capture.sh
+```
+
+Una nueva captura MAME es necesaria porque el TSV anterior no recogía la propiedad de configuración del mapa. Se realiza backup bajo `out/r3/`. Compartir solo JSON resumido. Ver [ruta crítica](r3-critical-path.md).
+
+---
+
 ## R3.6.B3 — Diagnóstico de 100 lecturas repetidas (22/10/2026)
 
 La ejecución nativa real tuvo **100 lecturas exactas** del operando de `LDA extended` en `0x6017`, todas posteriores al reset, `pretrace=17135` y `BLOCKED_AMBIGUOUS_NATIVE_MMIO_READ_SAMPLES`. Se ha confirmado que el mapeo `gngb` declara handlers de escritura en el rango, pero no de lectura explícita; sin valor de bus independiente todavía.
