@@ -1,5 +1,25 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## Incidencia A0.6.3 en Mac y reparación offline (22/10/2026)
+
+**Resultado operator Mac:** al ejecutar `git pull --ff-only; bash scripts/r3-local-regression.sh; bash scripts/r3-bank-provenance-capture.sh`, la suite Node quedó en **58/60**. Los dos fallos del test `test_r3_banked_static_gate.mjs` provenían del *fixture ROM-free*, que hacía que un `NOP` en `0x4002` «saltase» a `0x4000` sin branch. Se corrigió por un `JMP 0x6000` compilado, con cambio explícito de banco en una sección de ROM fija. El fixture negativo ahora comprueba el PC correcto. **No se altera la lógica del compilador productivo para ocultar divergencias.**
+
+La nueva ejecución de MAME **sí finalizó con exit=0**, extrajo otra vez **17.135** preestados y revalidó B4 `MAME_UNMAPPED_POLICY_MATCHES_NATIVE_TAPS_AND_STATIC_LDA` y A0.4 `NATIVE_VIDEO_WRITES_MATCH_GENERATED_STATIC_JS` para **4096/4096** escrituras, sin diferencias ni eventos extra. Falló **solamente** el parseo de A0.6.3: `A063_TRACE_MARKERS_NOT_SAME_INSTRUCTION`. Por ello A0.6.3 y A0.6.4 **NO están cerradas**, aunque los datos brutos quedaron privados en el Mac.
+
+**Cambios de reparación:** `r3_bank_provenance.py` tolera anchos de campo hexadecimal variables (MAME `%02X` especifica ancho **mínimo**), acepta un prefijo `0x` cuando corresponda y **rechaza**, sin truncar, valores superiores a un byte. Mantiene el requisito estricto de marcador PC y dos firmas en la **misma línea nativa**, con alineación 1:1 con `pre-instruction.jsonl`. Se añadió modo `diagnose` que solo comunica conteos y formas de campos —sin bytes, PC concretos ni disassembly—. Los tests nuevos prueban estas variantes y corrupciones; **aún no están ejecutados en el Mac**.
+
+**Recuperación SIN nueva captura y SIN GitHub Actions:**
+
+```bash
+git pull --ff-only
+bash scripts/r3-local-regression.sh
+bash scripts/r3-banked-critical-path.sh
+```
+
+`r3-banked-critical-path.sh` imprime primero el diagnóstico redacted; luego reintenta el informe A0.6.3 y, **solo si pasa**, recompila los pares (banco, PC) mediante A0.6.4. Si todavía falla, compartir únicamente el JSON `gng.a06.bank-trace-shape-diagnostic.v1` y la línea de error —**nunca** `cpu.trace` ni los bytes de firma—. No repetir `r3-bank-provenance-capture.sh` hasta determinar si el problema es solo formato o la acción MAME no emitió ambos campos.
+
+---
+
 ## A0.6.1/2 real PASS → A0.6.3 banco por instrucción + A0.6.4 AOT bancario (22/10/2026)
 
 **Confirmado por operador Mac:** 55/55 pruebas Node y 6/6 Python PASS. Inventario autenticó **5×8192 bytes = 40.960**, empaquetados desde el ZIP original con CRC; ROM fija sin cambios. Captura existente: **17.135** prestates, **7.434** en ventana bancaria, solo **7 PCs distintos**, banco inicial del debugger observado 0, dos frames con banco 0 y dos con banco 3; **una** escritura registrada al selector `0x3e00` que seleccionaría banco 3. **No se puede atribuir el banco por PC con esas muestras**. A0.6.1/2 aceptados, sin hacer equivalencia CPU o IRQ.
