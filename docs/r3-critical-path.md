@@ -1,5 +1,28 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## A0.5-LAB — Board RAM/VRAM minimal sobre el compilador existente (22/10/2026)
+
+**Trabajo independiente completado en `main` mientras A0.4 espera captura real MAME.** No cambiamos de compilador, no introducimos intérprete de opcodes y **GitHub Actions ya está eliminado** (los tests se ejecutan localmente).
+
+- `src/gngb_board_memory.mjs`: adaptador de memoria conservador y *fail-closed* para `0x0000–0x2fff`. Separa RAM principal, RAM de sprites, FG `0x2000–0x27ff` y BG `0x2800–0x2fff`, reutilizando directamente `src/video_memory.mjs`, `src/sprite_memory.mjs` y `checkedState` del compilador R3. Ninguna inicialización de RAM se presenta como un cold boot real: **leer antes de escribir falla**.
+- `stepStatic(compiledStep,regs)`: ejecuta una instrucción JS **ya generada** por `emitStaticModule` con sinks `writeRamWord`/ `writeRamByte`; valida rango, byte, estado CPU y ejecuta commit atómico. Un error en el código emitido o en cualquier escritura **no muta la board**. No hay decodificador de instrucciones en runtime.
+- `snapshotAddressSpace({requireVideoInitialized:true})` entrega **una copia** de los bytes FG/BG para el renderer existente; `tile(...)` decodifica con `readTile` original. Para sprites se expone exclusivamente copia de RAM CPU y se exige inicialización completa; **no se finge el buffer DMA** ni se reproduce la escritura a `0x3c00`.
+- Lectura de `0x3c00` únicamente si se inyecta callback explícito con la política **B4 ya validada**; el módulo **no** codifica ni infiere su valor. Otros registros MMIO, lecturas/escrituras de ROM fija/bancaria y causalidad IRQ siguen bloqueados.
+- `tests/test_gngb_board_memory.mjs`: 5 pruebas locales ROM-free: RAM sin inicializar, integración FG/BG, **4.096 stores sintéticos** desde los cuatro PCs compilados que inicializan 4.096 bytes VRAM (2.048 FG + 2.048 BG), 16-bit sprite word big-endian y rollback ante MMIO incorrecto/error del JS. Se probaron en el laboratorio local de desarrollo con sustitutos de las dependencias para verificar la mecánica, **no contra la ROM real ni el MAME privado del usuario**.
+- `scripts/r3-local-regression.sh`: ejecuta la batería de tests Node de A0.2–A0.5 **localmente, sin GitHub Actions**, incluida la integración real de módulos dentro del checkout del Mac. No genera ni redistribuye ROM.
+
+**Validaciones pendientes y orden:**
+
+```bash
+git pull --ff-only
+bash scripts/r3-local-regression.sh
+bash scripts/r3-video-write-capture.sh
+```
+
+El último comando inicia **una captura MAME** para A0.4, respalda antes los artefactos privados y valida el contraste de escrituras nativas. Si ese gate pasa, podremos conectar la evidencia de VRAM con el board mínimo y luego avanzar el estado de bancos y el origen real de IRQ/SYNCACK. A0.5-LAB **no es A0.4 PASS ni primer frame autónomo R4**.
+
+---
+
 ## A0.4 — Contraste real ordenado de VRAM (22/10/2026)
 
 **Evidencia Mac A0.3 aceptada en su alcance:** `INDEXED_REGISTER_CHECKPOINTS_MATCHED_BUS_UNVERIFIED` con **4.096/4.096** registros correctos, cero divergencias, cuatro `STA/STB indexed` con postincremento 1: `0x6041` (A,X+), `0x6043` (B,Y+), `0x6055` (B,X+), `0x6057` (A,Y+). Todas sus direcciones predichas corresponden a **VIDEO_RAM**. El nuevo perfil A0 muestra **9.689/17.135 = 56,55%** de *instrucciones muestreadas elegibles para emisión AOT*; restan **12** muestras de opcodes ROM fija sin compilar, **7.434** muestras de ROM bancaria sin procedencia. Esta cifra **no** certifica CPU/bus autónomo ni porcentaje de juego completo.
