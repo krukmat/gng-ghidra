@@ -12,6 +12,23 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## R3 G1 PASS real; G2 segmentos acumulados preparados — 22/10/2026
+
+El operador confirmó el primer resultado recompilado real: **616/616** pares de instrucciones soportadas, **25 PC compilados**, sin divergencias, con la ROM original `gngb` y el pretrace nativo MAME ya verificado. Se acepta **G1 limitado**; no significa 616 pasos contiguos ni equivalencia de todo el juego.
+
+Se implementó **R3.1**, replay continuo desde **un único estado MAME por segmento**: el JS generado ejecuta varios pasos y compara su estado acumulado contra los siguientes preestados MAME. Detecta automáticamente la primera interrupción del segmento por opcode desconocido o divergencia. CI ROM-free [PASS](https://github.com/krukmat/gng-ghidra/actions/runs/39746370288). La aceptación provisional G2 requerirá **≥4 pasos consecutivos** reales.
+
+**Único siguiente comando:**
+
+```bash
+git pull --ff-only
+bash scripts/r3-first-real-slice.sh
+```
+
+La salida imprime `contiguous` con `longest_segment_steps`, `top_segments` y estatus. Compartir únicamente esa salida agregada; no ROM, JS generado, registros ni `pre-instruction.jsonl`. Si no hay tramo continuo, analizar los opcodes que lo interrumpen antes de ampliar el traductor. Sin nuevo MAME/Ghidra.
+
+---
+
 ## Corrección de bloqueo operativo R3.0 — 22/10/2026
 
 El primer run local de `node scripts/r3_static_trace_probe.mjs` se bloqueó por ausencia de `out/gngb-flat.bin`; `roms/gng.zip` ya estaba verificada en fases MAME anteriores. No es una divergencia de lógica MC6809.
