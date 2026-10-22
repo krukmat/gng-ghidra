@@ -1,5 +1,30 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## A0.4 PASS real → A0.5.B: VRAM nativa integrada con board y tiles (22/10/2026)
+
+**Resultado Mac confirmado por el operador:** `bash scripts/r3-local-regression.sh` termina **47/47 PASS**; captura MAME opt-in finalizada con soft reset y 17.135 preestados. `r3_unmapped_read_policy.mjs` repite `MAME_UNMAPPED_POLICY_MATCHES_NATIVE_TAPS_AND_STATIC_LDA`; `r3_native_video_write_gate.mjs` devuelve **`NATIVE_VIDEO_WRITES_MATCH_GENERATED_STATIC_JS`**, `4096/4096` escrituras VRAM nativas y predichas coincidentes, **0** escrituras de vídeo adicionales, **0** divergencias de los 4096 checkpoints, mismo orden, dirección, valor y máscara; 0 writes VRAM antes del reset. **A0.4 PASS**, solamente en el alcance de estos cuatro sites de memoria, sin atribución individual CPU→tap ni equivalencia IRQ/SYNC/bancos.
+
+**A0.5.B implementado sobre A0.5-LAB ya existente, sin reescribir renderer ni compilar otro motor:**
+
+- `src/gngb_video_bridge.mjs`: reproduce los cuatro sites `STA/STB indexed` desde **preestados MAME independientes por instrucción** usando `board.stepStatic`, no inyecta los valores de MAME en el CPU JS. Requiere prueba A0.4 PASS recién recalculada por el CLI y verifica 4×1024 eventos; contrasta los **4096 bytes finales de VRAM** de la board con la imagen construida exclusivamente desde el tap nativo (full-byte, direcciones únicas y todas las 4096 posiciones escritas).
+- Comprueba los **2048 registros de tile FG/BG** mediante los decodificadores ya existentes `readTile` y `board.tile`. No decodifica ROM gráfica ni afirma píxeles correctos; no produce un fotograma R4. Bloquea lectura de memoria no inicializada, divergencia de CPU, direcciones repetidas, máscara parcial, discrepancia byte a byte y procedencia de reset inválida.
+- `scripts/r3_video_board_integration.mjs`: gate offline que revalida contra **los mismos archivos nativos locales** el arranque/sprites R3.3, SYNC y A0.4, genera solo JS estático privado en `out/r3` y emite un resumen sin bytes ROM/VRAM. **No reejecuta MAME**.
+- `tests/test_gngb_video_bridge.mjs`: cinco tests ROM-free sintéticos sobre **4096 escrituras**, 2048 tiles, procedencia obligatoria y escenarios de corrupción. Probados localmente en sandbox de componentes con un compilador de prueba compatible (5/5); **la validación del checkout real en Mac sigue pendiente**. `scripts/r3-local-regression.sh` incluye ahora esas pruebas. **Sin GitHub Actions**.
+
+**Ejecuta sobre los datos nativos que ya existen en tu Mac:**
+
+```bash
+git pull --ff-only
+bash scripts/r3-local-regression.sh
+node scripts/r3_video_board_integration.mjs
+```
+
+El último reporte esperado es `gng.a05.native-video-board-integration.v1` con estado `NATIVE_VRAM_IMAGE_MATCHED_STATIC_JS_BOARD_AND_TILE_DECODER`. Un PASS significará que el JS generado alimenta la VRAM de la board y los decodificadores de tiles con **4096 bytes equivalentes al tap MAME**, sin necesidad de copiar los bytes nativos al CPU. El CPU aún recibe **preestados MAME por instrucción**, por lo que **NO es autónomo desde reset**. R4, sprites DMA, política de bancos e IRQ/SYNCACK siguen pendientes.
+
+**Siguiente bloque tras A0.5.B:** inventario del banco efectivo para los 7434 preestados observados fuera de ROM fija y señal nativa de wake/IRQ para continuidad de ejecución. No basta con ampliar más opcodes si esas dos dependencias no están resueltas.
+
+---
+
 ## A0.5-LAB — Board RAM/VRAM minimal sobre el compilador existente (22/10/2026)
 
 **Trabajo independiente completado en `main` mientras A0.4 espera captura real MAME.** No cambiamos de compilador, no introducimos intérprete de opcodes y **GitHub Actions ya está eliminado** (los tests se ejecutan localmente).
