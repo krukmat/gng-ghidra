@@ -120,12 +120,42 @@ class NativeMameOverlayTests(unittest.TestCase):
                           ROOT / "out/r3/native-missing")
 
 
+    def test_bash_nounset_no_empty_array_expansion(self):
+        # macOS ships Bash 3.2; Bash 3.x fails with nounset on an empty
+        # ${array[@]}. Assert our argv-building logic avoids it entirely.
+        script = (ROOT / "scripts/r2-mame-probe.sh").read_text()
+        self.assertNotIn('NATIVE_LOG_ARGS=()', script)
+        self.assertNotIn('NATIVE_LOG_ARGS[@]', script)
+        self.assertIn('set -- gngb -rompath "$ROMPATH"', script)
+        if not shutil.which("bash"):
+            self.skipTest("bash not available")
+        for mode, expected in (("0", "gngb,-rompath,example,-debug"),
+                               ("1", "gngb,-rompath,example,-debug,-oslog")):
+            snippet = (
+                'set -euo pipefail\n'
+                'ROMPATH=example\n'
+                'set -- gngb -rompath "$ROMPATH" -debug\n'
+                f'NATIVE_LOG_EVENTS={mode}\n'
+                'if [[ "$NATIVE_LOG_EVENTS" == "1" ]]; then\n'
+                '  set -- "$@" -oslog\n'
+                'fi\n'
+                'IFS=,; printf "%s" "$*"\n'
+            )
+            proc = subprocess.run(["bash", "-c", snippet], capture_output=True,
+                                  text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.stdout, expected)
+
     def test_r2_launcher_native_mode_is_opt_in_and_guarded(self):
         script = (ROOT / "scripts/r2-mame-probe.sh").read_text()
         self.assertIn('GNG_R3_MAME_NATIVE_EVENTS', script)
         self.assertIn('GNG_R3_MAME_BIN', script)
         self.assertIn('native_hook_requires_explicit_custom_mame_binary', script)
-        self.assertIn('NATIVE_LOG_ARGS=(-oslog)', script)
+        self.assertIn('NATIVE_LOG_EVENTS=', script)
+        self.assertIn('set -- "$@" -oslog', script)
+        self.assertIn('"$MAME_BIN" "$@" -seconds_to_run', script)
+        self.assertNotIn('NATIVE_LOG_ARGS[@]', script)
+        self.assertIn('invalid_native_log_events_option', script)
         wrapper = (ROOT / "scripts/r3-native-irq-verify.sh").read_text()
         self.assertIn('missing_explicit_instrumented_mame_binary', wrapper)
         self.assertIn('binary_lacks_native_hook_marker', wrapper)
