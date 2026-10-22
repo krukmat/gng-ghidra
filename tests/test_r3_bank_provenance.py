@@ -28,11 +28,16 @@ def rows():
             one(3,0x4001),one(4,0x6016),one(5,0x6000)]
 
 def signature_line(row,bank,images,offsets):
+    state=row["before"]
     pc=row["pc"]
     a=images[bank*BANK_SIZE+offsets[0]]
     b=images[bank*BANK_SIZE+offsets[1]]
-    return (f'{pc:04X}: NOP GNG_R2_PRE PC={pc:04X} A=00 B=00 '
-            f'X=0000 Y=0000 U=0000 S=0000 DP=00 CC=00 '
+    cpu=(" ".join(
+        f"{key}={state[key]:0{width}X}"
+        for key,width in (("PC",4),("A",2),("B",2),
+                          ("X",4),("Y",4),("U",4),("S",4),
+                          ("DP",2),("CC",2))))
+    return (f'{pc:04X}: NOP GNG_R2_PRE {cpu} '
             f'GNG_A06_BANKSIG S0={a:02X} S1={b:02X}')
 
 def observation():
@@ -95,6 +100,49 @@ class NativeBankSignatures(unittest.TestCase):
             lines.append(original)
         assert module.parse_debugger_bank_signatures(
             "\n".join(lines),obs,images,offsets)==selected
+
+    def test_same_pc_but_different_cpu_register_or_trace_line_fails_closed(self):
+        images=banks()
+        obs=rows()
+        offsets=(0,1)
+        selection=[0,0,3,3,3,0]
+        trace="\n".join(signature_line(r,b,images,offsets)
+                        for r,b in zip(obs,selection))
+        wrong_rows=rows()
+        wrong_rows[1]["before"]["B"]=4  # PC still agrees
+        with self.assertRaisesRegex(ValueError,"CPU_REGISTERS_AND_PRESTATE"):
+            module.parse_debugger_bank_signatures(trace,wrong_rows,images,offsets)
+        correct_rows=rows()
+        for i,row in enumerate(correct_rows):
+            row["trace_line"]=i+1
+        self.assertEqual(module.parse_debugger_bank_signatures(
+            trace,correct_rows,images,offsets),selection)
+        correct_rows[1]["trace_line"]=99
+        with self.assertRaisesRegex(ValueError,"TRACE_LINE_NOT_ALIGNED"):
+            module.parse_debugger_bank_signatures(trace,correct_rows,images,offsets)
+
+    def test_shape_diagnosis_does_not_shift_alignment_after_malformed_pair(self):
+        images=banks()
+        obs=rows()
+        lines=[signature_line(row,0,images,(0,1)) for row in obs]
+        lines[0]=lines[0].replace("S1=","S_BAD=")
+        report=module.diagnose_trace_signatures("\n".join(lines),obs)
+        self.assertEqual(report["trace_lines_with_both_markers"],len(obs))
+        self.assertEqual(report["trace_lines_with_formatted_cpu_pc_and_pair"],len(obs)-1)
+        self.assertEqual(report["matched_format_pc_mismatch_count"],0)
+        self.assertEqual(report["matched_format_cpu_register_mismatch_count"],0)
+        self.assertEqual(report["matched_format_cpu_register_pairs_checked"],len(obs)-1)
+        self.assertNotIn("S0=01",json.dumps(report))
+
+    def test_duplicate_signature_marker_is_not_allowed_even_with_one_valid_pair(self):
+        images=banks()
+        obs=rows()
+        trace="\n".join(signature_line(r,0,images,(0,1)) for r in obs)
+        first=trace.splitlines()
+        first[0]+=" GNG_A06_BANKSIG"
+        with self.assertRaisesRegex(ValueError,"MARKERS_NOT_SAME_INSTRUCTION"):
+            module.parse_debugger_bank_signatures(
+                "\n".join(first),obs,images,(0,1))
 
     def test_non_byte_signature_is_rejected_and_shape_diagnostic_redacts(self):
         images=banks()

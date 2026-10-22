@@ -22,6 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+from r2_pretrace_report import FIELDS as NATIVE_CPU_FIELDS, PATTERN as NATIVE_CPU_PATTERN
 from r3_bank_inventory import (BANK_COUNT, BANK_SIZE, PACKED_SIZE,
                                assemble_banks, private_destination,
                                count_trace_banked_pcs, analyze_native_bank_samples)
@@ -74,21 +75,38 @@ def parse_debugger_bank_signatures(raw_trace: str, rows: list[dict],
         raise ValueError("A063_MISSING_NATIVE_CPU_TRACE")
     lookup = signature_to_bank(packed, offsets)
     entries=[]
-    for line in raw_trace.splitlines():
+    for trace_line_number,line in enumerate(raw_trace.splitlines(),1):
         if "GNG_R2_PRE" not in line and MARK not in line:
             continue
         pmatches=list(PC.finditer(line))
         smatches=list(SIG.finditer(line))
-        if len(pmatches)!=1 or len(smatches)!=1:
+        cpu_matches=list(NATIVE_CPU_PATTERN.finditer(line))
+        # The fingerprint and all nine CPU registers must be from the
+        # same native debugger line; matching only PC is insufficient.
+        if (line.count("GNG_R2_PRE")!=1 or line.count(MARK)!=1
+            or len(pmatches)!=1 or len(smatches)!=1
+            or len(cpu_matches)!=1):
             raise ValueError("A063_TRACE_MARKERS_NOT_SAME_INSTRUCTION")
         position=int(pmatches[0].group(1),16)
         signature=tuple(int(x,16) for x in smatches[0].groups())
-        if any(value < 0 or value > 255 for value in signature):
+        if any(value > 255 for value in signature):
             raise ValueError("A063_NATIVE_SIGNATURE_EXCEEDS_BYTE")
-        if len(entries)>=len(rows) or rows[len(entries)].get("pc")!=position:
+        if len(entries)>=len(rows):
             raise ValueError("A063_PRESTATE_AND_SIGNATURE_PC_NOT_ALIGNED")
-        if rows[len(entries)].get("seq")!=len(entries):
+        row=rows[len(entries)]
+        if row.get("pc")!=position:
+            raise ValueError("A063_PRESTATE_AND_SIGNATURE_PC_NOT_ALIGNED")
+        if row.get("seq")!=len(entries):
             raise ValueError("A063_NATIVE_PRESTATE_SEQUENCE_INVALID")
+        native_cpu={key:int(value,16) for key,value in
+                    zip(NATIVE_CPU_FIELDS,cpu_matches[0].groups())}
+        if native_cpu["PC"]!=position or native_cpu!=row.get("before"):
+            raise ValueError("A063_NATIVE_CPU_REGISTERS_AND_PRESTATE_NOT_ALIGNED")
+        # R2 records physical line numbers. Check when available to
+        # distinguish repeated identical PCs across unrelated samples.
+        if (row.get("trace_line") is not None
+            and row["trace_line"]!=trace_line_number):
+            raise ValueError("A063_NATIVE_PRESTATE_TRACE_LINE_NOT_ALIGNED")
         bank=lookup.get(signature)
         if bank is None:
             raise ValueError("A063_UNKNOWN_NATIVE_MAPPED_BANK_SIGNATURE")
@@ -102,17 +120,21 @@ def diagnose_trace_signatures(raw_trace: str, rows: list[dict]) -> dict:
     if not isinstance(raw_trace, str) or not isinstance(rows, list):
         raise ValueError("A063_TRACE_DIAGNOSTIC_INPUT_INVALID")
     pre_lines = sig_lines = same = formatted_pairs = 0
-    line_samples = 0
+    pre_line_index = -1
     pc_alignment_mismatches = 0
+    cpu_pair_checked = 0
+    cpu_pair_mismatches = 0
+    trace_line_mismatches = 0
     byte_width_exceeds_8 = 0
     missing_signature_on_pre_line = 0
     signature_without_pre_on_line = 0
     malformed_sample_shapes = []
-    for line in raw_trace.splitlines():
+    for raw_line_number,line in enumerate(raw_trace.splitlines(),1):
         has_pre = "GNG_R2_PRE" in line
         has_sig = MARK in line
         if has_pre:
             pre_lines += 1
+            pre_line_index += 1
         if has_sig:
             sig_lines += 1
         if has_pre and not has_sig:
@@ -129,9 +151,20 @@ def diagnose_trace_signatures(raw_trace: str, rows: list[dict]) -> dict:
             values = [int(value, 16) for value in signatures[0].groups()]
             if any(value > 255 for value in values):
                 byte_width_exceeds_8 += 1
-            if line_samples < len(rows) and int(pcs[0].group(1),16) != rows[line_samples]["pc"]:
-                pc_alignment_mismatches += 1
-            line_samples += 1
+            if pre_line_index < len(rows):
+                row=rows[pre_line_index]
+                if int(pcs[0].group(1),16) != row.get("pc"):
+                    pc_alignment_mismatches += 1
+                native_cpu=NATIVE_CPU_PATTERN.search(line)
+                if native_cpu:
+                    cpu_pair_checked += 1
+                    parsed={key:int(value,16) for key,value in
+                            zip(NATIVE_CPU_FIELDS,native_cpu.groups())}
+                    if parsed != row.get("before"):
+                        cpu_pair_mismatches += 1
+                if (row.get("trace_line") is not None
+                    and row["trace_line"] != raw_line_number):
+                    trace_line_mismatches += 1
         elif len(malformed_sample_shapes) < 3:
             # Shape-only, no disassembly, addresses, register or byte values.
             malformed_sample_shapes.append({
@@ -156,6 +189,9 @@ def diagnose_trace_signatures(raw_trace: str, rows: list[dict]) -> dict:
         "signature_lines_without_pre": signature_without_pre_on_line,
         "native_pair_width_out_of_byte_range": byte_width_exceeds_8,
         "matched_format_pc_mismatch_count": pc_alignment_mismatches,
+        "matched_format_cpu_register_pairs_checked": cpu_pair_checked,
+        "matched_format_cpu_register_mismatch_count": cpu_pair_mismatches,
+        "matched_format_original_trace_line_mismatch_count": trace_line_mismatches,
         "first_malformed_line_shapes_redacted": malformed_sample_shapes,
         "raw_native_cpu_registers_bank_signature_bytes_or_rom_exported": False,
     }

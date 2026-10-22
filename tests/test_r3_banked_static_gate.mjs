@@ -76,7 +76,7 @@ test('ordinary fixed-ROM compileAt still refuses bank PCs unless explicitly sele
   assert.equal(compileAt(view,0x4000),null);
   assert.equal(compileAt(view,0x4000,{banked:false}),null);
   assert.equal(compileAt(view,0x4000,{banked:true})?.name,'LDA_IMM');
-  assert.equal(compileAt(view,0x4002,{banked:true})?.name,'NOP');
+  assert.equal(compileAt(view,0x4002,{banked:true})?.name,'JMP_EXT');
   view[0x5fff]=0x20; // branch requires second byte in the NEXT mapping
   assert.equal(compileAt(view,0x5fff,{banked:true}),null);
   view[0x5fff]=0x12;

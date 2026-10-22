@@ -1,5 +1,21 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## A0.6.3 — integridad de enlace CPU y banco (22/10/2026)
+
+El parser ahora exige en una misma línea la firma bancaria única y los nueve registros del preestado R2; verifica también el número de línea nativo si consta en JSONL. Rechaza emparejamientos de registros distintos aunque coincida el PC, y marcadores duplicados. El diagnóstico seguro alinea las líneas de preestado reales incluso si una pareja de firmas está malformada. También se corrigió el test A0.6.4 que esperaba `NOP` en `0x4002`, donde el fixture contiene `JMP_EXT`.
+
+**Pendiente:** ejecutar regresión y reutilizar evidencia privada en Mac; no declarar A0.6.3 PASS antes de correspondencia nativa 1:1. Sin GitHub Actions:
+
+```bash
+git pull --ff-only
+bash scripts/r3-local-regression.sh
+bash scripts/r3-banked-critical-path.sh
+```
+
+Ante un bloqueo, compartir solo `gng.a06.bank-trace-shape-diagnostic.v1` y el error; nunca `cpu.trace`, firmas ni ROM.
+
+---
+
 ## Incidencia A0.6.3 en Mac y reparación offline (22/10/2026)
 
 **Resultado operator Mac:** al ejecutar `git pull --ff-only; bash scripts/r3-local-regression.sh; bash scripts/r3-bank-provenance-capture.sh`, la suite Node quedó en **58/60**. Los dos fallos del test `test_r3_banked_static_gate.mjs` provenían del *fixture ROM-free*, que hacía que un `NOP` en `0x4002` «saltase» a `0x4000` sin branch. Se corrigió por un `JMP 0x6000` compilado, con cambio explícito de banco en una sección de ROM fija. El fixture negativo ahora comprueba el PC correcto. **No se altera la lógica del compilador productivo para ocultar divergencias.**
