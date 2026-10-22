@@ -78,6 +78,26 @@ if sprite_capture then
             return data
         end), "Failed to install optional R3 sprite RAM write tap")
 end
+-- A0.4 opt-in: independent CPU program-space VIDEO RAM byte-write tap.
+-- Capture order and values from MAME, NOT from debugger PC; the callback PC
+-- is not an instruction boundary and is deliberately omitted.
+local a04_video_enabled = os.getenv("GNG_A04_VIDEO_WRITE_TAP") == "1"
+local a04_video_count = 0
+local a04_video_limit = 32768
+record("A04_VIDEO_WRITE_TAP_ENABLED", a04_video_enabled and "1" or "0")
+if a04_video_enabled then
+    assert(space.data_width == 8, "A04 expected 8-bit MAME program bus")
+    gng_a04_video_write_tap = assert(space:install_write_tap(
+        0x2000, 0x2fff, "a04-video-ram-write-probe",
+        function(addr, data, mask)
+            a04_video_count = a04_video_count + 1
+            if a04_video_count <= a04_video_limit then
+                record("A04_VIDEO_WRITE_BYTE", resetCount,
+                       a04_video_count, addr, data & 0xff, mask & 0xff)
+            end
+            return data
+        end), "A04 failed to install video RAM write tap")
+end
 local reset_requested = false
 local controlled_reset = os.getenv("GNG_R2_PROBE_SOFT_RESET") == "1"
 -- Opt-in R3.6.B2: observe exact CPU program-bus read from the ROM-attested
@@ -171,6 +191,7 @@ local function finish(reason)
     record("OBSERVED_MMIO_WRITE_COUNT", writeCount)
     record("OBSERVED_BANK_CONTROL_WRITE_COUNT", bankControlWrites)
     record("OBSERVED_SPRITE_RAM_WRITE_COUNT", sprite_write_count)
+    record("A04_VIDEO_WRITE_COUNT", a04_video_count)
     record("PROBE_END", reason)
     assert(file:close())
     file_closed = true
