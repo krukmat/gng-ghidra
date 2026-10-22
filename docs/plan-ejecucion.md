@@ -12,6 +12,21 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## R3.5.B1 — Causalidad reset vs SYNC delimitada (22/10/2026)
+
+R3.5.A produjo dos preestados auténticos de `SYNC` en `0x6016`: primero seguido por `0x6000` durante una ejecución con soft reset explícito, segundo seguido por `0x6017` con IRQ/FIRQ enmascaradas. No hay evidencia de señal IRQ efectiva. Fuente GNG: VBLANK conecta al IRQ del CPU en `gng.cpp`, **eso no prueba** que la señal se afirmara en el instante observado.
+
+Se implementó `r3_sync_reset_causality.mjs`: revalida ROM+pretrace+taps y orden de `SOFT_RESET_REQUESTED`/`RESET_NOTIFICATION`; clasifica los dos casos por separado y mantiene estado `RESET_BOUNDARY_CONFIRMED_MASKED_WAKE_CAUSE_NOT_OBSERVED`. Tests sintéticos para orden inválido, resets duplicados y PC/CC no esperados; CI ROM-free.
+
+```bash
+git pull --ff-only
+node scripts/r3_sync_reset_causality.mjs
+```
+
+Para **B2** se requiere instrumentar directamente el evento de entrada IRQ/FIRQ/NMI y el ACK de SYNC a nivel núcleo/driver MAME. Evitar presentar VBLANK o next PC como equivalencia IRQ confirmada.
+
+---
+
 ## R3.5 — SYNC 0x6016; falta certificar IRQ real (22/10/2026)
 
 El operador confirmó `FRONTIER_IDENTIFIED_NOT_COMPILED` en los dos boots: `0x6016`, familia `SYNC`, secuencias `388` y `778`. El core MC6809 de MAME confirma que **SYNC despierta incluso con IRQ/FIRQ enmascaradas**; una señal no enmascarada requiere entrada de interrupción con pila/vector.
