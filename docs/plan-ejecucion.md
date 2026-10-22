@@ -12,6 +12,33 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Estado vigente 22/10/2026 — R2.2.B2.a validado, B2.b offline listo
+
+**Resultado MAME del operador:** exactamente **1/1 escritura** a `0x3e00` del banco, `bank_control_writes_observed=true`, sin evidencia de cambio efectivo por instrucción. Aceptar B2.a sin cerrar B2.
+
+**B2.b — correlación sin repetir MAME:** el analizador `scripts/r2_probe_report.py` clasifica escrituras `0x3e00` frente al **siguiente frame** observado. Los resets, escrituras múltiples o ausencia de muestra invalidan la correlación. El informe expone únicamente contadores agregados `deferred_frame_followup`; no prueba `BANK_SWITCH` instantáneo. Pruebas ROM-free CI PASS.
+
+```bash
+git pull --ff-only
+python3 scripts/r2_probe_report.py --dir out/r2/mame-probe
+python3 - <<'PY'
+import json
+from pathlib import Path
+r=json.loads(Path("out/r2/mame-probe/capabilities.json").read_text())
+print(json.dumps({
+    "status":r["status"],
+    "control_write_count":r.get("bank_control",{}).get("control_write_count"),
+    "deferred_frame_followup":r.get("bank_control",{}).get("deferred_frame_followup"),
+    "observed_bank_switch_edges":r["capabilities"]["observed_bank_switch_edges"],
+    "blockers":r["blockers"]
+},indent=2))
+PY
+```
+
+Compartir únicamente el JSON resumido. No enviar `observations.tsv`, `cpu.trace`, `pre-instruction.jsonl` ni ROM. Concluir B2.b según evidencia real antes de decidir instrumentación C++ del núcleo. R2.2.B2.c bus/IRQ/SYNC sigue pendiente.
+
+---
+
 ## Estado vigente — 22/10/2026: R2.2.B1 PASS y B2.a desarrollado
 
 **R2.2.B1 validado en MAME real:** soft reset observado una vez, 17.135 snapshots MC6809 sin errores sintácticos, 100 lecturas/12 escrituras MMIO; las barreras de `after`, bus por instrucción, banco post-handler, SYNC e IRQ permanecen abiertas.
