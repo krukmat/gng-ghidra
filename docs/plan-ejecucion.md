@@ -12,6 +12,23 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Estado R3.2 — 22/10/2026: G2 real PASS, bucle boot ampliado en JS
+
+El operador confirmó **G2 real**: 616/616 checkpoints de registros, 3 segmentos continuos de 4 pasos, 108 de al menos 2, ningún primer error. La frontera real son instrucciones no compiladas, especialmente en el arranque `0x6000`.
+
+Se generó `STD ,X++` (posiciones `0x600c`/`0x600e`) con efecto explícito de escritura de D en sprite RAM y `LEAY -1,Y` en `0x6010`, restringidos a opcodes y direcciones ROM originales documentados por `src/poc.py`. **El JS modela escrituras RAM** y el harness las cuenta, pero todavía no las puede contrastar con bus MAME. Se mantiene `ram_writes_compared_with_mame=false` y la equivalencia RAM/IRQ sin verificar. Pruebas sintéticas de 12 pasos continuos y 4 escrituras, CI ROM-free PASS.
+
+**Próxima validación de registros en Mac:**
+
+```bash
+git pull --ff-only
+bash scripts/r3-first-real-slice.sh
+```
+
+La salida contendrá `longest_segment_steps`, `modeled_ram_word_writes` y la primera divergencia. Si aumenta la longitud continua y no divergen registros, pasar a capturar efectos de RAM reales en MAME para validar el mismo bucle antes de ampliar más opcodes. Ver [R3](r3-first-native-prestate-slice.md).
+
+---
+
 ## R3 G1 PASS real; G2 segmentos acumulados preparados — 22/10/2026
 
 El operador confirmó el primer resultado recompilado real: **616/616** pares de instrucciones soportadas, **25 PC compilados**, sin divergencias, con la ROM original `gngb` y el pretrace nativo MAME ya verificado. Se acepta **G1 limitado**; no significa 616 pasos contiguos ni equivalencia de todo el juego.
