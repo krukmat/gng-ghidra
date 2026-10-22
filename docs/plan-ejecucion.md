@@ -12,6 +12,23 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## R3.5 — SYNC 0x6016; falta certificar IRQ real (22/10/2026)
+
+El operador confirmó `FRONTIER_IDENTIFIED_NOT_COMPILED` en los dos boots: `0x6016`, familia `SYNC`, secuencias `388` y `778`. El core MC6809 de MAME confirma que **SYNC despierta incluso con IRQ/FIRQ enmascaradas**; una señal no enmascarada requiere entrada de interrupción con pila/vector.
+
+Se implementó generador JS estático para `SYNC` limitado al byte `0x13` real en `0x6016`, con estados `SYNC_WAIT`, `RUNNABLE_AFTER_MASKED_WAKE` e `INTERRUPT_ENTRY_REQUIRED`. Sin señal externa afirmada el estado no avanza. La fase de entrada IRQ queda bloqueada explícitamente; no hay simulación de stack ni señal inventada. Tests ROM-free y diagnóstico sobre los dos puntos del pretrace aprobados en CI.
+
+**Siguiente paso Mac, sin lanzar MAME:**
+
+```bash
+git pull --ff-only
+node scripts/r3_sync_boundary.mjs
+```
+
+Compártenos el JSON agregado para saber cuál es el próximo PC registrado y las máscaras CC; **ningún PC por sí solo acredita una IRQ real**. Luego se debe instrumentar señal y aceptación IRQ independientemente para permitir al JS cruzar esa barrera y extender el flujo del juego.
+
+---
+
 ## R3.3 PASS real — 768/768 bytes; R3.4 diagnóstico post-boot (22/10/2026)
 
 **Aceptado por evidencia operador:** `PASS_BOOT_SPRITE_RAM_WRITE_BYTES`: 2 ciclos de inicialización MC6809, 384 bytes escritos por ciclo observados directamente en MAME, **768/768** en total, cero diferencias de dirección, valor y orden, cero otras escrituras capturadas en sprite RAM. Los registros del bucle JS ya coincidían durante 389 pasos continuos. Esta es equivalencia acotada del bloque de boot, **no de todo el sistema de memoria**.
