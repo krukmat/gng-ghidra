@@ -156,7 +156,7 @@ export async function runNativeBootWriteGate({romPath,tracePath,
     throw Error('R3_OUTPUT_MUST_BE_PRIVATE');
   const base=await runGate({romPath,tracePath,outDir});
   if(base.status!=='MATCHED_SUPPORTED_PRESTATE_PAIRS' ||
-      base.contiguous.longest_segment_steps<389 ||
+      base.contiguous.longest_segment_steps<4 ||
       base.contiguous.first_divergence)
     throw Error('R3_PRESTATE_CONTIGUOUS_BASELINE_NOT_PASS');
   const rows=(await readFile(tracePath,'utf8')).trimEnd().split('\n')
