@@ -12,11 +12,13 @@ function fixtureData(){
   const fixed=new Uint8Array(65536);
   fixed[0xfffe]=0x60;fixed[0xffff]=0;
   const packed=new Uint8Array(5*8192);
-  packed.set([0x86,0x01,0x12],0); // bank 0, PC 0x4000: LDA #01, NOP
-  packed.set([0x86,0x03,0x12],3*8192); // bank 3: same PC, distinct opcode operand
+  // Each bank executes LDA immediate -> JMP 0x6000; the fixed-ROM
+  // segment between visits may select a new bank. No impossible NOP jumps.
+  packed.set([0x86,0x01,0x7e,0x60,0x00],0);
+  packed.set([0x86,0x03,0x7e,0x60,0x00],3*8192);
   const reg=(PC,A)=>({PC,A,B:0,X:0,Y:0,U:0,S:0x2000,DP:0,CC:0x50});
-  const pcs=[0x6000,0x4000,0x4002,0x4000,0x4002,0x6000];
-  const A=[0,0,1,1,3,3],ids=[0,0,0,3,3,3];
+  const pcs=[0x6000,0x4000,0x4002,0x6000,0x4000,0x4002,0x6000];
+  const A=[0,0,1,1,1,3,3],ids=[0,0,0,0,3,3,3];
   const rows=pcs.map((pc,seq)=>({
     schema:'gng.r2.pre-instruction.v1',origin:'mame-native-tracelog',
     kind:'pre_instruction',seq,pc,before:reg(pc,A[seq])
@@ -111,7 +113,7 @@ test('unsupported native bank opcode is inventoried, never executed speculativel
 test('a native checkpoint divergence is reported with fields only, never CPU or ROM values',async()=>{
   await compiledFixture(x=>{
     const rows=structuredClone(x.rows);
-    rows[4].before.A=5;
+    rows[5].before.A=5;
     const result=verifyNativeBankedStaticSteps({...x,rows});
     assert.equal(result.status,'BANKED_STATIC_CPU_OR_EXTERNAL_EVENT_DIVERGENCE');
     assert.equal(result.first_divergence.pc,'0x4000');
