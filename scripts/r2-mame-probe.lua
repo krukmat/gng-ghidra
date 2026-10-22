@@ -58,6 +58,26 @@ local readCount, writeCount, resetCount, frameCount = 0, 0, 0, 0
 -- The memory tap may fire before the MAME gng_state::bankswitch_w handler.
 local bankControlWrites = 0
 local bankControlSamplesMax = 64
+-- Optional R3-only sprite-RAM tap. A memory tap is a board observation,
+-- not proof of exhaustive CPU-bus ordering or the post-write memory value.
+local sprite_capture = os.getenv("GNG_R2_PROBE_SPRITE_RAM") == "1"
+local sprite_write_count = 0
+local sprite_sample_limit = 4096
+record("SPRITE_RAM_TAP_ENABLED", sprite_capture and "1" or "0")
+if sprite_capture then
+    gng_r2_sprite_write_tap = assert(space:install_write_tap(
+        0x1e00, 0x1fff, "r3-sprite-ram-write-probe",
+        function(addr, data, mask)
+            sprite_write_count = sprite_write_count + 1
+            if sprite_write_count <= sprite_sample_limit then
+                -- The CPU state PC in a tap is not necessarily the
+                -- pre-instruction PC. Do not use it to match instructions.
+                record("SPRITE_RAM_WRITE_BYTE", addr, data & 0xff,
+                       mask & 0xff)
+            end
+            return data
+        end), "Failed to install optional R3 sprite RAM write tap")
+end
 local reset_requested = false
 local controlled_reset = os.getenv("GNG_R2_PROBE_SOFT_RESET") == "1"
 local limit = 20
@@ -103,6 +123,7 @@ local function finish(reason)
     record("OBSERVED_MMIO_READ_COUNT", readCount)
     record("OBSERVED_MMIO_WRITE_COUNT", writeCount)
     record("OBSERVED_BANK_CONTROL_WRITE_COUNT", bankControlWrites)
+    record("OBSERVED_SPRITE_RAM_WRITE_COUNT", sprite_write_count)
     record("PROBE_END", reason)
     assert(file:close())
     file_closed = true
