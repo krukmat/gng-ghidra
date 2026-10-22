@@ -17,13 +17,35 @@ sin usar MAME ni intérprete MC6809 como runtime. La ROM original sigue privada.
 | R3.5.B1 | PASS real: reset diferenciado del wake de SYNC, causa de línea aún desconocida |
 | R3.5.B2 (IRQ/SYNCACK nativo) | Instrumentación de fuente y parser PREPARADOS; sin binario compilado/captura real |
 | R3.6.A (después de 0x6017) | PASS real: primer opcode = LDA extended, en 0x6017 |
-| R3.6.B (continuación JS) | B1 implementado: LDA extended estático con fuente de memoria estricta; validación real pendiente |
+| R3.6.B (continuación JS) | B1 LDA compilado, lectura MMIO bloqueada correctamente; B2 captura exacta preparada, pendiente de MAME real |
 | R4 (primer frame calculado por JS) | PENDIENTE: memoria/MMIO y CPU entre VBLANK |
 
 La primera época de SYNC acaba observando PC=0x6000 bajo el soft reset
 controlado. La segunda observa PC=0x6017, con I/F enmascaradas. El segundo
 resultado **no** demuestra por sí solo una señal de IRQ.
 
+## R3.6.B2 — Lectura MMIO nativa acotada (22/10/2026)
+
+**Hallazgo real aportado por el operador:** el JS estático de `LDA extended` en `0x6017` quedó bloqueado con `BLOCKED_UNVERIFIED_MEMORY_READ`; el operando pertenece a la ventana `0x3800..0x3fff`, y el siguiente preestado real de MAME está en `0x601a` (seq 779). Esta ventana incluye más dispositivos que la paleta: según `gng_main_map` del driver MAME, `0x3800..0x39ff` es paleta, `0x3a00` audio latch, `0x3c00` disparo DMA y `0x3e00` selección de banco; por tanto la etiqueta `PALETTE_OR_MMIO` es una clasificación **gruesa**, no una afirmación sobre el dispositivo leído. No se ha demostrado el dato devuelto por el bus.
+
+**Implementado**:
+
+- `scripts/r2-mame-probe.lua` añade `GNG_R36_TARGET_READ_ADDRESS` (opt-in). En el tap de lecturas de programa que ya existía, guarda únicamente las lecturas de **esa dirección exacta**, el byte retornado y la máscara de byte, con secuencia, época separada por el reset observado y contador de truncamiento (máximo 4096). El PC visible dentro del callback es **orientativo**, no etiqueta fiable de instrucción.
+- `scripts/r3-mmio-read-capture.sh` obtiene la dirección **exclusivamente** de la ROM privada ya validada y el opcode `0xB6` en `0x6017`, comprueba que esté en `0x3800..0x3fff`, respalda `out/r2/mame-probe/` bajo `out/r3/probe-before-r36-mmio.*`, ejecuta un único laboratorio MAME con soft reset y sprite taps, y lanza el diferencial. No imprime dirección ni byte.
+- `scripts/r3_mmio_read_gate.mjs` revalida la prueba de escrituras de sprites **en la misma captura**, el SYNC de ambos boots, y los preestados reales de `0x6017` y `0x601a`. Exige lectura nativa única en la segunda época y máscara `255`; ejecuta el LDA compilado usando el byte **leído desde el tap MAME**, nunca el registro A resultante. Compara PC y registros y solo si coinciden devuelve `SINGLE_NATIVE_READ_CONSISTENT_NOT_INSTRUCTION_CORRELATED`.
+- Si la lectura está ausente, duplicada, truncada o diverge, se devuelve error/estado bloqueado; **sin forzar un valor**. Incluso con coincidencia la lectura no está vinculada causalmente a la instrucción y **no existe todavía** modelo autónomo del dispositivo MMIO. No declarar R3.6.B ni R4 PASS.
+- Tests ROM-free sobre consistencia, lecturas múltiples, máscaras, truncamiento, fuente exacta y preestados adulterados. [CI PASS](https://github.com/krukmat/gng-ghidra/actions/runs/39770466913).
+
+**Prueba local siguiente (esta vez sí ejecuta MAME; no requiere Ghidra ni binario instrumentado):**
+
+```bash
+git pull --ff-only
+bash scripts/r3-mmio-read-capture.sh
+```
+
+Compartir solo JSON resumido `status`, `native_samples_after_reset`, `generated_js_checkpoints_compared` y `first_divergence`. **No compartir** ROM, módulo generado, TSV de lecturas ni trace. Si el MMIO devuelve un valor variable, el siguiente trabajo es identificar el dispositivo concreto y su semántica, no grabar un valor de una captura en el runtime.
+
+---
 ## R3.6.B1 — primera instrucción post-SYNC traducida (22/10/2026)
 
 El operador confirmó **R3.5.B1** `RESET_BOUNDARY_CONFIRMED_MASKED_WAKE_CAUSE_NOT_OBSERVED` y **R3.6.A** `POST_SYNC_OPCODE_FRONTIER_IDENTIFIED`: primer PC post-SYNC = `0x6017` e instrucción `LDA extended`, precedida por espera `SYNC` con IRQ/FIRQ enmascaradas. La causa efectiva del wake continúa sin certificarse.
