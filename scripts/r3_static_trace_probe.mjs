@@ -84,6 +84,106 @@ export function diffRegisters(actual,expected){
   return KEYS.filter(key=>actual[key]!==expected[key]);
 }
 
+/**
+ * R3 G2 preparation: roll forward each supported instruction WITHOUT
+ * injecting MAME state again until the segment stops.
+ *
+ * A segment starts with ONE MAME pre-state. Its own generated JS output
+ * feeds the next compiled JS instruction. Every intermediate output is
+ * checked against the corresponding adjacent MAME pre-state. Unsupported
+ * instructions, a mismatch, or the end of the trace terminate the segment.
+ *
+ * This validates registers/control only, never RAM/MMIO/IRQ causality.
+ */
+export function analyzeContiguousSegments(rows,compiled,compiledStep){
+  if(!Array.isArray(rows)||rows.length<2||!(compiled instanceof Map)||
+    typeof compiledStep!=='function')throw Error('INVALID_R3_CONTIGUOUS_ARGUMENTS');
+  rows.forEach(checkedRow);
+  const segments=[];
+  let running=null,firstMismatch=null;
+  function close(reason){
+    if(!running)return;
+    if(running.steps>0)segments.push({
+      start_seq:running.startSeq,
+      start_pc:hex(running.startPC),
+      matched_steps:running.steps,
+      stop_reason:reason
+    });
+    running=null;
+  }
+  let supportedPairs=0,matchingPairs=0,uncompiledPairs=0;
+  for(let i=0;i<rows.length-1;i++){
+    const row=rows[i],next=rows[i+1];
+    const spec=compiled.get(row.pc);
+    if(!spec){
+      uncompiledPairs++;
+      close('UNCOMPILED_INSTRUCTION');
+      continue;
+    }
+    supportedPairs++;
+    if(!running){
+      running={
+        startSeq:row.seq,startPC:row.pc,
+        registers:{...row.before},steps:0
+      };
+    }
+    // This cannot be a fresh injection: a live run always carries its
+    // previous output, and is compared to the current MAME checkpoint.
+    const entryDiff=diffRegisters(running.registers,row.before);
+    if(entryDiff.length){
+      if(!firstMismatch)firstMismatch={
+        seq:row.seq,pc:hex(row.pc),stage:'accumulated_state',
+        divergent_fields:entryDiff
+      };
+      close('ACCUMULATED_STATE_MISMATCH');
+      running={
+        startSeq:row.seq,startPC:row.pc,
+        registers:{...row.before},steps:0
+      };
+    }
+    const output=compiledStep(running.registers);
+    const diff=diffRegisters(output,next.before);
+    if(diff.length){
+      if(!firstMismatch)firstMismatch={
+        seq:row.seq,pc:hex(row.pc),stage:'after_compiled_instruction',
+        divergent_fields:diff
+      };
+      close('FIRST_DIVERGENCE');
+    }else{
+      matchingPairs++;
+      running.steps++;
+      running.registers=output;
+    }
+  }
+  close('TRACE_END');
+  segments.sort((a,b)=>b.matched_steps-a.matched_steps||
+    a.start_seq-b.start_seq);
+  const longest=segments[0]?.matched_steps??0;
+  const contiguous2=segments.filter(s=>s.matched_steps>=2).length;
+  const contiguous4=segments.filter(s=>s.matched_steps>=4).length;
+  return {
+    schema:'gng.r3.contiguous-register-only.v1',
+    status:firstMismatch?'FIRST_DIVERGENCE':
+      longest>=4?'FOUR_PLUS_STEPS_OBSERVED':
+      longest>=2?'MULTISTEP_OBSERVED':'NO_MULTISTEP_FOUND',
+    starts_from_one_mame_prestate_per_segment:true,
+    reinjects_mame_state_per_instruction:false,
+    checkpoints_compared_to_mame_per_instruction:true,
+    compiled_supported_pairs:supportedPairs,
+    matching_pairs:matchingPairs,
+    uncompiled_pairs:uncompiledPairs,
+    segment_count:segments.length,
+    segments_at_least_2:contiguous2,
+    segments_at_least_4:contiguous4,
+    longest_segment_steps:longest,
+    top_segments:segments.slice(0,5),
+    first_divergence:firstMismatch,
+    bus_or_irq_equivalence_verified:false,
+    game_executable:false,
+    gate_note:'Provisional G2 only: register/control-only slices; no full boot, memory or IRQ'
+  };
+}
+
 export async function runGate({romPath,tracePath,outDir}){
   const allowed=resolve('out/r3');
   const target=resolve(outDir);
@@ -123,6 +223,10 @@ export async function runGate({romPath,tracePath,outDir}){
         'CPU disagreement or interrupt/other activity between MAME trace hooks'};
     if(!diff.length)matched++;
   }
+  const contiguous=analyzeContiguousSegments(rows,compiled,compiledStep);
+  if(contiguous.compiled_supported_pairs!==pairs ||
+      contiguous.matching_pairs!==matched)
+    throw Error('R3_CONTIGUOUS_CHECKPOINT_ACCOUNTING_MISMATCH');
   const status=!pairs?'NO_SUPPORTED_NATIVE_PAIR':first?'FIRST_DIVERGENCE':
     'MATCHED_SUPPORTED_PRESTATE_PAIRS';
   const report={
@@ -130,6 +234,7 @@ export async function runGate({romPath,tracePath,outDir}){
     source:'fixed-ROM compiled instructions compared to adjacent native MAME prestates',
     compiled_pc_count:compiled.size,compared_pairs:pairs,matching_pairs:matched,
     distinct_compared_pc:covered.size,first_divergence:first,
+    contiguous,
     rom_sha256:createHash('sha256').update(romBytes).digest('hex'),
     trace_sha256:createHash('sha256').update(raw).digest('hex'),
     reference_provenance_independently_authenticated:false,
@@ -155,7 +260,8 @@ if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url))
       compiled_pc_count:report.compiled_pc_count,
       compared_pairs:report.compared_pairs,
       matching_pairs:report.matching_pairs,
-      first_divergence:report.first_divergence},null,2));
+      first_divergence:report.first_divergence,
+      contiguous:report.contiguous},null,2));
     if(report.status!=='MATCHED_SUPPORTED_PRESTATE_PAIRS')process.exitCode=2;
   }).catch(error=>{
     console.error('GNG_R3_STATIC_GATE=BLOCKED '+error.message);
