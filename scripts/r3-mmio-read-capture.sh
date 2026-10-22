@@ -29,4 +29,10 @@ fi
 GNG_R36_TARGET_READ_ADDRESS="$ADDR" \
 GNG_R2_PROBE_SOFT_RESET=1 GNG_R2_PROBE_SPRITE_RAM=1 \
   bash scripts/r2-mame-probe.sh
-node scripts/r3_mmio_read_gate.mjs
+# Opt-in B4 captures native unmap_value as independent policy evidence.
+# Do not invoke the older single-sample gate on a known 100-read capture.
+if [[ "${GNG_R36_CAPTURE_UNMAP_POLICY:-0}" == "1" ]]; then
+  node scripts/r3_unmapped_read_policy.mjs
+else
+  node scripts/r3_mmio_read_gate.mjs
+fi
