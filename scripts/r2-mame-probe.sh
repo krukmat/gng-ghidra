@@ -8,11 +8,14 @@ fail() { echo "GNG_R2_PROBE=BLOCKED reason=$1" >&2; exit 2; }
 command -v python3 >/dev/null || fail python_missing
 MAME_BIN="${GNG_R3_MAME_BIN:-mame}"
 command -v "$MAME_BIN" >/dev/null || fail mame_missing
-NATIVE_LOG_ARGS=()
-if [[ "${GNG_R3_MAME_NATIVE_EVENTS:-0}" == "1" ]]; then
-  [[ "$MAME_BIN" != "mame" ]] || fail native_hook_requires_explicit_custom_mame_binary
-  # -oslog routes native logerror messages into the private mame.log.
-  NATIVE_LOG_ARGS=(-oslog)
+# Bash 3.2 on macOS treats an expanded empty array as unbound under
+# `set -u`. Use scalar mode plus positional arguments instead.
+NATIVE_LOG_EVENTS="${GNG_R3_MAME_NATIVE_EVENTS:-0}"
+[[ "$NATIVE_LOG_EVENTS" == "0" || "$NATIVE_LOG_EVENTS" == "1" ]] ||
+  fail invalid_native_log_events_option
+if [[ "$NATIVE_LOG_EVENTS" == "1" ]]; then
+  [[ "$MAME_BIN" != "mame" ]] ||
+    fail native_hook_requires_explicit_custom_mame_binary
 fi
 ROM="$ROOT/roms/gng.zip"
 if [[ -f "$ROOT/roms/gngb.zip" ]]; then ROM="$ROOT/roms/gngb.zip"; fi
@@ -58,10 +61,16 @@ export GNG_R2_PROBE_SOFT_RESET="${GNG_R2_PROBE_SOFT_RESET:-0}"
 echo "GNG_R2_PROBE=START_MAME_DEBUGGER_NOT_GAMEPLAY"
 # Run in its own MAME process: startup/reset and instruction timing here
 # intentionally differs from the Blackbox autoplay sessions.
+# Populate only non-empty positional arguments; works on stock macOS Bash 3.2
+# with strict nounset, and preserves the same argv order for normal R2 runs.
+set -- gngb -rompath "$ROMPATH" -debug -debugscript "$DEBUGSCRIPT" \
+  -autoboot_script "$ROOT/scripts/r2-mame-probe.lua"
+if [[ "$NATIVE_LOG_EVENTS" == "1" ]]; then
+  # Optional custom binary only. -oslog routes native logerror to mame.log.
+  set -- "$@" -oslog
+fi
 set +e
-"$MAME_BIN" gngb -rompath "$ROMPATH" -debug -debugscript "$DEBUGSCRIPT" \
-  -autoboot_script "$ROOT/scripts/r2-mame-probe.lua" \
-  "${NATIVE_LOG_ARGS[@]}" -seconds_to_run 8 -skip_gameinfo \
+"$MAME_BIN" "$@" -seconds_to_run 8 -skip_gameinfo \
   >"$OUTPUT/mame.log" 2>&1
 EXIT_CODE=$?
 set -e
