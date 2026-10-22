@@ -9,6 +9,7 @@ import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {resolve,relative,isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {compileAt} from './r3_static_trace_probe.mjs';
+import {runNativeBootWriteGate} from './r3_compare_sprite_writes.mjs';
 
 const BOOT_PCS=new Set([0x6000,0x6002,0x6005,0x6009,
   0x600c,0x600e,0x6010,0x6012]);
@@ -124,16 +125,24 @@ async function main(){
   };
   const romPath=val('--rom','out/gngb-flat.bin');
   const tracePath=val('--trace','out/r2/mame-probe/pre-instruction.jsonl');
-  const proofPath=val('--proof','out/r3/sprite-native/sprite-native-report.json');
+  const observationsPath=val('--observations','out/r2/mame-probe/observations.tsv');
+  const capabilitiesPath=val('--capabilities','out/r2/mame-probe/capabilities.json');
   const reportPath=resolve(val('--out','out/r3/next-frontier'));
   const allowed=resolve('out/r3');
   const rel=relative(allowed,reportPath);
   if(!rel||rel==='..'||rel.startsWith('../')||isAbsolute(rel))
     throw Error('R3_FRONTIER_PRIVATE_OUTPUT_REQUIRED');
+  // Recompute R3.3 on the SAME current native observations, CPU pretrace
+  // and ROM image. A stale or copied standalone PASS JSON is never enough.
+  // No MAME process runs; this is fully offline re-verification.
+  const evidence=await runNativeBootWriteGate({
+    romPath,tracePath,observationsPath,capabilitiesPath,
+    outDir:resolve(reportPath,'verified-reference')
+  });
   const image=await readFile(romPath),trace=await readFile(tracePath,'utf8');
   const rows=trace.trimEnd().split('\n').map(line=>JSON.parse(line));
-  const evidence=JSON.parse(await readFile(proofPath,'utf8'));
   const result=inspectPostBootFrontier(new Uint8Array(image),rows,evidence);
+  result.evidence_reverified_from_same_private_files=true;
   result.rom_sha256=createHash('sha256').update(image).digest('hex');
   result.trace_sha256=createHash('sha256').update(trace.trim()).digest('hex');
   await mkdir(reportPath,{recursive:true});
