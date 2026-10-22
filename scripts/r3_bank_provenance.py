@@ -34,14 +34,19 @@ def choose_signature_offsets(packed: bytes) -> tuple[int, int]:
     if len(packed) != PACKED_SIZE:
         raise ValueError("A063_FIVE_VERIFIED_BANKS_REQUIRED")
     banks = [packed[i*BANK_SIZE:(i+1)*BANK_SIZE] for i in range(BANK_COUNT)]
-    # Choose the most discriminatory first byte; deterministic tie-breaking.
-    best0 = max(range(BANK_SIZE), key=lambda pos:
-                len({b[pos] for b in banks}))
-    best1 = max((pos for pos in range(BANK_SIZE) if pos != best0),
-                key=lambda pos: len({(b[best0], b[pos]) for b in banks}))
-    if len({(b[best0], b[best1]) for b in banks}) != BANK_COUNT:
-        raise ValueError("A063_NO_UNIQUE_TWO_BYTE_BANK_FINGERPRINT")
-    return best0, best1
+    # Search by five-bank byte-pattern partitions (at most 52 distinct
+    # patterns), not 8192^2 candidate positions. Greedy selection of
+    # the most discriminating *first* byte can miss a valid pair.
+    representatives: dict[tuple[int, ...], int] = {}
+    for pos in range(BANK_SIZE):
+        pattern = tuple(b[pos] for b in banks)
+        representatives.setdefault(pattern, pos)
+    locations = sorted(representatives.values())
+    for i, first in enumerate(locations):
+        for second in locations[i+1:]:
+            if len({(b[first], b[second]) for b in banks}) == BANK_COUNT:
+                return first, second
+    raise ValueError("A063_NO_UNIQUE_TWO_BYTE_BANK_FINGERPRINT")
 
 def signature_to_bank(packed: bytes, offsets: tuple[int,int]) -> dict[tuple[int,int],int]:
     if (len(packed) != PACKED_SIZE or len(offsets) != 2
@@ -192,6 +197,14 @@ def run_report(args):
         args.rawtrace.read_text(),rows,packed,offsets)
     report=analyze_bank_provenance(
         rows,entries,packed,fixed,args.observations.read_text())
+    # Required by the next A0.6.4 bank/PC compilation gate. Stored only
+    # inside the private evidence directory, with sequence continuity.
+    witness=args.output/"private-bank-per-prestate.jsonl"
+    witness.write_text("".join(
+        json.dumps({"seq":i,"pc":rows[i]["pc"],"bank":entry},
+                   separators=(",",":"))+"\n"
+        for i,entry in enumerate(entries)),encoding="utf-8")
+    report["private_bank_per_instruction_witness_written"]=True
     (args.output/"report.json").write_text(json.dumps(report,indent=2)+"\n")
     print(json.dumps(report,indent=2))
 
