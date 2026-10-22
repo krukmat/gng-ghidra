@@ -48,12 +48,14 @@ def classify(probe: Path, trace: Path) -> dict:
         blockers.append("MAME Lua probe output absent")
         return report
     observations: dict[str, list[list[str]]] = {}
+    chronology: list[tuple[str, list[str]]] = []
     for line_num, line in enumerate(probe.read_text(encoding="utf-8").splitlines(), 1):
         parts = line.split("\t")
         if not parts or not parts[0] or any(not cell for cell in parts):
             blockers.append(f"malformed probe line {line_num}")
             return report
         observations.setdefault(parts[0], []).append(parts[1:])
+        chronology.append((parts[0], parts[1:]))
     for key in SINGLES:
         if len(observations.get(key, [])) > 1:
             blockers.append("duplicate observation key " + key)
@@ -88,9 +90,15 @@ def classify(probe: Path, trace: Path) -> dict:
     if controlled not in (None, "0", "1"):
         blockers.append("unexpected controlled reset marker")
         return report
+    reset_sequence = [tag for tag, _ in chronology
+                      if tag in ("SOFT_RESET_REQUESTED", "RESET_NOTIFICATION")]
     cap["controlled_soft_reset_observed"] = (
         controlled == "1" and len(requests) == 1 and
-        cap["reset_notifier"] and count["OBSERVED_RESET_COUNT"] >= 1)
+        cap["reset_notifier"] and count["OBSERVED_RESET_COUNT"] == 1 and
+        reset_sequence == ["SOFT_RESET_REQUESTED", "RESET_NOTIFICATION"])
+    if controlled == "0" and (requests or count["OBSERVED_RESET_COUNT"] > 0):
+        blockers.append("reset events inconsistent with disabled controlled reset")
+        return report
     cap["frame_clock"] = count["OBSERVED_FRAME_COUNT"] > 0 and (
         len(observations.get("FRAME_SAMPLE", [])) ==
         count["OBSERVED_FRAME_COUNT"])
