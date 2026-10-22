@@ -12,6 +12,20 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## R3.6.B2 — Targeted MMIO read, bloqueo real tras 0x6017 (22/10/2026)
+
+El operador confirmó `BLOCKED_UNVERIFIED_MEMORY_READ` en `LDA extended` PC `0x6017`: operand region `PALETTE_OR_MMIO` (`0x3800..0x3fff`), siguiente preestado PC `0x601a`. No hay divergencia demostrada. Esta región incluye mapeos de paleta, audio, DMA y banco, por lo que no hay que asumir el dispositivo.
+
+Implementados: tap MAME opt-in de **la dirección exacta ROM-derived** con época de reset, byte/máscara y contador; wrapper con respaldo previo; comparador JS vs dato de tap y registros de MAME para un único evento en la segunda época, tras revalidar sprites y SYNC. Por limitaciones de Lua, el PC visto en la lectura es una sugerencia, no vinculación causal, y el PASS de coincidencia se limita a `SINGLE_NATIVE_READ_CONSISTENT_NOT_INSTRUCTION_CORRELATED`. CI ROM-free PASS.
+
+```bash
+git pull --ff-only
+bash scripts/r3-mmio-read-capture.sh
+```
+
+Requiere un único MAME nativo adicional con tap exacto. Solo compartir el resumen JSON, nunca datos privados. Si hay duplicados, cero lecturas o divergencia, diagnosticar con cautela; no inventar byte MMIO ni afirmar R4. Ver [contrato](r3-critical-path.md).
+
+---
 ## Ruta crítica R3.6.B1 — LDA extended post-SYNC (22/10/2026)
 
 El operador aportó B1 real `RESET_BOUNDARY_CONFIRMED_MASKED_WAKE_CAUSE_NOT_OBSERVED` y R3.6.A real `POST_SYNC_OPCODE_FRONTIER_IDENTIFIED` en PC `0x6017`, opcode `LDA_EXT`. Esta selección resuelve la incertidumbre de qué traducir, **no** la causalidad IRQ.
