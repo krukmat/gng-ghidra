@@ -147,7 +147,7 @@ class NativeBankSignatures(unittest.TestCase):
             line=line.replace(f"S0={a:02X}",f"S0=FFFFFFFFFFFFFF{a:02X}")
             line=line.replace(f"S1={b:02X}",f"S1=FFFFFFFFFFFFFF{b:02X}")
             lines.append(line)
-        trace="\\n".join(lines)
+        trace="\n".join(lines)
         report=module.diagnose_trace_signatures(trace,obs,images,offsets)
         self.assertEqual(report["native_pair_width_out_of_byte_range"],len(obs))
         self.assertEqual(report["first_signature_values_exceed_byte"],len(obs))
@@ -167,7 +167,7 @@ class NativeBankSignatures(unittest.TestCase):
         obs=rows()
         lines=[signature_line(r,0,images,(0,1)) for r in obs]
         lines[0]=lines[0].replace("S0=01","S0=000002FE")
-        report=module.diagnose_trace_signatures("\\n".join(lines),obs,images,(0,1))
+        report=module.diagnose_trace_signatures("\n".join(lines),obs,images,(0,1))
         self.assertEqual(report["native_pair_width_out_of_byte_range"],1)
         self.assertEqual(report["first_signature_values_exceed_byte"],1)
         self.assertEqual(report["second_signature_values_exceed_byte"],0)
