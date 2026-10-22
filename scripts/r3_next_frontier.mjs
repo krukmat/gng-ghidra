@@ -8,6 +8,7 @@ import {createHash} from 'node:crypto';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {resolve,relative,isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {compileAt} from './r3_static_trace_probe.mjs';
 
 const BOOT_PCS=new Set([0x6000,0x6002,0x6005,0x6009,
   0x600c,0x600e,0x6010,0x6012]);
@@ -67,17 +68,35 @@ export function inspectPostBootFrontier(rom,rows,proof){
     while(end<rows.length&&BOOT_PCS.has(rows[end].pc))end++;
     if(end>=rows.length||rows[end].pc!==0x6014)
       throw Error('R3_FRONTIER_BOOT_EXIT_NOT_OBSERVED');
-    const steps=end-start;
-    if(steps<388)
-      throw Error('R3_FRONTIER_BOOT_SLICE_TOO_SHORT');
+    const bootSteps=end-start;
+    const expectedBootSteps=rows[start].pc===0x6000?388:387;
+    if(bootSteps!==expectedBootSteps)
+      throw Error('R3_FRONTIER_UNEXPECTED_BOOT_INSTRUCTION_COUNT');
+    const bootRows=rows.slice(start,end);
+    if(bootRows.filter(r=>r.pc===0x600c).length!==96||
+        bootRows.filter(r=>r.pc===0x600e).length!==96)
+      throw Error('R3_FRONTIER_MISSING_BOOT_SPRITE_STORES');
+    const exitSeq=end;
+    let postBootCompiledSteps=0;
+    while(end<rows.length-1 && compileAt(rom,rows[end].pc)){
+      postBootCompiledSteps++;
+      end++;
+      if(postBootCompiledSteps>32)
+        throw Error('R3_FRONTIER_POST_BOOT_SCAN_BUDGET_EXCEEDED');
+    }
+    if(end>=rows.length-1)
+      throw Error('R3_FRONTIER_UNSUPPORTED_PC_NOT_OBSERVED');
     frontiers.push({
       start_seq:start,
       start_pc:'0x'+rows[start].pc.toString(16),
-      register_checkpoints:steps,
+      boot_instruction_count:bootSteps,
+      boot_exit_seq:exitSeq,
+      boot_exit_pc:'0x6014',
+      already_compiled_after_boot:postBootCompiledSteps,
       first_uncompiled_seq:end,
       first_uncompiled_pc:'0x'+rows[end].pc.toString(16),
       candidate_opcode_family:labelAt(rom,rows[end].pc),
-      source:'ROM byte family hint; requires Ghidra/independent CPU verification',
+      source:'ROM opcode-family hint, not an instruction decode; verify with Ghidra/native CPU oracle',
     });
   }
   if(frontiers[0].first_uncompiled_pc!==
