@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -116,6 +118,25 @@ class NativeMameOverlayTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "R35_MAME_SOURCE_DIR_MISSING"):
             probe.prepare(ROOT / "missing-mame-source",
                           ROOT / "out/r3/native-missing")
+
+
+    def test_r2_launcher_native_mode_is_opt_in_and_guarded(self):
+        script = (ROOT / "scripts/r2-mame-probe.sh").read_text()
+        self.assertIn('GNG_R3_MAME_NATIVE_EVENTS', script)
+        self.assertIn('GNG_R3_MAME_BIN', script)
+        self.assertIn('native_hook_requires_explicit_custom_mame_binary', script)
+        self.assertIn('NATIVE_LOG_ARGS=(-oslog)', script)
+        wrapper = (ROOT / "scripts/r3-native-irq-verify.sh").read_text()
+        self.assertIn('missing_explicit_instrumented_mame_binary', wrapper)
+        self.assertIn('binary_lacks_native_hook_marker', wrapper)
+        self.assertIn('probe-before-native-irq.', wrapper)
+        self.assertIn('scripts/r3_native_irq_report.mjs', wrapper)
+        if shutil.which("bash"):
+            for file in ("scripts/r2-mame-probe.sh",
+                         "scripts/r3-native-irq-verify.sh"):
+                proc = subprocess.run(["bash", "-n", str(ROOT / file)],
+                    capture_output=True, text=True)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
 
 
 if __name__ == "__main__":
