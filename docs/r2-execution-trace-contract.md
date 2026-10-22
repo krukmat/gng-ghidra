@@ -91,6 +91,45 @@ Eventos permitidos: `RESET`, `FRAME_BOUNDARY`, `SYNC_ENTER`, `SYNC_EXIT`, `IRQ_A
 
 El ejemplo entero es **ilustrativo**: no simula ni prueba un arranque válido. Para R2 PASS, el footer tendrá `status=COMPLETE`, `reset_observed=true`, `sync_observed=true` y `first_irq_entry_observed=true`, coherentes con los eventos y el log real. Una captura interrumpida puede ser útil como diagnóstico, nunca como gate aprobado.
 
+## R2.2.B1 — Alternativa nativa `tracesym` (22/10/2026)
+
+Tras el error real del operador (`16.892` marcadores, `0` registros parsables y fallo del callback de soft reset), se contrastó el contrato con el código de depuración de MAME, `src/emu/debug/debugcmd.cpp`:
+
+- `tracelog` utiliza un `mini_printf` con parámetros interpretados por la consola.
+- `tracesym` obtiene directamente los símbolos CPU registrados y formatea los valores según el `device_state_entry` de MAME.
+- `trace` ejecuta la acción de depuración antes de cada instrucción. La sonda puede combinar dos comandos dentro de `{...}`.
+
+**Implementación actual:** `scripts/r2-mame-probe.sh` utiliza por defecto
+`GNG_R2_TRACE_MODE=tracesym`, generando `{tracelog "GNG_R2_PRE ";tracesym pc,a,b,x,y,u,s,dp,cc}`.
+El modo histórico `GNG_R2_TRACE_MODE=printf` se mantiene solo para diagnóstico opt-in;
+no se mezclan ambos modos en una misma evidencia. `scripts/r2_pretrace_report.py`
+admite mayúsculas/minúsculas, prefijo `0x`, relleno con espacios y cantidades
+hexadecimales de hasta 2/4 dígitos, pero rechaza registros ausentes o duplicados,
+campos sobreanchos, valores no hexadecimales y trazas parciales.
+
+**CI ROM-free PASS:** [run 39729514466](https://github.com/krukmat/gng-ghidra/actions/runs/39729514466).
+No confirma todavía el formato nativo en el Mac.
+
+### Orden de validación revisado
+
+1. **Primero aislar el modo de trazado sin reset** (`GNG_R2_PROBE_SOFT_RESET=0`, `tracesym` predeterminado). No alterar el bot.
+2. Comprobar `pretrace-report.json`: `PRE_INSTRUCTION_FORMAT_PARSED`, `snapshots >= 2` y `malformed_markers=0`. Una muestra sintácticamente válida aún no acredita ejecución CPU completa.
+3. Solo si (2) pasa, validar el soft reset controlado con `GNG_R2_PROBE_SOFT_RESET=1`. No equipararlo con reset frío.
+4. R2.2.B2 aún requiere bus completo por instrucción, salida de registros, bancos e IRQ/SYNC auténticos.
+
+Comando del primer gate:
+
+```bash
+git pull --ff-only
+GNG_R2_PROBE_SOFT_RESET=0 bash scripts/r2-mame-probe.sh
+cat out/r2/mame-probe/pretrace-report.json
+```
+
+La salida de `cpu.trace` sigue siendo privada; en caso de error compartir únicamente
+`malformed_shapes_redacted` (sin registros/ROM). El estado R2.2 continúa **BLOCKED** hasta una verificación real.
+
+---
+
 ## R2.2.B1 — Preestado real por instrucción, controlado (22/10/2026)
 
 **Resultado de la prueba R2.2.A del operador** (`gngb` real): `PARTIAL_NATIVE_INSTRUMENTATION`; traza nativa **314.999 bytes**, **4 frames**, **100 lecturas** y **12 escrituras MMIO**, registros y banco observables. Falta callback de reset inicial, estados de entrada/salida por instrucción, bus completo, cambios de banco y señales SYNC/IRQ.
