@@ -115,10 +115,12 @@ def parse_debugger_bank_signatures(raw_trace: str, rows: list[dict],
         raise ValueError("A063_INCOMPLETE_PER_INSTRUCTION_BANK_TRACE")
     return entries
 
-def diagnose_trace_signatures(raw_trace: str, rows: list[dict]) -> dict:
+def diagnose_trace_signatures(raw_trace: str, rows: list[dict],\n                              packed: bytes | None = None,\n                              offsets: tuple[int, int] | None = None) -> dict:
     """Redacted source-shape diagnostics only: never show CPU or ROM data."""
     if not isinstance(raw_trace, str) or not isinstance(rows, list):
         raise ValueError("A063_TRACE_DIAGNOSTIC_INPUT_INVALID")
+    lookup = (signature_to_bank(packed, offsets)
+              if packed is not None and offsets is not None else None)
     pre_lines = sig_lines = same = formatted_pairs = 0
     pre_line_index = -1
     pc_alignment_mismatches = 0
@@ -126,6 +128,14 @@ def diagnose_trace_signatures(raw_trace: str, rows: list[dict]) -> dict:
     cpu_pair_mismatches = 0
     trace_line_mismatches = 0
     byte_width_exceeds_8 = 0
+    per_field_non_byte = [0, 0]
+    high_pattern_counts = {"one_or_both_64bit_ones": 0,
+                           "one_or_both_32bit_ones": 0,
+                           "other_nonbyte": 0,
+                           "no_nonbyte": 0}
+    candidate_full_value_matches = 0
+    candidate_lowbyte_only_matches = 0
+    candidate_lowbyte_distinct_banks = set()
     missing_signature_on_pre_line = 0
     signature_without_pre_on_line = 0
     malformed_sample_shapes = []
@@ -149,8 +159,30 @@ def diagnose_trace_signatures(raw_trace: str, rows: list[dict]) -> dict:
         if len(pcs) == len(signatures) == 1:
             formatted_pairs += 1
             values = [int(value, 16) for value in signatures[0].groups()]
-            if any(value > 255 for value in values):
+            nonbyte = [value > 255 for value in values]
+            for j,is_nonbyte in enumerate(nonbyte):
+                if is_nonbyte:
+                    per_field_non_byte[j] += 1
+            if any(nonbyte):
                 byte_width_exceeds_8 += 1
+            if any(v >> 8 == 0xffffffffffffff for v in values):
+                high_pattern_counts["one_or_both_64bit_ones"] += 1
+            elif any(v >> 8 == 0xffffff for v in values):
+                high_pattern_counts["one_or_both_32bit_ones"] += 1
+            elif any(nonbyte):
+                high_pattern_counts["other_nonbyte"] += 1
+            else:
+                high_pattern_counts["no_nonbyte"] += 1
+            if lookup is not None:
+                pair=tuple(values)
+                if pair in lookup:
+                    candidate_full_value_matches += 1
+                # For diagnosis ONLY. This candidate must never flow
+                # into the provenance parser or witness generation.
+                candidate=lookup.get(tuple(v & 255 for v in values))
+                if candidate is not None:
+                    candidate_lowbyte_only_matches += 1
+                    candidate_lowbyte_distinct_banks.add(candidate)
             if pre_line_index < len(rows):
                 row=rows[pre_line_index]
                 if int(pcs[0].group(1),16) != row.get("pc"):
@@ -188,6 +220,17 @@ def diagnose_trace_signatures(raw_trace: str, rows: list[dict]) -> dict:
         "pre_lines_without_signature": missing_signature_on_pre_line,
         "signature_lines_without_pre": signature_without_pre_on_line,
         "native_pair_width_out_of_byte_range": byte_width_exceeds_8,
+        "first_signature_values_exceed_byte": per_field_non_byte[0],
+        "second_signature_values_exceed_byte": per_field_non_byte[1],
+        "nonbyte_upper_bit_shape_counts": high_pattern_counts,
+        "private_rom_fingerprint_crosscheck_performed": lookup is not None,
+        "native_pairs_matching_full_width_authentic_fingerprint":
+            candidate_full_value_matches if lookup is not None else None,
+        "native_pairs_matching_authentic_fingerprint_only_after_lowbyte_mask":
+            candidate_lowbyte_only_matches if lookup is not None else None,
+        "distinct_authentic_bank_candidates_after_lowbyte_mask":
+            len(candidate_lowbyte_distinct_banks) if lookup is not None else None,
+        "lowbyte_mask_is_proven_safe": False,
         "matched_format_pc_mismatch_count": pc_alignment_mismatches,
         "matched_format_cpu_register_pairs_checked": cpu_pair_checked,
         "matched_format_cpu_register_mismatch_count": cpu_pair_mismatches,
@@ -342,7 +385,17 @@ def main():
     try:
         if args.mode=="diagnose":
             rows=[json.loads(line) for line in args.trace.read_text().splitlines() if line]
-            report=diagnose_trace_signatures(args.rawtrace.read_text(),rows)
+            packed = offsets = None
+            config=args.output/"private-signature-offsets.json"
+            # Optional offline cross-check against the SAME authenticated
+            # ROMs; never print signature values, addresses or bank IDs.
+            if config.is_file() and args.zip.is_file() and args.flat.is_file() and args.banks.is_file():
+                packed,_=load_authenticated_images(args.zip,args.flat,args.banks)
+                offsets=tuple(json.loads(config.read_text())["offsets"])
+                if offsets!=choose_signature_offsets(packed):
+                    raise ValueError("A063_SIGNATURE_OFFSETS_NOT_AUTHENTIC")
+            report=diagnose_trace_signatures(
+                args.rawtrace.read_text(),rows,packed,offsets)
             print(json.dumps(report,indent=2))
         else:
             (run_prepare if args.mode=="prepare" else run_report)(args)

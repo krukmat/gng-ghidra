@@ -1,5 +1,25 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## A0.6.3 — diagnóstico offline de firmas fuera de rango (22/10/2026)
+
+**Resultado nativo:** 60/60 Node, 6/6 Python inventario y 13/13 Python procedencia PASS en Mac; 17.135/17.135 líneas tienen PC y ambas firmas; 0 divergencias CPU/PC/línea. Las 17.135 firmas tienen por lo menos un campo mayor que 0xFF, de modo que `report` se bloquea correctamente por `A063_NATIVE_SIGNATURE_EXCEEDS_BYTE`. **No es A0.6.3 PASS.**
+
+El código del debugger MAME upstream (`src/emu/debug/express.cpp`) define `b@` como lectura de 1 byte, que devuelve <= 0xFF; `tracelog` usa un formato con ancho mínimo. No basta alegar que el ancho `%02X` generó una extensión de 64 bits: los datos son inconsistentes con esa semántica. Por eso **no se aceptan valores enmascarados** ni se genera witness a partir de `value & 0xff`.
+
+Se amplió `diagnose` para distinguir por firma qué campos exceden un byte, si los bits altos reproducen patrones 32/64-bit y cuántas parejas serían compatibles con los cinco bancos autenticados **solo después de enmascarar**. Esto último es una hipótesis diagnóstica, no una equivalencia validada. Todos los recuentos permanecen agregados, sin bytes, PC, ROM o estado CPU.
+
+Para determinar la siguiente corrección sin repetir MAME ni exponer privados:
+
+```bash
+git pull --ff-only
+bash scripts/r3-local-regression.sh
+python3 scripts/r3_bank_provenance.py diagnose
+```
+
+Compartir únicamente ese JSON. **No lanzar nueva captura MAME**, ni el gate A0.6.4, hasta revisar si ambos campos contienen valores no-byte y si sus 8 bits bajos corresponden a bancos reales. A0.6.3 permanece bloqueado mientras la firma completa no sea válida o exista prueba independiente de la codificación alternativa.
+
+---
+
 ## A0.6.3 — integridad de enlace CPU y banco (22/10/2026)
 
 El parser ahora exige en una misma línea la firma bancaria única y los nueve registros del preestado R2; verifica también el número de línea nativo si consta en JSONL. Rechaza emparejamientos de registros distintos aunque coincida el PC, y marcadores duplicados. El diagnóstico seguro alinea las líneas de preestado reales incluso si una pareja de firmas está malformada. También se corrigió el test A0.6.4 que esperaba `NOP` en `0x4002`, donde el fixture contiene `JMP_EXT`.

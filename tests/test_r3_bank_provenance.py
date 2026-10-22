@@ -134,6 +134,48 @@ class NativeBankSignatures(unittest.TestCase):
         self.assertEqual(report["matched_format_cpu_register_pairs_checked"],len(obs)-1)
         self.assertNotIn("S0=01",json.dumps(report))
 
+    def test_diagnose_wide_signatures_with_authentic_low_byte_candidate_without_trusting_them(self):
+        images=banks()
+        obs=rows()
+        offsets=(0,1)
+        bank_ids=[0,0,3,3,3,0]
+        lines=[]
+        for row,bank in zip(obs,bank_ids):
+            line=signature_line(row,bank,images,offsets)
+            a=images[bank*BANK_SIZE]
+            b=images[bank*BANK_SIZE+1]
+            line=line.replace(f"S0={a:02X}",f"S0=FFFFFFFFFFFFFF{a:02X}")
+            line=line.replace(f"S1={b:02X}",f"S1=FFFFFFFFFFFFFF{b:02X}")
+            lines.append(line)
+        trace="\\n".join(lines)
+        report=module.diagnose_trace_signatures(trace,obs,images,offsets)
+        self.assertEqual(report["native_pair_width_out_of_byte_range"],len(obs))
+        self.assertEqual(report["first_signature_values_exceed_byte"],len(obs))
+        self.assertEqual(report["second_signature_values_exceed_byte"],len(obs))
+        self.assertEqual(report["nonbyte_upper_bit_shape_counts"]["one_or_both_64bit_ones"],len(obs))
+        self.assertEqual(report["native_pairs_matching_full_width_authentic_fingerprint"],0)
+        self.assertEqual(report["native_pairs_matching_authentic_fingerprint_only_after_lowbyte_mask"],len(obs))
+        self.assertEqual(report["distinct_authentic_bank_candidates_after_lowbyte_mask"],2)
+        self.assertFalse(report["lowbyte_mask_is_proven_safe"])
+        self.assertFalse(report["raw_native_cpu_registers_bank_signature_bytes_or_rom_exported"])
+        with self.assertRaisesRegex(ValueError,"A063_NATIVE_SIGNATURE_EXCEEDS_BYTE"):
+            module.parse_debugger_bank_signatures(trace,obs,images,offsets)
+        self.assertNotIn("FFFFFFFFFFFFFF",json.dumps(report))
+
+    def test_diagnose_foreign_nonbyte_values_remains_blocked(self):
+        images=banks()
+        obs=rows()
+        lines=[signature_line(r,0,images,(0,1)) for r in obs]
+        lines[0]=lines[0].replace("S0=01","S0=000002FE")
+        report=module.diagnose_trace_signatures("\\n".join(lines),obs,images,(0,1))
+        self.assertEqual(report["native_pair_width_out_of_byte_range"],1)
+        self.assertEqual(report["first_signature_values_exceed_byte"],1)
+        self.assertEqual(report["second_signature_values_exceed_byte"],0)
+        self.assertEqual(report["native_pairs_matching_full_width_authentic_fingerprint"],len(obs)-1)
+        self.assertEqual(report["native_pairs_matching_authentic_fingerprint_only_after_lowbyte_mask"],len(obs)-1)
+        self.assertEqual(report["nonbyte_upper_bit_shape_counts"]["other_nonbyte"],1)
+        self.assertFalse(report["lowbyte_mask_is_proven_safe"])
+
     def test_duplicate_signature_marker_is_not_allowed_even_with_one_valid_pair(self):
         images=banks()
         obs=rows()
