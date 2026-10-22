@@ -17,6 +17,7 @@ GNG_A06_BANKSIG_HEX0="$BANKSIG0" GNG_A06_BANKSIG_HEX1="$BANKSIG1" \
 GNG_R2_TRACE_MODE=printf \
 GNG_R36_CAPTURE_UNMAP_POLICY=1 GNG_A04_VIDEO_WRITE_TAP=1 \
   bash scripts/r3-video-write-capture.sh
+python3 scripts/r3_bank_provenance.py diagnose
 python3 scripts/r3_bank_provenance.py report
 # The same private capture now supplies the bank/PC static recompilation gate.
 # This never builds or executes an opcode interpreter or reruns MAME.
