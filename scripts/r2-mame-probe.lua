@@ -80,11 +80,39 @@ if sprite_capture then
 end
 local reset_requested = false
 local controlled_reset = os.getenv("GNG_R2_PROBE_SOFT_RESET") == "1"
+-- Opt-in R3.6.B2: observe exact CPU program-bus read from the ROM-attested
+-- LDA extended operand address. PC inside tap is advisory and NOT an
+-- instruction-correlated bus/fetch boundary. Never overwrite native data.
+local target_read_raw = os.getenv("GNG_R36_TARGET_READ_ADDRESS")
+local target_read_address = nil
+local target_read_count = 0
+local target_read_limit = 4096
+if target_read_raw and target_read_raw ~= "" then
+    target_read_address = tonumber(target_read_raw)
+    assert(target_read_address and target_read_address % 1 == 0 and
+           target_read_address >= 0x3800 and target_read_address <= 0x3fff,
+           "R36 exact MMIO target must be decimal 0x3800..0x3fff")
+end
+record("R36_TARGETED_READ_ENABLED", target_read_address and "1" or "0")
+if target_read_address then
+    record("R36_TARGETED_READ_ADDR", target_read_address)
+end
 local limit = 20
 gng_r2_probe_read_tap = space:install_read_tap(
     0x3000, 0x3fff, "r2-mmio-read-probe",
     function(addr, data, mask)
         readCount = readCount + 1
+        if target_read_address and addr == target_read_address then
+            target_read_count = target_read_count + 1
+            if target_read_count <= target_read_limit then
+                -- Epoch is separated by the actual observed reset notifier.
+                -- The debugger PC is a hint only and is never proof of
+                -- which instruction issued this memory access.
+                record("R36_TARGETED_READ_BYTE", resetCount,
+                       target_read_count, screen:frame_number(),
+                       pc(), addr, data & 0xff, mask & 0xff)
+            end
+        end
         if readCount <= limit then
             record("MMIO_READ_SAMPLE", screen:frame_number(), pc(), addr,
                    data & 0xff)
@@ -121,6 +149,7 @@ local function finish(reason)
     record("OBSERVED_RESET_COUNT", resetCount)
     record("OBSERVED_FRAME_COUNT", frameCount)
     record("OBSERVED_MMIO_READ_COUNT", readCount)
+    record("R36_TARGETED_READ_COUNT", target_read_count)
     record("OBSERVED_MMIO_WRITE_COUNT", writeCount)
     record("OBSERVED_BANK_CONTROL_WRITE_COUNT", bankControlWrites)
     record("OBSERVED_SPRITE_RAM_WRITE_COUNT", sprite_write_count)
