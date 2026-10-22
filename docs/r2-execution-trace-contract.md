@@ -91,6 +91,24 @@ Eventos permitidos: `RESET`, `FRAME_BOUNDARY`, `SYNC_ENTER`, `SYNC_EXIT`, `IRQ_A
 
 El ejemplo entero es **ilustrativo**: no simula ni prueba un arranque válido. Para R2 PASS, el footer tendrá `status=COMPLETE`, `reset_observed=true`, `sync_observed=true` y `first_irq_entry_observed=true`, coherentes con los eventos y el log real. Una captura interrumpida puede ser útil como diagnóstico, nunca como gate aprobado.
 
+## R2.2.B2.b — Comparación posterior en frame (no instrucción)
+
+La primera prueba local B2.a mostró **una escritura real y una muestra** del selector `0x3e00`. El siguiente subbloque compara esa escritura con la siguiente muestra `FRAME_SAMPLE` ya existente en el archivo privado del operador.
+
+El algoritmo `classify_deferred_bank_entry` en `scripts/r2_probe_report.py` respeta orden de registros TSV, aplica la semántica real `gng_state::bankswitch_w` de MAME (`data == 4 ? 4 : data & 3`), y clasifica la evidencia sin revelar CPU/ROM:
+
+- `expected_entry_visible_next_frame`: banco esperado presente posteriormente, sin afirmar instante de activación.
+- `different_entry_seen_after_write`: valor del banco visto durante el callback y valor posterior distintos; sigue sin haber timestamp de ejecución de handler.
+- `already_selected_at_write_tap`: selección redundante o callback posterior al handler; no hay prueba de cambio.
+- `unexpected_entry_next_frame`, `multiple_writes_before_frame`, `interrupted_by_reset`, `no_followup_frame`, `invalid_frame_sample`: el gate queda inconcluso.
+- `post_handler_bank_edge_proven=false` y `instruction_bus_complete=false` son invariantes deliberadas. El oráculo de R2 completo continúa bloqueado.
+
+**CI ROM-free:** [run 39736105423](https://github.com/krukmat/gng-ghidra/actions/runs/39736105423). Primera validación: reprocesar sin MAME con `python3 scripts/r2_probe_report.py --dir out/r2/mame-probe` y compartir solo `bank_control.deferred_frame_followup`.
+
+**Limitación:** el primer `FRAME_SAMPLE` después de una escritura no es un hook de fin de instrucción. Confirmar posteriormente un valor no demuestra, sin una fuente post-handler, que esa escritura produjo por sí sola el flanco. Se requiere un observador adicional a nivel de CPU o del handler MAME para `BANK_SWITCH`, bus y `IRQ_ENTRY`.
+
+---
+
 ## R2.2.B2.a — Bank-select MMIO (instrumentación preparada; validación real pendiente)
 
 **Confirmación en código fuente MAME** [`src/mame/capcom/gng.cpp`](https://github.com/mamedev/mame/blob/master/src/mame/capcom/gng.cpp):
