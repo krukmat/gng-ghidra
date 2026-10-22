@@ -45,6 +45,8 @@ jobs:
       - run: node --check scripts/r3_dynamic_coverage.mjs
       - run: node --check scripts/r3_static_trace_probe.mjs
       - run: node --test tests/test_r3_compiler_family_batch.mjs
+      - run: node --check scripts/r3_indexed_store_gate.mjs
+      - run: node --test tests/test_r3_indexed_store_gate.mjs
       - run: node --test tests/test_r3_dynamic_coverage.mjs
       - run: node --test tests/test_sprite_memory.mjs
       - run: node --test tests/test_video_memory.mjs
