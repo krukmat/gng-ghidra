@@ -6,6 +6,25 @@
 **Pruebas:** `tests/test_r3_static_trace_probe.mjs`  
 **Dependencias:** R0 y R1 finalizados; R2.2.B1 (17.281 y 17.135 preestados MAME válidos en ejecuciones reales). El gate R2 integral permanece abierto.
 
+## R3.5.B1 — Reset separado del wake de SYNC (22/10/2026)
+
+**Nueva evidencia Mac R3.5.A:** `SYNC` fijo verificado (opcode `0x13` en `0x6016`), dos preestados reales: `seq=388` seguido de debugger PC `0x6000` y `seq=778` seguido de PC `0x6017`. En ambos casos `CC.I` y `CC.F` están activados; `cpu_post_sync_equivalence_verified=false` y `irq_or_firq_or_nmi_assertion_observed=false`.
+
+**Interpretación precisa:** época 0 coincide con el **soft reset controlado** de la prueba, por lo que el salto observado a `0x6000` no constituye evidencia de IRQ. Época 1 muestra **fallthrough a `0x6017` con interrupciones enmascaradas**, consistente con un wake de SYNC, pero **no identifica** el origen de la señal. El driver MAME `gng.cpp` tiene `m_maincpu->set_vblank_int("screen", irq0_line_hold)`: hay una fuente hardware configurada, pero no hemos observado directamente la línea IRQ en el momento crítico ni `SYNCACK`.
+
+**Implementación R3.5.B1:** `scripts/r3_sync_reset_causality.mjs` revalida desde la **misma ROM/pretrace/taps MAME** los dos boots y parsea la cronología real del TSV. Exige exactamente una `SOFT_RESET_REQUESTED` seguida de exactamente una `RESET_NOTIFICATION`, con contadores y `PROBE_END` válidos. Clasifica las dos épocas sin atribuir el PC `0x6000` a IRQ y sin inventar una señal en la época 1. Reporta `RESET_BOUNDARY_CONFIRMED_MASKED_WAKE_CAUSE_NOT_OBSERVED`; todas las afirmaciones de equivalencia IRQ/stack/syncack permanecen `false`.
+
+**Próximo comando local, sin MAME:**
+```bash
+git pull --ff-only
+node scripts/r3_sync_reset_causality.mjs
+```
+Compartir solo JSON resumido. No compartir ROM, `observations.tsv`, `pre-instruction.jsonl` ni los módulos generados.
+
+**R3.5.B2 pendiente:** para demostrar causalidad exacta se precisa instrumentación **nativa de línea IRQ/SYNCACK** en núcleo/driver MAME (o una interfaz oficialmente documentada equivalente) con intervalos de tiempo y aceptación CPU. Muestrear VBLANK o deducir IRQ por el siguiente PC no cumple el contrato. No lanzar capturas Lua repetidas que no añadan esa capacidad.
+
+---
+
 ## R3.5 — Frontera SYNC 0x6016: espera compilada, evento aún no demostrado (22/10/2026)
 
 **Prueba real R3.4 aportada por el operador:** `FRONTIER_IDENTIFIED_NOT_COMPILED` en dos boots, PC no compilado **`0x6016`**, familia probable **SYNC**, primera época `seq=388` y segunda `seq=778` después de una instrucción ya compilada en `0x6014`. Ambas parten de la misma ROM privada SHA-256 `fe14e127586245fd4dd0842cd09acdcab44c7ac91cfeff45a8bfccbd03e1b535`, y R3.3 mantiene 768/768 bytes nativos comparados. **El resultado de R3.4 era una pista por familia, no descodificación ni prueba IRQ.**
