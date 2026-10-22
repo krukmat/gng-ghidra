@@ -12,6 +12,26 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## A0 — Aceleración incremental por cobertura (22/10/2026)
+
+**No se descarta ni reemplaza R0–R3.6.** Se añade un profiler a la **implementación actual** para priorizar familias de instrucciones y construir lotes de bloques. Se prohíbe confundir cobertura de PCs muestreados con porcentaje de juego recompilado.
+
+- **A0.1 (implementada, CI ROM-free PASS):** `scripts/r3_dynamic_coverage.mjs` revalida prueba real R3.3 de RAM sprites, doble SYNC y reset desde los archivos privados del Mac; calcula frecuencias de PC, categorías AOT del compilador existente, ROM bancaria no autenticada y familias/opcodes pendientes. Emite `out/r3/dynamic-coverage/report.json` sin bytes ROM, registros ni código generado.
+- **A0.2 (pendiente del JSON real):** seleccionar familias con mejor rendimiento potencial (frecuencia + diversidad de PC), en lugar de modificar a ciegas `compileAt`.
+- **A0.3 (pendiente):** refactor incremental de semántica común y validación diferencial por lotes, conservando gates actuales.
+- **B5:** el gate existente `r3_post_lda_frontier.mjs` se mantiene como prueba separada de continuación desde `0x601A`; su validación real no ha llegado aún.
+- **IRQ/SYNCACK:** permanece el bloque R3.5.B2 con la instrumentación nativa existente, sin declarar equivalencia solo por perfiles.
+
+```bash
+git pull --ff-only
+node --test tests/test_r3_dynamic_coverage.mjs
+node scripts/r3_dynamic_coverage.mjs
+```
+
+Solo reportar JSON agregado. No hace falta capturar MAME otra vez. Detalles y límites: [ruta crítica](r3-critical-path.md).
+
+---
+
 ## R3.6.B4 real PASS; R3.6.B5 post-LDA frontier (22/10/2026)
 
 **Operador Mac:** `MAME_UNMAPPED_POLICY_MATCHES_NATIVE_TAPS_AND_STATIC_LDA` para `LDA_EXT` PC `0x6017`, operando `0x3C00`; 100 lecturas reales, todas iguales al `space.map.unmap_value` obtenido independientemente del mapa MAME; el JS estático reproduce registros del checkpoint `0x601A` (`first_divergence=null`). B4 **validado en alcance acotado**. El wake IRQ/SYNC, causalidad CPU bus y R4 siguen pendientes.
