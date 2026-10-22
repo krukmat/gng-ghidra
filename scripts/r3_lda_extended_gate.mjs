@@ -74,8 +74,8 @@ export function emitLdaModule(spec){
   ].join('\n');
 }
 export function finalSpriteMemory(boot){
-  if(!Array.isArray(boot)||boot.length!==768)
-    throw Error('R36_LDA_NEEDS_384_NATIVE_VERIFIED_BYTE_WRITES');
+  if(!Array.isArray(boot)||boot.length!==384)
+    throw Error('R36_LDA_NEEDS_192_NATIVE_VERIFIED_WORD_WRITES');
   const known=new Map();
   for(const event of boot){
     if(!Number.isInteger(event.addr)||event.addr<0x1e00||
