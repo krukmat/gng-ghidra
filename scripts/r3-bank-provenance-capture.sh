@@ -18,3 +18,6 @@ GNG_R2_TRACE_MODE=printf \
 GNG_R36_CAPTURE_UNMAP_POLICY=1 GNG_A04_VIDEO_WRITE_TAP=1 \
   bash scripts/r3-video-write-capture.sh
 python3 scripts/r3_bank_provenance.py report
+# The same private capture now supplies the bank/PC static recompilation gate.
+# This never builds or executes an opcode interpreter or reruns MAME.
+node scripts/r3_banked_static_gate.mjs
