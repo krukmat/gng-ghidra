@@ -1,5 +1,28 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## A0.4 — Contraste real ordenado de VRAM (22/10/2026)
+
+**Evidencia Mac A0.3 aceptada en su alcance:** `INDEXED_REGISTER_CHECKPOINTS_MATCHED_BUS_UNVERIFIED` con **4.096/4.096** registros correctos, cero divergencias, cuatro `STA/STB indexed` con postincremento 1: `0x6041` (A,X+), `0x6043` (B,Y+), `0x6055` (B,X+), `0x6057` (A,Y+). Todas sus direcciones predichas corresponden a **VIDEO_RAM**. El nuevo perfil A0 muestra **9.689/17.135 = 56,55%** de *instrucciones muestreadas elegibles para emisión AOT*; restan **12** muestras de opcodes ROM fija sin compilar, **7.434** muestras de ROM bancaria sin procedencia. Esta cifra **no** certifica CPU/bus autónomo ni porcentaje de juego completo.
+
+**A0.4 implementada en `main`, MAME real pendiente:**
+
+- `r2-mame-probe.lua` con `GNG_A04_VIDEO_WRITE_TAP=1` añade **un único tap** de escritura del espacio de programa en `0x2000–0x2fff`. Guarda **dirección, byte, máscara, orden y época de reset**, con límite explícito **32.768** eventos y contador final. Ningún callback PC se utiliza como correlación de instrucción.
+- `scripts/r3-video-write-capture.sh` arranca un único laboratorio MAME nativo, reutilizando el wrapper que **respalda toda la captura anterior** en `out/r3` y exige la comprobación B4 de lectura sin handler en la **misma** nueva captura antes del gate A0.4.
+- `scripts/r3_native_video_write_gate.mjs` vuelve a validar en el mismo conjunto nativo R3.3 (sprite RAM) y los dos SYNC; ejecuta cada uno de los cuatro stores con **JS compilado y el preestado nativo inicial de esa instrucción**. Exige 1 byte VRAM por store, registro siguiente correcto y exactamente 1.024 ejecuciones de cada PC. Compara las **4.096 escrituras predichas** con un **segmento contiguo y único** de los eventos del tap de MAME después del reset, exigiendo igualdad de **dirección, dato, máscara y orden**.
+- **Sin inflar el gate:** una coincidencia permite afirmar solo que el **segmento completo de 4.096 escrituras de VRAM** se observó idéntico en MAME. No se ha demostrado correlación de cada write tap con la instrucción exacta, cobertura exhaustiva de todos los accesos del bus, ni una simulación autónoma de la board. Se cuentan escrituras de VRAM adicionales que no se pueden atribuir al segmento. Sin captura completa, coincidencia única, secuencia correcta o 4.096 registros equivalentes, se bloquea.
+- Tests ROM-free con 4.096 eventos sintéticos, orden/dirección/byte/máscara corruptos, epoch equivocado, truncamiento y protección de los resultados. **CI PASS** [Actions](https://github.com/krukmat/gng-ghidra/actions/runs/39809056078).
+
+**Ejecutar en Mac una sola vez (necesita MAME porque la captura anterior no incluía los write taps VRAM):**
+
+```bash
+git pull --ff-only
+bash scripts/r3-video-write-capture.sh
+```
+
+Compartir exclusivamente el JSON agregado final `gng.a0.native-video-byte-write-v1`, no los archivos `out/r2`, el módulo JS generado ni los eventos raw. Si `NATIVE_VIDEO_WRITES_MATCH_GENERATED_STATIC_JS` —y solo entonces— cerrar A0.4 en este alcance e iniciar A0.5 (board RAM/VRAM) y el inventario de bancos. **R4 sigue pendiente** por ejecución continua, banked ROM y causa IRQ/SYNCACK.
+
+---
+
 ## A0.3 — STA/STB indexados: compilación estática y gate de registros (22/10/2026)
 
 **Se conserva lo anterior:** del Mac, A0.2 comprobó **5.593/17.135 (32,64%)** muestras elegibles para generación AOT vs **1.393/17.135 (8,13%)** antes; el incremento se debe a `CMPX` inmediato, saltos cortos y familia unary A/B. **B5 real**: cinco pasos desde `0x601A` por NOP×3, DEC_B y BNE, finalizando en `SYNC 0x6016` sin divergencia. Se trata de **cobertura sobre la traza**, no 32,64% del juego ni IRQ validada.
