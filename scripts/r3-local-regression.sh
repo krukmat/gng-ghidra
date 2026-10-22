@@ -15,6 +15,7 @@ node --check scripts/r3_video_board_integration.mjs
 node --check scripts/r3_static_trace_probe.mjs
 node --check scripts/r3_indexed_store_gate.mjs
 node --check scripts/r3_native_video_write_gate.mjs
+node --check scripts/r3_banked_static_gate.mjs
 node --test \
   tests/test_gngb_board_memory.mjs \
   tests/test_gngb_video_bridge.mjs \
@@ -22,6 +23,7 @@ node --test \
   tests/test_r3_compiler_family_batch.mjs \
   tests/test_r3_dynamic_coverage.mjs \
   tests/test_r3_indexed_store_gate.mjs \
+  tests/test_r3_banked_static_gate.mjs \
   tests/test_r3_native_video_write_gate.mjs \
   tests/test_video_memory.mjs \
   tests/test_sprite_memory.mjs
