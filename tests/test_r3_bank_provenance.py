@@ -78,6 +78,54 @@ class NativeBankSignatures(unittest.TestCase):
             module.parse_debugger_bank_signatures(raw,obs,images,offsets),
             selection)
 
+    def test_native_debugger_minimum_width_and_optional_hex_prefix(self):
+        images=banks()
+        obs=rows()
+        selected=[0,0,3,3,3,0]
+        offsets=module.choose_signature_offsets(images)
+        lines=[]
+        for row,bank in zip(obs,selected):
+            original=signature_line(row,bank,images,offsets)
+            for key in ("S0", "S1"):
+                import re
+                original=re.sub(
+                    rf"\\b{key}=([0-9A-Fa-f]{{2}})",
+                    lambda m: key+"=0x"+m.group(1).rjust(8,"0"),
+                    original)
+            lines.append(original)
+        assert module.parse_debugger_bank_signatures(
+            "\\n".join(lines),obs,images,offsets)==selected
+
+    def test_non_byte_signature_is_rejected_and_shape_diagnostic_redacts(self):
+        images=banks()
+        obs=rows()
+        offsets=module.choose_signature_offsets(images)
+        lines=[signature_line(row,0,images,offsets) for row in obs]
+        lines[0]=lines[0].replace("S0=01","S0=00000101")
+        raw="\\n".join(lines)
+        with self.assertRaisesRegex(ValueError,"A063_NATIVE_SIGNATURE_EXCEEDS_BYTE"):
+            module.parse_debugger_bank_signatures(raw,obs,images,offsets)
+        report=module.diagnose_trace_signatures(raw,obs)
+        self.assertEqual(report["trace_lines_with_both_markers"],len(obs))
+        self.assertEqual(report["native_pair_width_out_of_byte_range"],1)
+        self.assertFalse(report["raw_native_cpu_registers_bank_signature_bytes_or_rom_exported"])
+        self.assertNotIn("00000101",json.dumps(report))
+        self.assertNotIn("PC=6000",json.dumps(report))
+
+    def test_diagnostic_identifies_split_or_unformatted_trace_without_raw_data(self):
+        obs=rows()
+        lines=[signature_line(row,0,banks(),(0,1)) for row in obs]
+        raw="\\n".join(line.replace("GNG_A06_BANKSIG","\\nGNG_A06_BANKSIG")
+                      for line in lines)
+        report=module.diagnose_trace_signatures(raw,obs)
+        self.assertEqual(report["trace_lines_with_cpu_pre_marker"],len(obs))
+        self.assertEqual(report["trace_lines_with_bank_signature_marker"],len(obs))
+        self.assertEqual(report["trace_lines_with_both_markers"],0)
+        self.assertEqual(report["pre_lines_without_signature"],len(obs))
+        self.assertEqual(report["signature_lines_without_pre"],len(obs))
+        with self.assertRaisesRegex(ValueError,"A063_TRACE_MARKERS_NOT_SAME_INSTRUCTION"):
+            module.parse_debugger_bank_signatures(raw,obs,banks(),(0,1))
+
     def test_stale_missing_ambiguous_and_foreign_native_signatures_fail(self):
         images=banks()
         obs=rows()
