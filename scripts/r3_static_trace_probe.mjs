@@ -43,6 +43,18 @@ export function compileAt(rom,pc){
   }else if(op===0x10&&(b1===0x8e||b1===0xce)){
     len=4;name=b1===0x8e?'LDY_IMM':'LDS_IMM';
     stmt=load(b1===0x8e?'Y':'S',(b2<<8)|rom[pc+3],16);
+  }else if((pc===0x600c||pc===0x600e) && op===0xed && b1===0x81){
+    // ROM-attested gngb reset-loop STD ,X++ only (src/poc.py).
+    // This is an actual 16-bit write, not a register-only shortcut.
+    len=2;name='STD_X_POSTINC';
+    stmt='if(r.X<0x1e00||r.X>0x1ffe)throw RangeError("SPRITE_RAM_WRITE_OUT_OF_RANGE");'+
+      'if(typeof writeRamWord!=="function")throw Error("MISSING_RAM_WORD_SINK");'+
+      'writeRamWord(r.X,(r.A<<8)|r.B);r.X=(r.X+2)&65535;'+
+      'r.CC=changeNZV(r.CC,(r.A<<8)|r.B,16);';
+  }else if(pc===0x6010 && op===0x31 && b1===0x3f){
+    // ROM-attested 6809 LEAY -1,Y: modifies Z only.
+    len=2;name='LEAY_MINUS_1';
+    stmt='r.Y=(r.Y-1)&65535;r.CC=(r.CC&~4)|(r.Y===0?4:0);';
   }else if(op===0x20){
     len=2;name='BRA';stmt='next='+hex((pc+2+signed8(b1))&65535)+';';
   }else if(op===0x16){
@@ -55,13 +67,14 @@ export function compileAt(rom,pc){
     len=3;name='JMP_EXT';stmt='next='+hex(imm16)+';';
   }else return null;
   if(pc+len>65536)return null;
-  return {pc,len,name,statement:stmt,next:(pc+len)&65535};
+  return {pc,len,name,statement:stmt,next:(pc+len)&65535,
+    writesSpriteWord:name==='STD_X_POSTINC'};
 }
 
 export function emitStaticModule(specs){
   let js='// PRIVATE ROM-DERIVED STATIC JS. No runtime opcode decoder.\n';
   js+='const changeNZV=(cc,v,bits)=>(cc&~14)|((v&(bits===8?128:32768))?8:0)|(v===0?4:0);\n';
-  js+='export function compiledStep(regs){\nconst r={...regs};let next=0;\nswitch(r.PC){\n';
+  js+='export function compiledStep(regs,writeRamWord){\nconst r={...regs};let next=0;\nswitch(r.PC){\n';
   for(const spec of specs){
     js+='case '+hex(spec.pc)+':{next='+hex(spec.next)+';'+
       spec.statement+'r.PC=next;return r;}\n';
@@ -107,11 +120,13 @@ export function analyzeContiguousSegments(rows,compiled,compiledStep){
       start_seq:running.startSeq,
       start_pc:hex(running.startPC),
       matched_steps:running.steps,
+      modeled_ram_word_writes:running.modeledRamWordWrites??0,
       stop_reason:reason
     });
     running=null;
   }
   let supportedPairs=0,matchingPairs=0,uncompiledPairs=0;
+  let modeledRamWordWrites=0;
   for(let i=0;i<rows.length-1;i++){
     const row=rows[i],next=rows[i+1];
     const spec=compiled.get(row.pc);
@@ -141,7 +156,15 @@ export function analyzeContiguousSegments(rows,compiled,compiledStep){
         registers:{...row.before},steps:0
       };
     }
-    const output=compiledStep(running.registers);
+    // RAM is sparse and write-only in this experimental slice. No initial
+    // RAM image is invented and no MAME memory equivalence is asserted.
+    const stagedWrites=[];
+    const output=compiledStep(running.registers,(addr,word)=>{
+      if(!Number.isInteger(addr)||addr<0x1e00||addr>0x1ffe||
+        !Number.isInteger(word)||word<0||word>65535)
+        throw Error('INVALID_COMPILED_SPRITE_RAM_WORD_WRITE');
+      stagedWrites.push([addr,word]);
+    });
     const diff=diffRegisters(output,next.before);
     if(diff.length){
       if(!firstMismatch)firstMismatch={
@@ -153,6 +176,8 @@ export function analyzeContiguousSegments(rows,compiled,compiledStep){
       matchingPairs++;
       running.steps++;
       running.registers=output;
+      modeledRamWordWrites+=stagedWrites.length;
+      running.modeledRamWordWrites=(running.modeledRamWordWrites??0)+stagedWrites.length;
     }
   }
   close('TRACE_END');
@@ -172,6 +197,8 @@ export function analyzeContiguousSegments(rows,compiled,compiledStep){
     compiled_supported_pairs:supportedPairs,
     matching_pairs:matchingPairs,
     uncompiled_pairs:uncompiledPairs,
+    modeled_ram_word_writes:modeledRamWordWrites,
+    ram_writes_compared_with_mame:false,
     segment_count:segments.length,
     segments_at_least_2:contiguous2,
     segments_at_least_4:contiguous4,
@@ -180,7 +207,7 @@ export function analyzeContiguousSegments(rows,compiled,compiledStep){
     first_divergence:firstMismatch,
     bus_or_irq_equivalence_verified:false,
     game_executable:false,
-    gate_note:'Provisional G2 only: register/control-only slices; no full boot, memory or IRQ'
+    gate_note:'G2 extension: register checkpoints only, sparse RAM writes modeled but not verified against MAME bus; no IRQ'
   };
 }
 
@@ -216,7 +243,11 @@ export async function runGate({romPath,tracePath,outDir}){
     const spec=compiled.get(one.pc);
     if(!spec)continue;
     pairs++;covered.add(one.pc);
-    const diff=diffRegisters(compiledStep(one.before),two.before);
+    const diff=diffRegisters(compiledStep(one.before,(addr,word)=>{
+      if(!Number.isInteger(addr)||addr<0x1e00||addr>0x1ffe||
+          !Number.isInteger(word)||word<0||word>65535)
+        throw Error('INVALID_COMPILED_SPRITE_RAM_WORD_WRITE');
+    }),two.before);
     if(diff.length&&!first)
       first={seq:one.seq,pc:hex(one.pc),instruction:spec.name,
         divergent_fields:diff,interpretation:
@@ -240,8 +271,9 @@ export async function runGate({romPath,tracePath,outDir}){
     reference_provenance_independently_authenticated:false,
     full_game_or_bus_irq_equivalence_verified:false,
     runtime_opcode_interpreter:false,
-    no_runtime_memory_or_io:true,
-    limitations:['Only statically supported fixed-ROM register/control instructions',
+    no_runtime_memory_or_io:!([...compiled.values()].some(v=>v.writesSpriteWord)),
+    generated_sprite_ram_writes_unverified_by_reference:true,
+    limitations:['Only statically supported fixed-ROM register/control plus ROM-attested sprite RAM writes',
       'MAME adjacent prestates can cross interrupts or external CPU events',
       'No RAM/MMIO/banking/fetch/stack or SYNC/IRQ bus-level effects verified',
       'Generated ROM-derived JS must stay private under out/'],
