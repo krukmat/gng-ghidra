@@ -12,6 +12,22 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Reparación A0.6.3: recuperación offline de captura existente (22/10/2026)
+
+Tras la captura real, MAME exit=0, 17.135 preestados, B4 MMIO `PASS` y A0.4 VRAM **4096/4096 PASS**. La suite ROM-free tuvo 58/60: dos errores causados por un fixture bancario con una transición `NOP` imposible. Corregido a `LDA → JMP` con transición entre bancos fuera del segmento bancario.
+
+A0.6.3 falló `A063_TRACE_MARKERS_NOT_SAME_INSTRUCTION`. **No prueba un problema de ROM ni de banco**: el parser anterior suponía campos de firma exactamente de dos dígitos y un único formato de línea. El parser nuevo acepta anchos hexadecimales variables dentro del rango byte y emite diagnóstico **de formas, sin datos ROM/CPU** cuando la misma línea no contiene ambos marcadores. No se permite correlacionar a ciegas marcadores de líneas distintas. **A0.6.3/A0.6.4 siguen pendientes de gate real.**
+
+```bash
+git pull --ff-only
+bash scripts/r3-local-regression.sh
+bash scripts/r3-banked-critical-path.sh
+```
+
+Este último proceso usa solamente la captura ya generada. Si falla, compartir solo su JSON diagnóstico `gng.a06.bank-trace-shape-diagnostic.v1` y la línea de error. **No repetir MAME** hasta ver la forma real de la traza. No GitHub Actions.
+
+---
+
 ## Ruta crítica ejecutada: A0.6.3 → A0.6.4 (22/10/2026)
 
 **A0.6.1–A0.6.2 cerradas con evidencia real Mac:** 55 tests Node y 6 Python PASS; 5 imágenes de banco CRC auténticas (40.960 B), 7.434 prestates bancarios/7 PCs distintos; banco inicial observado 0 y un control write a `0x3e00` hacia banco 3. No convertir muestras por frame en atribución de banco por instrucción.
