@@ -12,6 +12,21 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## A0.4 — Video RAM write equivalence gate (22/10/2026)
+
+A0.3 real Mac: `4.096/4.096` checkpoints nativos iguales para `STA/STB indexed` (X+/Y+), todas las escrituras **predichas** apuntan a VRAM; sin divergencia. El perfil AOT sube a `9.689/17.135 = 56,55%` **de las instrucciones observadas**, frente a 8,13% al inicio de A0, pero la ROM bancaria (7.434) y los accesos de bus nativos siguen pendientes. Restan 12 muestras de ROM fija sin codegen.
+
+**Implementado:** tap MAME opt-in de escritura VRAM 0x2000–0x2fff (byte/máscara/orden/epoch, límite 32768), wrapper de una sola ejecución que preserva las capturas anteriores y revalida B4, y `r3_native_video_write_gate.mjs`. Compara un **segmento único y ordenado de 4.096 escrituras** generado por JS desde cada preestado con eventos reales MAME, sin publicar direcciones/bytes. Se rechazan secuencias incompletas, truncadas, sin orden, duplicadas o diferentes; no se asume correlación precisa tap/instrucción, IRQ o juego autónomo. Tests ROM-free y CI PASS.
+
+```bash
+git pull --ff-only
+bash scripts/r3-video-write-capture.sh
+```
+
+**Siguiente tras gate nativo:** integrar VRAM al board runtime y avanzar bancos; IRQ/SYNCACK sigue en paralelo. **No marcar R4 completo.** Ver [ruta crítica](r3-critical-path.md).
+
+---
+
 ## A0.3 — Compilador indexado y comparador de 4 sites (22/10/2026)
 
 **Resultado real operador:** A0 subió de 1.393/17.135 (8,13%) a 5.593/17.135 (32,64%) muestras elegibles tras A0.2. B5 verificó 5 pasos de NOP×3, DEC_B y BNE, regresando a SYNC `0x6016` sin divergencia; causa del wake todavía desconocida. Las 4.096 muestras sin soporte más repetidas son `STA/STB_INDEXED` en `0x6041`, `0x6043`, `0x6055` y `0x6057`.
