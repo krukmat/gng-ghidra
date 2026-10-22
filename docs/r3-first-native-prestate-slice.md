@@ -12,7 +12,7 @@ El operador ha ejecutado en un proceso nativo MAME `gngb` con tap RAM y soft res
 
 ## R3.4 — Elegir el siguiente bloque real después del boot (preparado)
 
-Nuevo `scripts/r3_next_frontier.mjs`, completamente offline. Exige un `sprite-native-report.json` con dos épocas válidas y sin otras escrituras de sprite RAM, ROM fija de 64 KiB con vector `0x6000`, y estructura de boot con **96 repeticiones de cada una de las dos instrucciones `STD ,X++` por arranque**. Elige la primera instrucción que realmente no esté compilada **después del exit `0x6014`**, no asume que `0x6014` sea la frontera. La clasificación de opcode es una *pista por familia*; no constituye todavía descodificación Ghidra ni implementación de semántica.
+Nuevo `scripts/r3_next_frontier.mjs`, completamente offline. **Reejecuta primero el diferencial R3.3 desde la misma ROM, el mismo pretrace y los mismos taps MAME privados**, de modo que un `sprite-native-report.json` antiguo no sirve como prueba. Exige dos épocas válidas y sin otras escrituras de sprite RAM, ROM fija de 64 KiB con vector `0x6000`, y estructura de boot con **96 repeticiones de cada una de las dos instrucciones `STD ,X++` por arranque**. Elige la primera instrucción que realmente no esté compilada **después del exit `0x6014`**, no asume que `0x6014` sea la frontera. La clasificación de opcode es una *pista por familia*; no constituye todavía descodificación Ghidra ni implementación de semántica.
 
 ```bash
 git pull --ff-only
