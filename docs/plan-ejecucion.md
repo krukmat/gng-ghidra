@@ -12,6 +12,24 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## A0.2 — Primer lote del compilador guiado por la cobertura REAL (22/10/2026)
+
+El operador obtuvo 17.135 preestados / 62 PCs; solo 1.393 (8,13%) elegibles previamente para AOT (sin prueba de runtime), 8.308 muestras ROM fija no soportadas y 7.434 muestras en ROM bancaria no autenticada. **8.192 de las 8.308** se concentran en dos bucles de 8 PCs que combinan escritura indexada A/B, CMPX inmediato y saltos cortos. B5 confirmó tres NOP en `0x601A–0x601C`, deteniéndose en una operación unary en `0x601D`, sin divergencia.
+
+**Implementado en `main`:** corrección de ranking de familias (error `.hits` frente a `.samples` que anteponía 104 hits a 2.048); compilación estática reutilizable de 22 operaciones unary A/B, CMPX inmediato y 16 saltos cortos en `r3_static_trace_probe.mjs`. Pruebas exhaustivas sobre semántica ROM-free y regresiones, CI PASS. Todo el trabajo de R0–R3 y B4 se conserva; no se crea un intérprete.
+
+**Validación real pendiente:**
+
+```bash
+git pull --ff-only
+node scripts/r3_dynamic_coverage.mjs
+node scripts/r3_post_lda_frontier.mjs
+```
+
+Solo resultados agregados. A0.3: implementar variantes de `STA/STB_INDEXED` basadas en el **postbyte real**, certificando sus escrituras, y estudiar ROM bancaria para no confundir 7.434 muestras de banco con fijo. Seguir con instrumentación IRQ/SYNCACK en paralelo. Ver [ruta crítica](r3-critical-path.md).
+
+---
+
 ## A0 — Aceleración incremental por cobertura (22/10/2026)
 
 **No se descarta ni reemplaza R0–R3.6.** Se añade un profiler a la **implementación actual** para priorizar familias de instrucciones y construir lotes de bloques. Se prohíbe confundir cobertura de PCs muestreados con porcentaje de juego recompilado.
