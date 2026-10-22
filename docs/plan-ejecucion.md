@@ -12,6 +12,25 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Estado verificado R2.2.B1 — 22/10/2026: `tracesym` operativo
+
+El operador confirmó una ejecución real de la sonda nativa MAME `gngb` **sin soft reset**: `17.281` preestados / `17.281` marcadores válidos, `0` malformados, `61` PC distintos. `PRE_INSTRUCTION_FORMAT_PARSED` y `PARTIAL_NATIVE_INSTRUMENTATION` superan el gate de **preestado**, pero no el contrato integral R2.1. El parser aislado no certifica procedencia por sí mismo. La ejecución R2.2.B2 está pendiente.
+
+**Siguiente gate:** validar el soft reset separado (conservando primero la evidencia sin reset). `r2_probe_report.py` ahora exige solicitud → notificación en orden, sin duplicados; CI ROM-free PASS.
+
+```bash
+git pull --ff-only
+mkdir -p out/r2/mame-probe-no-reset-pass
+cp -R out/r2/mame-probe/. out/r2/mame-probe-no-reset-pass/
+GNG_R2_PROBE_SOFT_RESET=1 bash scripts/r2-mame-probe.sh
+cat out/r2/mame-probe/capabilities.json
+cat out/r2/mame-probe/pretrace-report.json
+```
+
+La copia local preserva `cpu.trace` y `pre-instruction.jsonl` sin publicarlos. **Solo enviar los JSON de resúmenes, no datos CPU.** R2.2.B2 sigue exigiendo bus, registros `after`, IRQ y SYNC reales.
+
+---
+
 ## R2.2.B1 — Corrección del soft reset y diagnóstico privado del trace
 
 La primera ejecución MAME con soft reset informó `[LUA ERROR] attempt to use a closed file`, duplicación de contadores y **16.892 marcadores nativos** no parseables. **R2.2.B1 BLOCKED**, independientemente de `MAME_EXIT=0`. Se añadió cierre idempotente/guardia de reentrada y validación shell fail-closed; parser ahora informa anchos y nombres de campos sin revelar valores.
