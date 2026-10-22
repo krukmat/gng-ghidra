@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {compileAt,emitStaticModule,diffRegisters,runGate}
+import {compileAt,emitStaticModule,diffRegisters,runGate,analyzeContiguousSegments}
   from '../scripts/r3_static_trace_probe.mjs';
 
 const basic=(PC,A=0,CC=128)=>({PC,A,B:0,X:0,Y:0,U:0,S:0x2000,DP:0,CC});
@@ -68,6 +68,70 @@ test('native prestate shaped synthetic sequence compares four compiled one-step 
     assert.throws(()=>imported.compiledStep(basic(0x6009)),/UNCOMPILED_PC/);
   });
 });
+test('G2 contiguous replay executes four JS instructions with one initial real-shape state',async()=>{
+  await fixture(async args=>{
+    const result=await runGate(args);
+    assert.equal(result.status,'MATCHED_SUPPORTED_PRESTATE_PAIRS');
+    const c=result.contiguous;
+    assert.equal(c.status,'FOUR_PLUS_STEPS_OBSERVED');
+    assert.equal(c.compiled_supported_pairs,4);
+    assert.equal(c.matching_pairs,4);
+    assert.equal(c.longest_segment_steps,4);
+    assert.equal(c.segments_at_least_4,1);
+    assert.equal(c.top_segments[0].start_seq,0);
+    assert.equal(c.top_segments[0].start_pc,'0x6000');
+    assert.equal(c.top_segments[0].stop_reason,'TRACE_END');
+    assert.equal(c.starts_from_one_mame_prestate_per_segment,true);
+    assert.equal(c.reinjects_mame_state_per_instruction,false);
+    assert.equal(c.bus_or_irq_equivalence_verified,false);
+    assert.equal(c.game_executable,false);
+  });
+});
+test('G2 stops runs on uncompiled instructions, does not concatenate separated matching pairs',()=>{
+  const mem=image();
+  const compiled=new Map([
+    [0x6000,compileAt(mem,0x6000)],
+    [0x6004,compileAt(mem,0x6004)],
+  ]);
+  function syntheticStep(r){
+    if(r.PC===0x6000)return {...r,PC:0x6002,A:0x7f};
+    if(r.PC===0x6004)return {...r,PC:0x6008};
+    throw Error('UNCOMPILED_PC');
+  }
+  const r=analyzeContiguousSegments(rows(),compiled,syntheticStep);
+  assert.equal(r.matching_pairs,2);
+  assert.equal(r.compiled_supported_pairs,2);
+  assert.equal(r.longest_segment_steps,1);
+  assert.equal(r.segments_at_least_2,0);
+  assert.equal(r.status,'NO_MULTISTEP_FOUND');
+});
+test('G2 stops and records a CC divergence rather than forging a continuous segment',async()=>{
+  const corrupt=rows();
+  corrupt[1].before.CC=0x88;
+  await fixture(async args=>{
+    const result=await runGate(args);
+    const c=result.contiguous;
+    assert.equal(result.status,'FIRST_DIVERGENCE');
+    assert.equal(c.status,'FIRST_DIVERGENCE');
+    assert.equal(c.first_divergence.seq,0);
+    assert.deepEqual(c.first_divergence.divergent_fields,['CC']);
+    assert.ok(c.longest_segment_steps<4);
+    assert.equal(c.matching_pairs,result.matching_pairs);
+  },{states:corrupt});
+});
+test('G2 never reads MAME before state again inside contiguous segment',()=>{
+  const mem=image(),states=rows();
+  const specs=new Map(states.slice(0,4).map(row=>[row.pc,compileAt(mem,row.pc)]));
+  const bogusStep=()=>{
+    // Failing generated execution must surface as an exception,
+    // not be concealed by resetting from a new MAME row.
+    throw Error('SYNTHETIC_COMPILED_JS_FAILURE');
+  };
+  assert.throws(
+    ()=>analyzeContiguousSegments(states,specs,bogusStep),
+    /SYNTHETIC_COMPILED_JS_FAILURE/);
+});
+
 test('first divergence is reported, never silently skipped or converted to PASS',async()=>{
   const changed=rows();
   changed[1].before.CC=0x88;
