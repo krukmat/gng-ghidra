@@ -12,6 +12,20 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Ruta crítica R3.6.B1 — LDA extended post-SYNC (22/10/2026)
+
+El operador aportó B1 real `RESET_BOUNDARY_CONFIRMED_MASKED_WAKE_CAUSE_NOT_OBSERVED` y R3.6.A real `POST_SYNC_OPCODE_FRONTIER_IDENTIFIED` en PC `0x6017`, opcode `LDA_EXT`. Esta selección resuelve la incertidumbre de qué traducir, **no** la causalidad IRQ.
+
+Nuevo `scripts/r3_lda_extended_gate.mjs`: compila un `LDA extended` específico desde ROM fija en PC `0x6017`; genera JS estático con lector `readByte` obligatorio y actualiza A/N/Z/V/PC. Solo admite valores independientes: ROM fija o bytes de sprite RAM escritos en R3.3 y verificados con taps de MAME en dos boots. Desconocidos de RAM, MMIO, vídeo o banco se bloquean, sin usar MAME A como read-value. Pruebas ROM-free CI PASS; la comparación nativa posterior está pendiente.
+
+```bash
+git pull --ff-only
+node scripts/r3_lda_extended_gate.mjs
+```
+
+Compartir solo JSON agregado (`status`, `operand_region`, `native_next_pc`, `generated_js_step_compared`). Si `BLOCKED_UNVERIFIED_MEMORY_READ`, hay que instrumentar exactamente esa lectura; si hay `MATCHED_...`, se valida un **solo paso LDA** con fuente conocida, pero no la salida de SYNC ni el bus completo. Ver [ruta crítica](r3-critical-path.md).
+
+---
 ## Ruta crítica activa — 22/10/2026: R3.5.B1/B2 y R3.6.A
 
 Plan detallado, dependencias y gates: [Ruta crítica R3→R4](r3-critical-path.md). Esta actualización prevalece sobre los bloques históricos posteriores.
