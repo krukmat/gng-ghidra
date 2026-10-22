@@ -33,11 +33,13 @@ def evidence(dir: Path, with_trace: bool = True):
         ("FRAME_SAMPLE", "2", "24578", "0"),
         ("RESET_NOTIFICATION", "0", "24576"),
         ("MMIO_READ_SAMPLE", "1", "24576", "12288", "255"),
-        ("MMIO_WRITE_SAMPLE", "2", "24578", "15104", "0"),
+        ("MMIO_WRITE_SAMPLE", "2", "24578", "15872", "4"),
+        ("BANK_CONTROL_WRITE_SAMPLE", "2", "24578", "15872", "4", "0"),
         ("OBSERVED_RESET_COUNT", "1"),
         ("OBSERVED_FRAME_COUNT", "2"),
         ("OBSERVED_MMIO_READ_COUNT", "1"),
         ("OBSERVED_MMIO_WRITE_COUNT", "1"),
+        ("OBSERVED_BANK_CONTROL_WRITE_COUNT", "1"),
         ("PROBE_END", "frame-limit"),
     ]
     (dir / "observations.tsv").write_text(
@@ -61,6 +63,37 @@ class R2MameProbeTests(unittest.TestCase):
             self.assertTrue(result["capabilities"]["mmio_read_taps"])
             self.assertFalse(result["capabilities"]["observed_irq_assert_entry"])
             self.assertFalse(result["capabilities"]["exhaustive_ordered_bus"])
+
+    def test_bank_control_write_is_observed_not_forged_into_bank_switch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            evidence(root)
+            result = probe.classify(root / "observations.tsv", root / "cpu.trace")
+            self.assertTrue(result["capabilities"]["bank_control_writes_observed"])
+            self.assertFalse(result["capabilities"]["observed_bank_switch_edges"])
+            self.assertEqual(result["bank_control"]["control_write_count"], 1)
+            self.assertEqual(result["bank_control"]["recorded_samples"], 1)
+            self.assertFalse(result["bank_control"]["post_handler_bank_entry_verified"])
+
+    def test_missing_truncated_and_wrong_address_bank_samples_block_evidence(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            evidence(root)
+            path = root / "observations.tsv"
+            initial = path.read_text()
+            for broken in (
+                initial.replace("BANK_CONTROL_WRITE_SAMPLE\t2\t24578\t15872\t4\t0\n", ""),
+                initial.replace("BANK_CONTROL_WRITE_SAMPLE\t2\t24578\t15872\t4\t0",
+                                "BANK_CONTROL_WRITE_SAMPLE\t2\t24578\t15104\t4\t0"),
+                initial.replace("OBSERVED_BANK_CONTROL_WRITE_COUNT\t1",
+                                "OBSERVED_BANK_CONTROL_WRITE_COUNT\t65"),
+            ):
+                with self.subTest(broken=broken[-90:]):
+                    path.write_text(broken)
+                    result = probe.classify(path, root / "cpu.trace")
+                    self.assertFalse(result["capabilities"]["bank_control_writes_observed"])
+                    self.assertTrue(any("bank-control" in item for item in result["blockers"]))
+                    self.assertFalse(result["reference_execution_verified"])
 
     def test_missing_native_trace_never_qualifies(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -172,6 +205,8 @@ class R2MameProbeTests(unittest.TestCase):
         self.assertNotIn("r0-blackbox-baseline.sh", script)
         self.assertIn("install_read_tap(", lua)
         self.assertIn("install_write_tap(", lua)
+        self.assertIn('if addr == 0x3e00 then', lua)
+        self.assertIn('OBSERVED_BANK_CONTROL_WRITE_COUNT', lua)
         self.assertIn("add_machine_reset_notifier", lua)
         self.assertIn("manager.machine", lua)
         self.assertNotIn("GNG_R2_TRACE_CONTRACT=PASS", lua)
