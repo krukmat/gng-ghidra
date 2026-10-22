@@ -12,6 +12,21 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## A0.5-LAB — Board RAM/VRAM mínimo, sin CI remota (22/10/2026)
+
+**Se conserva el compilador estático R3 y toda la evidencia R0–A0.3.** El nuevo módulo `src/gngb_board_memory.mjs` integra los sinks byte/word con RAM principal, sprite RAM y FG/BG; reutiliza `video_memory.mjs` / `sprite_memory.mjs`. Exige que cada byte haya sido escrito antes de permitir leerlo, genera copias aisladas para el renderer, y rechaza ROM bancaria, MMIO sin modelar y escritura DMA no certificada. Las escrituras de instrucciones generadas tienen commit atómico. No asume cold boot ni interrupciones.
+
+`tests/test_gngb_board_memory.mjs` verifica localmente la mecánica de una secuencia **sintética** de 4.096 escrituras y las condiciones de bloqueo; no acredita buses MAME ni juego autónomo. No hay GitHub Actions en el repositorio; para revisar todos los módulos con el checkout real se añadió:
+
+```bash
+git pull --ff-only
+bash scripts/r3-local-regression.sh
+```
+
+**A0.4 continúa pendiente**: `bash scripts/r3-video-write-capture.sh` corre MAME una vez y compara dirección, byte, máscara y orden de las escrituras nativas. Después: board basado en evidencia real, ROM bancaria e IRQ/SYNCACK. Ver [ruta crítica](r3-critical-path.md).
+
+---
+
 ## A0.4 — Video RAM write equivalence gate (22/10/2026)
 
 A0.3 real Mac: `4.096/4.096` checkpoints nativos iguales para `STA/STB indexed` (X+/Y+), todas las escrituras **predichas** apuntan a VRAM; sin divergencia. El perfil AOT sube a `9.689/17.135 = 56,55%` **de las instrucciones observadas**, frente a 8,13% al inicio de A0, pero la ROM bancaria (7.434) y los accesos de bus nativos siguen pendientes. Restan 12 muestras de ROM fija sin codegen.
