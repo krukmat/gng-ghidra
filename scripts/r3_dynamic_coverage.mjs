@@ -82,7 +82,9 @@ function classOf(rom,pc){
     family:'BANKED_OPCODE_UNVERIFIED'};
   const compiled=compileAt(rom,pc);
   if(compiled)return {eligibility:compiled.writesSpriteWord?
-    'AOT_SPRITE_WRITE_SITE':'AOT_STATIC_AVAILABLE',family:compiled.name};
+    'AOT_SPRITE_WRITE_SITE':compiled.writesRamByte?
+    'AOT_INDEXED_BYTE_WRITE_UNVERIFIED':'AOT_STATIC_AVAILABLE',
+    family:compiled.name};
   if(pc===0x6016&&compileSyncAt(rom,pc))
     return {eligibility:'AOT_SYNC_WAIT_ONLY',family:'SYNC'};
   if(pc===0x6017&&compileLdaAt(rom,pc)?.address===0x3c00)
