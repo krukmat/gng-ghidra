@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {inspectPostBootFrontier} from '../scripts/r3_next_frontier.mjs';
 
@@ -91,4 +92,12 @@ test('both boots must reach the same first unsupported frontier',()=>{
     before:{...rows[idx].before,PC:0x6016}};
   assert.throws(()=>inspectPostBootFrontier(image(),rows,proof()),
     /R3_FRONTIER_BOOT_EXITS_DIFFER/);
+});
+
+test('CLI re-verifies RAM against current native observations, never trusts a stale PASS JSON',async()=>{
+  const script=await readFile('scripts/r3_next_frontier.mjs','utf8');
+  assert.match(script,/await runNativeBootWriteGate\(\{/);
+  assert.match(script,/observationsPath,capabilitiesPath/);
+  assert.match(script,/verified-reference/);
+  assert.doesNotMatch(script,/readFile\(proofPath/);
 });
