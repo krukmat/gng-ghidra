@@ -1,10 +1,48 @@
 # R3.0 — Primer gate real de lógica MC6809 → JavaScript estático
 
-**Estado:** IMPLEMENTED_AND_CI_ROM_FREE_PASS / REAL_ROM_MAME_COMPARISON_PENDING  
+**Estado:** G1 REAL_ROM_MAME_PASS (616/616 pares admitidos); G2 REPLAY_CONTIGUO_IMPLEMENTADO, PENDIENTE_DE_VALIDACIÓN_REAL  
 **Fecha:** 2026-10-22  
 **Código:** `scripts/r3_static_trace_probe.mjs`  
 **Pruebas:** `tests/test_r3_static_trace_probe.mjs`  
 **Dependencias:** R0 y R1 finalizados; R2.2.B1 (17.281 y 17.135 preestados MAME válidos en ejecuciones reales). El gate R2 integral permanece abierto.
+
+## Validación real R3.0 G1 — 22 de octubre de 2026
+
+**Resultado del operador en Mac:** `bash scripts/r3-first-real-slice.sh` preparó la imagen fija de ROM verificada desde `roms/gng.zip`, SHA-256 `fe14e127586245fd4dd0842cd09acdcab44c7ac91cfeff45a8bfccbd03e1b535`, y comparó **616/616 pares preinstrucción reales de MAME con JS estático generado**, sin divergencias (`MATCHED_SUPPORTED_PRESTATE_PAIRS`). Se compilaron **25 direcciones PC** distintas. **G1 PASS acotado:** solo instrucciones de registros/control admitidas en ROM fija, con un reinicio desde cada preestado MAME para la comparación de una instrucción. No demuestra 616 instrucciones consecutivas ni equivalencia de memoria/bus/IRQ.
+
+## R3.1 — Replay continuo de registros/control, una única entrada MAME por segmento
+
+`scripts/r3_static_trace_probe.mjs` ahora también produce `report.contiguous` con esquema `gng.r3.contiguous-register-only.v1`:
+
+- Se inicia un segmento desde **un único preestado de MAME**. El registro de salida del JS generado pasa como entrada al siguiente paso JS del segmento.
+- Después de cada instrucción se compara contra el siguiente preestado MAME. Si aparece un opcode sin compilar, una divergencia o el final del trace, **se cierra el segmento**. Nunca se mezclan como continuas coincidencias separadas.
+- Informa `longest_segment_steps`, `segments_at_least_2`, `segments_at_least_4`, `top_segments`, `first_divergence`, y contadores de pares soportados/no soportados.
+- `reinjects_mame_state_per_instruction=false` se aplica dentro de cada segmento; el único reinicio permitido ocurre **entre** segmentos separados.
+- El reporte no incluye registros, bytes, ROM ni fragmentos de código; puede compartirse como JSON agregado. Generación y pruebas de replay son ROM-free en CI; [ejecución aprobada](https://github.com/krukmat/gng-ghidra/actions/runs/39746370288).
+
+**Gate G2 preliminar (pendiente en Mac):** al menos cuatro instrucciones seguidas con el estado **acumulado** del JS concordando con todos los preestados MAME intermedios. Incluso un `FOUR_PLUS_STEPS_OBSERVED` valida exclusivamente el subconjunto de registros/control y no reemplaza el requisito R3 completo (RAM/MMIO/IRQ). Si no hay segmento de cuatro, el informe sigue siendo útil para seleccionar la próxima instrucción a compilar.
+
+**Operador — misma ROM y traza ya verificadas; no repetir MAME:**
+
+```bash
+git pull --ff-only
+bash scripts/r3-first-real-slice.sh
+```
+
+Devolver únicamente la sección `contiguous` que imprime el wrapper, o extraerla desde `out/r3/static-mame-prestate/report.json`:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+r=json.loads(Path('out/r3/static-mame-prestate/report.json').read_text())
+print(json.dumps(r['contiguous'],indent=2))
+PY
+```
+
+Una discrepancia de PC/CC durante una IRQ pendiente sigue siendo evidencia de un límite del modelo, no motivo para ignorarla ni inventar el evento.
+
+---
 
 ## Motivación
 
@@ -80,7 +118,7 @@ PY
 ### Gates
 
 - **G0 — PASS:** `node --test tests/test_r3_static_trace_probe.mjs` en CI ROM-free. Verificar que los bytes sintéticos permiten generar JS estático, ejecutarlo y detectar errores deliberados de flags, saltos, snapshots, secuencias, límites y ROM.
-- **G1 — PENDIENTE:** al menos 1 par de preestados **realmente capturados por MAME** coincide con el resultado del JS generado desde bytes de ROM privados y el modelo de registros. No confundir un acierto de una instrucción con compatibilidad de toda una función.
+- **G1 — PASS (616/616 pares admitidos; 25 PC compilados):** al menos 1 par de preestados **realmente capturados por MAME** coincide con el resultado del JS generado desde bytes de ROM privados y el modelo de registros. No confundir un acierto de una instrucción con compatibilidad de toda una función.
 - **G2 — PENDIENTE:** reunir una subsecuencia real contigua de varias instrucciones soportadas, o ampliar el traductor a memoria/stack/bus con verificación independiente. Este gate **no** se satisface por coincidencias separadas a lo largo de la traza.
 - **G3 — PENDIENTE:** reset → IRQ con cambios completos de estado y eventos MMIO/banco/stack. Es el criterio previo de R2/R3, y sigue bloqueado.
 
