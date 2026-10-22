@@ -80,7 +80,7 @@ def instrument_microcode(source: str) -> str:
     old = "\tm_syncack_write_func(0);\n"
     source = replace_once(source, old, exit_event + old, "SYNC_EXIT")
     for line in ("IRQ", "FIRQ", "NMI"):
-        anchor = line + ":\n"
+        anchor = "\n" + line + ":\n"
         callback = (
             '\tif (' + condition + ')\n'
             '\t\tlogerror("GNG_R35_NATIVE_V1\\tIRQ_ENTRY\\t' + line +
