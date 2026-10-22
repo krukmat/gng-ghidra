@@ -21,6 +21,82 @@ SINGLES = frozenset(("PROBE", "DRIVER", "DEBUGGER_AVAILABLE",
 REGS = ("PC", "A", "B", "X", "Y", "U", "S", "DP", "CC")
 
 
+def classify_deferred_bank_entry(chronology: list[tuple[str, list[str]]]) -> dict:
+    """Compare a bank-control write with the NEXT sampled frame, if unambiguous.
+
+    This observes a later register state. It never proves the bank entry
+    changed during the write handler or identifies an instruction boundary.
+    No PC, ROM, registers, or raw write data are exposed in the result.
+    """
+    outcomes = {
+        "expected_entry_visible_next_frame": 0,
+        "different_entry_seen_after_write": 0,
+        "already_selected_at_write_tap": 0,
+        "unexpected_entry_next_frame": 0,
+        "multiple_writes_before_frame": 0,
+        "interrupted_by_reset": 0,
+        "no_followup_frame": 0,
+        "invalid_frame_sample": 0,
+    }
+    pending: list[list[str]] = []
+    for kind, fields in chronology:
+        if kind == "BANK_CONTROL_WRITE_SAMPLE":
+            pending.append(fields)
+        elif kind in ("SOFT_RESET_REQUESTED", "RESET_NOTIFICATION"):
+            outcomes["interrupted_by_reset"] += len(pending)
+            pending.clear()
+        elif kind == "FRAME_SAMPLE" and pending:
+            if len(pending) != 1:
+                outcomes["multiple_writes_before_frame"] += len(pending)
+            elif len(fields) != 3 or len(pending[0]) != 5:
+                outcomes["invalid_frame_sample"] += 1
+            else:
+                _, _, _, datum, sampled_at_write = pending[0]
+                next_entry = fields[2]
+                if any(not re.fullmatch(r"[0-9]+", value) for value in (
+                        datum, sampled_at_write, next_entry)):
+                    outcomes["invalid_frame_sample"] += 1
+                else:
+                    value, old_sample, later = map(
+                        int, (datum, sampled_at_write, next_entry))
+                    if not (0 <= value <= 255 and 0 <= old_sample <= 4 and
+                            0 <= later <= 4):
+                        outcomes["invalid_frame_sample"] += 1
+                    else:
+                        # gng_state::bankswitch_w from MAME driver.
+                        expected = 4 if value == 4 else value & 3
+                        if later != expected:
+                            outcomes["unexpected_entry_next_frame"] += 1
+                        else:
+                            outcomes["expected_entry_visible_next_frame"] += 1
+                            if old_sample == expected:
+                                outcomes["already_selected_at_write_tap"] += 1
+                            else:
+                                outcomes["different_entry_seen_after_write"] += 1
+            pending.clear()
+    outcomes["no_followup_frame"] += len(pending)
+    outcome_count = sum(v for k, v in outcomes.items()
+                        if k not in ("expected_entry_visible_next_frame",
+                                     "different_entry_seen_after_write",
+                                     "already_selected_at_write_tap"))
+    # outcome_count counts non-successful statuses; successful statuses have
+    # a parent and a subtype, so avoid double-counting them.
+    examined = (outcome_count +
+                outcomes["expected_entry_visible_next_frame"])
+    return {
+        "schema": "gng.r2.bank-frame-followup.v1",
+        "write_samples_examined": examined,
+        "counts": outcomes,
+        "all_writes_resolved_at_next_frame": (
+            examined > 0 and
+            examined == outcomes["expected_entry_visible_next_frame"]
+        ),
+        "observation_phase": "next-frame callback (not instruction boundary)",
+        "post_handler_bank_edge_proven": False,
+        "instruction_bus_complete": False,
+    }
+
+
 def classify(probe: Path, trace: Path) -> dict:
     report = {
         "schema": SCHEMA,
@@ -136,6 +212,14 @@ def classify(probe: Path, trace: Path) -> dict:
         blockers.append("invalid or missing bank-control-write sample(s)")
     if bank_count > 64:
         blockers.append("bank-control-write samples truncated; not all writes observed")
+    # Chronological verification is intentionally weaker than an instruction
+    # boundary: the tap can run before MAME's bank handler, and there is no
+    # post-handler hook in this probe.
+    report["bank_control"]["deferred_frame_followup"] = (
+        classify_deferred_bank_entry(chronology)
+        if valid_sample_count else None)
+    # Keep observed_bank_switch_edges and post_handler_bank_entry_verified
+    # false even when the expected entry is visible at the later frame.
     cap["frame_clock"] = count["OBSERVED_FRAME_COUNT"] > 0 and (
         len(observations.get("FRAME_SAMPLE", [])) ==
         count["OBSERVED_FRAME_COUNT"])
