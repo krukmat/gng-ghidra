@@ -1,10 +1,29 @@
 # R3.0 — Primer gate real de lógica MC6809 → JavaScript estático
 
-**Estado:** G1 PASS; G2 PASS; R3.2 REGISTROS REALES PASS (1192/1192, 389 pasos); R3.3 WRITES NATIVAS IMPLEMENTADO, VALIDACIÓN REAL PENDIENTE  
+**Estado:** G1 PASS; G2 PASS; R3.2 REGISTROS REALES PASS (1192/1192, 389 pasos); R3.3 NATIVE SPRITE RAM PASS (768/768 bytes); R3.4 FRONTIER OFFLINE PREPARADO  
 **Fecha:** 2026-10-22  
 **Código:** `scripts/r3_static_trace_probe.mjs`  
 **Pruebas:** `tests/test_r3_static_trace_probe.mjs`  
 **Dependencias:** R0 y R1 finalizados; R2.2.B1 (17.281 y 17.135 preestados MAME válidos en ejecuciones reales). El gate R2 integral permanece abierto.
+
+## R3.3 PASS real — escrituras nativas del boot (22/10/2026)
+
+El operador ha ejecutado en un proceso nativo MAME `gngb` con tap RAM y soft reset. **`PASS_BOOT_SPRITE_RAM_WRITE_BYTES`**: 192 stores MC6809 de 16 bits por boot, cada uno observado como dos escrituras de byte en MAME; **384/384 bytes en cada uno de los dos boots** y **768/768 bytes en total**, mismos valores, direcciones y orden; ninguna otra escritura nativa en el rango durante las épocas. Todas las comparaciones de registros del boot que soportan el análisis anterior siguen acotadas a la traza auténtica. **R3.3 cerrado para esas escrituras de sprite RAM**; no significa que todas las RAM, CPU bus, IRQ, SYNC o banco sean equivalentes.
+
+## R3.4 — Elegir el siguiente bloque real después del boot (preparado)
+
+Nuevo `scripts/r3_next_frontier.mjs`, completamente offline. Exige un `sprite-native-report.json` con dos épocas válidas y sin otras escrituras de sprite RAM, ROM fija de 64 KiB con vector `0x6000`, y estructura de boot con **96 repeticiones de cada una de las dos instrucciones `STD ,X++` por arranque**. Elige la primera instrucción que realmente no esté compilada **después del exit `0x6014`**, no asume que `0x6014` sea la frontera. La clasificación de opcode es una *pista por familia*; no constituye todavía descodificación Ghidra ni implementación de semántica.
+
+```bash
+git pull --ff-only
+node scripts/r3_next_frontier.mjs
+```
+
+El comando genera únicamente el resumen `out/r3/next-frontier/report.json` (ignorado por Git) y lo imprime. **Solo compartir ese resumen**, nunca datos de `out/r2/mame-probe/`, ROM o JS generado. Un resultado `FRONTIER_IDENTIFIED_NOT_COMPILED` permite elegir R3.5 sobre evidencias en vez de extender opcodes sin prioridad. [Pruebas ROM-free CI PASS](https://github.com/krukmat/gng-ghidra/actions/runs/39754222149).
+
+**Próxima aceptación:** confirmar familia/instrucción/operando por Ghidra y oráculo 6809 independiente, traducir *una instrucción o el menor bloque necesario* y volver a medir longitud continua, memoria y MMIO. El estado de juego ejecutable sigue **false**.
+
+---
 
 ## R3.3 — Contrastar las escrituras de sprite RAM con MAME (22/10/2026)
 
