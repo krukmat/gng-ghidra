@@ -12,6 +12,23 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Ruta crítica activa — 22/10/2026: R3.5.B1/B2 y R3.6.A
+
+Plan detallado, dependencias y gates: [Ruta crítica R3→R4](r3-critical-path.md). Esta actualización prevalece sobre los bloques históricos posteriores.
+
+**Implementado en main:** inspección offline del primer opcode real tras 0x6017 (`scripts/r3_post_sync_frontier.mjs`); generación no destructiva de overlay nativo MC6809 con eventos IRQ/SYNCACK/RESET/VECTOR (`scripts/r3_prepare_native_mame_hook.py`); parser estricto (`scripts/r3_native_irq_report.mjs`); launcher opt-in para binario MAME instrumentado (`scripts/r3-native-irq-verify.sh`). Hay pruebas ROM-free, pero **no** binario MAME instrumentado compilado ni evidencia IRQ directa aún.
+
+**Validación inmediata sobre Mac, reutilizando capturas existentes:**
+
+```bash
+git pull --ff-only
+node scripts/r3_sync_reset_causality.mjs
+node scripts/r3_post_sync_frontier.mjs
+```
+
+Compartir solo JSON agregado. Después implementar el siguiente bloque JS real. En paralelo, obtener fuente MAME en un worktree separado y compilar la instrumentación para B2. R4 (primer frame generado autónomamente por JS) sigue PENDIENTE.
+
+---
 ## R3.5.B1 — Causalidad reset vs SYNC delimitada (22/10/2026)
 
 R3.5.A produjo dos preestados auténticos de `SYNC` en `0x6016`: primero seguido por `0x6000` durante una ejecución con soft reset explícito, segundo seguido por `0x6017` con IRQ/FIRQ enmascaradas. No hay evidencia de señal IRQ efectiva. Fuente GNG: VBLANK conecta al IRQ del CPU en `gng.cpp`, **eso no prueba** que la señal se afirmara en el instante observado.
