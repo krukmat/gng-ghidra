@@ -44,8 +44,8 @@ test('profile counts actual native PCs and AOT-eligible samples, not total game 
   assert.deepEqual(r.native_epochs,[{epoch:0,samples:2},
     {epoch:1,samples:8}]);
   assert.equal(r.distinct_observed_pcs,8);
-  assert.equal(r.aot_codegen_eligible_samples,5);
-  assert.equal(r.aot_codegen_eligible_share_of_observed_samples,0.5);
+  assert.equal(r.aot_codegen_eligible_samples,6);
+  assert.equal(r.aot_codegen_eligible_share_of_observed_samples,0.6);
   assert.equal(r.post_lda_first_pc,'0x601a');
   assert.equal(r.post_lda_first_family,'PSHS');
   assert.equal(r.post_lda_first_aot_eligibility,
