@@ -92,6 +92,60 @@ export function compileShortBranch(op,pc,offset){
     statement:'if('+tests[op&15]+')next='+hex(destination)+';'};
 }
 
+
+/**
+ * A0.3: compile MC6809 8-bit STA/STB indexed addressing modes with a
+ * two-byte instruction footprint. No indirect postbytes or variable-length
+ * offsets are accepted. Uses a byte-write callback supplied by the *board*
+ * runtime, not a fabricated MMIO/RAM implementation in generated CPU code.
+ *
+ * Supported modes:
+ * 5-bit signed R offset, ,R+ ,R++ ,-R ,--R ,R, B,R, A,R and D,R.
+ * Postbyte and effective address calculations are compile-time-specialized.
+ */
+export function compileIndexedByteStore(op,postbyte){
+  if(![0xa7,0xe7].includes(op)||!Number.isInteger(postbyte)||
+      postbyte<0||postbyte>255)return null;
+  const reg=op===0xa7?'A':'B',base=['X','Y','U','S'][(postbyte>>5)&3];
+  const mode=postbyte&31;
+  let label='',address='',before='',after='';
+  if((postbyte&128)===0){
+    const offset=mode<16?mode:mode-32;
+    label='OFFSET5';
+    address='(r.'+base+'+'+offset+')&65535';
+  }else if((postbyte&16)!==0){
+    // All indexed-indirect forms require memory reads; no read/word bus
+    // provenance for those sites and no ad-hoc implementation.
+    return null;
+  }else{
+    switch(mode){
+      case 0:label='POSTINC1';address='r.'+base;
+        after='r.'+base+'=(r.'+base+'+1)&65535;';break;
+      case 1:label='POSTINC2';address='r.'+base;
+        after='r.'+base+'=(r.'+base+'+2)&65535;';break;
+      case 2:label='PREDEC1';before='r.'+base+'=(r.'+base+'-1)&65535;';
+        address='r.'+base;break;
+      case 3:label='PREDEC2';before='r.'+base+'=(r.'+base+'-2)&65535;';
+        address='r.'+base;break;
+      case 4:label='ZERO';address='r.'+base;break;
+      case 5:label='B_OFFSET';
+        address='(r.'+base+'+(r.B<128?r.B:r.B-256))&65535';break;
+      case 6:label='A_OFFSET';
+        address='(r.'+base+'+(r.A<128?r.A:r.A-256))&65535';break;
+      case 11:label='D_OFFSET';
+        address='(r.'+base+'+((r.A<<8|r.B)<32768?(r.A<<8|r.B):(r.A<<8|r.B)-65536))&65535';
+        break;
+      default:return null;
+    }
+  }
+  const stmt=before+'const addr='+address+';'+
+    'if(typeof writeRamByte!=="function")throw Error("MISSING_RAM_BYTE_SINK");'+
+    'writeRamByte(addr,r.'+reg+');'+after+
+    'r.CC=changeNZV(r.CC,r.'+reg+',8);';
+  return {len:2,name:'ST'+reg+'_INDEXED',statement:stmt,
+    writesRamByte:true,index_register:base,index_mode:label};
+}
+
 export function compileAt(rom,pc){
   if(!(rom instanceof Uint8Array) || rom.length!==65536 ||
       !Number.isInteger(pc) || pc<0x6000 || pc>0xffef)return null;
@@ -126,6 +180,11 @@ export function compileAt(rom,pc){
     // ROM-attested 6809 LEAY -1,Y: modifies Z only.
     len=2;name='LEAY_MINUS_1';
     stmt='r.Y=(r.Y-1)&65535;r.CC=(r.CC&~4)|(r.Y===0?4:0);';
+  }else if(op===0xa7||op===0xe7){
+    const indexed=compileIndexedByteStore(op,b1);
+    if(!indexed)return null;
+    len=indexed.len;name=indexed.name;stmt=indexed.statement;
+    // Full effect verification remains a separate native RAM/bus gate.
   }else if(op===0x8c){
     len=3;name='CMPX_IMM';
     stmt='const a=r.X, b='+hex(imm16)+', n=(a-b)&65535;'+
@@ -145,13 +204,19 @@ export function compileAt(rom,pc){
   }else return null;
   if(pc+len>65536)return null;
   return {pc,len,name,statement:stmt,next:(pc+len)&65535,
-    writesSpriteWord:name==='STD_X_POSTINC'};
+    writesSpriteWord:name==='STD_X_POSTINC',
+    writesRamByte:name==='STA_INDEXED'||name==='STB_INDEXED',
+    ...(name==='STA_INDEXED'||name==='STB_INDEXED'?{
+      index_register:compileIndexedByteStore(op,b1).index_register,
+      index_mode:compileIndexedByteStore(op,b1).index_mode
+    }:{}),
+  };
 }
 
 export function emitStaticModule(specs){
   let js='// PRIVATE ROM-DERIVED STATIC JS. No runtime opcode decoder.\n';
   js+='const changeNZV=(cc,v,bits)=>(cc&~14)|((v&(bits===8?128:32768))?8:0)|(v===0?4:0);\n';
-  js+='export function compiledStep(regs,writeRamWord){\nconst r={...regs};let next=0;\nswitch(r.PC){\n';
+  js+='export function compiledStep(regs,writeRamWord,writeRamByte){\nconst r={...regs};let next=0;\nswitch(r.PC){\n';
   for(const spec of specs){
     js+='case '+hex(spec.pc)+':{next='+hex(spec.next)+';'+
       spec.statement+'r.PC=next;return r;}\n';
@@ -307,7 +372,10 @@ export async function runGate({romPath,tracePath,outDir}){
   const compiled=new Map();
   for(const row of rows){
     const s=compileAt(rom,row.pc);
-    if(s)compiled.set(s.pc,s);
+    // Current R3.3 gate verifies only the original boot sprite writes.
+    // Indexed byte writes require an independent native write-observation
+    // gate; do not silently upgrade register-only comparisons to bus PASS.
+    if(s&&!s.writesRamByte)compiled.set(s.pc,s);
   }
   await mkdir(target,{recursive:true});
   const generated=resolve(target,'static-rom-slice.mjs');
