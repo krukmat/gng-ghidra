@@ -3,7 +3,7 @@
 // Only exact boot-loop writes are certified, not the entire CPU/bus/game.
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
-import {pathToFileURL} from 'node:url';
+import {pathToFileURL,fileURLToPath} from 'node:url';
 import {runGate,diffRegisters} from './r3_static_trace_probe.mjs';
 
 const BOOT_PCS=new Set([0x6000,0x6002,0x6005,0x6009,0x600c,
@@ -172,7 +172,7 @@ export async function runNativeBootWriteGate({romPath,tracePath,
   return result;
 }
 
-if(process.argv[1] && resolve(process.argv[1])===new URL(import.meta.url).pathname){
+if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const get=n=>{const i=process.argv.indexOf(n);
     return i<0?null:process.argv[i+1];};
   runNativeBootWriteGate({
