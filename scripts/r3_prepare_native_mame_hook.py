@@ -76,9 +76,9 @@ def instrument_microcode(source: str) -> str:
                  (unsigned long long)total_cycles());
 '''
     old = "\tm_syncack_write_func(1);\n"
-    source = replace_once(source, old, entry + old, "SYNC_ENTER")
+    source = replace_once(source, old, old + entry, "SYNC_ENTER")
     old = "\tm_syncack_write_func(0);\n"
-    source = replace_once(source, old, exit_event + old, "SYNC_EXIT")
+    source = replace_once(source, old, old + exit_event, "SYNC_EXIT")
     for line in ("IRQ", "FIRQ", "NMI"):
         anchor = "\n" + line + ":\n"
         callback = (
