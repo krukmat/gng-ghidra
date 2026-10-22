@@ -1,5 +1,30 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## A0.5.B PASS real → A0.6 banco de ROM auténtico (22/10/2026)
+
+**Nueva evidencia aportada por el operador:** `bash scripts/r3-local-regression.sh` **52/52 PASS**; `r3_video_board_integration.mjs` devuelve **`NATIVE_VRAM_IMAGE_MATCHED_STATIC_JS_BOARD_AND_TILE_DECODER`**. La board JS reproduce **4.096/4.096** bytes VRAM finales independientes del tap MAME, comprueba 2.048 registros de tile FG/BG y utiliza los 4.096 preestados MAME como *inputs individuales* (no CPU autónoma). **A0.5.B aceptado dentro de ese alcance; R4 aún no.**
+
+**A0.6.1–A0.6.2 implementados en `main`, prueba Mac pendiente:**
+
+- Fuente técnica [MAME `gng.cpp`](https://github.com/mamedev/mame/blob/master/src/mame/capcom/gng.cpp): ventana `0x4000–0x5fff`, registro selector `0x3e00`, `bankswitch_w`: `data==4 ? 4 : data&3`. Bancos 0–3: cuatro segmentos de 8 KiB de `gg5.bin`; banco 4: primeros 8 KiB de `gg4.bin`. `0x6000–0xffff` es ROM fija. Los bytes no se obtienen de internet.
+- Nuevo `scripts/r3_bank_inventory.py`: usa `src/poc.py::read_rom` para autenticar el **ZIP original por CRC, tamaño y reset vector**, conserva `out/gngb-flat.bin` sin modificarlo, exige equivalencia byte a byte y crea `out/r3/banked-rom/private-banked-rom.bin` (5 × 8 KiB) exclusivamente bajo `out/r3` ignorado; no sobrescribe una imagen que difiera. Informa un recuento de PCs observados en `0x4000–0x5fff` y las entradas MAME vistas en `FRAME_SAMPLE` / `BANK_CONTROL_WRITE_SAMPLE`, **sin atribuir bancos a instrucciones**.
+- Nuevo `src/gngb_banked_rom.mjs`: adaptador ROM solo lectura de cinco entradas, **sin selección inicial inventada**. `read8` falla hasta recibir un `selectFromControlWrite` explícito; se reproduce la selección para los 256 bytes posibles. Los bytes se copian y no hay intérprete MC6809 ni ROM exportada por el reporte.
+- `tests/test_r3_bank_inventory.py` (6 casos) + `tests/test_gngb_banked_rom.mjs` (3 casos), incorporados a `scripts/r3-local-regression.sh`, sin GitHub Actions. **No se han ejecutado todavía contra el checkout real del operador; no declarar PASS prematuro.**
+
+**Validación Mac, sin volver a ejecutar MAME:**
+
+```bash
+git pull --ff-only
+bash scripts/r3-local-regression.sh
+python3 scripts/r3_bank_inventory.py
+```
+
+Solo compartir el JSON final resumido. El inventario debe mantener `bank_entry_for_each_instruction_proven=false` y `complete_bank_switch_edges_proven=false` hasta observar un identificador de banco **en la misma frontera de cada preinstrucción nativa**, más la transición post-handler de `0x3e00`. Las muestras antiguas por frame/tap no bastan para recompilar 7.434 prestates bancarios con procedencia verificada.
+
+**A0.6.3 (siguiente dependencia):** instrumentación MAME local de banco activo por preinstrucción y efecto post-handler, vinculados a ciclo/seq/PC, con trazas bajo `out`. La validación IRQ/SYNCACK real (R3.5.B2) sigue en paralelo. No lanzar MAME otra vez para A0.6.1; solo para A0.6.3 si la instrumentación se prepara primero.
+
+---
+
 ## A0.4 PASS real → A0.5.B: VRAM nativa integrada con board y tiles (22/10/2026)
 
 **Resultado Mac confirmado por el operador:** `bash scripts/r3-local-regression.sh` termina **47/47 PASS**; captura MAME opt-in finalizada con soft reset y 17.135 preestados. `r3_unmapped_read_policy.mjs` repite `MAME_UNMAPPED_POLICY_MATCHES_NATIVE_TAPS_AND_STATIC_LDA`; `r3_native_video_write_gate.mjs` devuelve **`NATIVE_VIDEO_WRITES_MATCH_GENERATED_STATIC_JS`**, `4096/4096` escrituras VRAM nativas y predichas coincidentes, **0** escrituras de vídeo adicionales, **0** divergencias de los 4096 checkpoints, mismo orden, dirección, valor y máscara; 0 writes VRAM antes del reset. **A0.4 PASS**, solamente en el alcance de estos cuatro sites de memoria, sin atribución individual CPU→tap ni equivalencia IRQ/SYNC/bancos.
