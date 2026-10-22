@@ -55,6 +55,49 @@ class NativePretraceTests(unittest.TestCase):
             self.assertFalse(result["genuine_cpu_execution_verified"])
             self.assertFalse(result["provenance_authenticated"])
 
+    def test_native_tracesym_spacing_and_lowercase_registers(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            tracesym_a = (
+                "GNG_R2_PRE pc=   6000 a=1 b=fe x= 1234 y=cafe "
+                "u=  8000 s=2ffc dp=0 cc=d0"
+            )
+            tracesym_b = (
+                "GNG_R2_PRE pc=0x6001 a=0x02 b=fe x=1234 y=cafe "
+                "u=8000 s=2ffc dp=0 cc=d0"
+            )
+            raw, out = files(root, "6000: NOP " + tracesym_a + "\n" +
+                             "6001: INCA " + tracesym_b + "\n")
+            r = module.extract(raw, out)
+            self.assertEqual(r["status"], "PRE_INSTRUCTION_FORMAT_PARSED")
+            self.assertEqual(r["snapshots"], 2)
+            rows = [json.loads(line) for line in out.read_text().splitlines()]
+            self.assertEqual(rows[0]["before"]["A"], 1)
+            self.assertEqual(rows[1]["before"]["PC"], 0x6001)
+
+    def test_missing_duplicate_or_overwide_symbol_is_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            cases = [
+                VALID.replace(" CC=D0", ""),
+                VALID.replace(" A=01", " A=01 A=09"),
+                VALID.replace(" A=01", " A=100"),
+                VALID.replace(" PC=6000", " PC=10000"),
+                VALID.replace(" Y=CAFE", " Y=????"),
+            ]
+            for item in cases:
+                with self.subTest(line=item[:18]):
+                    raw, out = files(root, item + "\n" + NEXT + "\n")
+                    result = module.extract(raw, out)
+                    self.assertEqual(result["status"], "INSTRUMENTATION_BLOCKED")
+                    self.assertFalse(out.exists())
+
+    def test_mame_debugger_launch_uses_native_symbols_as_default(self):
+        shell = (ROOT / "scripts/r2-mame-probe.sh").read_text()
+        self.assertIn('GNG_R2_TRACE_MODE=', shell)
+        self.assertIn('tracesym pc,a,b,x,y,u,s,dp,cc', shell)
+        self.assertIn('*) fail invalid_native_trace_mode', shell)
+
     def test_absent_action_is_not_a_preinstruction_pass(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
