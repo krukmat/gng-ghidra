@@ -52,6 +52,29 @@ case "$GNG_R2_TRACE_MODE" in
     ;;
   *) fail invalid_native_trace_mode ;;
 esac
+# A0.6.3 optional bank signature read by MAME's debugger TRACE action.
+# b@ suppresses memory read side effects; both reads occur in the same
+# per-instruction debugger callback as the CPU register prestate.
+# The two addresses originate from CRC-verified local bank signatures and
+# must uniquely identify all five banks. Never infer bank from frame samples.
+if [[ -n "${GNG_A06_BANKSIG_HEX0:-}" || -n "${GNG_A06_BANKSIG_HEX1:-}" ]]; then
+  [[ "$GNG_R2_TRACE_MODE" == "printf" ]] ||
+    fail a063_requires_printf_trace_mode
+  [[ "${GNG_A06_BANKSIG_HEX0:-}" =~ ^[0-9a-fA-F]{4}$ ]] ||
+    fail a063_bad_first_bank_probe_address
+  [[ "${GNG_A06_BANKSIG_HEX1:-}" =~ ^[0-9a-fA-F]{4}$ ]] ||
+    fail a063_bad_second_bank_probe_address
+  [[ "$GNG_A06_BANKSIG_HEX0" != "$GNG_A06_BANKSIG_HEX1" ]] ||
+    fail a063_duplicate_bank_probe_address
+  FIRST_DEC=$((16#$GNG_A06_BANKSIG_HEX0))
+  SECOND_DEC=$((16#$GNG_A06_BANKSIG_HEX1))
+  (( FIRST_DEC >= 16384 && FIRST_DEC <= 24575 &&
+     SECOND_DEC >= 16384 && SECOND_DEC <= 24575 )) ||
+    fail a063_bank_probe_outside_rom_window
+  # Use ONE tracelog command with register and signature data to prevent
+  # ambiguous joins across debugger callbacks, loops, or reset boundaries.
+  TRACE_ACTION='{tracelog "GNG_R2_PRE PC=%04X A=%02X B=%02X X=%04X Y=%04X U=%04X S=%04X DP=%02X CC=%02X GNG_A06_BANKSIG S0=%02X S1=%02X",pc,a,b,x,y,u,s,dp,cc,b@'${GNG_A06_BANKSIG_HEX0}',b@'${GNG_A06_BANKSIG_HEX1}'}'
+fi
 printf 'trace %s,:maincpu,noloop,%s\ng\n' "$OUTPUT/cpu.trace" "$TRACE_ACTION" > "$DEBUGSCRIPT"
 echo "GNG_R2_TRACE_MODE=$GNG_R2_TRACE_MODE"
 export GNG_R2_PROBE_DIR="$OUTPUT" GNG_R2_PROBE_FRAMES=4
