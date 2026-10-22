@@ -1,5 +1,31 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## A0.3 — STA/STB indexados: compilación estática y gate de registros (22/10/2026)
+
+**Se conserva lo anterior:** del Mac, A0.2 comprobó **5.593/17.135 (32,64%)** muestras elegibles para generación AOT vs **1.393/17.135 (8,13%)** antes; el incremento se debe a `CMPX` inmediato, saltos cortos y familia unary A/B. **B5 real**: cinco pasos desde `0x601A` por NOP×3, DEC_B y BNE, finalizando en `SYNC 0x6016` sin divergencia. Se trata de **cobertura sobre la traza**, no 32,64% del juego ni IRQ validada.
+
+**A0.3 implementado en `main`:**
+
+- Extendida `compileAt` (sin nuevo compilador/intérprete) para `STA/STB` con **modo indexado de dos bytes**, factorando semántica de selector X/Y/U/S, offset firmado de 5 bits, `,R+`, `,R++`, `,-R`, `,--R`, `,R`, `B,R`, `A,R`, `D,R`. Se rechazan **indirectos y formatos de operandos adicionales** hasta auditar direcciones y lectura de punteros reales.
+- `emitStaticModule` admite un sink separado `writeRamByte` (tercer argumento opcional); un store indexado **exige** ese sink, hace una sola escritura y actualiza N/Z/V como el 6809. La CPU generada nunca decodifica opcodes en runtime; la política de VRAM/RAM/MMIO pertenece al futuro runtime de board. Las escrituras `STD_X_POSTINC` del arranque siguen con el sink histórico `writeRamWord`.
+- **No se ha falsificado equivalencia de bus:** el gate R3 antiguo **excluye** los nuevos stores de su prueba de solo registros/sprite; B5 se detiene en ellos, y A0 etiqueta esta categoría como `AOT_INDEXED_BYTE_WRITE_UNVERIFIED` aunque sea compilable.
+- Nuevo `scripts/r3_indexed_store_gate.mjs`: sobre la misma ROM y captura real privada, revalida R3.3/sprite+SYNC, examina los cuatro sites de alta frecuencia `0x6041`, `0x6043`, `0x6055`, `0x6057`, identifica los **modos reales** sin imprimir postbytes, emite JS privado y compara los registros antes/después para cada ejecución observada. Resumen solo contiene nombres de modos, cantidades de escrituras predichas por **región de memoria**, recuentos de coincidencias/divergencias. **Cada ejecución se compara de manera aislada** desde su preestado MAME; no se afirma una secuencia de 4.096 stores de JS autónoma ni escrituras nativas verificadas.
+- Tests ROM-free para 11 modos indexados directos, selección de registro X/Y/U/S, rechazos indirectos, ausencia de sinks y checkpoints contradictorios. **CI PASS** [Actions](https://github.com/krukmat/gng-ghidra/actions/runs/39807337724).
+
+**Prueba local, SIN ejecutar MAME de nuevo:**
+
+```bash
+git pull --ff-only
+node scripts/r3_indexed_store_gate.mjs
+node scripts/r3_dynamic_coverage.mjs
+```
+
+Compartir **solo JSON agregado**. Resultado `INDEXED_REGISTER_CHECKPOINTS_MATCHED_BUS_UNVERIFIED` significa que el estado de CPU generado reproduce checkpoints para los stores indexados; **no significa** que MAME confirme los bytes escritos. Si `BLOCKED_UNSUPPORTED_REAL_INDEXED_POSTBYTE`, se agrega solo el modo realmente necesario; si `BLOCKED_GENERATED_INDEXED_REGISTER_DIVERGENCE`, se investiga la primera discrepancia. No introducir un valor o dirección de MAME como regla codificada.
+
+**Siguiente paso A0.4:** después de conocer la región real de los 4×1.024 stores, añadir **taps nativos opcionales y acotados por rango** para comparar estrictamente dirección/byte/máscara y orden con la salida JS. Para llegar a R4 también siguen pendientes la ROM bancaria y el origen de IRQ/SYNCACK, que B5 no demuestra.
+
+---
+
 ## A0.2 — Compilación de familias priorizadas por perfil real (22/10/2026)
 
 **Perfil real aportado por operador:** 17.135 preestados / 62 PCs diferentes; 55 PCs de ROM fija y 7 en región bancaria/otros. Solo **1.393/17.135 = 8,13%** de las instrucciones de esta traza eran previamente elegibles para el código AOT actual, sin que esa cifra acreditara comportamiento JS ni porcentaje de juego. **7.434** preestados están en ROM bancaria no autenticada. De **8.308** muestras de ROM fija inicialmente sin compilación, **8.192** se acumulan en dos bucles (8 PCs, 1.024 hits cada uno) de `STA_INDEXED`, `STB_INDEXED`, `CMPX_IMM` y `SHORT_BRANCH`. El gate B5 llegó desde `0x6017` a `0x601D` con **3 NOP** y ninguna divergencia, encontrando una operación de familia `REG_UNARY` (el código exacto se descifra privadamente del ROM; no se infiere desde el nombre genérico de B5).
