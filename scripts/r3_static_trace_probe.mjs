@@ -21,6 +21,77 @@ export function checkedState(r){
 }
 const changeNZV=(cc,v,bits)=>(cc&~14)|((v&(bits===8?128:32768))?8:0)|(v===0?4:0);
 
+/**
+ * Compile-time lowering of documented MC6809 A/B single-byte ALU ops.
+ * V is unchanged on LSR/ROR/ASR (per MAME base6x09.lst), carry is
+ * unchanged on DEC/INC/TST. Illegal unary slots fail closed.
+ * The generated statement has no runtime opcode table or ROM decoder.
+ */
+export function compileUnaryReg(op){
+  if(!Number.isInteger(op)||op<0x40||op>0x5f)return null;
+  const reg=op<0x50?'A':'B',n=op&15;
+  const names={0:'NEG',3:'COM',4:'LSR',6:'ROR',7:'ASR',
+    8:'ASL',9:'ROL',10:'DEC',12:'INC',13:'TST',15:'CLR'};
+  const operation=names[n];
+  if(!operation)return null;
+  const r='r.'+reg;
+  const nz='((n&128)?8:0)|(n===0?4:0)';
+  // Every case binds n and v in a per-PC generated JS lexical scope.
+  let body='const v='+r+';let n=v;';
+  const set=(mask,flags)=>'r.CC=(r.CC&~'+mask+')|('+flags+');';
+  switch(operation){
+    case 'NEG':
+      body+='n=(-v)&255;'+set(15,nz+'|(v===128?2:0)|(v!==0?1:0)');
+      break;
+    case 'COM':
+      body+='n=(~v)&255;'+set(15,nz+'|1');break;
+    case 'LSR':
+      body+='n=v>>>1;'+set(13,nz+'|(v&1)');break;
+    case 'ROR':
+      body+='n=((r.CC&1)<<7)|(v>>>1);'+set(13,nz+'|(v&1)');break;
+    case 'ASR':
+      body+='n=(v&128)|(v>>>1);'+set(13,nz+'|(v&1)');break;
+    case 'ASL':
+      body+='n=(v<<1)&255;'+set(15,nz+
+        '|((v>>>7)^((n>>>7)&1)?2:0)|(v>>>7)');
+      break;
+    case 'ROL':
+      body+='n=((v<<1)|(r.CC&1))&255;'+set(15,nz+
+        '|((v>>>7)^((n>>>7)&1)?2:0)|(v>>>7)');
+      break;
+    case 'DEC':
+      body+='n=(v-1)&255;'+set(14,nz+'|(v===128?2:0)');break;
+    case 'INC':
+      body+='n=(v+1)&255;'+set(14,nz+'|(v===127?2:0)');break;
+    case 'TST':
+      body+=set(14,'((v&128)?8:0)|(v===0?4:0)');break;
+    case 'CLR':
+      body+='n=0;'+set(15,'4');break;
+  }
+  if(operation!=='TST')body+=r+'=n;';
+  return {len:1,name:operation+'_'+reg,statement:body};
+}
+/** Compile branch conditions once from opcode to JS expressions. */
+export function compileShortBranch(op,pc,offset){
+  if(!Number.isInteger(op)||op<0x20||op>0x2f||
+      !Number.isInteger(pc)||!Number.isInteger(offset))return null;
+  const kind=[
+    'BRA','BRN','BHI','BLS','BCC','BCS','BNE','BEQ',
+    'BVC','BVS','BPL','BMI','BGE','BLT','BGT','BLE'
+  ][op&15];
+  const c='(r.CC&1)!==0',z='(r.CC&4)!==0',
+    v='(r.CC&2)!==0',n='(r.CC&8)!==0';
+  const tests=[
+    'true','false','(!'+c+'&&!'+z+')','('+c+'||'+z+')',
+    '!'+c,c,'!'+z,z,'!'+v,v,'!'+n,n,
+    '('+n+'==='+v+')','('+n+'!=='+v+')',
+    '(!'+z+'&&'+n+'==='+v+')','('+z+'||'+n+'!=='+v+')'
+  ];
+  const destination=(pc+2+signed8(offset))&65535;
+  return {len:2,name:kind,
+    statement:'if('+tests[op&15]+')next='+hex(destination)+';'};
+}
+
 export function compileAt(rom,pc){
   if(!(rom instanceof Uint8Array) || rom.length!==65536 ||
       !Number.isInteger(pc) || pc<0x6000 || pc>0xffef)return null;
@@ -55,14 +126,20 @@ export function compileAt(rom,pc){
     // ROM-attested 6809 LEAY -1,Y: modifies Z only.
     len=2;name='LEAY_MINUS_1';
     stmt='r.Y=(r.Y-1)&65535;r.CC=(r.CC&~4)|(r.Y===0?4:0);';
-  }else if(op===0x20){
-    len=2;name='BRA';stmt='next='+hex((pc+2+signed8(b1))&65535)+';';
+  }else if(op===0x8c){
+    len=3;name='CMPX_IMM';
+    stmt='const a=r.X, b='+hex(imm16)+', n=(a-b)&65535;'+
+      'r.CC=(r.CC&~15)|((n&32768)?8:0)|(n===0?4:0)|'+
+      '((((a^b)&(a^n)&32768)!==0)?2:0)|(a<b?1:0);';
+  }else if(op>=0x40&&op<=0x5f){
+    const unary=compileUnaryReg(op);
+    if(!unary)return null;
+    len=unary.len;name=unary.name;stmt=unary.statement;
+  }else if(op>=0x20&&op<=0x2f){
+    const branch=compileShortBranch(op,pc,b1);
+    len=branch.len;name=branch.name;stmt=branch.statement;
   }else if(op===0x16){
     len=3;name='LBRA';stmt='next='+hex((pc+3+signed16(imm16))&65535)+';';
-  }else if(op===0x26||op===0x27){
-    len=2;name=op===0x26?'BNE':'BEQ';
-    stmt='if((r.CC&4)'+(op===0x26?'===':'!==')+'0)next='+
-      hex((pc+2+signed8(b1))&65535)+';';
   }else if(op===0x7e){
     len=3;name='JMP_EXT';stmt='next='+hex(imm16)+';';
   }else return null;
