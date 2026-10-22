@@ -30,6 +30,7 @@ jobs:
       - run: node --test tests/test_r3_static_trace_probe.mjs
       - run: node --test tests/test_r3_sprite_native.mjs
       - run: node --test tests/test_r3_next_frontier.mjs
+      - run: node --test tests/test_r3_sync_boundary.mjs
       - run: node --test tests/test_sprite_memory.mjs
       - run: node --test tests/test_video_memory.mjs
       - run: npm install --global typescript@5.9.3
