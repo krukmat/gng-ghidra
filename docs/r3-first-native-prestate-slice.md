@@ -48,15 +48,18 @@ Instrucciones que no realizan RAM/ROM/MMIO en su semántica principal: `NOP`, `O
 
 ## Primera ejecución real (Mac)
 
-El fichero `out/gngb-flat.bin` es el flat ROM privado previamente generado. Si falta, **no generar otra imagen sintética** ni descargar ROM: restaurar la ROM verificada por el flujo de Ghidra.
+El operador ya tiene `roms/gng.zip` verificada por MAME, pero su prueba inicial R3 devolvió `ENOENT: out/gngb-flat.bin`. No indica que falte la ROM original ni que haya divergencia CPU: solo faltaba la **vista plana local** generada anteriormente por `src/poc.py`.
+
+La siguiente entrada única ejecuta el preflight y luego el test **sin iniciar MAME ni Ghidra**:
 
 ```bash
 git pull --ff-only
-node scripts/r3_static_trace_probe.mjs \
-  --rom out/gngb-flat.bin \
-  --trace out/r2/mame-probe/pre-instruction.jsonl \
-  --out out/r3/static-mame-prestate
+bash scripts/r3-first-real-slice.sh
 ```
+
+`scripts/prepare_r3_flat_rom.py` reutiliza el **mismo** `poc.read_rom` con sus CRC esperados de `gg4.bin`, `gg3.bin`, `gg5.bin` y reset `0x6000`, produce `out/gngb-flat.bin` solo cuando falta y rehúsa sobrescribir una imagen existente que no coincida con el ZIP. La ventana bancaria `0x4000..0x5fff` es una vista estática de banco 4, **no** un modelo de cambio de bancos. `scripts/r3-first-real-slice.sh` invoca el comparador original con `pre-instruction.jsonl` local, sin reejecutar las pruebas de MAME.
+
+Salida privada en `out/r3/static-mame-prestate/report.json` y `static-rom-slice.mjs`, ambos gitignored. Enviar solo la salida del terminal o campos agregados del informe. Si falla, conservar el motivo textual; no inventar ROM/estado.
 
 Para obtener solo datos agregados, sin código ROM ni registros:
 
