@@ -25,7 +25,7 @@ void m6809_base_device::execute_set_input(int inputnum, int state)
     switch(inputnum) { }
 }
 """
-MICROCODE = """NMI:
+MICROCODE = """\nNMI:
     return;
 FIRQ:
     return;
