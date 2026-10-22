@@ -193,27 +193,24 @@ async function main(){
   const sync=inspectNativeSyncPrestates(rom,rows,proof);
   const ldaSpec=compileLdaAt(rom);
   const policy=nativeUnmapPolicy(tsv);
-  const plan=planPostLdaCandidates(rom,rows,sync,
-    // Only provisional here, definitive report checked below.
-    {status:'MAME_UNMAPPED_POLICY_MATCHES_NATIVE_TAPS_AND_STATIC_LDA',
-      autonomous_read_policy_for_exact_address_validated:true,
-      generated_lda_checkpoint_compared:true,
-      all_native_tap_values_equal_map_policy:true,
-      native_second_epoch_tap_count:1});
   await mkdir(target,{recursive:true});
   const busPath=resolve(target,'generated-unmapped-bus.mjs'),
     ldaPath=resolve(target,'generated-lda.mjs'),
     stepsPath=resolve(target,'generated-post-lda-steps.mjs');
   await writeFile(busPath,emitStaticGngbUnmappedRead(policy));
   await writeFile(ldaPath,emitLdaModule(ldaSpec));
-  await writeFile(stepsPath,emitStaticModule(plan.specs));
   const {readGngbUnmappedByte}=await import(pathToFileURL(busPath).href);
   const {executeLdaExt}=await import(pathToFileURL(ldaPath).href);
-  const {compiledStep}=await import(pathToFileURL(stepsPath).href);
   const verifiedB4=verifyNativeUnmappedLda({
     rom,rows,bootProof:proof,sync,tsv,
     readGngbUnmappedByte,executeLdaExt
   });
+  if(verifiedB4.status!=='MAME_UNMAPPED_POLICY_MATCHES_NATIVE_TAPS_AND_STATIC_LDA')
+    throw Error('R36_B5_NATIVE_B4_POLICY_GATE_NOT_PASSED');
+  // No candidate JS code is emitted until REAL same-run B4 passes.
+  const plan=planPostLdaCandidates(rom,rows,sync,verifiedB4);
+  await writeFile(stepsPath,emitStaticModule(plan.specs));
+  const {compiledStep}=await import(pathToFileURL(stepsPath).href);
   const report=inspectPostLdaFrontier({
     rom,rows,sync,b4:verifiedB4,executeLdaExt,
     readGngbUnmappedByte,compiledStep
