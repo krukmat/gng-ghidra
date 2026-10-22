@@ -122,3 +122,38 @@ test('reuse existing compiler, ROM verifier and SYNC proof rather than new emula
   assert.match(script,/top.*12/);
   assert.doesNotMatch(script,/eval\(|WebAssembly|interpreterLoop/);
 });
+
+
+test('A0.2 regression: 2,048-hit-family must outrank earlier 104-hit family',()=>{
+  // Previous sort called .hits on output rows that contain .samples,
+  // returning NaN and keeping insertion order instead of priority.
+  const data=trace(),image=rom();
+  image[0x6800]=0x34;image[0x6801]=0x01; // earlier PSHS
+  image[0x6810]=0xa7;image[0x6811]=0x84; // later STA indexed
+  data.push(row(data.length,0x6800));
+  for(let i=0;i<8;i++)data.push(row(data.length,0x6810));
+  const result=profileDynamicCoverage(image,data,sync());
+  const family=result.most_repeated_unsupported_families;
+  assert.equal(family[0].family,'STA_INDEXED');
+  assert.equal(family[0].samples,8);
+  assert.ok(family.findIndex(x=>x.family==='PSHS')>0);
+  for(let i=1;i<family.length;i++){
+    assert.ok(family[i-1].samples>=family[i].samples,
+      'families must be sorted by numerical hit count');
+  }
+});
+test('A0.2 compiler additions increase codegen eligibility, not certified runtime coverage',()=>{
+  const image=rom(),data=trace();
+  // Synthetic DEC A, CMPX immediate, and BGE branch appear in supported
+  // codegen categories without any claims of native state/bus equivalence.
+  image[0x6800]=0x4a;
+  image.set([0x8c,0x7f,0xff],0x6801);
+  image.set([0x2c,0xfb],0x6804);
+  data.push(row(data.length,0x6800));
+  data.push(row(data.length,0x6801));
+  data.push(row(data.length,0x6804));
+  const report=profileDynamicCoverage(image,data,sync());
+  assert.equal(report.aot_codegen_eligible_samples,9);
+  assert.equal(report.full_cpu_bus_irq_or_gameplay_equivalence_verified,false);
+  assert.equal(report.sampled_pc_coverage_is_total_rom_coverage,false);
+});
