@@ -1,5 +1,27 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## A0.2 — Compilación de familias priorizadas por perfil real (22/10/2026)
+
+**Perfil real aportado por operador:** 17.135 preestados / 62 PCs diferentes; 55 PCs de ROM fija y 7 en región bancaria/otros. Solo **1.393/17.135 = 8,13%** de las instrucciones de esta traza eran previamente elegibles para el código AOT actual, sin que esa cifra acreditara comportamiento JS ni porcentaje de juego. **7.434** preestados están en ROM bancaria no autenticada. De **8.308** muestras de ROM fija inicialmente sin compilación, **8.192** se acumulan en dos bucles (8 PCs, 1.024 hits cada uno) de `STA_INDEXED`, `STB_INDEXED`, `CMPX_IMM` y `SHORT_BRANCH`. El gate B5 llegó desde `0x6017` a `0x601D` con **3 NOP** y ninguna divergencia, encontrando una operación de familia `REG_UNARY` (el código exacto se descifra privadamente del ROM; no se infiere desde el nombre genérico de B5).
+
+**Error corregido:** `r3_dynamic_coverage.mjs` clasificaba los PCs según `hits`, pero las filas agregadas por familia ya usaban `samples`. La ordenación en familias producía `NaN` y mantenía orden de inserción, colocando incorrectamente **104 hits por delante de familias de 2.048 hits**. Se añadió comparador independiente de prioridad `samples` descendente con desempate estable y test explícito de regresión.
+
+**A0.2 implementado en `main`:** ampliación del **mismo** `r3_static_trace_probe.mjs` (`compileAt`), sin crear un nuevo compilador ni intérprete de opcodes. Se comparte la semántica de generación entre todos los PCs: 22 operaciones unarias válidas A/B (NEG, COM, LSR, ROR, ASR, ASL, ROL, DEC, INC, TST, CLR), `CMPX` inmediato 16 bit con NZVC y todos los 16 saltos relativos de 8 bits, incluyendo condiciones C/Z/N/V. Las posiciones reservadas de la familia unary siguen rechazadas. Los flags se ajustan a la semántica MC6809 usada por [MAME base6x09.lst](https://github.com/mamedev/mame/blob/master/src/devices/cpu/m6809/base6x09.lst), por ejemplo V no se modifica en LSR/ROR/ASR.
+
+**Pruebas ROM-free:** 45.056 combinaciones de valor/CC/opcode para unary A/B, 4.096 condiciones de salto contra oráculo sintético de predicados, 72 casos `CMPX`, rechazo de opcodes reservados, regresión de prioridad y ausencia de intérprete en el código emitido. **CI PASS.** Estas pruebas no sustituyen contrastar CPU/bus con la ROM real. El perfil siguiente mostrará `AOT_STATIC_AVAILABLE` para los PCs presentes de dichas familias, pero **las 4.096 ejecuciones de CMPX/salto ahora elegibles NO significan que los dos bucles completos puedan correr**: aún faltan `STA/STB_INDEXED` y efectos de RAM/MMIO.
+
+**Próxima ejecución del operador en Mac; sin volver a lanzar MAME:**
+
+```bash
+git pull --ff-only
+node scripts/r3_dynamic_coverage.mjs
+node scripts/r3_post_lda_frontier.mjs
+```
+
+Compartir solo los JSON agregados. A0.3 priorizará el postbyte/modo de direccionamiento de `STA/STB_INDEXED` y las escrituras nativas de ambos bucles, además de identificar el mapeo bancario de las **7.434** muestras sin procedencia de banco. B5 identifica la primera divergencia real si algún unary difiere; no se promociona CI sintética a PASS nativo. IRQ/SYNCACK siguen pendiente en paralelo y R4 no es jugable.
+
+---
+
 ## A0 — Medir cobertura antes de ampliar opcodes (22/10/2026)
 
 **Decisión de aceleración:** evolucionar **el mismo compilador R3**, sin migraciones ni reescrituras. La unidad de priorización será una **familia recurrente de opcodes / bloque candidato**, no una captura manual por PC. Ningún gate R0–R3.6.B4 se elimina.
