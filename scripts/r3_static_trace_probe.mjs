@@ -146,9 +146,14 @@ export function compileIndexedByteStore(op,postbyte){
     writesRamByte:true,index_register:base,index_mode:label};
 }
 
-export function compileAt(rom,pc){
+export function compileAt(rom,pc,{banked=false}={}){
+  // Banked AOT is opt-in and must be supplied a verified, bank-selected
+  // 64 KiB ROM view by the native bank/PC provenance gate. The standard
+  // fixed-ROM compiler continues to refuse all bank-window addresses.
   if(!(rom instanceof Uint8Array) || rom.length!==65536 ||
-      !Number.isInteger(pc) || pc<0x6000 || pc>0xffef)return null;
+      !Number.isInteger(pc) || pc>0xffef ||
+      (pc<0x6000 && !(banked===true && pc>=0x4000 && pc<=0x5fff)))
+    return null;
   const op=rom[pc], b1=rom[pc+1], b2=rom[pc+2];
   const imm16=(b1<<8)|b2;
   let len=0,stmt='',name='';
@@ -202,7 +207,8 @@ export function compileAt(rom,pc){
   }else if(op===0x7e){
     len=3;name='JMP_EXT';stmt='next='+hex(imm16)+';';
   }else return null;
-  if(pc+len>65536)return null;
+  // Refuse any code that straddles a bank mapping boundary.
+  if(pc+len>(pc<0x6000?0x6000:65536))return null;
   return {pc,len,name,statement:stmt,next:(pc+len)&65535,
     writesSpriteWord:name==='STD_X_POSTINC',
     writesRamByte:name==='STA_INDEXED'||name==='STB_INDEXED',
