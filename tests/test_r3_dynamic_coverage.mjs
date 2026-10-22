@@ -129,7 +129,7 @@ test('A0.2 regression: 2,048-hit-family must outrank earlier 104-hit family',()=
   // returning NaN and keeping insertion order instead of priority.
   const data=trace(),image=rom();
   image[0x6800]=0x34;image[0x6801]=0x01; // earlier PSHS
-  image[0x6810]=0xa7;image[0x6811]=0x84; // later STA indexed
+  image[0x6810]=0xa7;image[0x6811]=0x88; // uncompiled 8-bit offset STA indexed
   data.push(row(data.length,0x6800));
   for(let i=0;i<8;i++)data.push(row(data.length,0x6810));
   const result=profileDynamicCoverage(image,data,sync());
