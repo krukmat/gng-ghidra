@@ -91,6 +91,26 @@ Eventos permitidos: `RESET`, `FRAME_BOUNDARY`, `SYNC_ENTER`, `SYNC_EXIT`, `IRQ_A
 
 El ejemplo entero es **ilustrativo**: no simula ni prueba un arranque válido. Para R2 PASS, el footer tendrá `status=COMPLETE`, `reset_observed=true`, `sync_observed=true` y `first_irq_entry_observed=true`, coherentes con los eventos y el log real. Una captura interrumpida puede ser útil como diagnóstico, nunca como gate aprobado.
 
+## R2.2.B2.a — Bank-select MMIO (instrumentación preparada; validación real pendiente)
+
+**Confirmación en código fuente MAME** [`src/mame/capcom/gng.cpp`](https://github.com/mamedev/mame/blob/master/src/mame/capcom/gng.cpp):
+
+- `gng_main_map` instala `gng_state::bankswitch_w` en **0x3E00** y mapea la ROM con banco en **0x4000–0x5FFF**.
+- `bankswitch_w(data)` selecciona banco **4** si `data == 4`; para otros valores selecciona `data & 0x03`. Esta regla es semántica publicada del driver, no una medición del banco activado después de una instrucción.
+- La CPU principal usa MC6809 y `irq0_line_hold` asociado al VBLANK. Que exista la configuración no constituye una observación del instante IRQ_ENTRY.
+
+**Cambios en `main`:** `scripts/r2-mame-probe.lua` añade `BANK_CONTROL_WRITE_SAMPLE` al tap de escrituras MMIO existente únicamente cuando `addr == 0x3e00`, incluyendo frame, PC visto por Lua, dirección, byte escrito y `bank.entry` **en el propio callback**. Emite `OBSERVED_BANK_CONTROL_WRITE_COUNT` y conserva como máximo 64 muestras; el exceso se declara truncado. No se toca Blackbox ni se añade un segundo tap que pueda interferir con el primero.
+
+`scripts/r2_probe_report.py` comprueba integridad, rango y contadores de esas muestras, crea `capabilities.bank_control_writes_observed` e informa `bank_control.control_write_count`, `recorded_samples` y los flags **`post_handler_bank_entry_verified=false`**, **`all_bank_edges_verified=false`**. `observed_bank_switch_edges` sigue en **false** aunque haya escrituras válidas: el tap puede ejecutar antes del handler de banco, por lo que leer `bank.entry` en ese instante no demuestra el efecto posterior.
+
+**CI ROM-free:** pruebas de banco válido, dirección incorrecta, muestras ausentes/truncadas y prohibición de dar por demostrados los flancos de banco. [CI PASS](https://github.com/krukmat/gng-ghidra/actions/runs/39734205848).
+
+**Prueba en MAME real — una sola corrida:** conservar la evidencia previa y ejecutar `GNG_R2_PROBE_SOFT_RESET=1 bash scripts/r2-mame-probe.sh`. Revisar `capabilities.json` (sección `bank_control`, `capabilities.bank_control_writes_observed` y `observed_counts`); si el banco no se escribe durante los cuatro primeros frames, el reporte marcará **false** sin inventar transiciones. Mantener `cpu.trace` privado.
+
+**Próxima decisión R2.2.B2.b:** instrumentar los flancos reales de `mainbank` con fuente post-handler o callback de instrucción independiente; registrar IRQ/SYNC con señales del núcleo y no inferir la aceptación de interrupciones a partir de VBLANK o PC. Si Lua/debugger no ofrece esos hooks, implementar una variante diagnóstica del MAME de laboratorio, sin introducir un emulador 6809 en el producto JS.
+
+---
+
 ## R2.2.B1 — Alternativa nativa `tracesym` (22/10/2026)
 
 Tras el error real del operador (`16.892` marcadores, `0` registros parsables y fallo del callback de soft reset), se contrastó el contrato con el código de depuración de MAME, `src/emu/debug/debugcmd.cpp`:
