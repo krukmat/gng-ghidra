@@ -42,6 +42,8 @@ jobs:
       - run: node --test tests/test_r3_unmapped_read_policy.mjs
       - run: node --check scripts/r3_post_lda_frontier.mjs
       - run: node --test tests/test_r3_post_lda_frontier.mjs
+      - run: node --check scripts/r3_dynamic_coverage.mjs
+      - run: node --test tests/test_r3_dynamic_coverage.mjs
       - run: node --test tests/test_sprite_memory.mjs
       - run: node --test tests/test_video_memory.mjs
       - run: npm install --global typescript@5.9.3
