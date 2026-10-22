@@ -16,7 +16,8 @@ SINGLES = frozenset(("PROBE", "DRIVER", "DEBUGGER_AVAILABLE",
     "CPU_DEBUGGER_AVAILABLE", "CPU_PROGRAM_WIDTH", "BANK_ENTRY_AVAILABLE",
     "BANK_INITIAL_OBSERVED", "CONTROLLED_SOFT_RESET_REQUESTED",
     "OBSERVED_RESET_COUNT", "OBSERVED_FRAME_COUNT",
-    "OBSERVED_MMIO_READ_COUNT", "OBSERVED_MMIO_WRITE_COUNT", "PROBE_END"))
+    "OBSERVED_MMIO_READ_COUNT", "OBSERVED_MMIO_WRITE_COUNT",
+    "OBSERVED_BANK_CONTROL_WRITE_COUNT", "PROBE_END"))
 REGS = ("PC", "A", "B", "X", "Y", "U", "S", "DP", "CC")
 
 
@@ -34,6 +35,7 @@ def classify(probe: Path, trace: Path) -> dict:
             "controlled_soft_reset_observed": False,
             "mmio_read_taps": False, "mmio_write_taps": False,
             "bank_entry_observable": False,
+            "bank_control_writes_observed": False,
             "per_instruction_register_before_after": False,
             "exhaustive_ordered_bus": False,
             "observed_bank_switch_edges": False,
@@ -99,6 +101,41 @@ def classify(probe: Path, trace: Path) -> dict:
     if controlled == "0" and (requests or count["OBSERVED_RESET_COUNT"] > 0):
         blockers.append("reset events inconsistent with disabled controlled reset")
         return report
+    bank_count_wire = single("OBSERVED_BANK_CONTROL_WRITE_COUNT")
+    if bank_count_wire is None or not re.fullmatch(r"[0-9]+", bank_count_wire):
+        blockers.append("missing or invalid bank-control-write counter")
+        return report
+    bank_count = int(bank_count_wire)
+    samples = observations.get("BANK_CONTROL_WRITE_SAMPLE", [])
+    report["bank_control"] = {
+        "control_write_count": bank_count,
+        "recorded_samples": len(samples),
+        "post_handler_bank_entry_verified": False,
+        "all_bank_edges_verified": False,
+        "semantic_reference": "MAME gng_state::bankswitch_w (data == 4 ? 4 : data & 3)",
+    }
+    valid_sample_count = len(samples) == min(bank_count, 64)
+    for sample in samples:
+        if len(sample) != 5:
+            valid_sample_count = False
+            break
+        frame_str, pc_str, addr_str, data_str, entry_str = sample
+        if any(not re.fullmatch(r"[0-9]+", value)
+               for value in (frame_str, pc_str, addr_str, data_str, entry_str)):
+            valid_sample_count = False
+            break
+        frame_value, pc_value, addr_value, data_value, entry_value = map(
+            int, (frame_str, pc_str, addr_str, data_str, entry_str))
+        if (addr_value != 0x3e00 or pc_value > 65535 or
+                data_value > 255 or entry_value > 4 or frame_value > 0xffffffff):
+            valid_sample_count = False
+            break
+    cap["bank_control_writes_observed"] = (
+        bank_count > 0 and bank_count <= 64 and valid_sample_count)
+    if not valid_sample_count:
+        blockers.append("invalid or missing bank-control-write sample(s)")
+    if bank_count > 64:
+        blockers.append("bank-control-write samples truncated; not all writes observed")
     cap["frame_clock"] = count["OBSERVED_FRAME_COUNT"] > 0 and (
         len(observations.get("FRAME_SAMPLE", [])) ==
         count["OBSERVED_FRAME_COUNT"])
@@ -144,6 +181,8 @@ def classify(probe: Path, trace: Path) -> dict:
         blockers.append("observed soft reset is NOT proof of initial cold-boot reset")
     if not cap["bank_entry_observable"]:
         blockers.append("MAME mainbank entry not observed")
+    if not cap["bank_control_writes_observed"]:
+        blockers.append("no complete real bank-control-write samples at 0x3e00")
     if not cap["mmio_read_taps"] or not cap["mmio_write_taps"]:
         blockers.append("no genuine read+write MMIO samples")
     blockers.extend((
