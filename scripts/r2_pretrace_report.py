@@ -19,10 +19,17 @@ FIELDS = {"PC": 4, "A": 2, "B": 2, "X": 4, "Y": 4,
 MARKER = "GNG_R2_PRE"
 # tracelog may write the marker on the same physical line as MAME disassembly,
 # or on a separate line. Never rely on reformatting the disassembly.
+# MAME tracelog uses zero-filled printf output; tracesym uses device
+# state-entry formats, which may pad with spaces or omit leading zeros.
+# Accept only nine ordered, hexadecimal registers within 8/16-bit widths.
+# Never synthesize absent registers or infer instruction effects.
 PATTERN = re.compile(
     r"(?<!\w)GNG_R2_PRE\s+" +
-    r"\s+".join(rf"{key}=([0-9A-Fa-f]{{{digits}}})" for key, digits in FIELDS.items()) +
-    r"(?=\s|$|[^0-9A-Za-z_])"
+    r"\s+".join(
+        rf"{key}\s*=\s*(?:0[xX])?([0-9A-Fa-f]{{1,{digits}}})"
+        for key, digits in FIELDS.items()
+    ) +
+    r"(?=\s|$|[^0-9A-Za-z_])", re.IGNORECASE
 )
 
 
