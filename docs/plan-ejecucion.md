@@ -12,6 +12,22 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## A0.3 — Compilador indexado y comparador de 4 sites (22/10/2026)
+
+**Resultado real operador:** A0 subió de 1.393/17.135 (8,13%) a 5.593/17.135 (32,64%) muestras elegibles tras A0.2. B5 verificó 5 pasos de NOP×3, DEC_B y BNE, regresando a SYNC `0x6016` sin divergencia; causa del wake todavía desconocida. Las 4.096 muestras sin soporte más repetidas son `STA/STB_INDEXED` en `0x6041`, `0x6043`, `0x6055` y `0x6057`.
+
+**A0.3 implementado, CI ROM-free PASS:** `compileAt` admite modos indexados directos de dos bytes; `emitStaticModule` genera una única escritura byte a un sink de memoria explícito sin runtime intérprete. Indirectos y offsets con bytes extras se rechazan hasta completar evidencia del ROM. Nuevo `r3_indexed_store_gate.mjs` revalida prueba R3.3 + SYNC y compara **solo registros** para esos cuatro PCs contra preestados nativos, con resumen de modo e impactos predichos por región. No compara todavía taps nativos de memoria. Los gates viejos y B5 no se promocionan automáticamente a PASS de bus.
+
+```bash
+git pull --ff-only
+node scripts/r3_indexed_store_gate.mjs
+node scripts/r3_dynamic_coverage.mjs
+```
+
+**A0.4:** examinar la región de escritura observada y preparar un tap independiente MAME para certificar dirección/byte/máscara. **En paralelo:** causa nativa de IRQ/SYNCACK y cobertura de bancos `0x4000–0x5FFF`. La cifra de elegibilidad AOT no es progreso integral del juego. Ver [ruta crítica](r3-critical-path.md).
+
+---
+
 ## A0.2 — Primer lote del compilador guiado por la cobertura REAL (22/10/2026)
 
 El operador obtuvo 17.135 preestados / 62 PCs; solo 1.393 (8,13%) elegibles previamente para AOT (sin prueba de runtime), 8.308 muestras ROM fija no soportadas y 7.434 muestras en ROM bancaria no autenticada. **8.192 de las 8.308** se concentran en dos bucles de 8 PCs que combinan escritura indexada A/B, CMPX inmediato y saltos cortos. B5 confirmó tres NOP en `0x601A–0x601C`, deteniéndose en una operación unary en `0x601D`, sin divergencia.
