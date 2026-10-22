@@ -73,7 +73,8 @@ async function fixture(address,fn){
       }]};
     const proof={status:'PASS_BOOT_SPRITE_RAM_WRITE_BYTES',
       actual_mame_sprite_byte_writes_compared:true};
-    await fn({rom,rows,sync,proof,compiledStep,executeLdaExt});
+    await fn({rom,rows,sync,proof,compiledStep,executeLdaExt,
+      compiledBootStep:compiledStep,generatedLdaStep:executeLdaExt});
   }finally{await rm(folder,{recursive:true,force:true});}
 }
 
