@@ -13,6 +13,7 @@ Private samples and ROM image are confined to ignored out/r3.
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -205,6 +206,19 @@ def run_report(args):
                    separators=(",",":"))+"\n"
         for i,entry in enumerate(entries)),encoding="utf-8")
     report["private_bank_per_instruction_witness_written"]=True
+    # Bind the witness to the exact native capture. A0.6.4 must refuse a
+    # report copied from an earlier capture or a modified packed bank image.
+    files={
+        "flat":args.flat,"banks":args.banks,"trace":args.trace,
+        "rawtrace":args.rawtrace,"observations":args.observations,
+        "witness":witness,
+    }
+    fingerprints={name:hashlib.sha256(path.read_bytes()).hexdigest()
+                  for name,path in files.items()}
+    (args.output/"private-source-manifest.json").write_text(
+        json.dumps({"schema":"gng.a06.private-bank-evidence-manifest.v1",
+                    "sha256":fingerprints},sort_keys=True)+"\n")
+    report["private_evidence_hash_manifest_written"]=True
     (args.output/"report.json").write_text(json.dumps(report,indent=2)+"\n")
     print(json.dumps(report,indent=2))
 
