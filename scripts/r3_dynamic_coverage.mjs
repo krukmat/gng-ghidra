@@ -153,9 +153,12 @@ export function profileDynamicCoverage(rom,rows,sync,{top=12}={}){
     }
   }
   const seqAt=rows[afterLda];
-  const byHits=(a,b)=>b.hits-a.hits||
-    (b.distinct_pc??0)-(a.distinct_pc??0)||
-    (a.pc??0)-(b.pc??0);
+  // Rows and family aggregates have DIFFERENT count field names.
+  // Comparing .hits on family rows produced NaN and preserved insertion
+  // order: a 104-hit family appeared ahead of 2048-hit families.
+  const byHits=(a,b)=>b.hits-a.hits||a.pc-b.pc;
+  const byFamilySamples=(a,b)=>b.samples-a.samples||
+    b.distinct_pc-a.distinct_pc||a.family.localeCompare(b.family);
   const gaps=[...pcs.values()]
     .filter(x=>x.eligibility==='UNSUPPORTED_OR_UNVERIFIED_OPCODE')
     .sort(byHits).slice(0,top)
@@ -164,7 +167,7 @@ export function profileDynamicCoverage(rom,rows,sync,{top=12}={}){
     .filter(x=>x.eligibility==='UNSUPPORTED_OR_UNVERIFIED_OPCODE')
     .map(x=>({family:x.family,samples:x.hits,
       distinct_pc:x.distinct.size}))
-    .sort(byHits).slice(0,top);
+    .sort(byFamilySamples).slice(0,top);
   const categories=[...eligibilityCounts.entries()]
     .map(([eligibility,samples])=>({eligibility,samples}))
     .sort((a,b)=>b.samples-a.samples||a.eligibility.localeCompare(b.eligibility));
