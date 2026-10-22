@@ -12,6 +12,23 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## Corrección de bloqueo operativo R3.0 — 22/10/2026
+
+El primer run local de `node scripts/r3_static_trace_probe.mjs` se bloqueó por ausencia de `out/gngb-flat.bin`; `roms/gng.zip` ya estaba verificada en fases MAME anteriores. No es una divergencia de lógica MC6809.
+
+**Fix en main:** `scripts/prepare_r3_flat_rom.py` reutiliza `src/poc.read_rom` (CRC de chips, mapeo de banco 4 y reset `0x6000`) para generar el flat **solo si falta**, bloqueando discrepancias de cualquier archivo existente; `scripts/r3-first-real-slice.sh` enlaza preflight + prueba del compilador estático. Tests ROM-free incluyen imagen ausente, existente idéntica, corrupta, vector de reset y salidas fuera de `out/`.
+
+**Siguiente comando del operador:**
+
+```bash
+git pull --ff-only
+bash scripts/r3-first-real-slice.sh
+```
+
+Si el comando alcanza la comparación MAME, devolver la salida agregada (estado, pares comparados, coincidentes, primera divergencia) sin publicar ROM ni JS generado. Una coincidencia en una instrucción no es equivalencia de juego completo.
+
+---
+
 ## Prioridad actual: R3.0, primer paso real de JS compilado contra MAME
 
 En lugar de seguir ampliando el observador sin demostrar recompilación, se preparó una prueba acotada **ROM → JS estático por PC → comparación del resultado con preestados consecutivos MAME**. El compilador `scripts/r3_static_trace_probe.mjs` solo admite instrucciones de registros, inmediatos y saltos en ROM fija; no interpreta opcodes durante runtime y falla cerrado ante registros/trazas inválidas. La CI ROM-free está integrada.
