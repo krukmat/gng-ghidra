@@ -115,7 +115,8 @@ def parse_debugger_bank_signatures(raw_trace: str, rows: list[dict],
         raise ValueError("A063_INCOMPLETE_PER_INSTRUCTION_BANK_TRACE")
     return entries
 
-def diagnose_trace_signatures(raw_trace: str, rows: list[dict],\n                              packed: bytes | None = None,\n                              offsets: tuple[int, int] | None = None) -> dict:
+def diagnose_trace_signatures(raw_trace: str, rows: list[dict],
+                              packed: bytes | None = None,\n                              offsets: tuple[int, int] | None = None) -> dict:
     """Redacted source-shape diagnostics only: never show CPU or ROM data."""
     if not isinstance(raw_trace, str) or not isinstance(rows, list):
         raise ValueError("A063_TRACE_DIAGNOSTIC_INPUT_INVALID")
