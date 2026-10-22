@@ -12,6 +12,21 @@ Entregar *Ghosts 'n Goblins* ejecutando **lógica original MC6809 recompilada a 
 
 La prioridad ya no es producir más escenas de diagnóstico. **V1.2 fue rechazado visualmente**: su collage determinista de tiles auténticos no es un nivel real. Ningún fixture se podrá presentar como fotograma ejecutado.
 
+## R3.6.B3 — Diagnóstico de 100 lecturas repetidas (22/10/2026)
+
+La ejecución nativa real tuvo **100 lecturas exactas** del operando de `LDA extended` en `0x6017`, todas posteriores al reset, `pretrace=17135` y `BLOCKED_AMBIGUOUS_NATIVE_MMIO_READ_SAMPLES`. Se ha confirmado que el mapeo `gngb` declara handlers de escritura en el rango, pero no de lectura explícita; sin valor de bus independiente todavía.
+
+`scripts/r3_mmio_read_diagnostics.mjs` analiza **todas** las muestras de la última captura privada, comprueba uniformidad, máscaras, subregión del driver y congruencia con el checkpoint de `0x601a` usando JS estático, sin escoger arbitrariamente ninguna muestra y sin afirmar semántica de hardware. Tests ROM-free incorporados a CI.
+
+```bash
+git pull --ff-only
+node scripts/r3_mmio_read_diagnostics.mjs
+```
+
+Si las 100 lecturas coinciden, es un **diagnóstico de estabilidad**, no un modelo del bus; la regla de retorno del dispositivo y la vinculación a PC `0x6017` siguen pendientes de certificar. Ver [ruta crítica](r3-critical-path.md).
+
+---
+
 ## R3.6.B2 — Targeted MMIO read, bloqueo real tras 0x6017 (22/10/2026)
 
 El operador confirmó `BLOCKED_UNVERIFIED_MEMORY_READ` en `LDA extended` PC `0x6017`: operand region `PALETTE_OR_MMIO` (`0x3800..0x3fff`), siguiente preestado PC `0x601a`. No hay divergencia demostrada. Esta región incluye mapeos de paleta, audio, DMA y banco, por lo que no hay que asumir el dispositivo.
