@@ -54,6 +54,10 @@ end
 -- Taps may be lost when the memory map is replaced; they are not proof
 -- of exhaustive RAM/ROM/stack/fetch coverage.
 local readCount, writeCount, resetCount, frameCount = 0, 0, 0, 0
+-- This reports writes to the bank-select register, NOT completed switches.
+-- The memory tap may fire before the MAME gng_state::bankswitch_w handler.
+local bankControlWrites = 0
+local bankControlSamplesMax = 64
 local reset_requested = false
 local controlled_reset = os.getenv("GNG_R2_PROBE_SOFT_RESET") == "1"
 local limit = 20
@@ -71,6 +75,16 @@ gng_r2_probe_write_tap = space:install_write_tap(
     0x3000, 0x3fff, "r2-mmio-write-probe",
     function(addr, data, mask)
         writeCount = writeCount + 1
+        if addr == 0x3e00 then
+            bankControlWrites = bankControlWrites + 1
+            if bankControlWrites <= bankControlSamplesMax then
+                -- bank.entry is sampled INSIDE the write callback and cannot
+                -- be interpreted as a post-handler observed bank entry.
+                record("BANK_CONTROL_WRITE_SAMPLE", screen:frame_number(),
+                       pc(), addr, data & 0xff,
+                       bank and tostring(bank.entry) or "unavailable")
+            end
+        end
         if writeCount <= limit then
             record("MMIO_WRITE_SAMPLE", screen:frame_number(), pc(), addr,
                    data & 0xff)
@@ -88,6 +102,7 @@ local function finish(reason)
     record("OBSERVED_FRAME_COUNT", frameCount)
     record("OBSERVED_MMIO_READ_COUNT", readCount)
     record("OBSERVED_MMIO_WRITE_COUNT", writeCount)
+    record("OBSERVED_BANK_CONTROL_WRITE_COUNT", bankControlWrites)
     record("PROBE_END", reason)
     assert(file:close())
     file_closed = true
