@@ -116,11 +116,10 @@ class R2MameProbeTests(unittest.TestCase):
             )
             # Reset notification before the first request is not valid.
             misplaced = base.replace(
-                "FRAME_SAMPLE\t1\t24576\t0",
-                "SOFT_RESET_REQUESTED\t1\t24576\nFRAME_SAMPLE\t1\t24576\t0"
+                "RESET_NOTIFICATION\t0\t24576",
+                "RESET_NOTIFICATION\t0\t24576\nSOFT_RESET_REQUESTED\t1\t24576"
             )
-            # Normal insertion is also after an old RESET_NOTIFICATION, so
-            # the sequence is notification -> request rather than causal.
+            # The order is notification -> request rather than causal.
             path.write_text(misplaced)
             bad = probe.classify(path, root / "cpu.trace")
             self.assertFalse(bad["capabilities"]["controlled_soft_reset_observed"])
