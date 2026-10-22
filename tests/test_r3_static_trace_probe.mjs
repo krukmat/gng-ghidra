@@ -190,6 +190,108 @@ test('generated loads update only N,Z,V, preserve H,C and remaining CC bits',asy
     assert.equal(original.A,0);
   });
 });
+// A synthetic *ROM-pattern* fixture based on the previously verified
+// src/poc.py reset-loop decoder. These are hand-authored expected register
+// checkpoints, not captured MAME evidence or true memory equivalence.
+const resetLoopImage=()=>{
+  const mem=new Uint8Array(65536);
+  mem[0xfffe]=0x60;mem[0xffff]=0;
+  mem.set([
+    0x1a,0x50,       // ORCC #$50
+    0x8e,0x1e,0x00,  // LDX #$1e00
+    0x10,0x8e,0,2,   // LDY #$0002
+    0xcc,0x12,0x34,  // LDD #$1234
+    0xed,0x81,       // STD ,X++
+    0xed,0x81,       // STD ,X++
+    0x31,0x3f,       // LEAY -1,Y
+    0x26,0xf8,       // BNE $600c
+    0x39,            // unsupported RTS, stops segment
+  ],0x6000);
+  return mem;
+};
+const resetCheckpoint=(PC,X,Y,A,B,CC)=>({
+  PC,X,Y,A,B,CC,U:0,S:0x2000,DP:0
+});
+const resetLoopRows=()=>{
+  const states=[
+    resetCheckpoint(0x6000,0,0,0,0,0x80),
+    resetCheckpoint(0x6002,0,0,0,0,0xd0),
+    resetCheckpoint(0x6005,0x1e00,0,0,0,0xd0),
+    resetCheckpoint(0x6009,0x1e00,2,0,0,0xd0),
+    resetCheckpoint(0x600c,0x1e00,2,0x12,0x34,0xd0),
+    resetCheckpoint(0x600e,0x1e02,2,0x12,0x34,0xd0),
+    resetCheckpoint(0x6010,0x1e04,2,0x12,0x34,0xd0),
+    resetCheckpoint(0x6012,0x1e04,1,0x12,0x34,0xd0),
+    resetCheckpoint(0x600c,0x1e04,1,0x12,0x34,0xd0),
+    resetCheckpoint(0x600e,0x1e06,1,0x12,0x34,0xd0),
+    resetCheckpoint(0x6010,0x1e08,1,0x12,0x34,0xd0),
+    resetCheckpoint(0x6012,0x1e08,0,0x12,0x34,0xd4),
+    resetCheckpoint(0x6014,0x1e08,0,0x12,0x34,0xd4)
+  ];
+  return states.map((state,i)=>row(i,state));
+};
+test('ROM-attested reset loop statically compiles STD ,X++ and LEAY -1,Y only at exact PCs',()=>{
+  const rom=resetLoopImage();
+  assert.equal(compileAt(rom,0x600c)?.name,'STD_X_POSTINC');
+  assert.equal(compileAt(rom,0x600e)?.name,'STD_X_POSTINC');
+  assert.equal(compileAt(rom,0x6010)?.name,'LEAY_MINUS_1');
+  assert.equal(compileAt(rom,0x6014),null);
+  rom[0x6100]=0xed;rom[0x6101]=0x81;
+  assert.equal(compileAt(rom,0x6100),null);
+  rom[0x600c]=0xed;rom[0x600d]=0x80; // wrong postbyte
+  assert.equal(compileAt(rom,0x600c),null);
+});
+test('generated STD X++ performs guarded 16-bit RAM write, increments X, updates NZV',async()=>{
+  await fixture(async args=>{
+    const rom=resetLoopImage(),source=emitStaticModule([
+      compileAt(rom,0x600c),compileAt(rom,0x6010)]);
+    const output=resolve(args.outDir,'boot-mem-tests.mjs');
+    await writeFile(output,source);
+    const {compiledStep}=await import(pathToFileURL(output).href);
+    const initial=resetCheckpoint(0x600c,0x1e00,2,0x80,0,0xf2);
+    const writes=[];
+    const result=compiledStep(initial,(addr,word)=>writes.push([addr,word]));
+    assert.deepEqual(writes,[[0x1e00,0x8000]]);
+    assert.equal(result.X,0x1e02);
+    assert.equal(result.PC,0x600e);
+    assert.equal(result.CC,0xf8); // N set, V cleared, Z cleared, H and C preserved
+    assert.equal(initial.X,0x1e00); // no caller register mutation
+    assert.throws(()=>compiledStep(initial),/MISSING_RAM_WORD_SINK/);
+    assert.throws(()=>compiledStep({...initial,X:0x1fff},
+      ()=>assert.fail('must not write')),/SPRITE_RAM_WRITE_OUT_OF_RANGE/);
+    const leay=compiledStep(resetCheckpoint(0x6010,0x1e02,1,0x80,0,0xf8));
+    assert.equal(leay.Y,0);
+    assert.equal(leay.CC,0xfc);
+  });
+});
+test('synthetic reset loop G2+ crosses memory writes with accumulated JS register state',async()=>{
+  await fixture(async args=>{
+    const result=await runGate(args);
+    assert.equal(result.status,'MATCHED_SUPPORTED_PRESTATE_PAIRS');
+    assert.equal(result.compared_pairs,12);
+    assert.equal(result.matching_pairs,12);
+    assert.equal(result.contiguous.longest_segment_steps,12);
+    assert.equal(result.contiguous.top_segments[0].start_pc,'0x6000');
+    assert.equal(result.contiguous.top_segments[0].modeled_ram_word_writes,4);
+    assert.equal(result.contiguous.modeled_ram_word_writes,4);
+    assert.equal(result.contiguous.ram_writes_compared_with_mame,false);
+    assert.equal(result.generated_sprite_ram_writes_unverified_by_reference,true);
+    assert.equal(result.no_runtime_memory_or_io,false);
+    assert.equal(result.full_game_or_bus_irq_equivalence_verified,false);
+    const source=await readFile(resolve(args.outDir,'static-rom-slice.mjs'),'utf8');
+    assert.match(source,/writeRamWord\(r.X,\(r.A<<8\)\|r.B\)/);
+    assert.doesNotMatch(source,/decodeOpcode|opcodes\[|rom\[r.PC\]/);
+  },{rom:resetLoopImage(),states:resetLoopRows()});
+});
+test('bad synthetic RAM write range blocks, never normalises outside sprite RAM',async()=>{
+  const states=resetLoopRows();
+  // Change only the entry state to an invalid sprite pointer.
+  states[4].before.X=0x2000;
+  await fixture(async args=>{
+    await assert.rejects(()=>runGate(args),/SPRITE_RAM_WRITE_OUT_OF_RANGE/);
+  },{rom:resetLoopImage(),states});
+});
+
 test('compare function rejects missing registers rather than normalising',()=>{
   assert.deepEqual(diffRegisters(basic(0x6000),basic(0x6000)),[]);
   assert.deepEqual(diffRegisters(basic(0x6000),basic(0x6001)),['PC']);
