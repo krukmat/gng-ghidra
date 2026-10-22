@@ -18,7 +18,7 @@ SPEC.loader.exec_module(probe)
 # Minimal fixtures, not copied or packaged upstream MAME source.
 CPU = """void m6809_base_device::device_reset()
 {
-    m_cc |= CC_F;       // FIRQ disabled
+	m_cc |= CC_F;       // FIRQ disabled
 }
 void m6809_base_device::execute_set_input(int inputnum, int state)
 {
@@ -32,12 +32,12 @@ FIRQ:
 IRQ:
     return;
 SYNC:
-    m_syncack_write_func(1);
+	m_syncack_write_func(1);
     while (!m_irq_line) { }
-    m_syncack_write_func(0);
+	m_syncack_write_func(0);
     return;
 INTERRUPT_VECTOR:
-    @m_pc.b.l = read_vector(1);
+	@m_pc.b.l = read_vector(1);
     return;
 """
 
