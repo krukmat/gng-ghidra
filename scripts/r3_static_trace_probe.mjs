@@ -79,8 +79,8 @@ export function compileShortBranch(op,pc,offset){
     'BRA','BRN','BHI','BLS','BCC','BCS','BNE','BEQ',
     'BVC','BVS','BPL','BMI','BGE','BLT','BGT','BLE'
   ][op&15];
-  const c='(r.CC&1)!==0',z='(r.CC&4)!==0',
-    v='(r.CC&2)!==0',n='(r.CC&8)!==0';
+  const c='((r.CC&1)!==0)',z='((r.CC&4)!==0)',
+    v='((r.CC&2)!==0)',n='((r.CC&8)!==0)';
   const tests=[
     'true','false','(!'+c+'&&!'+z+')','('+c+'||'+z+')',
     '!'+c,c,'!'+z,z,'!'+v,v,'!'+n,n,
