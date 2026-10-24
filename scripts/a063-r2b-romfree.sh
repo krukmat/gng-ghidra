@@ -12,7 +12,9 @@ for binary in python3 node git; do
 done
 bash -n scripts/r2-mame-probe.sh scripts/a063-native-miniprobe.sh \
   scripts/a063-native-oracle-miniprobe.sh scripts/r3-bank-provenance-capture.sh \
-  scripts/a063-r2b-romfree.sh scripts/a063-r2c-linux-gate.sh
+  scripts/a063-r2b-romfree.sh scripts/a063-r2c-linux-gate.sh scripts/a063-r2d-linux-preflight.sh \
+  scripts/a063-codespaces-bootstrap.sh
+python3 -m json.tool .devcontainer/devcontainer.json >/dev/null
 python3 -m py_compile \
   scripts/a063_trace_contract.py scripts/a063_capture_integrity.py \
   scripts/a063_bank_oracle_gate.py scripts/a063_oracle_replay.py \
