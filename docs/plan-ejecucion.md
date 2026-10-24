@@ -652,7 +652,7 @@ T1: Node H de 9 casos + escalas 5k/40.001/100k, SHA256 y diagnóstico. T2: suite
 
 ### T4 — Auditoría autónoma del cierre T1–T3 (24/10/2026)
 
-T4.1/3/4: corregida reutilización de resultados obsoletos, tratamiento de SHA mal tipado y JSONL con claves duplicadas; 12 tests Python del controlador y casos adversariales G. T4.2: pruebas Python registradas pero sin ejecución completa por ausencia de checkout ejecutable. T4.5: informe [T4](r42-t4-autonomous-audit.md). No abrir nuevas escenas R4.2. **T1–T3 sin PASS** hasta ejecución real.
+T4.1/3/4: corregida reutilización de resultados obsoletos, tratamiento de SHA mal tipado y JSONL con claves duplicadas; 12 tests Python del controlador y casos adversariales G. T4.2: 8/8 pruebas dirigidas en Python 3.13 PASS, 5/5 casos dirigidos del parser en Node 22 PASS; los 12 tests Python del checkout y regresión integral siguen pendientes. T4.5: informe [T4](r42-t4-autonomous-audit.md). No abrir nuevas escenas R4.2. **T1–T3 sin PASS** hasta ejecución real.
 
 ### R4.2.H — Consolidación ROM-free y congelación del laboratorio (24/10/2026)
 
