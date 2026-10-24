@@ -106,6 +106,24 @@ def replay_cases()->dict:
     expected_rejection("partial_capture","\n".join(truncated),rows)
     shifted=lines.copy();shifted[40]=shifted[40].replace("GNG_A06_BANKSIG","\nGNG_A06_BANKSIG",1)
     expected_rejection("split_instruction_and_signature","\n".join(shifted),rows)
+    try:
+        strict_check(trace,rows,writes=4,resets=0)
+        # This is a positive fixture only. Reject if the native event
+        # stream is malformed despite otherwise matching instruction banks.
+        strict_check(trace,rows,writes=-1)
+        cases.append(("negative_write_samples",False))
+    except ValueError:
+        cases.append(("negative_write_samples",True))
+    try:
+        from a063_bank_oracle_gate import compare
+        attested=[entry for entry in ordered]
+        compare(attested,attested,{
+            "sampled_control_writes_before_handler":4,
+            "native_soft_reset_notifications":0,
+            "unparseable_native_bank_samples":1})
+        cases.append(("corrupt_native_sample",False))
+    except ValueError:
+        cases.append(("corrupt_native_sample",True))
     totals={"schema":"gng.a063.r2b-romfree-replay.v1",
             "status":"PASS" if all(passed for _,passed in cases) else "FAIL",
             "cases":len(cases),
