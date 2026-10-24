@@ -160,3 +160,58 @@ rejects a suspected secret, do not override the safety gate.
 When it prints `A063_REVIEW_PUBLISH=PASS_REDACTED_SUMMARY_ONLY`,
 tell the assistant **"subido"**; it can then fetch and diagnose the
 latest checkpoint directly from GitHub.
+
+## Recover an interrupted 0.289 compile (R2.E / resume)
+
+The first genuine Codespaces build completed the ROM-free regression and
+17/17 synthetic bank replay, applied the approved patch, but stopped
+while compiling MAME frontend `luaengine.o`:
+
+```text
+g++: fatal error: Terminated signal terminated program cc1plus
+```
+
+This means the compiler was terminated externally. The captured log
+alone cannot establish whether the trigger was resource pressure,
+a stopped Codespace or another signal source. It does **not** show a
+patch compilation error.
+
+**Do not reset, clean, delete or clone MAME again.** The source tree
+is intentionally modified by the approved read-only diagnostic patch;
+existing completed build objects can be reused.
+
+In the existing Codespace, run this one command:
+
+```bash
+git pull --ff-only && bash scripts/a063-r2e-validate-and-report.sh
+```
+
+The runner inspects the MAME driver state, chooses `--resume` if the
+patch is already present, and verifies the entire modified driver
+**byte-for-byte against the canonical patch** before building. It
+reruns ROM-free tests and replay, then resumes MAME incrementally with
+one compiler job by default (`A063_MAME_JOBS=1`). It never
+automatically resets MAME source.
+
+It records compiler failure status and, where available, numeric
+container cgroup OOM event deltas. It then automatically commits and
+pushes **only the sanitized Markdown diagnostic report** to this
+private feature branch even when validation fails. A failed build
+remains `R2C_BUILD_FAILED`, never `ROM_FREE_READY`.
+
+Expected completion markers:
+
+- `A063_R2E_MODE=--resume`: original patched tree reused
+- `A063_R2E=ROMFREE_READY_REPORT_PUBLISHED_NOT_NATIVE`: ROM-free
+  build, binary provenance and hash checks passed
+- `A063_R2E=BLOCKED validation_failed_report_published`: read the
+  new sanitized report on GitHub; do not manually paste a raw log
+
+If the Codespace runs out of RAM even with one compiler job, select a
+larger Codespace machine size through its GitHub management controls
+before retrying. This consumes additional compute quota. Closing the
+browser is not evidence the build is finished. Avoid concurrent
+compilations; check for active `make` / `cc1plus` before starting.
+
+No ROM or native pre-instruction trace is uploaded or executed by this
+ROM-free recovery. Passing it still does not certify A0.6.3.
