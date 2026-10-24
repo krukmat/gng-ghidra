@@ -83,6 +83,17 @@ class NativeOracleTests(unittest.TestCase):
         result=oracle.compare(self.banks*60,self.banks*60,s)
         self.assertEqual(result["status"],"INCONCLUSIVE_NO_UNINTERRUPTED_BANK_TRANSITION")
 
+    def test_invalid_native_samples_never_pass(self):
+        cases=[
+            {"sampled_control_writes_before_handler":1,
+             "unparseable_native_bank_samples":1},
+            {"sampled_control_writes_before_handler":2,
+             "total_bank_control_writes":1},
+        ]
+        for sample in cases:
+            with self.subTest(sample=sample), self.assertRaises(ValueError):
+                oracle.compare(self.banks*60,self.banks*60,sample)
+
     def test_corrupt_bank_sequence_fails(self):
         for a,b in [([0],[True]),([0],[5]),([0],[0,0]),([],[])]:
             with self.subTest(a=a,b=b),self.assertRaises(ValueError):
