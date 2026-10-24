@@ -6,7 +6,7 @@
 
 **C4:** `stepStatic` admite hasta dos escrituras de registro de vídeo por instrucción, valida estado CPU antes de commit y rechaza mezclas RAM/MMIO/DMA no corroboradas por bus. Pruebas ROM-free: endianess, red/green/blue, datos incompletos, aislamiento, cambios de píxeles por scroll/paleta, reset, DMA inalterado, callbacks B4 y rollback.
 
-**C5:** nuevos `tests/test_gngb_video_registers.mjs` y `tests/test_gngb_video_mmio_board.mjs` en `scripts/r3-local-regression.sh`. No GitHub Actions, no ROM privada, no equivalencia temporal de paleta/raster ni frame autónomo. El gate nativo de R4 continúa dependiendo de A0.6.3 e IRQ/SYNCACK.
+**C5:** nuevos `tests/test_gngb_video_registers.mjs` y `tests/test_gngb_video_mmio_board.mjs` en `scripts/r3-local-regression.sh`. Validación de los fuentes actuales descargados de GitHub en V8 con dependencias inyectadas: **11/11 pruebas nuevas + 10/10 pruebas de DMA/renderer preexistentes**. El fixture de scroll se corrigió para respetar el recorte de 16 líneas del raster; no hubo que modificar el cálculo de scroll. **La regresión integral Node/Python aún NO se ha ejecutado** en este entorno. No GitHub Actions, no ROM privada, no equivalencia temporal de paleta/raster ni frame autónomo. El gate nativo de R4 continúa dependiendo de A0.6.3 e IRQ/SYNCACK.
 
 ---
 
