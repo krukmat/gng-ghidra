@@ -63,7 +63,7 @@ export async function runR42gLocal({
      !manifest.r42f_native_timeline)
     throw Error('R42G_F_VALIDATED_MANIFEST_REQUIRED');
   const timeline=manifest.r42f_native_timeline;
-  let bootstrap,reference;
+  let bootstrap,reference,referenceBytes;
   if(bootstrapPath!==null)
     bootstrap=decodeBootstrap(JSON.parse(await readFile(privatePath(bootstrapPath),'utf8')));
   if(r0AuditPath!==null){
@@ -72,10 +72,19 @@ export async function runR42gLocal({
        report.status!=='STRUCTURAL_AUDIT_ONLY_NATIVE_TIMELINE_UNVERIFIED')
       throw Error('R42G_R0_AUDIT_REQUIRED');
     reference=report.reference;
+    // Original private R0 bytes are SHA-bound against the independent
+    // integrity audit before their first mismatch offset may be reported.
+    const fg=await readFile(join(dir,'foreground.bin'));
+    const bg=await readFile(join(dir,'background.bin'));
+    referenceBytes={
+      video_ram:Buffer.concat([fg,bg]),
+      buffered_sprites:await readFile(join(dir,'sprites-buffered.bin')),
+      palette:await readFile(join(dir,'palette-rgba.bin'))
+    };
   }
   const result=await replayR42gTimeline({
     rawLines:readR42gJsonlLines(join(dir,'r42f-native-events.jsonl')),
-    timeline,bootstrap,reference
+    timeline,bootstrap,reference,referenceBytes
   });
   await mkdir(dirname(target),{recursive:true});
   await writeFile(target,JSON.stringify(result,null,2)+'\n','utf8');
