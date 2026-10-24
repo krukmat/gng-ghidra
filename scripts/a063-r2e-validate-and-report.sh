@@ -18,8 +18,18 @@ git pull --ff-only origin "$BRANCH" || {
   exit 2
 }
 
+# A previously interrupted MAME compile leaves exactly our approved
+# driver patch in place. Resume objects with one job rather than resetting.
+MAME_SOURCE="${A063_MAME_SOURCE:-$HOME/a063-mame0289}"
+if [[ -d "$MAME_SOURCE/.git" ]] &&
+   ! git -C "$MAME_SOURCE" diff --quiet -- src/mame/capcom/gng.cpp; then
+  VALIDATION_MODE="--resume"
+else
+  VALIDATION_MODE="--validate"
+fi
+printf 'A063_R2E_MODE=%s\n' "$VALIDATION_MODE"
 set +e
-bash scripts/a063-codespaces-bootstrap.sh --validate
+bash scripts/a063-codespaces-bootstrap.sh "$VALIDATION_MODE"
 validation_rc=$?
 set -e
 
