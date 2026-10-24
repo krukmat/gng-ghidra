@@ -21,7 +21,12 @@ def manifest():
         "mame_executed": False,
         "autonomous_cpu_frame_rendered": False,
         "diagnostic": {"status": "SYNTHETIC_E2E_DIAGNOSTIC_PASS",
-                       "native_mame_executed": False, "repeat_identical": True},
+                       "native_mame_executed": False, "repeat_identical": True,
+                       "changed": {"first_event_seq":0,
+                                   "first_byte_divergence":{"region":"SPRITE_DMA","byte_offset":3},
+                                   "first_pixel_divergence":{"x":34,"y":66,"channel":"R"}},
+                       "post_dma_write":{"first_event_seq":2,"first_pixel_divergence":None,
+                                         "equal_components":{"pixels":True}}},
         "scales": [
             {"event_count": n, "window_count": w, "state": "SYNTHETIC_E2E_COMPONENTS_VERIFIED",
              "native_proof": False, "state_sha256": "a"*64}
