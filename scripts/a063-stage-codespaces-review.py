@@ -70,7 +70,7 @@ def summarize(run: Path, number: int) -> str:
     result = [f"### Run {number}", ""]
     ck = read_small(run, "checkpoint.txt")
     for s in ck.splitlines():
-        if re.match(r"^(?:schema|status|native_validation|a063_certified|build_exit_code|build_jobs)=", s):
+        if re.match(r"^(?:schema|status|native_validation|a063_certified|build_exit_code|build_jobs|build_elapsed_seconds)=", s):
             result.append("- " + scrub(s))
     if ck == "[missing or oversized]":
         result.append("- checkpoint=NOT_AVAILABLE")
