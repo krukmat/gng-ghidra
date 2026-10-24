@@ -7,6 +7,7 @@ traces, ROMs, or binaries. Operator must inspect the generated text before push.
 from __future__ import annotations
 
 import json
+from collections import deque
 import os
 from pathlib import Path
 import re
@@ -90,7 +91,7 @@ def summarize(run: Path, number: int) -> str:
         p = run / log
         if not p.is_file() or p.is_symlink():
             continue
-        findings = []
+        findings = deque(maxlen=42)
         # Streaming, bounded total findings; no export of entire logs.
         with p.open("r", encoding="utf-8", errors="replace") as stream:
             for line in stream:
@@ -99,9 +100,7 @@ def summarize(run: Path, number: int) -> str:
                     if sanitized.startswith("[line omitted"):
                         continue
                     findings.append(sanitized)
-                    if len(findings) >= MAX_ERRORS:
-                        break
-        result.extend(("", f"**{log}** — up to {MAX_ERRORS} diagnostic lines:", "", "```text"))
+        result.extend(("", f"**{log}** — last {MAX_ERRORS} diagnostic lines:", "", "```text"))
         result.extend(findings or ["[no error/status markers in selected lines]"])
         result.append("```")
     result.extend(("", ""))
