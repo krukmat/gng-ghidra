@@ -91,7 +91,7 @@ def capture_postflight(root: Path, output: Path, preflight: Path, first: str,
     current = {}
     try:
         for rel in source_files:
-            if (not isinstance(rel, str) or not rel.startswith("scripts/") or
+            if (not isinstance(rel, str) or rel not in contract.SOURCE_FILES or
                     ".." in Path(rel).parts):
                 raise contract.ContractError("A063_POSTFLIGHT_SOURCE_MANIFEST_INVALID")
             current[rel] = digest(root / rel)
