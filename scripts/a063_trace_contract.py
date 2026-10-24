@@ -34,6 +34,7 @@ SOURCE_FILES=(
     "scripts/prepare_r3_flat_rom.py",
     "scripts/a063_smoke_signature_gate.py",
     "scripts/a063_bank_oracle_gate.py",
+    "scripts/a063_patch_mame_oracle.py",
     "scripts/a063-native-oracle-miniprobe.sh",
     "scripts/a063-native-miniprobe.sh",
     "scripts/a063_capture_integrity.py",
