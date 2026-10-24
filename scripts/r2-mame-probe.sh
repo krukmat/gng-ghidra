@@ -36,8 +36,11 @@ fi
 if [[ "${GNG_A063_ORACLE_SMOKE:-0}" == "1" ]]; then
   [[ "$MAME_BIN" == */* ]] || fail a063_oracle_requires_explicit_mame_binary_path
   OUTPUT="$ROOT/out/r3/a063-oracle-smoke"
-  SECONDS_TO_RUN=2
-  export GNG_R2_PROBE_FRAMES=2
+  SECONDS_TO_RUN=3
+  GNG_A063_ORACLE_FRAMES="${GNG_A063_ORACLE_FRAMES:-8}"
+  [[ "$GNG_A063_ORACLE_FRAMES" =~ ^([2-9]|[12][0-9]|30)$ ]] ||
+    fail a063_oracle_frames_must_be_2_to_30
+  export GNG_R2_PROBE_FRAMES="$GNG_A063_ORACLE_FRAMES"
 elif [[ "${GNG_A063_ORACLE_SMOKE:-0}" != "0" ]]; then
   fail a063_invalid_oracle_smoke_mode
 elif [[ "${GNG_A063_SMOKE:-0}" == "1" ]]; then
