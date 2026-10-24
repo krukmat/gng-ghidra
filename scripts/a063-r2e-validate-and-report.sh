@@ -5,6 +5,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 BRANCH="feature/a063-r1-forensics-contract"
+# Prevent a second build when the mobile/browser connection was lost but
+# the original Codespace process is still running. flock releases on stop.
+command -v flock >/dev/null || {
+  echo "A063_R2E=BLOCKED missing_flock" >&2
+  exit 2
+}
+mkdir -p "$HOME/.cache"
+exec 9>"$HOME/.cache/a063-r2e-run.lock"
+if ! flock -n 9; then
+  echo "A063_R2E=BLOCKED already_running_check_existing_codespace_terminal" >&2
+  exit 2
+fi
 [[ "$(git branch --show-current)" == "$BRANCH" ]] || {
   echo "A063_R2E=BLOCKED wrong_branch" >&2
   exit 2
