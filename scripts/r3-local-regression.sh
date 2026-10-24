@@ -27,6 +27,7 @@ node --test \
   tests/test_gngb_board_memory.mjs \
   tests/test_gngb_video_bridge.mjs \
   tests/test_gngb_frame_renderer.mjs \
+  tests/test_gngb_frame_renderer_r1_parity.mjs \
   tests/test_r42_visual_fixture.mjs \
   tests/test_gngb_banked_rom.mjs \
   tests/test_r3_compiler_family_batch.mjs \

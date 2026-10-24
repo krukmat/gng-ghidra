@@ -8,6 +8,8 @@ Se extrajo a `src/gngb_frame_renderer.mjs` el compositor **RGBA 256×224** que a
 
 Seis tests ROM-free verifican píxeles BG/sprite/FG, orden de prioridad, clip, aislamiento antes/después de DMA y fallo ante datos incompletos. Se incluyeron en `scripts/r3-local-regression.sh`.
 
+**Regresión de compatibilidad R1:** cuatro hashes FNV-1a de 229.376 canales RGBA cada uno, obtenidos con el compositor HTML anterior del commit `65eace2` y fixtures deterministas. En la comparación directa con el nuevo compositor: **0 diferencias** para los cuatro casos. El test `tests/test_gngb_frame_renderer_r1_parity.mjs` congela esos valores; no son capturas MAME ni pruebas de juego real. `tests/test_mame_visual_oracle.py` también exige que la página R1 inyecte la nueva función sin marcadores pendientes.
+
 **Salida visual ROM-free reproducible:** `node scripts/r42_visual_fixture.mjs` genera `out/r3/r42-visual-fixture/compare.html` y `report.json`. Los dos lienzos 256×224 muestran una modificación de RAM de sprites que **solo aparece después de la segunda transferencia DMA**. El HTML contiene píxeles exclusivamente sintéticos, no ROM, y está marcado visiblemente como prueba de laboratorio. Se añaden pruebas del HTML, del delta pixel a pixel y del split-priority de BG grupo 1 frente a sprites. No se utiliza como evidencia MAME ni V2.
 
  El gate real de R4 / V2 **sigue dependiendo de A0.6.3, IRQ/SYNCACK, timing DMA y ejecución CPU continua**; este bloque solo conecta el canal de píxeles del laboratorio, no demuestra un frame de juego generado por código recompilado.
