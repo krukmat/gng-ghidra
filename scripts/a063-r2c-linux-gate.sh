@@ -110,6 +110,14 @@ done < <(find "$MAME_SRC" -maxdepth 3 -type f \( -name '*gnga063*' -o -name 'mam
 [[ "$(stat -c %Y "$BIN")" -ge "$BUILD_START_EPOCH" ]] || {
   echo "R2C=BLOCKED stale_mame_binary_not_build_evidence" >&2; exit 2;
 }
+python3 - "$BIN" <<'PY' || {
+import sys
+from pathlib import Path
+if Path(sys.argv[1]).open('rb').read(4) != b'\x7fELF':
+    raise SystemExit('R2C=BLOCKED compiled_binary_not_elf')
+PY
+  echo "R2C=BLOCKED non_elf_binary" >&2; exit 2;
+}
 "$BIN" -version >"$EVID/mame-version.txt" 2>&1
 # Both checks require executable content from the patched driver; the
 # binary must advertise the target set and contain the diagnostic symbol.
