@@ -82,3 +82,53 @@ Privacidad: no se han añadido ROMs, bytes privados, capturas reales ni trazas C
 **Cierre:** `R2C_STATIC_AND_ISOLATED_PASS__FULL_REGRESSION_AND_MAME_BUILD_BLOCKED`.
 No inventar `ROM_FREE_READY`, no ejecutar GitHub Actions. La siguiente
 validación factible requiere un entorno de checkout privado ejecutable.
+
+## Bloque posterior a investigación avanzada — verificación del mismo día
+
+**Estado: `R2C_PARTIAL_ROMFREE_PASS_FULL_BUILD_BLOCKED`; confianza estimada 85% sin recalibración.**
+
+**Ejecución real disponible en el contenedor de la sesión:** `python3
+scripts/a063_oracle_replay.py`: 17/17 PASS en copia parcial con
+dependencias sintéticas; `python3 -m unittest discover -s tests -p
+'test_a063_*py' -q`: 32/32 PASS en espejo R1 parcial. Además, un
+smoke C++20 de la expresión getter/registro observó las cinco entradas
+simuladas, pero **no enlazó ni compiló MAME**. No se ejecutó en checkout
+íntegro de la rama.
+
+**Defecto reproducido y corregido:** el test
+`tests/test_a063_oracle.py::test_insufficient_coverage_or_transition_is_inconclusive`
+esperaba `INCONCLUSIVE_NO_BANK_TRANSITION` para cero escrituras,
+mientras que el oráculo devuelve
+`INCONCLUSIVE_NO_UNINTERRUPTED_BANK_TRANSITION`. Se reprodujo el
+desacuerdo con el comparador ejecutable, y se actualizó el assert sin
+debilitar el gate. La suite del checkout real debe demostrarlo.
+
+**Nuevo test de integración publicado, aún NO ejecutado en checkout real:**
+`tests/test_a063_oracle_pipeline.py` usa el extractor R2 real y los
+dos parsers del oráculo sobre una traza sintética; cubre éxito y cuatro
+adversarios (división de firma, marcador CPU duplicado, registros
+incompatibles y marcador bancario huérfano). Ahora forma parte de
+`scripts/r3-local-regression.sh`.
+
+**Gate Linux versionado, build NO ejecutado:**
+`scripts/a063-r2c-linux-gate.sh`. En host Linux autorizado y con
+dos clones privados/públicos completos:
+
+```bash
+bash scripts/a063-r2c-linux-gate.sh --mame-source /path/to/clean/mame0289 --jobs 2
+```
+
+Ejecuta la regresión ROM-free, verifica 17/17, valida/aplica el parche
+al MAME separado, hace el build `gnga063`, verifica la versión y fecha
+de creación del ejecutable y produce SHA-256, logs y manifiesto
+fuera del repositorio. **Solo publica `R2C_ROM_FREE_READY` si todo
+pasa**. Si falla cualquiera de los pasos, deja
+`status=BLOCKED_UNTIL_ALL_GATES_PASS`. Las precondiciones incluyen
+árboles limpios, tag exacto y existencia de binario recién generado.
+
+**Limitaciones actuales:** el contenedor no resuelve `github.com`
+para clonar el repositorio privado y no contiene MAME 0.289 completo.
+No se ha corrido el nuevo runner extremo a extremo ni se ha
+ejecutado la compilación real. MAME y la ROM privados NO forman parte
+del test sintético; R2.A5 permanece pendiente. No se activaron Actions
+ni se modificó `main`.
