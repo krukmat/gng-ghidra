@@ -55,6 +55,12 @@ node scripts/r42g_replay_timeline.mjs \
 
 Sin `manifest.json` con validación F estructural, aborta. Sin estado inicial suficiente, devuelve un reporte `BLOCKED_...` y el CLI sale con código 2. La salida contiene únicamente conteos, porcentajes de cobertura, hashes y offset/región de divergencia: **no** bytes de ROM, registros CPU ni imágenes nativas.
 
+## Evidencia ROM-free de esta iteración (24/10/2026)
+
+**Comprobaciones ejecutadas:** 11/11 tests aislados del módulo incremental con los fuentes actuales de GitHub, board real y dependencias inyectadas en V8, incluido procesamiento continuo de **40.021 eventos**, cambio de ventana, errores de secuencia/máscara, cobertura incompleta, bootstrap alterado, captura visual sintética y primera divergencia de byte R0. El hash fue un **sustituto determinista no criptográfico** dentro de ese sandbox; las aserciones funcionales pasaron, pero **no se ha verificado allí el SHA-256 de Node**.
+
+**CLI comprobado:** parser JS `PASS`; humo de entrada/salida en V8 con filesystem y replay simulados `PASS` (lectura de línea, escritura de agregado, error por ruta fuera de `out/` y truncamiento). Los 4 tests adicionales del CLI están registrados y no ejecutados en Node real. **Pendiente:** regresión integral Node/Python (incluidas F4), prueba completa del CLI con SHA-256/fs reales, captura MAME privada y certificado de origen/raster. No se usan Actions ni se publica ROM.
+
 ## No se considera PASS nativo
 
 Prohibido atribuir `native_origin_attested`, `native_instruction_alignment_verified`, `native_raster_vblank_verified` o `native_pixel_equivalence_verified` a una ejecución G. La certificación requiere taps Lua ejecutados realmente en MAME, snapshot pre-tap vinculado temporalmente, alineamiento por instrucción/banco A0.6.3, IRQ/SYNC y comparación independiente del framebuffer con VBlank real. Esta parte permanece bloqueada externamente.

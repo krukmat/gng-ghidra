@@ -2,6 +2,8 @@
 
 G1: esquema F verificado y test F incorporado en runner; ejecución nativa Node/Python pendiente. G2: cobertura explícita de RAM sprite/VRAM/paleta/scroll y bootstrap SHA-256 opcional, sin inicialización inventada. G3: replay incremental y checksum del JSONL F hasta 1M eventos (ventanas de 40K con estado persistente). G4: SHA-256 de los componentes visuales y primer offset de divergencia frente a R0 verificado, sin copiar bytes al informe. G5: pruebas ROM-free, CLI y roadmap actualizados.
 
+**ROM-free verificado:** 11/11 tests del módulo en V8 con hash sustituto; humo del CLI con filesystem simulado PASS; 4 tests de CLI incorporados pero pendientes de Node. El runner Node/Python integral, los taps MAME y el origen temporal permanecen pendientes.
+
 **STOP:** no afirmar correspondencia por instrucción, raster, IRQ ni equivalencia nativa. [Contrato y comandos](r42g-event-replay-bridge.md).
 
 ---
