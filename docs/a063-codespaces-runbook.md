@@ -215,3 +215,61 @@ compilations; check for active `make` / `cc1plus` before starting.
 
 No ROM or native pre-instruction trace is uploaded or executed by this
 ROM-free recovery. Passing it still does not certify A0.6.3.
+
+## Android reconnection, authentication expiry and idle stops
+
+A mobile/browser **login session expiring** is different from GitHub
+stopping the Codespace VM. Reauthentication alone does not prove the
+compiler stopped. Closing the browser also does not stop the VM
+immediately.
+
+GitHub's default Codespaces idle timeout is **30 minutes**. Interactive
+terminal activity, **including terminal output**, resets the idle
+timer; a quiet or disconnected workload may reach the limit. When
+GitHub stops a Codespace, all running processes (including an in-flight
+MAME compiler and the final commit/push) stop. Saved files and already
+compiled object files remain when the same Codespace is restarted.
+There is also a **12-hour maximum Codespace lifetime**, independent of
+activity. A successful push is only guaranteed after the publisher
+actually reports success.
+
+Recommended recovery from Android:
+
+1. Reauthenticate and reopen **the existing** Codespace from
+   https://github.com/codespaces. Do not create another Codespace.
+2. If the previous terminal or build remains active, do not start a
+   second build. The script now also uses a private Linux `flock`
+   lock to reject concurrent invocations.
+3. If nothing is running, use the same one-command recovery:
+
+```bash
+git pull --ff-only && bash scripts/a063-r2e-validate-and-report.sh
+```
+
+The runner detects the already applied, *exact* diagnostic patch and
+resumes the existing MAME build objects using one compiler job. It then
+publishes a redacted checkpoint through GitHub. It cannot restart
+automatically **while the Codespace VM is stopped**; a person must
+start that same Codespace again first.
+
+For **new** Codespaces, increase GitHub **Settings → Codespaces →
+Default idle timeout** to a suitable period between **5 and 240
+minutes**; GitHub states the setting applies to Codespaces created
+after the change. Larger values consume more billable compute when
+the VM is idle. Do not assume the changed default extends an
+already-created Codespace.
+
+To inspect an existing Codespace's actual policy when GitHub CLI is
+available and authenticated:
+
+```bash
+gh codespace view -c "$CODESPACE_NAME" --json state,idleTimeoutMinutes
+```
+
+If GitHub reports an active session but a vanished terminal, reconnect
+before inferring a build failure. A SIGTERM in a build log alone cannot
+distinguish an idle/VM stop from other external termination causes.
+
+Official references:
+- https://docs.github.com/en/codespaces/setting-your-user-preferences/setting-your-timeout-period-for-github-codespaces
+- https://docs.github.com/en/codespaces/about-codespaces/understanding-the-codespace-lifecycle
