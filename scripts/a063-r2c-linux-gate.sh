@@ -24,7 +24,7 @@ done
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || {
   echo "R2C=BLOCKED invalid_jobs" >&2; exit 2;
 }
-for app in python3 node git make sha256sum find; do
+for app in python3 node git make sha256sum find c++; do
   command -v "$app" >/dev/null || {
     echo "R2C=BLOCKED missing_prerequisite" >&2; exit 2;
   }
