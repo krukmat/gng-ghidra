@@ -43,8 +43,14 @@ out=Path(sys.argv[2]).resolve()
 if not private.is_relative_to(root) or not out.is_relative_to(private):
     raise SystemExit("A063_SMOKE_PRIVATE_OUTPUT_REQUIRED")
 PY
-  [[ ! -e "$OUTPUT/cpu.trace" && ! -e "$OUTPUT/pre-instruction.jsonl" ]] ||
-    fail a063_smoke_capture_exists_preserve_old_evidence
+  # Refuse to replace ANY previous smoke artifact, including partial/crashed
+  # runs where the raw CPU trace was not successfully written.
+  if [[ -d "$OUTPUT" ]]; then
+    for artifact in "$OUTPUT"/* "$OUTPUT"/.[!.]* "$OUTPUT"/..?*; do
+      [[ ! -e "$artifact" && ! -L "$artifact" ]] ||
+        fail a063_smoke_capture_exists_preserve_old_evidence
+    done
+  fi
 elif [[ "${GNG_A063_SMOKE:-0}" != "0" ]]; then
   fail a063_invalid_smoke_mode
 fi
@@ -100,7 +106,7 @@ if [[ -n "${GNG_A06_BANKSIG_HEX0:-}" || -n "${GNG_A06_BANKSIG_HEX1:-}" ]]; then
 fi
 printf 'trace %s,:maincpu,noloop,%s\ng\n' "$OUTPUT/cpu.trace" "$TRACE_ACTION" > "$DEBUGSCRIPT"
 echo "GNG_R2_TRACE_MODE=$GNG_R2_TRACE_MODE"
-export GNG_R2_PROBE_DIR="$OUTPUT" GNG_R2_PROBE_FRAMES=4
+export GNG_R2_PROBE_DIR="$OUTPUT" GNG_R2_PROBE_FRAMES="${GNG_R2_PROBE_FRAMES:-4}"
 export GNG_R2_PROBE_SOFT_RESET="${GNG_R2_PROBE_SOFT_RESET:-0}"
 [[ "$GNG_R2_PROBE_SOFT_RESET" == "0" || "$GNG_R2_PROBE_SOFT_RESET" == "1" ]] ||
   fail invalid_soft_reset_option

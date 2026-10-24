@@ -35,7 +35,9 @@ available remotely; ROM-free unit tests cannot authenticate a bank.
 - **T5 Checkpoint:** `A063_R1_READY` is only contract/integrity readiness.
   An isolated native mini-probe driver (`scripts/a063-native-miniprobe.sh`)
   is prepared but **not run**. It uses `out/r3/a063-smoke/`, two frames/two
-  seconds and refuses to overwrite existing evidence. It returns a redacted
+  seconds and refuses to overwrite existing evidence, including partial
+  attempts with no CPU trace. R2 respects the 2-frame override; its original
+  4-frame default remains unchanged. It returns a redacted
   byte-shape result, not a bank identity certificate.
 
 ## Evidence and current gates

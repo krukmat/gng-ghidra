@@ -113,6 +113,8 @@ class TraceContractTests(unittest.TestCase):
         self.assertIn('a063_smoke_capture_exists_preserve_old_evidence',shell)
         self.assertIn('SECONDS_TO_RUN=2',shell)
         self.assertIn('GNG_R2_PROBE_FRAMES=2',shell)
+        self.assertIn('GNG_R2_PROBE_FRAMES="${GNG_R2_PROBE_FRAMES:-4}"',shell)
+        self.assertIn('for artifact in "$OUTPUT"/*',shell)
         self.assertIn('R1_READY_FOR_PRIVATE_STRICT_PARSER_ONLY',mini)
         self.assertNotIn('r3-banked-critical-path.sh',mini)
         self.assertNotIn('r3_bank_provenance.py report',mini)
