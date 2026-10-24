@@ -95,7 +95,7 @@ class IntegrityTests(unittest.TestCase):
             (self.output / filename).write_text("synthetic fixture\n")
         action = contract.build_action("4000", "5000", oracle=True)
         (self.output / "start-debugger.txt").write_text(
-            f"trace {self.output / 'cpu.trace'},:maincpu,noloop,{action}\\ng\\n")
+            f"trace {self.output / 'cpu.trace'},:maincpu,noloop,{action}\ng\n")
         (self.output / "pretrace-report.json").write_text(
             json.dumps({"status": "PRE_INSTRUCTION_FORMAT_PARSED", "snapshots": 300}))
         (self.output / "capabilities.json").write_text(
@@ -105,7 +105,7 @@ class IntegrityTests(unittest.TestCase):
             integrity.verify_postflight(self.root, self.output, self.preflight)
         integrity.verify_postflight(self.root, self.output, self.preflight,
                                     mame_bin=str(self.mame))
-        self.mame.write_text('#!/bin/sh\\necho "MAME test 0.289"\\necho tampered\\n')
+        self.mame.write_text('#!/bin/sh\necho "MAME test 0.289"\necho tampered\n')
         self.mame.chmod(0o755)
         with self.assertRaisesRegex(contract.ContractError, "ORACLE_BINARY_CHANGED"):
             integrity.verify_postflight(self.root, self.output, self.preflight,
