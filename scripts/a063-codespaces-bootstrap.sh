@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Manual GitHub Codespaces entrypoint for R2.E. No GitHub Actions/ROM access.
 # --prepare: audit host and fetch clean public MAME mame0289, no build.
-# --validate: require prepared MAME and run complete ROM-free Linux gate.
+# --validate: clean source required. --resume: exact patched source, incremental ROM-free gate.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MAME_SOURCE="${A063_MAME_SOURCE:-$HOME/a063-mame0289}"
@@ -11,7 +11,7 @@ REF="feature/a063-r1-forensics-contract"
 fail() { printf 'A063_CODESPACES=BLOCKED reason=%s\n' "$1" >&2; exit 2; }
 [[ $# == 1 ]] || fail expected_prepare_or_validate_argument
 case "$1" in
-  --prepare|--validate) MODE="$1" ;;
+  --prepare|--validate|--resume) MODE="$1" ;;
   *) fail unexpected_argument ;;
 esac
 cd "$ROOT"
@@ -40,15 +40,22 @@ fi
   fail wrong_mame_upstream_commit
 [[ "$(git -C "$MAME_SOURCE" describe --tags --exact-match HEAD)" == "mame0289" ]] ||
   fail wrong_mame_tag
-[[ -z "$(git -C "$MAME_SOURCE" status --porcelain --untracked-files=no)" ]] ||
-  fail mame_source_already_modified
-
-python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SOURCE" ||
-  fail mame_patch_not_applicable
+if [[ "$MODE" == "--resume" ]]; then
+  python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SOURCE" --verify-applied ||
+    fail resume_patch_not_exact
+else
+  [[ -z "$(git -C "$MAME_SOURCE" status --porcelain --untracked-files=no)" ]] ||
+    fail mame_source_already_modified
+  python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SOURCE" ||
+    fail mame_patch_not_applicable
+fi
 
 if [[ "$MODE" == "--prepare" ]]; then
   printf 'A063_CODESPACES=PREPARED_NOT_COMPILED\n'
   printf 'A063_NEXT=bash scripts/a063-codespaces-bootstrap.sh --validate\n'
+elif [[ "$MODE" == "--resume" ]]; then
+  bash scripts/a063-r2c-linux-gate.sh --resume-patched \
+    --mame-source "$MAME_SOURCE" --jobs "${A063_MAME_JOBS:-1}"
 else
   bash scripts/a063-r2c-linux-gate.sh --mame-source "$MAME_SOURCE" \
     --jobs "${A063_MAME_JOBS:-2}"
