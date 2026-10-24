@@ -80,8 +80,10 @@ if (d.get("status"),d.get("cases"),d.get("passed"),
     d.get("synthetic_trace_only")) != ("PASS",17,17,True):
     raise SystemExit("R2C=BLOCKED replay_incomplete")
 PY
-python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SRC"   2>&1 | tee "$EVID/patch-check.log"
-python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SRC" --apply   2>&1 | tee "$EVID/patch-apply.log"
+python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SRC" \
+  2>&1 | tee "$EVID/patch-check.log"
+python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SRC" --apply \
+  2>&1 | tee "$EVID/patch-apply.log"
 git -C "$MAME_SRC" diff --check
 
 # The patch is now applied in the separate MAME checkout, never in main.
@@ -95,13 +97,13 @@ BUILD_START_EPOCH="$(date +%s)"
 BIN=""
 while IFS= read -r path; do
   [[ -x "$path" ]] || continue
-  if "$path" -version 2>&1 | head -n 2 | grep -qE '0\\.289([^0-9]|$)'; then
+  if "$path" -version 2>&1 | head -n 2 | grep -qE '0\.289([^0-9]|$)'; then
     if [[ -n "$BIN" ]]; then
       echo "R2C=BLOCKED multiple_mame_binaries" >&2; exit 2
     fi
     BIN="$path"
   fi
-done < <(find "$MAME_SRC" -maxdepth 3 -type f \\( -name '*gnga063*' -o -name 'mame' \\) -print)
+done < <(find "$MAME_SRC" -maxdepth 3 -type f \( -name '*gnga063*' -o -name 'mame' \) -print)
 [[ -n "$BIN" ]] || {
   echo "R2C=BLOCKED compiled_mame_binary_not_found" >&2; exit 2;
 }
