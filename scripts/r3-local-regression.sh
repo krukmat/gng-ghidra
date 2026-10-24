@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local regression subset for A0.2–A0.5. No GitHub Actions and no native ROM.
+# ROM-free local regression for R3/R4.2. No GitHub Actions or private ROM.
 # Run from any directory: bash scripts/r3-local-regression.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
