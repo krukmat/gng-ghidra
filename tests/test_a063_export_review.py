@@ -10,7 +10,14 @@ from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-import a063_export_review as review
+import importlib.util
+
+spec = importlib.util.spec_from_file_location(
+    "a063_export_review", ROOT / "scripts" / "a063-export-review.py"
+)
+assert spec and spec.loader
+review = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(review)
 
 
 class RedactedReviewTests(unittest.TestCase):
