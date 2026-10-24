@@ -55,7 +55,6 @@ def capture_postflight(root: Path, output: Path, preflight: Path, first: str,
     private_r2 = (root / "out" / "r2").resolve()
     private_smoke = (root / "out" / "r3" / "a063-smoke").resolve()
     oracle_smoke = (root / "out" / "r3" / "a063-oracle-smoke").resolve()
-    oracle_smoke = (root / "out" / "r3" / "a063-oracle-smoke").resolve()
     private_r3 = (root / "out" / "r3").resolve()
     preflight = preflight.resolve()
     if not (out.is_relative_to(private_r2) or out in (private_smoke, oracle_smoke)):
@@ -162,19 +161,36 @@ def capture_postflight(root: Path, output: Path, preflight: Path, first: str,
     return result
 
 
-def verify_postflight(root: Path, output: Path, preflight: Path) -> dict:
+def verify_postflight(root: Path, output: Path, preflight: Path,
+                      *, mame_bin: str | None = None) -> dict:
     root = root.resolve()
     out = output.resolve()
     private_r2 = (root / "out" / "r2").resolve()
     private_smoke = (root / "out" / "r3" / "a063-smoke").resolve()
+    oracle_smoke = (root / "out" / "r3" / "a063-oracle-smoke").resolve()
     if not (out.is_relative_to(private_r2) or out in (private_smoke, oracle_smoke)):
         raise contract.ContractError("A063_POSTFLIGHT_PRIVATE_CAPTURE_LOCATION_REQUIRED")
     path = out / "private-a063-postflight.json"
     try:
         saved = json.loads(path.read_text(encoding="utf-8"))
+        planned = json.loads(preflight.read_text(encoding="utf-8"))
         actual_files = {name: digest(out / name) for name in ARTIFACTS}
     except (ValueError, OSError) as exc:
         raise contract.ContractError("A063_POSTFLIGHT_EVIDENCE_MISSING") from exc
+    if (not isinstance(saved, dict) or not isinstance(planned, dict)
+            or not isinstance(saved.get("source_sha256"), dict)
+            or planned.get("source_sha256") != saved.get("source_sha256")
+            or saved.get("emulator_binary_sha256") != planned.get("emulator_binary_sha256")
+            or set(planned.get("source_sha256", {})) != set(contract.SOURCE_FILES)):
+        raise contract.ContractError("A063_POSTFLIGHT_PREFLIGHT_BINDING_MISMATCH")
+    if out == oracle_smoke:
+        if (planned.get("oracle_mode") is not True
+                or planned.get("oracle_driver_symbol") != contract.ORACLE_SYMBOL
+                or planned.get("oracle_bank_entry_expression_count") != 1
+                or not mame_bin or not shutil.which(mame_bin)):
+            raise contract.ContractError("A063_POSTFLIGHT_ORACLE_BINARY_REQUIRED")
+        if digest(Path(shutil.which(mame_bin)).resolve()) != saved["emulator_binary_sha256"]:
+            raise contract.ContractError("A063_POSTFLIGHT_ORACLE_BINARY_CHANGED")
     if (saved.get("schema") != SCHEMA or
             saved.get("status") != "A063_POSTFLIGHT_FILES_BOUND_NOT_PROVENANCE" or
             saved.get("capture_artifacts_complete") is not True or
@@ -202,7 +218,8 @@ def main() -> None:
     args = p.parse_args()
     try:
         if args.verify:
-            result = verify_postflight(ROOT, args.output, args.preflight)
+            result = verify_postflight(ROOT, args.output, args.preflight,
+                                       mame_bin=args.mame_bin if args.mame_bin != "mame" else None)
             print("A063_R1_POSTFLIGHT=" + result["status"])
             return
         if args.mame_exit is None or args.first is None or args.second is None:
