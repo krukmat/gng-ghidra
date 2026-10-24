@@ -36,3 +36,7 @@ The new H tests were run with **exact current GitHub JS sources in isolated V8**
 - F logs only post-autoboot callback order; pre-tap byte coverage must be supplied with independently verified initialization, not a final R0 snapshot reused as an initial seed.
 - G may report state equality without proving temporal equivalence.
 - First real frame requires separate native MAME capture, exact pixel comparison, bank-by-instruction A0.6.3, IRQ/SYNC and continuous original MC6809 logic compiled into JS.
+
+## Auditoría posterior T4 (24/10/2026)
+
+Se ha endurecido el cierre de evidencias T1–T3 y el parser F→G. Se prohíbe admitir resultados H obsoletos como pruebas de una ejecución actual. [Checkpoint T4](r42-t4-autonomous-audit.md).

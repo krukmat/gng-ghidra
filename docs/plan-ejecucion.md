@@ -650,6 +650,10 @@ Los plazos son **timeboxes orientativos en días laborables desde el inicio**, n
 
 T1: Node H de 9 casos + escalas 5k/40.001/100k, SHA256 y diagnóstico. T2: suite `scripts/r3-local-regression.sh` con Node/Python y gate F. T3: reparación de defectos comprobados, nuevo pase integral, salida agregada `out/r3/r42-validation-closure.json` sin ROM ni logs. **El ejecutor está implementado y probado (8/8 casos Python de aislamiento); las ejecuciones Node H y suite integral permanecen bloqueadas en la terminal actual por falta de checkout GitHub**. El bloqueo no es fallo del producto; realizar `python3 scripts/r42_validation_closure.py` sobre un clon completo. Sin GitHub Actions. [Documento operativo](r42-validation-closure.md).
 
+### T4 — Auditoría autónoma del cierre T1–T3 (24/10/2026)
+
+T4.1/3/4: corregida reutilización de resultados obsoletos, tratamiento de SHA mal tipado y JSONL con claves duplicadas; 12 tests Python del controlador y casos adversariales G. T4.2: pruebas Python registradas pero sin ejecución completa por ausencia de checkout ejecutable. T4.5: informe [T4](r42-t4-autonomous-audit.md). No abrir nuevas escenas R4.2. **T1–T3 sin PASS** hasta ejecución real.
+
 ### R4.2.H — Consolidación ROM-free y congelación del laboratorio (24/10/2026)
 
 H1 F-shaped sintético → G → board → renderer; H2 integridad, cobertura y DMA; H3 pruebas 5k/40.001/100k (1M opcional); H4 comparación primer evento/byte/píxel con informe sin valores privados; H5 tests y documentación. Implementado en main; 9/9 tests aislados en V8 con hash no criptográfico, Node/Python integral pendiente. **No** usar H como certificación MAME, R4/V2 ni banco A0.6.3. Congelar expansión visual al finalizar. [Contrato R4.2.H](r42h-romfree-checkpoint.md).

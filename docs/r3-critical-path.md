@@ -1,3 +1,9 @@
+## T4 — Auditoría autónoma y corrección del cierre (24/10/2026)
+
+**Código publicado en `main`:** cierre T1–T3 con informe H por ejecución (elimina posibilidad de reusar evidencia obsoleta), rechazo de SHA-256 mal tipado y banderas nativas falsas; G rechaza claves duplicadas JSONL/aliases Unicode. `tests/test_r42_validation_closure.py` tiene 12 tests; el test G de claves duplicadas está integrado en runner. **Validación disponible:** 5/5 casos aislados del parser en V8, 9/9 verificaciones de integración/contrato; Node/Python integral y los 12 tests Python reales **no se ejecutaron en esta terminal**, que no tiene checkout GitHub. Sin atribución de equivalencia MAME ni A0.6.3. [Detalle y reproducción](r42-t4-autonomous-audit.md).
+
+---
+
 ## T1–T3 — Cierre de ejecución ROM-free (24/10/2026)
 
 **Implementado:** `scripts/r42_validation_closure.py` ejecuta tests Node H (9), escala 5k/40.001/100k y regresión Node/Python; comprueba contratos de TAP, hash, primera divergencia y DMA. `tests/test_r42_validation_closure.py` contiene ocho tests de cierre con procesos simulados, ejecutados con Python real: **8/8 PASS**. Un TAP sintético de nueve tests bajo Node 22 real también validó el parser, pero **NO** representa ejecución de la suite H.
