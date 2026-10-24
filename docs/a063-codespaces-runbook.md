@@ -97,3 +97,36 @@ not source code.
 If you see `A063_REVIEW=NO_R2C_RUNS_FOUND`, then the runner failed
 before creating evidence; copy the last 30–50 **non-secret** terminal
 lines instead.
+
+## Alternative: share results through the PRIVATE GitHub feature branch
+
+When ChatGPT Android does not provide a convenient file picker, do
+**not** commit the ZIP or any raw logs. Stage a **much smaller,
+scrubbed, allowlisted** report as Markdown and inspect it before sharing:
+
+```bash
+git pull --ff-only
+python3 scripts/a063-stage-codespaces-review.py
+cat docs/audit/a063-r2e-codespaces-summary.md
+```
+
+If the report contains any sensitive information, do not publish it.
+After review, intentionally publish **only that one text file**:
+
+```bash
+git add docs/audit/a063-r2e-codespaces-summary.md
+git commit -m "docs(a063): share redacted Codespaces diagnostic status"
+git push origin feature/a063-r1-forensics-contract
+```
+
+The assistant can then read the report through the connected GitHub app.
+This creates a persistent Git commit on the private feature branch;
+it never modifies `main` or triggers workflows directly. If the
+repository has automatic push-triggered GitHub Actions, check before
+pushing because GitHub itself may start them independently. Do not
+push if that would be unacceptable.
+
+The staging tool extracts only status, replay metadata and a small
+selection of already-scrubbed error lines. Unlike the ZIP, it **does
+not include whole ROM-free logs**. Share the first missing error
+category separately if it is omitted by the allowlist.
