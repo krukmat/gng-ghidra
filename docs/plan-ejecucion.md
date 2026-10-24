@@ -646,6 +646,10 @@ Los plazos son **timeboxes orientativos en días laborables desde el inicio**, n
 
 **Entrega:** demo Node y reporte de primera divergencia. **GO:** tramo real con interrupción, checkpoints y escrituras equivalentes, sin intérprete. **NO-GO al D14:** no hay prueba suficiente o la complejidad exige atajos no verificables. Si falla, **replantear el alcance con el operador**, sin convertir el producto a emulador de forma encubierta.
 
+### R4.2.H — Consolidación ROM-free y congelación del laboratorio (24/10/2026)
+
+H1 F-shaped sintético → G → board → renderer; H2 integridad, cobertura y DMA; H3 pruebas 5k/40.001/100k (1M opcional); H4 comparación primer evento/byte/píxel con informe sin valores privados; H5 tests y documentación. Implementado en main; 9/9 tests aislados en V8 con hash no criptográfico, Node/Python integral pendiente. **No** usar H como certificación MAME, R4/V2 ni banco A0.6.3. Congelar expansión visual al finalizar. [Contrato R4.2.H](r42h-romfree-checkpoint.md).
+
 ### R4.2.G — Puente F→board de video, ROM-free (24/10/2026)
 
 G1 revisión del contrato F; G2 estado de captura inicial, no asumir bytes inexistentes; G3 procesamiento incremental de hasta 1M eventos y ventanas de 40K sin reset; G4 comparación hashes/primer byte frente a R0; G5 CLI, tests y docs. La equivalencia nativa requiere pruebas externas y no está certificada. [Contrato R4.2.G](r42g-event-replay-bridge.md).

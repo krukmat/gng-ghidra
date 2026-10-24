@@ -1,3 +1,13 @@
+## R4.2.H — Cierre funcional ROM-free (24/10/2026)
+
+H1 cadena F-shaped sintética → G board → renderer compartido; H2 SHA/estado/DMA fail-closed; H3 escala 5k/40.001/100k en ventanas sin nuevo reset; H4 diagnóstico por primera divergencia de evento, byte y píxel; H5 CLI, tests y evidencia agregada. [Contrato y pasos](r42h-romfree-checkpoint.md).
+
+**Verificación disponible:** 9/9 tests en V8 aislado con hash suplente (no SHA256 Node) y fuentes de GitHub; 100k eventos en 3 ventanas, mutación de sprite (byte offset 3, píxel 34/66 canal R) y escritura CPU posterior al DMA sin efecto visible. Los tests Node reales y la regresión Python integrada siguen pendientes de ejecución. La certificación nativa por F, A0.6.3, IRQ/SYNC, MAME framebuffer **no** está cerrada.
+
+**Decisión:** congelar expansión del laboratorio visual R4.2 después de H; no abrir R4.2.I por inercia. Enfocar esfuerzo siguiente en evidencias externas pendientes, no sumar escenas sintéticas.
+
+---
+
 ## R4.2.G — Puente F→board sin certificación MAME (24/10/2026)
 
 G1: esquema F verificado y test F incorporado en runner; ejecución nativa Node/Python pendiente. G2: cobertura explícita de RAM sprite/VRAM/paleta/scroll y bootstrap SHA-256 opcional, sin inicialización inventada. G3: replay incremental y checksum del JSONL F hasta 1M eventos (ventanas de 40K con estado persistente). G4: SHA-256 de los componentes visuales y primer offset de divergencia frente a R0 verificado, sin copiar bytes al informe. G5: pruebas ROM-free, CLI y roadmap actualizados.
