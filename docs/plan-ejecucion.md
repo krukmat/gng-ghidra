@@ -646,6 +646,15 @@ Los plazos son **timeboxes orientativos en días laborables desde el inicio**, n
 
 **Entrega:** demo Node y reporte de primera divergencia. **GO:** tramo real con interrupción, checkpoints y escrituras equivalentes, sin intérprete. **NO-GO al D14:** no hay prueba suficiente o la complejidad exige atajos no verificables. Si falla, **replantear el alcance con el operador**, sin convertir el producto a emulador de forma encubierta.
 
+### R4.2.A — DMA sprites + entradas al renderer (24/10/2026)
+
+Subbloque de R4.2 preparado y conectado al board en `main`, independiente de la recuperación bancaria A0.6.3:
+- **R4.2.A1:** 0x3C00 dispara copia lógica de 512 bytes de sprite RAM CPU a buffer separado; sin inicialización de fuente no hay DMA válido.
+- **R4.2.A2:** adapter con el decodificador JS existente, memoria FG/BG y sprites copiados; no hay píxeles ni frame real generado.
+- **R4.2.A3:** pruebas ROM-free de atomicidad, copias, replay, rechazo y entradas del renderer. Comando: `bash scripts/r3-local-regression.sh`.
+
+Sigue pendiente la conexión al renderer Canvas, la certificación de la transferencia nativa/timing y la ejecución continua con bancos, IRQ y `SYNC`. No presentar este avance como V2 ni como R4.2 cerrado. Detalles: [ruta crítica](r3-critical-path.md).
+
 ### R4 / V2 — Primer frame generado por JS recompilado · Semanas 3–4 · [Issue #5](https://github.com/krukmat/gng-ghidra/issues/5)
 
 **Tarea:** que la memoria del fotograma proceda del **código original recompilado**, no de una instantánea inyectada.
