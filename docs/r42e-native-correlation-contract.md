@@ -14,6 +14,13 @@
 - **E4 — Adversarial.** Tests de alteración de bytes, tamaños/hashes/nombres, falso DMA, inconsistencia de scroll, cabecera PNG, procedencia falsa, checkpoint repetido, valores inválidos y rutas fuera de `out/`. Fixtures enteramente sintéticos; las pruebas no generan archivos ROM en Git.
 - **E5 — CLI y documentación.** `scripts/r42e_native_reference_audit.mjs` lee archivos **solo del directorio privado ignorado `out/`**, y genera `out/r3/r42e-reference-audit.json`. Las pruebas se agregan a `scripts/r3-local-regression.sh`; no se utilizan Actions.
 
+## Evidencia de verificación ROM-free (24/10/2026)
+
+- 11/11 tests adversariales de E1–E3 ejecutados en V8 aislado con **fuentes exactos de GitHub**, y comprobador `Buffer`/hash determinista inyectado. Esto valida lógica de contratos, no los SHA-256 nativos de Node.
+- Smoke adicional del CLI con sistema de archivos simulado: acepta un manifiesto estructural coherente bajo `out/`, genera reporte, y rechaza rutas fuera de `out/`. **No** supone ejecución real del CLI sobre archivos nativos.
+- Dos pruebas Node de CLI y las 11 pruebas de contratos están integradas en el runner local. Las pruebas Node completas (crypto real y fs real) **siguen pendientes** porque el checkout completo de GitHub no está accesible desde la terminal disponible.
+- La instrumentación MAME privada también queda pendiente; no se ha generado ni observado traza nativa de escrituras ordenadas.
+
 ## Comandos para cuando exista captura R0 local
 
 Solo integridad de la referencia:
