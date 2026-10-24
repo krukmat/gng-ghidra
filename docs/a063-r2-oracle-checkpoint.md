@@ -44,3 +44,14 @@ Los únicos reportes permitidos fuera de out/ son diagnósticos agregados sin RO
 GitHub Actions prohibidos. No alterar main ni reutilizar capturas R2.
 
 Estado de salida: R2_A1_A4_PREPARED_NATIVE_VALIDATION_REQUIRED.
+
+## Validación adicional de integración
+
+Se ejecutaron localmente 11/11 casos aislados del comparador de bancos
+sobre una copia de código del algoritmo con dependencias simuladas, y 2/2
+pruebas de aplicación de patch sobre estructura sintética MAME 0.289.
+La suite completa de GitHub NO se ejecutó en el checkout íntegro ni se
+compiló MAME. La confianza de desbloqueo permanece estimativa hasta R2.A5.
+
+El mini-probe del oráculo admite entre 2 y 30 frames por
+GNG_A063_ORACLE_FRAMES (8 por defecto), manteniendo tiempo de captura acotado.

@@ -102,3 +102,12 @@ La API Lua por frame **no** es una correlación por instrucción; primero demost
 5. **Confundir avance técnico con juego completo** → separar los estados A0.6.3, A0.6.4 y R4.
 
 **Próxima tarea:** C1.T5, sin pedir intervención. Después C2 es el primer requisito privado; no preparar una captura completa antes del resultado diferencial C3.
+
+## Actualización R2.A (2026-10-24)
+
+Se preparó una alternativa de doble oráculo en
+[a063-r2-oracle-checkpoint.md](a063-r2-oracle-checkpoint.md): parche diagnóstico
+MAME 0.289, símbolo de solo lectura del banco activo y validador 1:1 de
+firma ROM frente a entrada real en una sola acción tracelog. Todo en rama
+feature/a063-r1-forensics-contract. **Estado ROM-free PREPARED; ejecución
+nativa y A0.6.3 PASS siguen BLOCKED.**
