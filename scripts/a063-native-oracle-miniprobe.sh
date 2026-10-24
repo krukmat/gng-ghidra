@@ -22,6 +22,6 @@ GNG_A063_ORACLE_SMOKE=1 GNG_R2_TRACE_MODE=printf GNG_A063_PREFLIGHT="$PRE" \
   GNG_A06_BANKSIG_HEX0="$FIRST" GNG_A06_BANKSIG_HEX1="$SECOND" \
   bash scripts/r2-mame-probe.sh || fail native_oracle_capture_failed
 python3 scripts/a063_capture_integrity.py --verify \
-  --output "$OUT" --preflight "$PRE" || fail oracle_postflight_rejected
+  --output "$OUT" --preflight "$PRE" --mame-bin "$MAME_BIN" || fail oracle_postflight_rejected
 python3 scripts/a063_bank_oracle_gate.py || fail oracle_bank_disagreement_or_inconclusive
 echo "A063_ORACLE_MINIPROBE=PASS_SAMPLED_INSTRUCTIONS_ONLY_NOT_FULL_A063"
