@@ -26,7 +26,28 @@ MACHINE="$(python3 -c 'import json;print(json.load(open("out/reference/mame-roms
 [[ "$MACHINE" == "gngb" ]] || fail requires_gngb
 "$MAME_BIN" -verifyroms gngb -rompath "$ROMPATH" >/dev/null || fail rom_verify_failed
 
+# R2 default remains unchanged. The A0.6.3 native smoke uses a private
+# independent directory and never overwrites prior R2/R3 trace evidence.
 OUTPUT="$ROOT/out/r2/mame-probe"
+SECONDS_TO_RUN=8
+if [[ "${GNG_A063_SMOKE:-0}" == "1" ]]; then
+  OUTPUT="$ROOT/out/r3/a063-smoke"
+  SECONDS_TO_RUN=2
+  export GNG_R2_PROBE_FRAMES=2
+  python3 - "$ROOT" "$OUTPUT" <<'PY'
+import sys
+from pathlib import Path
+root=Path(sys.argv[1]).resolve()
+private=(root/"out/r3").resolve()
+out=Path(sys.argv[2]).resolve()
+if not private.is_relative_to(root) or not out.is_relative_to(private):
+    raise SystemExit("A063_SMOKE_PRIVATE_OUTPUT_REQUIRED")
+PY
+  [[ ! -e "$OUTPUT/cpu.trace" && ! -e "$OUTPUT/pre-instruction.jsonl" ]] ||
+    fail a063_smoke_capture_exists_preserve_old_evidence
+elif [[ "${GNG_A063_SMOKE:-0}" != "0" ]]; then
+  fail a063_invalid_smoke_mode
+fi
 mkdir -p "$OUTPUT"
 # Fresh evidence required; never accept an old trace on a failed debug run.
 rm -f "$OUTPUT/observations.tsv" "$OUTPUT/cpu.trace" "$OUTPUT/capabilities.json" \
@@ -95,7 +116,7 @@ if [[ "$NATIVE_LOG_EVENTS" == "1" ]]; then
   set -- "$@" -oslog
 fi
 set +e
-"$MAME_BIN" "$@" -seconds_to_run 8 -skip_gameinfo \
+"$MAME_BIN" "$@" -seconds_to_run "$SECONDS_TO_RUN" -skip_gameinfo \
   >"$OUTPUT/mame.log" 2>&1
 EXIT_CODE=$?
 set -e

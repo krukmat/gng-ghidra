@@ -105,6 +105,18 @@ class TraceContractTests(unittest.TestCase):
             with self.subTest(key=key),self.assertRaises(contract.ContractError):
                 contract.classify_diagnostic(sample)
 
+    def test_miniprobe_preserves_existing_native_evidence_by_design(self):
+        shell=(ROOT/"scripts/r2-mame-probe.sh").read_text()
+        mini=(ROOT/"scripts/a063-native-miniprobe.sh").read_text()
+        self.assertIn('GNG_A063_SMOKE=1',mini)
+        self.assertIn('OUTPUT="$ROOT/out/r3/a063-smoke"',shell)
+        self.assertIn('a063_smoke_capture_exists_preserve_old_evidence',shell)
+        self.assertIn('SECONDS_TO_RUN=2',shell)
+        self.assertIn('GNG_R2_PROBE_FRAMES=2',shell)
+        self.assertIn('R1_READY_FOR_PRIVATE_STRICT_PARSER_ONLY',mini)
+        self.assertNotIn('r3-banked-critical-path.sh',mini)
+        self.assertNotIn('r3_bank_provenance.py report',mini)
+
     @staticmethod
     def sample_diagnostic():
         n=17135
