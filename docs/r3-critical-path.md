@@ -1,3 +1,9 @@
+## R4.2.E — Auditoría estructural R0 / preparación de correlación MAME (24/10/2026)
+
+El contrato y la ruta de uso están en [docs/r42e-native-correlation-contract.md](r42e-native-correlation-contract.md). E1–E5 implementan verificación de los cinco artefactos R0, metadata de frame/DMA/scroll, comparación informativa de estado con checkpoint sintético D, CLI privado y tests adversariales. **No hay secuencia temporal de MAME verificable** en el formato R0 existente; una coincidencia de snapshots no certifica orden nativo de eventos, pixels del PNG ni VBlank. No usar este bloque para cerrar A0.6.3.
+
+---
+
 # R4.2.D — Secuenciación determinista de vídeo (24/10/2026)
 
 **D1:** contrato ROM-free `gng.r42.visual-events.v1`: `WRITE8` (RAM o MMIO visual documentado), `DMA` (solo `0x3c00`) y `CHECKPOINT` (identificador único). Secuencias `seq=0..N-1`, validación completa de la estructura antes del replay y rechazo de cualquier evento desconocido o supuesto origen MAME.

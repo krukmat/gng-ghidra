@@ -18,6 +18,9 @@ node --check scripts/r42_visual_fixture.mjs
 node --check src/gngb_visual_event_replay.mjs
 node --check src/gngb_visual_event_fixture.mjs
 node --check scripts/r42d_visual_replay_lab.mjs
+node --check src/r42e_snapshot_integrity.mjs
+node --check src/r42e_checkpoint_compare.mjs
+node --check scripts/r42e_native_reference_audit.mjs
 node --check src/gngb_banked_rom.mjs
 node --check scripts/r3_video_board_integration.mjs
 node --check scripts/r3_static_trace_probe.mjs
@@ -37,6 +40,9 @@ node --test \
   tests/test_r42_visual_fixture.mjs \
   tests/test_gngb_visual_event_replay.mjs \
   tests/test_r42d_visual_replay_lab.mjs \
+  tests/test_r42e_snapshot_integrity.mjs \
+  tests/test_r42e_checkpoint_compare.mjs \
+  tests/test_r42e_audit_cli.mjs \
   tests/test_gngb_banked_rom.mjs \
   tests/test_r3_compiler_family_batch.mjs \
   tests/test_r3_dynamic_coverage.mjs \

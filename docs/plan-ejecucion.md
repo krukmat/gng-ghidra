@@ -646,6 +646,10 @@ Los plazos son **timeboxes orientativos en días laborables desde el inicio**, n
 
 **Entrega:** demo Node y reporte de primera divergencia. **GO:** tramo real con interrupción, checkpoints y escrituras equivalentes, sin intérprete. **NO-GO al D14:** no hay prueba suficiente o la complejidad exige atajos no verificables. Si falla, **replantear el alcance con el operador**, sin convertir el producto a emulador de forma encubierta.
 
+### R4.2.E — Evidencia estructural R0 y correlación limitada (24/10/2026)
+
+E1 contrato de procedencia R0; E2 integridad SHA-256 de FG/BG/DMA/paleta/PNG; E3 comparación de snapshots con checkpoints R4.2.D sin reclamar eventos nativos; E4 mutaciones adversariales ROM-free; E5 CLI local y documentación. El capturador R0 no registra aún escrituras ordenadas por instrucción: **timeline y VBlank no certificados**. Detalles: [contrato R4.2.E](r42e-native-correlation-contract.md).
+
 ### R4.2.D — Secuenciación y checkpoints visuales (24/10/2026)
 
 **D1:** contrato ROM-free `gng.r42.visual-events.v1`: `WRITE8` (RAM o MMIO visual documentado), `DMA` (solo `0x3c00`) y `CHECKPOINT` (identificador único). Secuencias `seq=0..N-1`, validación completa de la estructura antes del replay y rechazo de cualquier evento desconocido o supuesto origen MAME.
