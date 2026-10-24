@@ -122,10 +122,15 @@ def check_regression(step: dict) -> bool:
 
 
 def report_step(step: dict, ok: bool) -> dict:
+    category = ("NONE" if ok else
+                "ENVIRONMENT" if step["outcome"] in ("TIMEOUT", "UNAVAILABLE") else
+                "TEST_PROCESS_FAILED_REQUIRES_TRIAGE" if step["exit_code"] != 0 else
+                "EVIDENCE_OR_FIXTURE_CONTRACT_MISMATCH")
     return {k: v for k, v in step.items() if not k.startswith("_")} | {
         "status": "PASS" if ok else (
-            "BLOCKED_ENVIRONMENT" if step["outcome"] in ("TIMEOUT", "UNAVAILABLE")
-            else "FAILED_VALIDATION")
+            "BLOCKED_ENVIRONMENT" if category == "ENVIRONMENT"
+            else "FAILED_VALIDATION"),
+        "failure_category": category,
     }
 
 
