@@ -12,6 +12,13 @@ read -r BANKSIG0 BANKSIG1 <<< "$SIGS"
   echo "A063_CAPTURE=BLOCKED could_not_prepare_private_bank_signature" >&2
   exit 2
 }
+# Fail before invoking MAME if the debugger-action contract, MAME version,
+# binary fingerprint or source hashes cannot be recorded privately.
+# This is PRE-RUN evidence only; it NEVER attests an instruction or bank.
+python3 scripts/a063_trace_contract.py preflight \
+  --first "$BANKSIG0" --second "$BANKSIG1" \
+  --mame-bin "${GNG_R3_MAME_BIN:-mame}" \
+  --output "$ROOT/out/r3/banked-provenance/private-a063-preflight.json" >/dev/null
 # Preserve all previous R2 trace/TSV/ROM evidence via existing wrapper.
 GNG_A06_BANKSIG_HEX0="$BANKSIG0" GNG_A06_BANKSIG_HEX1="$BANKSIG1" \
 GNG_R2_TRACE_MODE=printf \

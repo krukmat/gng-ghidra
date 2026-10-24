@@ -270,7 +270,11 @@ class NativeBankSignatures(unittest.TestCase):
     def test_stock_debugger_trace_and_backup_are_wired_without_actions(self):
         shell=(ROOT/"scripts"/"r2-mame-probe.sh").read_text()
         capture=(ROOT/"scripts"/"r3-bank-provenance-capture.sh").read_text()
-        self.assertIn("GNG_A06_BANKSIG S0=%02X S1=%02X",shell)
+        import a063_trace_contract as trace_contract
+        self.assertIn("GNG_A06_BANKSIG S0=%02X S1=%02X",
+                      trace_contract.build_action("4000","5000"))
+        self.assertIn("a063_trace_contract.py emit",shell)
+        self.assertIn("a063_trace_contract.py preflight",capture)
         self.assertIn("b@",shell)
         self.assertIn("GNG_R2_TRACE_MODE=printf",capture)
         self.assertIn("r3-video-write-capture.sh",capture)

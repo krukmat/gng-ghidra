@@ -73,7 +73,9 @@ if [[ -n "${GNG_A06_BANKSIG_HEX0:-}" || -n "${GNG_A06_BANKSIG_HEX1:-}" ]]; then
     fail a063_bank_probe_outside_rom_window
   # Use ONE tracelog command with register and signature data to prevent
   # ambiguous joins across debugger callbacks, loops, or reset boundaries.
-  TRACE_ACTION='{tracelog "GNG_R2_PRE PC=%04X A=%02X B=%02X X=%04X Y=%04X U=%04X S=%04X DP=%02X CC=%02X GNG_A06_BANKSIG S0=%02X S1=%02X",pc,a,b,x,y,u,s,dp,cc,b@'${GNG_A06_BANKSIG_HEX0}',b@'${GNG_A06_BANKSIG_HEX1}'}'
+  TRACE_ACTION="$(python3 scripts/a063_trace_contract.py emit \
+    --first "$GNG_A06_BANKSIG_HEX0" \
+    --second "$GNG_A06_BANKSIG_HEX1")" || fail a063_trace_contract_invalid
 fi
 printf 'trace %s,:maincpu,noloop,%s\ng\n' "$OUTPUT/cpu.trace" "$TRACE_ACTION" > "$DEBUGSCRIPT"
 echo "GNG_R2_TRACE_MODE=$GNG_R2_TRACE_MODE"
