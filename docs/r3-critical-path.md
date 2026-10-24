@@ -6,7 +6,11 @@ Se extrajo a `src/gngb_frame_renderer.mjs` el compositor **RGBA 256×224** que a
 
 `src/gngb_frame_pipeline.mjs` integra el módulo mediante `snapshotGngbRendererInputs` de R4.2.A, exigiendo RAM FG/BG completa y transferencia de sprites `0x3C00` previa; dibuja únicamente desde el buffer congelado, nunca desde sprite RAM CPU sin DMA. Entradas obligatorias: imágenes gráficas privadas CRC-verificadas y paleta/scroll proporcionados explícitamente. Sin esas fuentes **se bloquea**, no se inventan datos ni se declara V2.
 
-Cinco tests ROM-free verifican píxeles BG/sprite/FG, orden de prioridad, clip, aislamiento antes/después de DMA y fallo ante datos incompletos. Se incluyeron en `scripts/r3-local-regression.sh`. El gate real de R4 / V2 **sigue dependiendo de A0.6.3, IRQ/SYNCACK, timing DMA y ejecución CPU continua**; este bloque solo conecta el canal de píxeles del laboratorio, no demuestra un frame de juego generado por código recompilado.
+Seis tests ROM-free verifican píxeles BG/sprite/FG, orden de prioridad, clip, aislamiento antes/después de DMA y fallo ante datos incompletos. Se incluyeron en `scripts/r3-local-regression.sh`.
+
+**Salida visual ROM-free reproducible:** `node scripts/r42_visual_fixture.mjs` genera `out/r3/r42-visual-fixture/compare.html` y `report.json`. Los dos lienzos 256×224 muestran una modificación de RAM de sprites que **solo aparece después de la segunda transferencia DMA**. El HTML contiene píxeles exclusivamente sintéticos, no ROM, y está marcado visiblemente como prueba de laboratorio. Se añaden pruebas del HTML, del delta pixel a pixel y del split-priority de BG grupo 1 frente a sprites. No se utiliza como evidencia MAME ni V2.
+
+ El gate real de R4 / V2 **sigue dependiendo de A0.6.3, IRQ/SYNCACK, timing DMA y ejecución CPU continua**; este bloque solo conecta el canal de píxeles del laboratorio, no demuestra un frame de juego generado por código recompilado.
 
 ---
 

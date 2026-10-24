@@ -13,6 +13,7 @@ node --check src/gngb_board_memory.mjs
 node --check src/gngb_video_bridge.mjs
 node --check src/gngb_frame_renderer.mjs
 node --check src/gngb_frame_pipeline.mjs
+node --check scripts/r42_visual_fixture.mjs
 node --check src/gngb_banked_rom.mjs
 node --check scripts/r3_video_board_integration.mjs
 node --check scripts/r3_static_trace_probe.mjs
@@ -26,6 +27,7 @@ node --test \
   tests/test_gngb_board_memory.mjs \
   tests/test_gngb_video_bridge.mjs \
   tests/test_gngb_frame_renderer.mjs \
+  tests/test_r42_visual_fixture.mjs \
   tests/test_gngb_banked_rom.mjs \
   tests/test_r3_compiler_family_batch.mjs \
   tests/test_r3_dynamic_coverage.mjs \

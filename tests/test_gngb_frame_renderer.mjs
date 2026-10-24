@@ -86,3 +86,14 @@ test('foreground and split background overlay sprite in the original R1 order',(
   const cover=renderGngbBoardFrame({board:b,...assets});
   assert.deepEqual(colorAt(cover,20,24),[128,128,127,255]);
 });
+
+test('group1 BG front occludes sprites while group0 leaves sprites in front',()=>{
+  const b=board(),assets=graphics();b.write8(0x3c00,0);
+  assets.tiles.fill(0xff); // graphics pen 7, group1 is BG-front for pen7
+  const bgAddress=0x2800+1*32+2; // x=20, visible y=24 -> hardware y=40
+  const group0=renderGngbBoardFrame({board:b,...assets});
+  assert.deepEqual(colorAt(group0,20,24),[64,192,191,255]);
+  b.write8(bgAddress+0x400,0x08);
+  const group1=renderGngbBoardFrame({board:b,...assets});
+  assert.deepEqual(colorAt(group1,20,24),[7,21,248,255]);
+});
