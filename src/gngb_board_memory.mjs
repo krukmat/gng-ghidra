@@ -4,13 +4,16 @@
  * This is an incremental bridge to src/video_memory.mjs and
  * src/sprite_memory.mjs, NOT an MC6809 interpreter or an emulation of the
  * full board. Cold-boot RAM power-on state, banked ROM, IRQ/SYNC, MMIO
- * writes, sprite DMA buffering and cycle timing are explicitly unverified.
+ * writes and cycle timing are explicitly unverified. R4.2.A models only
+ * the logical buffered-sprite snapshot after an explicit 0x3c00 write.
  * All reads of RAM not written since clearLabState() fail closed.
  */
 import {readTile as decodeTile, tileAddress, FG_START, BG_START, TILEMAP_SIZE}
   from './video_memory.mjs';
-import {snapshotSprites, SPRITE_RAM_START, SPRITE_RAM_LENGTH}
+import {snapshotSprites,drawOrder,SPRITE_RAM_START,SPRITE_RAM_LENGTH}
   from './sprite_memory.mjs';
+import {createGngbSpriteDma,GNG_SPRITE_DMA_TRIGGER}
+  from './gngb_sprite_dma.mjs';
 import {checkedState} from '../scripts/r3_static_trace_probe.mjs';
 
 export const GNG_RAM_END = 0x2fff;
@@ -39,6 +42,7 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
     throw new TypeError('GNGB_UNMAPPED_READ_CALLBACK_INVALID');
   const bytes = new Uint8Array(65536);
   const known = new Uint8Array(GNG_RAM_END + 1);
+  const dma=createGngbSpriteDma();
   let writeCount = 0;
   let writesPerRegion = Object.create(null);
 
@@ -49,6 +53,13 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
       throw new RangeError('GNGB_UNMODELED_IO_OR_ROM_WRITE');
   }
   function write8(addr, value) {
+    addressCheck(addr);
+    byteCheck(value);
+    if(addr===GNG_SPRITE_DMA_TRIGGER){
+      // A control write latches sprites, never stores a CPU RAM byte.
+      dma.trigger(addr,value,bytes,known);
+      return;
+    }
     assertWritable(addr, value);
     bytes[addr] = value;
     known[addr] = 1;
@@ -99,10 +110,13 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
     // This is CPU sprite RAM, NOT a claim that the 0x3c00 DMA occurred.
     return snapshotSprites(bytes);
   }
+  function snapshotBufferedSprites(){return dma.snapshot();}
+  function bufferedSpriteDrawOrder(){return drawOrder(dma.snapshot());}
   function clearLabState() {
     // Explicit lab reset, not a reproduction of native cold-boot contents.
     bytes.fill(0);
     known.fill(0);
+    dma.clear();
     writeCount = 0;
     writesPerRegion = Object.create(null);
   }
@@ -117,10 +131,22 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
     checkedState(registers);
     const staged = [];
     const stageByte = (addr, value) => {
-      assertWritable(addr, value);
-      if (staged.length >= 2)
-        throw new Error('GNGB_UNSUPPORTED_MULTIWRITE_INSTRUCTION');
-      staged.push({addr, value});
+      addressCheck(addr);
+      byteCheck(value);
+      // Only one DMA effect is supported per compiled instruction.
+      // Mixing DMA and RAM stores requires ordered bus proof.
+      if(addr===GNG_SPRITE_DMA_TRIGGER){
+        if(staged.length)throw Error('GNGB_MIXED_DMA_AND_RAM_EFFECTS_UNSUPPORTED');
+        dma.validateSource(bytes,known);
+        staged.push({addr,value});
+        return;
+      }
+      assertWritable(addr,value);
+      if(staged.some(e=>e.addr===GNG_SPRITE_DMA_TRIGGER))
+        throw Error('GNGB_MIXED_DMA_AND_RAM_EFFECTS_UNSUPPORTED');
+      if(staged.length>=2)
+        throw Error('GNGB_UNSUPPORTED_MULTIWRITE_INSTRUCTION');
+      staged.push({addr,value});
     };
     const stageWord = (addr, word) => {
       if (!Number.isInteger(word) || word < 0 || word > 0xffff ||
@@ -137,10 +163,11 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
       registers: output,
       committed: commit,
       byte_writes: staged.length,
+      sprite_dma_triggers: staged.filter(e=>e.addr===GNG_SPRITE_DMA_TRIGGER).length,
       // No raw byte/address export. The complete contents remain available
       // through the explicit private snapshot for the existing renderer.
       writes_by_region: staged.reduce((acc, e) => {
-        const reg = classify(e.addr);
+        const reg = e.addr===GNG_SPRITE_DMA_TRIGGER?'SPRITE_DMA':classify(e.addr);
         acc[reg] = (acc[reg] || 0) + 1;
         return acc;
       }, Object.create(null)),
@@ -152,6 +179,7 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
       writes: writeCount,
       initialized_ram_bytes: known.reduce((sum, item) => sum + item, 0),
       writes_by_region: {...writesPerRegion},
+      ...dma.stats(),
       native_video_bus_equivalence_verified: false,
       banked_rom_irq_sync_dma_verified: false,
       game_playable: false,
@@ -159,6 +187,7 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
   }
   return Object.freeze({
     read8, write8, writeSpriteWord, stepStatic, tile,
-    snapshotAddressSpace, snapshotRawSprites, clearLabState, stats,
+    snapshotAddressSpace, snapshotRawSprites, snapshotBufferedSprites,
+    bufferedSpriteDrawOrder, clearLabState, stats,
   });
 }
