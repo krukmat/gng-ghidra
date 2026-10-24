@@ -55,4 +55,6 @@ node --test \
 python3 -m unittest discover -s tests -p 'test_r3_bank_inventory.py' -v
 python3 -m unittest discover -s tests -p 'test_r3_bank_provenance.py' -v
 python3 -m unittest discover -s tests -p 'test_mame_visual_oracle.py' -v
-echo "GNG_LOCAL_REGRESSION=PASS_ROM_FREE_A0_2_TO_A0_6_3"
+python3 -m py_compile scripts/capture_real_frame.py scripts/r42f_validate_timeline.py tests/test_r42f_timeline.py
+python3 -m unittest discover -s tests -p 'test_r42f_timeline.py' -v
+echo "GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42F"
