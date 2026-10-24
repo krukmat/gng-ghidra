@@ -34,7 +34,7 @@ test('R4.2.C3 default pipeline consumes board scroll and RGBx palette, not manua
 test('R4.2.C4 scroll updates alter visible tile raster using board register writes',()=>{
   const b=setup(),gfx=assets();
   // BG tile #1 pen0 -> index1; tile0 and tile1 bitplanes differ.
-  b.write8(0x2800+32,1); // column-major index, col1/row0
+  b.write8(0x2800+33,1); // col1/row1; visible y=0 corresponds to hardware y=16
   // BG graphic #1 at x=0,y=0 set pen 7 via planar bits.
   // Existing decoder samples index * 256 (bits), which is byte offset 32.
   gfx.tiles[32]=0xff;gfx.tiles[0x8000+32]=0xff;gfx.tiles[0x10000+32]=0xff;
