@@ -87,7 +87,7 @@ def replay_cases()->dict:
                     "INCONCLUSIVE_TOO_FEW_PRESTATES")
     lines=trace.splitlines()
     wrong=lines.copy();wrong[180]=wrong[180].replace("E=01","E=03")
-    expected_rejection("one_wrong_live_entry","\\n".join(wrong).replace("\\n","\n"),rows)
+    expected_rejection("one_wrong_live_entry","\n".join(wrong),rows)
     wide=lines.copy();wide[12]=wide[12].replace("S0=05","S0=FFFFFFFFFFFFFF05")
     expected_rejection("sign_extended_rom_byte","\n".join(wide),rows)
     orphan=lines.copy();orphan.insert(22,"GNG_A063_ENTRY E=04")
