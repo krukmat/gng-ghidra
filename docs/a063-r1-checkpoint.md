@@ -1,5 +1,7 @@
 # A0.6.3-R1 — Contract + forensics checkpoint (branch-only)
 
+Critical path: [docs/a063-critical-path.md](a063-critical-path.md).
+
 Branch: feature/a063-r1-forensics-contract
 Base: 9f8e9ad (main at branch creation)
 
