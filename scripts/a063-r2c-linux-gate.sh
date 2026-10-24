@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # R2.C: opt-in ROM-free integration + actual MAME 0.289 subset build on Linux.
 # Never touches private ROMs, GitHub Actions or gng-ghidra/main.
-# Usage: bash scripts/a063-r2c-linux-gate.sh --mame-source /clean/mame0289 [--jobs 2]
+# Usage: bash scripts/a063-r2c-linux-gate.sh --mame-source /clean/mame0289 [--jobs 1]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MAME_SRC=""
-JOBS=2
+JOBS=1
 RESUME_PATCHED=0
 while (($#)); do
   case "$1" in
