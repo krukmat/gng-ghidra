@@ -75,7 +75,7 @@ class NativeOracleTests(unittest.TestCase):
                          "INCONCLUSIVE_NO_UNINTERRUPTED_BANK_TRANSITION")
         self.assertEqual(oracle.compare(self.banks*60,self.banks*60,
                          {"sampled_control_writes_before_handler":0})["status"],
-                         "INCONCLUSIVE_NO_BANK_TRANSITION")
+                         "INCONCLUSIVE_NO_UNINTERRUPTED_BANK_TRANSITION")
 
     def test_reset_disqualifies_transition(self):
         s={"sampled_control_writes_before_handler":1,
