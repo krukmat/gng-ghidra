@@ -59,12 +59,16 @@ class ClosureTests(unittest.TestCase):
         self.assertEqual(report["status"],"FAILED_VALIDATION")
         self.assertEqual(report["tasks"]["T1"]["status"],"NOT_VERIFIED")
         self.assertNotIn('secret stuff',json.dumps(report))
+        self.assertEqual(report['tasks']['T1']['tests']['failure_category'],
+                         'TEST_PROCESS_FAILED_REQUIRES_TRIAGE')
 
     def test_zero_exit_without_expected_contract_cannot_pass(self):
         bad=manifest();bad["scales"][1]["event_count"]=40000
         report=run_closure(ROOT,runner=fake_runner,manifest_loader=lambda _:bad,write=False)
         self.assertEqual(report["status"],"FAILED_VALIDATION")
         self.assertEqual(report["scales_checked"],[])
+        self.assertEqual(report['tasks']['T1']['scale']['failure_category'],
+                         'EVIDENCE_OR_FIXTURE_CONTRACT_MISMATCH')
 
     def test_unavailable_binary_is_blocked(self):
         def missing(cmd,**kwargs):
@@ -73,6 +77,7 @@ class ClosureTests(unittest.TestCase):
         report=run_closure(ROOT,runner=missing,manifest_loader=lambda _:manifest(),write=False)
         self.assertEqual(report["status"],"BLOCKED_ENVIRONMENT")
         self.assertEqual(report["tasks"]["T1"]["tests"]["status"],"BLOCKED_ENVIRONMENT")
+        self.assertEqual(report['tasks']['T1']['tests']['failure_category'],'ENVIRONMENT')
 
     def test_missing_output_manifest_is_not_success(self):
         def missing_manifest(_):raise FileNotFoundError('report missing')
