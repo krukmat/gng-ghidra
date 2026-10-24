@@ -71,3 +71,29 @@ build fails, report the exact error text **without credentials**.
 
 References: https://docs.github.com/en/codespaces/ and
 https://docs.mamedev.org/initialsetup/compilingmame.html .
+
+## Send diagnostic results back for review
+
+After running `--validate`, update the feature branch and create a **small
+redacted ZIP** from the two most recent local ROM-free attempts:
+
+```bash
+git pull --ff-only
+python3 scripts/a063-export-review.py
+```
+
+The ZIP is written to `out/a063-r2e-review.zip`, an ignored path
+inside the Codespace. The export contains only allowlisted ROM-free
+checkpoints and shortened, redacted diagnostic logs; it excludes ROM,
+native CPU traces, private captures and emulator binaries. Automated
+redaction is best effort: **inspect the ZIP before sharing**.
+
+From the browser Codespaces Explorer, expand `out`, right-click the ZIP
+(or use the file context menu) and choose **Download**, then attach it
+directly to the ChatGPT conversation. Do not commit/upload this ZIP
+to GitHub, including a private branch: it is a diagnostic artifact,
+not source code.
+
+If you see `A063_REVIEW=NO_R2C_RUNS_FOUND`, then the runner failed
+before creating evidence; copy the last 30–50 **non-secret** terminal
+lines instead.
