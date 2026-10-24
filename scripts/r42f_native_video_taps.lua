@@ -13,10 +13,16 @@ return function(ctx)
     local trace = assert(io.open(dir .. "/r42f-native-events.jsonl","wb"),
                          "R42F_TIMELINE_FILE_UNWRITABLE")
     local seq,last_frame,last_time,writes,dmas,finished=0,-1,-1,0,0,false
+    local function frame_number()
+        local value=screen.frame_number
+        if type(value)=="number" then return value end
+        if type(value)=="function" then return screen:frame_number() end
+        error("R42F_FRAME_NUMBER_API_UNAVAILABLE")
+    end
     local function record(kind,address,data,mask)
         assert(not finished,"R42F_RECORD_AFTER_FINISH")
         assert(seq < max,"R42F_EVENT_LIMIT_REACHED_ABORT_NO_COMPLETE_META")
-        local frame=assert(screen:frame_number(),"R42F_FRAME_UNAVAILABLE")
+        local frame=assert(frame_number(),"R42F_FRAME_UNAVAILABLE")
         local time=assert(machine.time:as_double(),"R42F_MACHINE_TIME_UNAVAILABLE")
         assert(type(frame)=="number" and frame%1==0 and frame>=last_frame,
                "R42F_FRAME_NONMONOTONIC")
@@ -64,7 +70,7 @@ return function(ctx)
     end
     local function finish(frame)
         assert(not finished,"R42F_DUPLICATE_FINISH")
-        assert(frame==screen:frame_number(),"R42F_CHECKPOINT_FRAME_CHANGED")
+        assert(frame==frame_number(),"R42F_CHECKPOINT_FRAME_CHANGED")
         assert(dmas>0,"R42F_NATIVE_DMA_REQUIRED")
         record("CHECKPOINT",nil,nil,nil)
         assert(trace:flush(),"R42F_TRACE_FLUSH_FAILED")
