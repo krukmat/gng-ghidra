@@ -124,8 +124,8 @@ class TraceContractTests(unittest.TestCase):
         for name in ("r2_pretrace_report.py", "r2_probe_report.py"):
             source=(ROOT/"scripts"/name).read_text()
             self.assertIn('allowed_smoke = (root / "out" / "r3" / "a063-smoke").resolve()',source)
-            self.assertIn('directory == allowed_smoke' if name=="r2_probe_report.py"
-                          else 'folder == allowed_smoke',source)
+            self.assertIn('directory in (allowed_smoke, allowed_oracle)' if name=="r2_probe_report.py"
+                          else 'folder in (allowed_smoke, allowed_oracle)',source)
 
     def test_miniprobe_does_not_require_prior_r2(self):
         shell=(ROOT/"scripts/a063-native-miniprobe.sh").read_text()
