@@ -1,3 +1,11 @@
+## R4.2.G — Puente F→board sin certificación MAME (24/10/2026)
+
+G1: esquema F verificado y test F incorporado en runner; ejecución nativa Node/Python pendiente. G2: cobertura explícita de RAM sprite/VRAM/paleta/scroll y bootstrap SHA-256 opcional, sin inicialización inventada. G3: replay incremental y checksum del JSONL F hasta 1M eventos (ventanas de 40K con estado persistente). G4: SHA-256 de los componentes visuales y primer offset de divergencia frente a R0 verificado, sin copiar bytes al informe. G5: pruebas ROM-free, CLI y roadmap actualizados.
+
+**STOP:** no afirmar correspondencia por instrucción, raster, IRQ ni equivalencia nativa. [Contrato y comandos](r42g-event-replay-bridge.md).
+
+---
+
 ## R4.2.F — Cronología de escrituras de vídeo MAME (24/10/2026)
 
 **Estado de implementación:** F1–F5 preparados en `main`, con captura opt-in de taps Lua, evento JSONL acotado, ID de corrida, validador estructural Python, tests adversariales y documentación. La ejecución real de MAME con ROM privada y la suite completa Node/Python se reportarán por separado; **ninguna coincidencia sintética constituye evidencia nativa**. [Ver contrato, límites y comando](r42f-native-video-timeline.md).

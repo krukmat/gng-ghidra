@@ -20,6 +20,8 @@ node --check src/gngb_visual_event_fixture.mjs
 node --check scripts/r42d_visual_replay_lab.mjs
 node --check src/r42e_snapshot_integrity.mjs
 node --check src/r42e_checkpoint_compare.mjs
+node --check src/r42g_incremental_timeline.mjs
+node --check scripts/r42g_replay_timeline.mjs
 node --check scripts/r42e_native_reference_audit.mjs
 node --check src/gngb_banked_rom.mjs
 node --check scripts/r3_video_board_integration.mjs
@@ -43,6 +45,8 @@ node --test \
   tests/test_r42e_snapshot_integrity.mjs \
   tests/test_r42e_checkpoint_compare.mjs \
   tests/test_r42e_audit_cli.mjs \
+  tests/test_r42g_incremental_timeline.mjs \
+  tests/test_r42g_replay_cli.mjs \
   tests/test_gngb_banked_rom.mjs \
   tests/test_r3_compiler_family_batch.mjs \
   tests/test_r3_dynamic_coverage.mjs \
@@ -57,4 +61,4 @@ python3 -m unittest discover -s tests -p 'test_r3_bank_provenance.py' -v
 python3 -m unittest discover -s tests -p 'test_mame_visual_oracle.py' -v
 python3 -m py_compile scripts/capture_real_frame.py scripts/r42f_validate_timeline.py tests/test_r42f_timeline.py
 python3 -m unittest discover -s tests -p 'test_r42f_timeline.py' -v
-echo "GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42F"
+echo "GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42G"
