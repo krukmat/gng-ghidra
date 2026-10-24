@@ -273,3 +273,64 @@ distinguish an idle/VM stop from other external termination causes.
 Official references:
 - https://docs.github.com/en/codespaces/setting-your-user-preferences/setting-your-timeout-period-for-github-codespaces
 - https://docs.github.com/en/codespaces/about-codespaces/understanding-the-codespace-lifecycle
+
+## Mobile browser logout and Codespaces timeout
+
+GitHub Codespaces has **two independent lifecycles**:
+
+- Android/browser login may expire or disconnect. A running Codespace
+  does not automatically stop just because the browser tab closes.
+- The Codespace can stop after **30 minutes of inactivity by default**
+  (terminal output/activity counts toward activity), or after a
+  **maximum 12-hour lifetime** even if actively used. When it stops,
+  running processes stop too. No shell wrapper or `nohup` can
+  override a stopped VM.
+
+We use a session launcher so a browser logout alone does not send
+a terminal hangup signal to our validation process. The launcher
+stores a private log and run state **outside the repository**, and
+prevents launching a second build at the same time:
+
+```bash
+git pull --ff-only && bash scripts/a063-r2e-session.sh start
+```
+
+On reconnection/relogin, in the same Codespace terminal:
+
+```bash
+bash scripts/a063-r2e-session.sh status
+```
+
+- `RUNNING`: no action; do not start another build.
+- `PASS`: report has been generated/published if Git credentials worked.
+- `FAILED:N`: inspect the sanitized GitHub report; compilation or
+  publishing failed.
+- `INTERRUPTED_OR_CODESPACE_STOPPED`: re-run `start` below.
+- `NOT_STARTED`: no session was started with this launcher.
+
+To resume after actual Codespace shutdown or stopped build:
+
+```bash
+bash scripts/a063-r2e-session.sh start
+```
+
+`start` safely fetches the feature branch, invokes the existing
+incremental MAME resume gate when the exact patch is already applied,
+uses one compilation job by default for resumption, and commits/pushes
+only the sanitized diagnostic report on completion.
+
+**Browser authentication:** GitHub may require signing in again.
+The launcher cannot bypass this or renew a web login. If authentication
+prevents pushing after the build, reauthenticate and use
+`bash scripts/a063-publish-codespaces-review.sh` to publish the
+already collected, redacted report **without recompiling**.
+
+**Cost/idle timeout:** To choose a longer default for **new**
+Codespaces, go to GitHub Settings → Codespaces → Default idle timeout.
+Allowed values are 5–240 minutes; longer settings increase potential
+compute charges. Changing the default does **not** retroactively
+guarantee a longer timeout on the existing Codespace. No artificial
+keepalive process is installed or recommended.
+
+Reference:
+https://docs.github.com/en/codespaces/about-codespaces/understanding-the-codespace-lifecycle
