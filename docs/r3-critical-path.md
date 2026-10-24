@@ -2,9 +2,9 @@
 
 ## A0.6.4.H1 — exactitud de histograma bancario sin hardware (24/10/2026)
 
-Se incorporó `scripts/r3_banked_report_integrity.mjs`, que exige coincidencia exacta entre las filas `(bank, pc, samples)` del reporte A0.6.3, los pares agrupados del witness y los totales por banco/PC. Un cambio de banco o redistribución de muestras con idénticos totales globales **se rechaza**, al igual que filas duplicadas, formato de dirección inválido, bancos desconocidos y muestras cero. El gate `compileNativeBankedPairs` ahora lo llama después del chequeo de totales agregados, antes de compilar módulos. Se añadieron seis tests Node ROM-free y se incluyeron en `scripts/r3-local-regression.sh`.
+Se incorporó `scripts/r3_banked_report_integrity.mjs`, que exige coincidencia exacta entre las filas `(bank, pc, samples)` del reporte A0.6.3, los pares agrupados del witness y los totales por banco/PC. Un cambio de banco o redistribución de muestras con idénticos totales globales **se rechaza**, al igual que filas duplicadas, formato de dirección inválido, bancos desconocidos y muestras cero. El gate `compileNativeBankedPairs` ahora lo llama después del chequeo de totales agregados, antes de compilar módulos. Se añadieron siete tests Node ROM-free (incluyendo 128 mutaciones deterministas compensadas) y se incluyeron en `scripts/r3-local-regression.sh`.
 
-**Validación alcanzada:** 6/6 tests independientes del validador ejecutados con Node v22 en entorno aislado. Aún no se ha podido ejecutar todo el runner del repositorio aquí porque la descarga/clonación de GitHub desde el shell está bloqueada. No se usaron GitHub Actions ni ROM privada. El nuevo control no transforma evidencia sintética en autenticación nativa; A0.6.3 y el A0.6.4 de captura real siguen bloqueados.
+**Validación alcanzada:** 7/7 tests independientes del validador ejecutados con Node v22 en entorno aislado. Aún no se ha podido ejecutar todo el runner del repositorio aquí porque la descarga/clonación de GitHub desde el shell está bloqueada. No se usaron GitHub Actions ni ROM privada. El nuevo control no transforma evidencia sintética en autenticación nativa; A0.6.3 y el A0.6.4 de captura real siguen bloqueados.
 
 ---
 
