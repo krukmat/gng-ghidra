@@ -54,7 +54,7 @@ return function(ctx)
     local function tap(lo,hi,name)
         return assert(space:install_write_tap(lo,hi,name,
             function(address,data,mask)
-                record("WRITE8",address,data,mask)
+                if not finished then record("WRITE8",address,data,mask) end
                 return data -- mandatory pass-through
             end), "R42F_TAP_INSTALL_FAILED_" .. name)
     end
@@ -63,10 +63,10 @@ return function(ctx)
     handlers[1]=tap(0x1e00,0x2fff,"r42f-cpu-sprite-fg-bg")
     handlers[2]=tap(0x3800,0x39ff,"r42f-palette")
     local function scroll_tap(address,data,mask)
-        record("WRITE8",address,data,mask)
+        if not finished then record("WRITE8",address,data,mask) end
     end
     local function dma_tap(address,data,mask)
-        record("DMA",address,data,mask)
+        if not finished then record("DMA",address,data,mask) end
     end
     local function finish(frame)
         assert(not finished,"R42F_DUPLICATE_FINISH")
