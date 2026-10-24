@@ -123,13 +123,17 @@ fi
 # The reporter stops when the compiler stops, even after a failed build.
 # It reports activity only while real compilation is in progress. This is
 # not a guarantee against Codespaces VM shutdown or lost login sessions.
-(
-  while sleep "$HEARTBEAT_SECONDS"; do
-    now="$(date +%s)"
-    printf 'R2C_BUILD_ACTIVE elapsed_minutes=%s jobs=%s max_minutes=%s\n' \
-      "$(((now - BUILD_START_EPOCH) / 60))" "$JOBS" "$BUILD_LIMIT_MINUTES"
-  done
-) &
+# A single process avoids orphaned sleeps holding the terminal open
+# after successful compilation or a failure.
+python3 -u - "$HEARTBEAT_SECONDS" "$BUILD_START_EPOCH" "$JOBS" "$BUILD_LIMIT_MINUTES" <<'PY' &
+import sys
+import time
+interval, started, jobs, limit = map(int, sys.argv[1:])
+while True:
+    time.sleep(interval)
+    elapsed = max(0, (int(time.time()) - started) // 60)
+    print(f"R2C_BUILD_ACTIVE elapsed_minutes={elapsed} jobs={jobs} max_minutes={limit}", flush=True)
+PY
 HEARTBEAT_PID=$!
 # Prevent an orphan periodic reporter on failure, Ctrl+C, or remote hangup.
 trap 'kill "${HEARTBEAT_PID:-}" 2>/dev/null || :' EXIT
