@@ -1,5 +1,15 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## R4.2.B — Pixel compositor compartido R1 → board DMA (24/10/2026)
+
+Se extrajo a `src/gngb_frame_renderer.mjs` el compositor **RGBA 256×224** que antes estaba embebido exclusivamente en `reference_frame_view.py`. Preserva el mismo orden de R1: BG back → sprites del buffer DMA → BG front → FG, transparencia y recorte superior de 16 píxeles. El generador privado R1 ahora inyecta el módulo compartido al HTML y lo usa para la comparación con PNG MAME.
+
+`src/gngb_frame_pipeline.mjs` integra el módulo mediante `snapshotGngbRendererInputs` de R4.2.A, exigiendo RAM FG/BG completa y transferencia de sprites `0x3C00` previa; dibuja únicamente desde el buffer congelado, nunca desde sprite RAM CPU sin DMA. Entradas obligatorias: imágenes gráficas privadas CRC-verificadas y paleta/scroll proporcionados explícitamente. Sin esas fuentes **se bloquea**, no se inventan datos ni se declara V2.
+
+Cinco tests ROM-free verifican píxeles BG/sprite/FG, orden de prioridad, clip, aislamiento antes/después de DMA y fallo ante datos incompletos. Se incluyeron en `scripts/r3-local-regression.sh`. El gate real de R4 / V2 **sigue dependiendo de A0.6.3, IRQ/SYNCACK, timing DMA y ejecución CPU continua**; este bloque solo conecta el canal de píxeles del laboratorio, no demuestra un frame de juego generado por código recompilado.
+
+---
+
 ## R4.2.A — Sprite DMA lógico y renderer input adapter (24/10/2026)
 
 **A1 — DMA aislado:** nuevo `src/gngb_sprite_dma.mjs` acoplado al adapter `src/gngb_board_memory.mjs`. La escritura en `0x3C00` copia **512 bytes completos** de la RAM CPU `0x1E00–0x1FFF` a un buffer privado. No se interpreta el valor escrito como dato del buffer. Sin RAM completamente inicializada, error sin efectos. `snapshotRawSprites` sigue mostrando CPU RAM, mientras que `snapshotBufferedSprites` solo existe tras DMA. Un reset de laboratorio invalida el buffer.

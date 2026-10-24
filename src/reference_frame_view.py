@@ -107,6 +107,7 @@ footer{font-size:12px;color:#8da5c4;margin-top:22px;line-height:1.55}
 "use strict";
 __VIDEO_MODULE__
 __SPRITE_MODULE__
+__FRAME_RENDERER_MODULE__
 const encoded=__ROM_AND_RAM__;
 const arrays={};
 for(const [key,text] of Object.entries(encoded)){
@@ -121,55 +122,16 @@ const spriteBuffer=arrays.spriteBuffer;
 const colors=arrays.palette;
 const scroll=__SCROLL__;
 const CAPTURE_FRAME=__FRAME__;
-const W=256,H=224,VERTICAL_START=16;
-function pal(index){
- const i=index*4;
- return [colors[i],colors[i+1],colors[i+2]];
-}
-function paint(image,x,y,paletteIndex){
- if(x<0||y<0||x>=W||y>=H)return;
- const pixel=(y*W+x)*4,p=paletteIndex*4;
- image.data[pixel]=colors[p];
- image.data[pixel+1]=colors[p+1];
- image.data[pixel+2]=colors[p+2];
- image.data[pixel+3]=255;
-}
+const W=GNG_FRAME_WIDTH,H=GNG_FRAME_HEIGHT,VERTICAL_START=GNG_VISIBLE_Y_START;
 function drawCaptured(){
  const canvas=document.getElementById("js"),ctx=canvas.getContext("2d",{alpha:false});
- const image=ctx.createImageData(W,H);
- // All remaining pixels will be replaced by BG back layer when opaque.
- // For group1, MAME transmask leaves pen0 and pen6 to BG back,
- // others are assigned to the front pass.
- for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-  const hardwareY=y+VERTICAL_START;
-  const t=screenTile(originalRAM,"bg",x,hardwareY,scroll.x,scroll.y);
-  const pen=readTilePen("bg",arrays.tiles,t.graphic,t.x,t.y);
-  if(bgPixelLayer(t.group,pen,"back"))
-   paint(image,x,y,t.palette*8+pen);
- }
- // Buffered sprite RAM captured by independent MAME DMA write tap.
- for(const sprite of drawOrder(spriteBuffer)){
-  for(let sy=0;sy<16;sy++)for(let sx=0;sx<16;sx++){
-   const pen=readSpritePen(arrays.sprites,sprite.graphic,
-     sprite.flipX?15-sx:sx,sprite.flipY?15-sy:sy);
-   if(pen===15)continue;
-   paint(image,sprite.x+sx,sprite.y+sy-VERTICAL_START,
-     0x40+sprite.paletteGroup*16+pen);
-  }
- }
- for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-  const hardwareY=y+VERTICAL_START;
-  const t=screenTile(originalRAM,"bg",x,hardwareY,scroll.x,scroll.y);
-  if(t.group===0)continue;
-  const pen=readTilePen("bg",arrays.tiles,t.graphic,t.x,t.y);
-  if(bgPixelLayer(t.group,pen,"front"))
-   paint(image,x,y,t.palette*8+pen);
- }
- for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-  const t=screenTile(originalRAM,"fg",x,y+VERTICAL_START);
-  const pen=readTilePen("fg",arrays.chars,t.graphic,t.x,t.y);
-  if(pen!==3)paint(image,x,y,0x80+t.palette*4+pen);
- }
+ const frame=renderGngbRgba({
+  videoAddressSpace:originalRAM,bufferedSprites:spriteBuffer,
+  chars:arrays.chars,tiles:arrays.tiles,sprites:arrays.sprites,
+  palette:colors,scroll
+ });
+ const image=ctx.createImageData(frame.width,frame.height);
+ image.data.set(frame.rgba);
  ctx.putImageData(image,0,0);
  return image;
 }
@@ -287,8 +249,20 @@ def build(graphics_zip:Path,reference_dir:Path,out:Path,
     modules={
         "__VIDEO_MODULE__":parent.joinpath("video_memory.mjs").read_text(),
         "__SPRITE_MODULE__":parent.joinpath("sprite_memory.mjs").read_text(),
+        "__FRAME_RENDERER_MODULE__":parent.joinpath("gngb_frame_renderer.mjs").read_text(),
     }
     for name,content in modules.items():
+        if name=="__FRAME_RENDERER_MODULE__":
+            # The shared compositor imports only the two existing R1 decoder
+            # modules, which are already inlined immediately above it.
+            declared=(
+                "import {screenTile,bgPixelLayer,readTilePen} from './video_memory.mjs';",
+                "import {drawOrder,readSpritePen} from './sprite_memory.mjs';",
+            )
+            for statement in declared:
+                if content.count(statement)!=1:
+                    raise ValueError("Unexpected shared renderer import")
+                content=content.replace(statement,"")
         if "import " in content or "export default" in content:
             raise ValueError("Standalone renderer module has external dependency")
         modules[name]=(content.replace("export const ","const ")
@@ -330,6 +304,7 @@ def build(graphics_zip:Path,reference_dir:Path,out:Path,
         "js_cpu_emulator":False,
         "js_original_game_logic_running":False,
         "js_pixel_equivalence_verified":False,
+        "shared_r1_r42_pixel_compositor":True,
     }
     (out.parent/"frame-compare.report.json").write_text(
         json.dumps(result,indent=2,sort_keys=True)+"\n")
