@@ -27,7 +27,17 @@ done
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || {
   echo "R2C=BLOCKED invalid_jobs" >&2; exit 2;
 }
-for app in python3 node git make sha256sum find c++ stat date tee grep head cut mktemp strings; do
+# Bounded progress output during an actual compilation. GitHub treats terminal
+# output as activity, but cannot guarantee VM survival after disconnection.
+HEARTBEAT_SECONDS="${A063_BUILD_HEARTBEAT_SECONDS:-180}"
+BUILD_LIMIT_MINUTES="${A063_BUILD_LIMIT_MINUTES:-180}"
+[[ "$HEARTBEAT_SECONDS" =~ ^[0-9]+$ ]] && ((HEARTBEAT_SECONDS >= 120 && HEARTBEAT_SECONDS <= 600)) || {
+  echo "R2C=BLOCKED invalid_heartbeat_interval" >&2; exit 2;
+}
+[[ "$BUILD_LIMIT_MINUTES" =~ ^[0-9]+$ ]] && ((BUILD_LIMIT_MINUTES >= 30 && BUILD_LIMIT_MINUTES <= 360)) || {
+  echo "R2C=BLOCKED invalid_build_limit" >&2; exit 2;
+}
+for app in python3 node git make timeout sha256sum find c++ stat date tee grep head cut mktemp strings; do
   command -v "$app" >/dev/null || {
     echo "R2C=BLOCKED missing_prerequisite" >&2; exit 2;
   }
@@ -110,13 +120,30 @@ BUILD_START_EPOCH="$(date +%s)"
 if [[ -f /sys/fs/cgroup/memory.events ]]; then
   cp /sys/fs/cgroup/memory.events "$EVID/memory-before.txt" || :
 fi
+# The reporter stops when the compiler stops, even after a failed build.
+# It reports activity only while real compilation is in progress. This is
+# not a guarantee against Codespaces VM shutdown or lost login sessions.
+(
+  while sleep "$HEARTBEAT_SECONDS"; do
+    now="$(date +%s)"
+    printf 'R2C_BUILD_ACTIVE elapsed_minutes=%s jobs=%s max_minutes=%s\n' \
+      "$(((now - BUILD_START_EPOCH) / 60))" "$JOBS" "$BUILD_LIMIT_MINUTES"
+  done
+) &
+HEARTBEAT_PID=$!
+printf 'R2C_BUILD_POLICY jobs=%s heartbeat_seconds=%s limit_minutes=%s\n' \
+  "$JOBS" "$HEARTBEAT_SECONDS" "$BUILD_LIMIT_MINUTES"
 set +e
 (
   cd "$MAME_SRC"
-  make SUBTARGET=gnga063 SOURCES=src/mame/capcom/gng.cpp REGENIE=1 -j"$JOBS"
+  timeout --signal=TERM --kill-after=60s "${BUILD_LIMIT_MINUTES}m" \
+    make SUBTARGET=gnga063 SOURCES=src/mame/capcom/gng.cpp REGENIE=1 -j"$JOBS"
 ) 2>&1 | tee "$EVID/mame-build.log"
 BUILD_RC=${PIPESTATUS[0]}
 set -e
+kill "$HEARTBEAT_PID" 2>/dev/null || :
+wait "$HEARTBEAT_PID" 2>/dev/null || :
+BUILD_ELAPSED_SECONDS="$(($(date +%s) - BUILD_START_EPOCH))"
 if [[ -f /sys/fs/cgroup/memory.events ]]; then
   cp /sys/fs/cgroup/memory.events "$EVID/memory-after.txt" || :
 fi
@@ -125,6 +152,7 @@ if [[ "$BUILD_RC" -ne 0 ]]; then
     'status=R2C_BUILD_FAILED' \
     "build_exit_code=$BUILD_RC" \
     "build_jobs=$JOBS" \
+    "build_elapsed_seconds=$BUILD_ELAPSED_SECONDS" \
     'native_validation=NOT_PERFORMED' \
     'a063_certified=NO' >"$EVID/checkpoint.txt"
   printf 'R2C=BLOCKED mame_build_failed exit_code=%s evidence=%s\n' "$BUILD_RC" "$EVID" >&2
@@ -168,6 +196,8 @@ sha256sum "$ROOT/patches/mame0289-a063-bank-oracle.patch" >"$EVID/mame-patch.sha
 git -C "$MAME_SRC" diff -- src/mame/capcom/gng.cpp >"$EVID/mame-patch-applied.diff"
 printf '%s\n' 'schema=A063_R2C_ROM_FREE_EVIDENCE_V1' \
   'status=R2C_ROM_FREE_READY' \
+  "build_elapsed_seconds=$BUILD_ELAPSED_SECONDS" \
+  "build_jobs=$JOBS" \
   'native_validation=NOT_PERFORMED' \
   'a063_certified=NO' \
   "gng_commit=$(git rev-parse HEAD)" \
