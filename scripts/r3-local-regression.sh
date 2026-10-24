@@ -38,4 +38,5 @@ python3 -m unittest discover -s tests -p 'test_a063_adversarial.py' -v
 python3 -m unittest discover -s tests -p 'test_a063_oracle.py' -v
 python3 -m unittest discover -s tests -p 'test_a063_mame_patch.py' -v
 python3 -m unittest discover -s tests -p 'test_a063_oracle_replay.py' -v
+python3 -m unittest discover -s tests -p 'test_a063_oracle_pipeline.py' -v
 echo "GNG_LOCAL_REGRESSION=PASS_ROM_FREE_A0_2_TO_A0_6_3"
