@@ -73,3 +73,31 @@ herramientas y C++20, **no** que todas las dependencias MAME estén instaladas.
 Privacidad: no se han publicado ROM, instrucciones reales, trazas de CPU,
 secretos ni credenciales; no se usaron GitHub Actions; no se modificó
 `main` ni se hizo merge.
+
+## Verificación de cierre después del pin de MAME
+
+- El **script Linux definitivo** en GitHub tiene blob SHA
+  `243945e10510f20a38995f30f4851f8b2655402e`.
+  Una copia local byte idéntica pasó `bash -n`.
+- El gate rechazó una fuente marcada `mame0289` cuyo commit no
+  correspondía al commit upstream: razón
+  `mame0289_upstream_commit_mismatch`. Esto demuestra rechazo de
+  identidad falsificada en el fixture, no un build real.
+- En la segunda ronda de fixtures, el *mock Git* devolvió exclusivamente
+  el SHA oficial esperado para simular el tag auténtico. **3/3 pruebas
+  del orquestador PASS**: ruta feliz con binario ELF artificial
+  compilado en C++20, binario sin símbolo diagnóstico rechazado y
+  binario antiguo rechazado. En los casos negativos persistió
+  `status=BLOCKED_UNTIL_ALL_GATES_PASS`. Esta sustitución de
+  identidad es EXCLUSIVA de las pruebas, no del script versionado.
+- La regresión parcial y replay aislados se reejecutaron: **32/32**
+  unitarios A063 y **17/17** escenarios sintéticos PASS. El programa
+  artificial C++ de cinco bancos devolvió PASS. La regresión integral
+  del checkout real sigue sin ejecutarse.
+- El principal bloqueo ambiental sigue siendo DNS inaccesible para
+  `github.com` y `api.github.com` desde el contenedor; no existe en
+  esta sesión herramienta remota de ejecución en Codespaces ni en VM.
+
+**Resultado definitivo R2.D:** `BLOCKED_EXTERNAL_EXECUTION`.
+El runner NO ha producido `ROM_FREE_READY` con fuentes reales, ni hay
+evidencia para actualizar la confianza del 85% al 90%.
