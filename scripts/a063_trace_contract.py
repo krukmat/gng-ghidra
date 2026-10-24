@@ -104,6 +104,8 @@ def create_preflight(first: str,second: str,mame_bin: str,output: Path,*,
     version_line=(version.stdout or version.stderr).splitlines()
     if not version_line or not version_line[0].strip() or len(version_line[0])>150:
         raise ContractError("A063_R1_MAME_VERSION_UNAVAILABLE")
+    if oracle and not re.search(r"(?<![0-9])0\.289(?![0-9])",version_line[0]):
+        raise ContractError("A063_ORACLE_REQUIRES_MAME_0289")
     source_files=SOURCE_FILES
     try:
         source_hashes={name:_digest(resolved_root/name) for name in source_files}

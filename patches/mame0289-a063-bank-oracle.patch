@@ -1,7 +1,7 @@
 diff --git a/src/mame/capcom/gng.cpp b/src/mame/capcom/gng.cpp
 --- a/src/mame/capcom/gng.cpp
 +++ b/src/mame/capcom/gng.cpp
-@@ -35,6 +35,8 @@
+@@ -35,5 +35,7 @@
  #include "emu.h"
  
 +#include "debug/debugcpu.h"
