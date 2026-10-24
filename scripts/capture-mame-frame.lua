@@ -19,6 +19,14 @@ assert(system and (system.name == "gngb" or system.name == "gng"),
     "expected gngb/gng hardware, not " .. tostring(system and system.name))
 
 local screen = assert(machine.screens[":screen"], "MAME :screen missing")
+-- MAME 0.289 documents screen.frame_number as a property, although
+-- older Lua builds may expose the method-style form.
+local function frame_number()
+    local value=screen.frame_number
+    if type(value)=="number" then return value end
+    if type(value)=="function" then return screen:frame_number() end
+    error("MAME_FRAME_NUMBER_API_UNAVAILABLE")
+end
 local cpu = assert(machine.devices[":maincpu"], "MAME :maincpu missing")
 local space = assert(cpu.spaces["program"], "maincpu program space missing")
 local shares = machine.memory.shares
@@ -180,14 +188,14 @@ gng_capture_dma_tap = space:install_write_tap(
 assert(gng_capture_scroll_tap and gng_capture_dma_tap, "MAME write-tap installation failed")
 
 local function snapshot()
-    if completed or capture_attempted or screen:frame_number() < target then return end
+    if completed or capture_attempted or frame_number() < target then return end
     capture_attempted = true
     -- Missing DMA means no authenticated buffered sprite state; never fake it
     -- with the unbuffered CPU RAM. In Blackbox addon mode, fail only the video
     -- capture and let the upstream bot finish and write its input timeline.
     if not sprite_buffer or dma_count <= 0 then
         print("GNG_R0_VIDEO_CAPTURE=BLOCKED_DMA_NOT_OBSERVED frame=" ..
-              screen:frame_number() .. " dma=" .. dma_count)
+              frame_number() .. " dma=" .. dma_count)
         if keep_running then
             local err = screen:snapshot(dir .. "/reference.png")
             if err ~= nil then
@@ -242,20 +250,20 @@ local function snapshot()
         '"input_replay":%s,' ..
         '"source":"MAME independent native frame, not translated JS",' ..
         '"sprite_buffer_source":"CPU write tap 0x3c00"}\n',
-        system.name, screen:frame_number(), dma_count,
+        system.name, frame_number(), dma_count,
         x, y, scroll[1], scroll[2], scroll[3], scroll[4], pc_json,
         replay_json))
-    if r42f then r42f.finish(screen:frame_number()) end
+    if r42f then r42f.finish(frame_number()) end
     completed = true
-    print("GNG_MAME_REFERENCE=CAPTURED frame=" .. screen:frame_number() ..
+    print("GNG_MAME_REFERENCE=CAPTURED frame=" .. frame_number() ..
         " dma=" .. dma_count .. " scroll_x=" .. x .. " scroll_y=" .. y)
     if not keep_running then machine:exit() end
 end
 
 -- The machine frame notifier is a reference capture, not a product loop.
 gng_capture_frame_subscription = emu.add_machine_frame_notifier(function()
-    step_bot(screen:frame_number())
-    capture_checkpoint(screen:frame_number())
+    step_bot(frame_number())
+    capture_checkpoint(frame_number())
     snapshot()
 end)
 assert(gng_capture_frame_subscription, "MAME machine frame notifier unavailable")
