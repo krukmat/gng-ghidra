@@ -115,10 +115,11 @@ def export(evidence_root: Path, destination: Path) -> tuple[Path, int]:
                     continue
                 content = safe_text(candidate, large=filename in LARGE_FILES)
                 archive.writestr(f"{rel}/{filename}.redacted.txt", content)
+                with candidate.open("rb") as source:
+                    digest = hashlib.file_digest(source, "sha256").hexdigest()
                 info["files"][filename] = {
                     "original_size_bytes": candidate.stat().st_size,
-                    "original_sha256": hashlib.file_digest(
-                        candidate.open("rb"), "sha256").hexdigest(),
+                    "original_sha256": digest,
                     "excerpt_included": True,
                 }
             summary["runs"].append(info)
