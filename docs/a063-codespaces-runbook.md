@@ -334,3 +334,55 @@ keepalive process is installed or recommended.
 
 Reference:
 https://docs.github.com/en/codespaces/about-codespaces/understanding-the-codespace-lifecycle
+
+## Current Codespace: bounded interactive compile progress (2026-10-24)
+
+For the existing Codespace, do **not** rebuild the devcontainer or switch
+to a new Codespace just to change the idle timeout: this risks losing
+work already compiled in the external MAME checkout in the container.
+GitHub only exposes per-Codespace `--idle-timeout` when creating a
+Codespace; `gh codespace edit` cannot change it for an existing one.
+
+Use **one foreground command** if you can keep the Codespaces terminal
+connected while the compiler runs:
+
+```bash
+git pull --ff-only && bash scripts/a063-r2e-validate-and-report.sh
+```
+
+The ROM-free runner now:
+- Defaults to **one** compiler job for both fresh and resumed MAME builds
+  (not two), avoiding the highest `cc1plus` memory spikes.
+- Reuses previously compiled object files and verifies the exact
+  approved diagnostic driver patch before any incremental build.
+- Emits `R2C_BUILD_ACTIVE` to the **interactive terminal every 180
+  seconds**, only while actually compiling. GitHub documents that
+  terminal output resets its idle timer **while that terminal is
+  connected and receiving output**. If the browser disconnects and
+  output no longer reaches a terminal, this may not help; GitHub may
+  stop the Codespace as usual.
+- Stops a single build attempt after **180 minutes**, reports elapsed
+  seconds and exit status, and stops its periodic reporter on exit.
+  The cap can be set using `A063_BUILD_LIMIT_MINUTES` from 30 to 360;
+  the progress interval can be changed with
+  `A063_BUILD_HEARTBEAT_SECONDS` from 120 to 600.
+- Publishes **only the redacted Markdown review**, including failure
+  checkpoints, to the private feature branch after completion.
+
+A **background/nohup** launch with `a063-r2e-session.sh start`
+survives an ordinary browser disconnect while the Codespace VM
+remains on, but it writes to a private logfile, **not** an active
+terminal. It therefore **cannot** be relied on to reset the idle
+timer, and it cannot bypass a VM stop, authentication expiry, the
+12-hour maximum lifetime or billing rules.
+
+Do not switch to a larger Codespace machine solely on the basis of
+`cc1plus ... Terminated`: the first report did not prove an OOM kill.
+The next failure report will record numeric cgroup OOM deltas to
+inform that choice. Changing existing Codespace machine type requires
+a restart and can increase compute costs.
+
+References:
+- https://docs.github.com/en/codespaces/setting-your-user-preferences/setting-your-timeout-period-for-github-codespaces
+- https://docs.github.com/en/codespaces/about-codespaces/understanding-the-codespace-lifecycle
+- https://cli.github.com/manual/gh_codespace_edit
