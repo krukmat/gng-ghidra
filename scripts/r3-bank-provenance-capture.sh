@@ -5,7 +5,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-python3 scripts/r3_bank_inventory.py >/dev/null
+python3 scripts/prepare_r3_flat_rom.py >/dev/null
+python3 scripts/r3_bank_inventory.py --images-only >/dev/null
 SIGS="$(python3 scripts/r3_bank_provenance.py prepare)"
 read -r BANKSIG0 BANKSIG1 <<< "$SIGS"
 [[ -n "$BANKSIG0" && -n "$BANKSIG1" ]] || {
@@ -20,10 +21,14 @@ python3 scripts/a063_trace_contract.py preflight \
   --mame-bin "${GNG_R3_MAME_BIN:-mame}" \
   --output "$ROOT/out/r3/banked-provenance/private-a063-preflight.json" >/dev/null
 # Preserve all previous R2 trace/TSV/ROM evidence via existing wrapper.
+GNG_A063_PREFLIGHT="$ROOT/out/r3/banked-provenance/private-a063-preflight.json" \
 GNG_A06_BANKSIG_HEX0="$BANKSIG0" GNG_A06_BANKSIG_HEX1="$BANKSIG1" \
 GNG_R2_TRACE_MODE=printf \
 GNG_R36_CAPTURE_UNMAP_POLICY=1 GNG_A04_VIDEO_WRITE_TAP=1 \
   bash scripts/r3-video-write-capture.sh
+python3 scripts/a063_capture_integrity.py --verify \
+  --output "$ROOT/out/r2/mame-probe" \
+  --preflight "$ROOT/out/r3/banked-provenance/private-a063-preflight.json"
 python3 scripts/r3_bank_provenance.py diagnose
 python3 scripts/r3_bank_provenance.py report
 # The same private capture now supplies the bank/PC static recompilation gate.

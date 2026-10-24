@@ -45,9 +45,10 @@ class TraceContractTests(unittest.TestCase):
             root=Path(td)
             scripts=root/"scripts"
             scripts.mkdir()
-            for file in ("r2-mame-probe.sh","r3-bank-provenance-capture.sh",
-                         "r3_bank_provenance.py","a063_trace_contract.py"):
-                (scripts/file).write_text("rom-free source for test\n")
+            for file in contract.SOURCE_FILES:
+                dest=root/file
+                dest.parent.mkdir(parents=True,exist_ok=True)
+                dest.write_text("rom-free source for test\n")
             mame=root/"fake-mame"
             mame.write_text('#!/bin/sh\necho "MAME 0.289-test"\n')
             mame.chmod(0o755)
@@ -56,7 +57,7 @@ class TraceContractTests(unittest.TestCase):
             self.assertEqual(output["status"],"A063_R1_PREFLIGHT_ONLY_NOT_NATIVE_PROVENANCE")
             self.assertFalse(output["bank_identity_per_instruction_proven"])
             self.assertFalse(output["native_capture_was_executed"])
-            self.assertEqual(len(output["source_sha256"]),4)
+            self.assertEqual(len(output["source_sha256"]),len(contract.SOURCE_FILES))
             self.assertEqual(output["emulator_binary_sha256"],hashlib.sha256(mame.read_bytes()).hexdigest())
             saved=private.read_text()
             self.assertNotIn(str(root),saved)

@@ -19,10 +19,15 @@ python3 scripts/a063_trace_contract.py preflight \
   >/dev/null || fail capture_contract_invalid
 # Existing MAME probe remains under out/r2 by default; this isolated mode
 # stops after two frames (or two seconds) and refuses to overwrite old smoke.
+GNG_A063_PREFLIGHT="$ROOT/out/r3/a063-smoke-preflight/private-a063-preflight.json" \
 GNG_A063_SMOKE=1 GNG_R2_TRACE_MODE=printf \
   GNG_A06_BANKSIG_HEX0="$FIRST" GNG_A06_BANKSIG_HEX1="$SECOND" \
   bash scripts/r2-mame-probe.sh || fail native_miniprobe_failed
 OUT="$ROOT/out/r3/a063-smoke"
+python3 scripts/a063_capture_integrity.py --verify \
+  --output "$OUT" \
+  --preflight "$ROOT/out/r3/a063-smoke-preflight/private-a063-preflight.json" \
+  || fail postflight_integrity_rejected
 python3 scripts/r3_bank_provenance.py diagnose \
   --rawtrace "$OUT/cpu.trace" --trace "$OUT/pre-instruction.jsonl" \
   > "$OUT/private-diagnostic.json" || fail native_diagnostic_failed

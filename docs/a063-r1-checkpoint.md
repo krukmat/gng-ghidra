@@ -78,3 +78,18 @@ Never publish ROMs, CPU trace, private offsets or witnesses; no GitHub Actions.
 Then R2: isolated minimal native run comparing byte-read signatures to MAME
 bank-entry observation at instruction boundaries. Do not perform a full recapture
 until that independent smoke proves the signature source behaves correctly.
+
+## R1 strengthened postflight (2026-10-24)
+
+`scripts/a063_capture_integrity.py` now binds the immutable preflight
+MAME binary/source hashes to the debugger script and seven resulting private
+capture artifacts (plus MAME exit status and git HEAD / clean tree). It requires
+an exact action match and refuses to overwrite any prior private postflight.
+The chain is verified again immediately before diagnostic or provenance
+parsing. Synthetic checks intentionally never claim a genuine native run.
+Mini-probe sources only CRC-attested local ROM images (`--images-only`), not
+any prior `out/r2` snapshot. Both R2 private reporters now accept the exact
+`out/r3/a063-smoke` directory without widening their path whitelist.
+
+Unit-test status must be established by executing the full checkout regression;
+remote GitHub commits alone are not execution proof. A0.6.3 remains BLOCKED.

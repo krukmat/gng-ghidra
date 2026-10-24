@@ -100,6 +100,8 @@ if [[ -n "${GNG_A06_BANKSIG_HEX0:-}" || -n "${GNG_A06_BANKSIG_HEX1:-}" ]]; then
     fail a063_bank_probe_outside_rom_window
   # Use ONE tracelog command with register and signature data to prevent
   # ambiguous joins across debugger callbacks, loops, or reset boundaries.
+  [[ -n "${GNG_A063_PREFLIGHT:-}" ]] ||
+    fail a063_requires_private_preflight
   TRACE_ACTION="$(python3 scripts/a063_trace_contract.py emit \
     --first "$GNG_A06_BANKSIG_HEX0" \
     --second "$GNG_A06_BANKSIG_HEX1")" || fail a063_trace_contract_invalid
@@ -137,6 +139,13 @@ fi
 # never calculate synthetic post-state/IRQ or replace missing instructions.
 python3 scripts/r2_pretrace_report.py --dir "$OUTPUT"
 python3 scripts/r2_probe_report.py --dir "$OUTPUT"
+if [[ -n "${GNG_A063_PREFLIGHT:-}" ]]; then
+  python3 scripts/a063_capture_integrity.py \
+    --output "$OUTPUT" --preflight "$GNG_A063_PREFLIGHT" \
+    --first "$GNG_A06_BANKSIG_HEX0" --second "$GNG_A06_BANKSIG_HEX1" \
+    --mame-bin "$MAME_BIN" --mame-exit "$EXIT_CODE" ||
+    fail a063_postflight_incomplete
+fi
 # Return nonzero unless we can authenticate the minimal probe fields,
 # but a valid probe is NEVER an R2 equivalence PASS.
 if [[ $EXIT_CODE -ne 0 ]]; then fail mame_debugger_runtime_failed; fi

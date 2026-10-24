@@ -20,6 +20,19 @@ CPU_SYMBOLS=("pc","a","b","x","y","u","s","dp","cc")
 CPU_FORMAT="PC=%04X A=%02X B=%02X X=%04X Y=%04X U=%04X S=%04X DP=%02X CC=%02X"
 SIGNATURE_FORMAT="GNG_A06_BANKSIG S0=%02X S1=%02X"
 SCHEMA="gng.a063.private-capture-preflight.v1"
+# Freeze ALL scripts that can change the native trace or its source records.
+SOURCE_FILES=(
+    "scripts/r2-mame-probe.sh",
+    "scripts/r2-mame-probe.lua",
+    "scripts/r2_pretrace_report.py",
+    "scripts/r2_probe_report.py",
+    "scripts/r3-bank-provenance-capture.sh",
+    "scripts/r3_bank_provenance.py",
+    "scripts/r3_bank_inventory.py",
+    "scripts/a063-native-miniprobe.sh",
+    "scripts/a063_capture_integrity.py",
+    "scripts/a063_trace_contract.py",
+)
 DIAGNOSTIC_SCHEMA="gng.a06.bank-trace-shape-diagnostic.v1"
 ADDRESS=re.compile(r"[0-9a-fA-F]{4}\Z",re.ASCII)
 
@@ -81,10 +94,7 @@ def create_preflight(first: str,second: str,mame_bin: str,output: Path,*,root: P
     version_line=(version.stdout or version.stderr).splitlines()
     if not version_line or not version_line[0].strip() or len(version_line[0])>150:
         raise ContractError("A063_R1_MAME_VERSION_UNAVAILABLE")
-    source_files=("scripts/r2-mame-probe.sh",
-                  "scripts/r3-bank-provenance-capture.sh",
-                  "scripts/r3_bank_provenance.py",
-                  "scripts/a063_trace_contract.py")
+    source_files=SOURCE_FILES
     try:
         source_hashes={name:_digest(resolved_root/name) for name in source_files}
         emulator_sha=_digest(executable_path)
