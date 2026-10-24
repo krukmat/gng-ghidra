@@ -650,6 +650,10 @@ Los plazos son **timeboxes orientativos en días laborables desde el inicio**, n
 
 T1: Node H de 9 casos + escalas 5k/40.001/100k, SHA256 y diagnóstico. T2: suite `scripts/r3-local-regression.sh` con Node/Python y gate F. T3: reparación de defectos comprobados, nuevo pase integral, salida agregada `out/r3/r42-validation-closure.json` sin ROM ni logs. **El ejecutor está implementado y probado (8/8 casos Python de aislamiento); las ejecuciones Node H y suite integral permanecen bloqueadas en la terminal actual por falta de checkout GitHub**. El bloqueo no es fallo del producto; realizar `python3 scripts/r42_validation_closure.py` sobre un clon completo. Sin GitHub Actions. [Documento operativo](r42-validation-closure.md).
 
+### T5 — Regresión Node/Python auténtica (24/10/2026)
+
+T5.1 `BLOCKED_MISSING_CHECKOUT`: GitHub privado accesible mediante connector, no clonado desde terminal. Nuevo preflight `scripts/r42_t5_preflight.py` y cinco pruebas reales PASS en Python 3.13.5. T5.2–T5.4 BLOCKED, sin reportar tests del repo o escala como ejecutados; T5.5 checkpoint publicado. [Reporte T5](r42-t5-closure-checkpoint.md). No abrir nuevas tasks ROM-free si no hay entorno ejecutable.
+
 ### T4 — Auditoría autónoma del cierre T1–T3 (24/10/2026)
 
 T4.1/3/4: corregida reutilización de resultados obsoletos, tratamiento de SHA mal tipado y JSONL con claves duplicadas; 12 tests Python del controlador y casos adversariales G. T4.2: 8/8 pruebas dirigidas en Python 3.13 PASS, 5/5 casos dirigidos del parser en Node 22 PASS; los 12 tests Python del checkout y regresión integral siguen pendientes. T4.5: informe [T4](r42-t4-autonomous-audit.md). No abrir nuevas escenas R4.2. **T1–T3 sin PASS** hasta ejecución real.

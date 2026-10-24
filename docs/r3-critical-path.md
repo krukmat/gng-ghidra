@@ -1,3 +1,9 @@
+## T5 — Preflight, suite real y checkpoint bloqueado (24/10/2026)
+
+T5.1 intentó obtener checkout privado en la terminal de ejecución: `git` bloqueado por DNS/credenciales; por ello T5.2–T5.4 Node/Python integrales siguen **BLOCKED_MISSING_CHECKOUT**, no PASS. T5.5 publicó `scripts/r42_t5_preflight.py` con **5/5 pruebas Python reales PASS** en Python 3.13.5, Node v22.16.0 disponible, pruebas integradas en runner. Fuente GitHub y ejecutada verificadas por SHA de blob idéntico. Sin ROM, MAME ni GitHub Actions. [Checkpoint T5](r42-t5-closure-checkpoint.md).
+
+---
+
 ## T4 — Auditoría autónoma y corrección del cierre (24/10/2026)
 
 **Código publicado en `main`:** cierre T1–T3 con informe H por ejecución (elimina posibilidad de reusar evidencia obsoleta), rechazo de SHA-256 mal tipado y banderas nativas falsas; G rechaza claves duplicadas JSONL/aliases Unicode. `tests/test_r42_validation_closure.py` tiene 12 tests; el test G de claves duplicadas está integrado en runner. **Validación disponible:** 5/5 casos aislados del parser en V8, 9/9 verificaciones de integración/contrato; 8/8 tests Python dirigidos de check_scale y 5/5 casos Node dirigidos del parser PASS en runtime real; Node/Python integral y los 12 tests Python de repositorio **no se ejecutaron en esta terminal**, que no tiene checkout GitHub. Sin atribución de equivalencia MAME ni A0.6.3. [Detalle y reproducción](r42-t4-autonomous-audit.md).
