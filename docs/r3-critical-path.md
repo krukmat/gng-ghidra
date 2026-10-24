@@ -1,5 +1,17 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## R4.2.A — Sprite DMA lógico y renderer input adapter (24/10/2026)
+
+**A1 — DMA aislado:** nuevo `src/gngb_sprite_dma.mjs` acoplado al adapter `src/gngb_board_memory.mjs`. La escritura en `0x3C00` copia **512 bytes completos** de la RAM CPU `0x1E00–0x1FFF` a un buffer privado. No se interpreta el valor escrito como dato del buffer. Sin RAM completamente inicializada, error sin efectos. `snapshotRawSprites` sigue mostrando CPU RAM, mientras que `snapshotBufferedSprites` solo existe tras DMA. Un reset de laboratorio invalida el buffer.
+
+**A2 — Conexión a los decodificadores existentes:** `snapshotGngbRendererInputs(board)` entrega instantáneas separadas: 4.096 bytes FG/BG dentro de la imagen 64 KiB, 512 bytes de sprites bufferizados, **1.024 tiles FG, 1.024 BG** decodificados con `video_memory.mjs`, y sprites ordenados por `sprite_memory.mjs`. El adapter falla si falta RAM de vídeo inicializada o no ocurrió DMA. No dibuja píxeles ni reemplaza el renderer Canvas actual; R4.2.B seguirá encargándose del frame efectivo.
+
+**A3 — Pruebas:** 5 tests del núcleo DMA y 4 tests de integración board/renderer; incluidos en `scripts/r3-local-regression.sh`. Se ejecutaron 5/5 con Node v22 (módulo DMA sin dependencias) y 9/9 en prueba aislada cargando los **archivos exactos de GitHub**, con sus dependencias JS inyectadas (no es la batería Node integrada). La regresión completa del repositorio sigue pendiente de un entorno con checkout; no activar GitHub Actions.
+
+**Gate ROM-free:** sin byte inicializado, DMA rechaza; cambios de CPU RAM posteriores no se ven en pantalla hasta nueva captura; la lectura de `0x3C00` conserva la política previa B4, otras escrituras MMIO siguen rechazadas; los efectos DMA de código generado se confirman antes de commit y se revierten si falla CPU o se mezclan writes ambiguos. **Alcance no certificado:** ciclos de DMA/halt CPU, efecto exacto observado en MAME, sprite-buffer/renderer completo, IRQ/SYNC, banco A0.6.3, frame R4 autónomo.
+
+---
+
 ## A0.6.3 — plan de desbloqueo (24/10/2026)
 
 La ruta ejecutable y los criterios de decisión están consolidados en [docs/a063-unblock.md](a063-unblock.md). Primero forense offline de firmas en la captura privada; solo si son inválidas se corrige la instrumentación y se repite MAME una vez. La API Lua `memory.banks[tag].entry` es una alternativa potencial, pero por sí sola no aporta correspondencia por instrucción. **Sin trazas/ROM privadas, no se puede certificar A0.6.3 a distancia.**
