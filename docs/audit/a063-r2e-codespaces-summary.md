@@ -7,21 +7,9 @@ Generated from local ROM-free evidence only. This report does not certify native
 - schema=A063_R2C_ROM_FREE_EVIDENCE_V1
 - status=BLOCKED_UNTIL_ALL_GATES_PASS
 
-**romfree.log** — up to 42 diagnostic lines:
+**romfree.log** — last 42 diagnostic lines:
 
 ```text
-test_five_distinct_synthetic_banks (test_a063_oracle_replay.R2BReplayTests.test_five_distinct_synthetic_banks) ... ok
-test_fourteen_adversarial_scenarios (test_a063_oracle_replay.R2BReplayTests.test_fourteen_adversarial_scenarios) ... ok
-test_repeated_pcs_do_not_shift_instruction_alignment (test_a063_oracle_replay.R2BReplayTests.test_repeated_pcs_do_not_shift_instruction_alignment) ... ok
-Ran 3 tests in 0.092s
-test_patch_applies_to_expected_0289_source_shapes (test_a063_mame_patch.PatchTests.test_patch_applies_to_expected_0289_source_shapes) ... ok
-test_patch_does_not_rewrite_bank_switch_handler (test_a063_mame_patch.PatchTests.test_patch_does_not_rewrite_bank_switch_handler) ... ok
-Ran 2 tests in 0.006s
-# Subtest: uninitialized RAM is unknown; unmodeled MMIO, ROM and bank reads/writes fail closed
-ok 4 - uninitialized RAM is unknown; unmodeled MMIO, ROM and bank reads/writes fail closed
-# Subtest: VRAM duplicate, address outside range and byte-mask mismatch fail closed
-ok 11 - VRAM duplicate, address outside range and byte-mask mismatch fail closed
-# Subtest: invalid/native-corrupted CPU samples fail closed, never count fictitious coverage
 ok 34 - invalid/native-corrupted CPU samples fail closed, never count fictitious coverage
 # fail 0
 test_control_value_formula_exhaustively (test_r3_bank_inventory.BankInventoryTests.test_control_value_formula_exhaustively) ... ok
@@ -52,6 +40,18 @@ test_exact_one_line_trace_action_eleven_arguments (test_a063_trace_contract.Trac
 test_invalid_offsets_reject_before_emulator (test_a063_trace_contract.TraceContractTests.test_invalid_offsets_reject_before_emulator) ... ok
 test_manifest_records_environment_but_never_attests_native (test_a063_trace_contract.TraceContractTests.test_manifest_records_environment_but_never_attests_native) ... ok
 test_manifest_refuses_public_or_unscoped_location (test_a063_trace_contract.TraceContractTests.test_manifest_refuses_public_or_unscoped_location) ... ok
+test_miniprobe_does_not_require_prior_r2 (test_a063_trace_contract.TraceContractTests.test_miniprobe_does_not_require_prior_r2) ... ok
+test_miniprobe_preserves_existing_native_evidence_by_design (test_a063_trace_contract.TraceContractTests.test_miniprobe_preserves_existing_native_evidence_by_design) ... ok
+test_r2_parsers_allow_only_exact_private_smoke_output (test_a063_trace_contract.TraceContractTests.test_r2_parsers_allow_only_exact_private_smoke_output) ... FAIL
+test_template_tampering_detected (test_a063_trace_contract.TraceContractTests.test_template_tampering_detected) ... ok
+test_triage_17135_aligned_overflow_never_passes (test_a063_trace_contract.TraceContractTests.test_triage_17135_aligned_overflow_never_passes) ... ok
+test_triage_even_all_byte_values_only_ready_for_private_parser (test_a063_trace_contract.TraceContractTests.test_triage_even_all_byte_values_only_ready_for_private_parser) ... ok
+test_triage_requires_alignment_and_rejects_impossible_counts (test_a063_trace_contract.TraceContractTests.test_triage_requires_alignment_and_rejects_impossible_counts) ... ok
+FAIL: test_r2_parsers_allow_only_exact_private_smoke_output (test_a063_trace_contract.TraceContractTests.test_r2_parsers_allow_only_exact_private_smoke_output)
+Traceback (most recent call last):
+  File "$REPO/tests/test_a063_trace_contract.py", line 127, in test_r2_parsers_allow_only_exact_private_smoke_output
+Ran 11 tests in 0.011s
+FAILED (failures=1)
 ```
 
 
@@ -60,21 +60,9 @@ test_manifest_refuses_public_or_unscoped_location (test_a063_trace_contract.Trac
 - schema=A063_R2C_ROM_FREE_EVIDENCE_V1
 - status=BLOCKED_UNTIL_ALL_GATES_PASS
 
-**romfree.log** — up to 42 diagnostic lines:
+**romfree.log** — last 42 diagnostic lines:
 
 ```text
-test_five_distinct_synthetic_banks (test_a063_oracle_replay.R2BReplayTests.test_five_distinct_synthetic_banks) ... ok
-test_fourteen_adversarial_scenarios (test_a063_oracle_replay.R2BReplayTests.test_fourteen_adversarial_scenarios) ... ok
-test_repeated_pcs_do_not_shift_instruction_alignment (test_a063_oracle_replay.R2BReplayTests.test_repeated_pcs_do_not_shift_instruction_alignment) ... ok
-Ran 3 tests in 0.107s
-test_patch_applies_to_expected_0289_source_shapes (test_a063_mame_patch.PatchTests.test_patch_applies_to_expected_0289_source_shapes) ... ok
-test_patch_does_not_rewrite_bank_switch_handler (test_a063_mame_patch.PatchTests.test_patch_does_not_rewrite_bank_switch_handler) ... ok
-Ran 2 tests in 0.005s
-# Subtest: uninitialized RAM is unknown; unmodeled MMIO, ROM and bank reads/writes fail closed
-ok 4 - uninitialized RAM is unknown; unmodeled MMIO, ROM and bank reads/writes fail closed
-# Subtest: VRAM duplicate, address outside range and byte-mask mismatch fail closed
-ok 11 - VRAM duplicate, address outside range and byte-mask mismatch fail closed
-# Subtest: invalid/native-corrupted CPU samples fail closed, never count fictitious coverage
 ok 34 - invalid/native-corrupted CPU samples fail closed, never count fictitious coverage
 # fail 0
 test_control_value_formula_exhaustively (test_r3_bank_inventory.BankInventoryTests.test_control_value_formula_exhaustively) ... ok
@@ -105,5 +93,17 @@ test_exact_one_line_trace_action_eleven_arguments (test_a063_trace_contract.Trac
 test_invalid_offsets_reject_before_emulator (test_a063_trace_contract.TraceContractTests.test_invalid_offsets_reject_before_emulator) ... ok
 test_manifest_records_environment_but_never_attests_native (test_a063_trace_contract.TraceContractTests.test_manifest_records_environment_but_never_attests_native) ... ok
 test_manifest_refuses_public_or_unscoped_location (test_a063_trace_contract.TraceContractTests.test_manifest_refuses_public_or_unscoped_location) ... ok
+test_miniprobe_does_not_require_prior_r2 (test_a063_trace_contract.TraceContractTests.test_miniprobe_does_not_require_prior_r2) ... ok
+test_miniprobe_preserves_existing_native_evidence_by_design (test_a063_trace_contract.TraceContractTests.test_miniprobe_preserves_existing_native_evidence_by_design) ... ok
+test_r2_parsers_allow_only_exact_private_smoke_output (test_a063_trace_contract.TraceContractTests.test_r2_parsers_allow_only_exact_private_smoke_output) ... FAIL
+test_template_tampering_detected (test_a063_trace_contract.TraceContractTests.test_template_tampering_detected) ... ok
+test_triage_17135_aligned_overflow_never_passes (test_a063_trace_contract.TraceContractTests.test_triage_17135_aligned_overflow_never_passes) ... ok
+test_triage_even_all_byte_values_only_ready_for_private_parser (test_a063_trace_contract.TraceContractTests.test_triage_even_all_byte_values_only_ready_for_private_parser) ... ok
+test_triage_requires_alignment_and_rejects_impossible_counts (test_a063_trace_contract.TraceContractTests.test_triage_requires_alignment_and_rejects_impossible_counts) ... ok
+FAIL: test_r2_parsers_allow_only_exact_private_smoke_output (test_a063_trace_contract.TraceContractTests.test_r2_parsers_allow_only_exact_private_smoke_output)
+Traceback (most recent call last):
+  File "$REPO/tests/test_a063_trace_contract.py", line 127, in test_r2_parsers_allow_only_exact_private_smoke_output
+Ran 11 tests in 0.010s
+FAILED (failures=1)
 ```
 
