@@ -21,6 +21,34 @@ const LAYOUT=[
   ['palette_base',256,0x3900],
   ['scroll_bytes',4,0x3b08],
 ];
+/**
+ * JSON.parse alone silently keeps the last duplicate field. F's Python
+ * validator rejects duplicates; G must not weaken that property for callers
+ * supplying a forged validation envelope. F rows are flat JSON objects.
+ * Inspect every JSON string token followed by ':' and compare decoded keys
+ * (including unicode escapes), before applying the usual exact-field checks.
+ */
+function requireUniqueJsonKeys(raw){
+  const keys=new Set();
+  for(let i=0;i<raw.length;){
+    if(raw[i]!=='"'){i++;continue;}
+    let j=i+1,escaped=false;
+    for(;j<raw.length;j++){
+      if(escaped){escaped=false;continue;}
+      if(raw[j]==='\\'){escaped=true;continue;}
+      if(raw[j]==='"')break;
+    }
+    if(j===raw.length)throw Error('R42G_JSONL_INVALID');
+    let next=j+1;
+    while(next<raw.length&&/\s/.test(raw[next]))next++;
+    if(raw[next]===':'){
+      const key=JSON.parse(raw.slice(i,j+1));
+      if(keys.has(key))throw Error('R42G_DUPLICATE_JSON_KEY');
+      keys.add(key);
+    }
+    i=j+1;
+  }
+}
 function canonicalKeys(obj,required){
   return obj&&typeof obj==='object'&&!Array.isArray(obj)&&
     Object.keys(obj).length===required.length&&
@@ -205,7 +233,11 @@ export async function replayR42gTimeline({rawLines,timeline,bootstrap,reference,
       throw Error('R42G_EVENT_COUNT_EXCEEDED');
     h.update(bytes);
     let event;
-    try{event=JSON.parse(bytes.toString('utf8'))}
+    try{
+      const raw=bytes.toString('utf8');
+      requireUniqueJsonKeys(raw);
+      event=JSON.parse(raw);
+    }
     catch{throw Error('R42G_JSONL_INVALID')}
     const e=mapR42fVideoEvent(event,seq,{frame:lastFrame,time:lastTime});
     if(checkpoints)throw Error('R42G_EVENTS_AFTER_CHECKPOINT');
