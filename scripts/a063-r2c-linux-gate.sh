@@ -110,12 +110,7 @@ done < <(find "$MAME_SRC" -maxdepth 3 -type f \( -name '*gnga063*' -o -name 'mam
 [[ "$(stat -c %Y "$BIN")" -ge "$BUILD_START_EPOCH" ]] || {
   echo "R2C=BLOCKED stale_mame_binary_not_build_evidence" >&2; exit 2;
 }
-python3 - "$BIN" <<'PY' || {
-import sys
-from pathlib import Path
-if Path(sys.argv[1]).open('rb').read(4) != b'\x7fELF':
-    raise SystemExit('R2C=BLOCKED compiled_binary_not_elf')
-PY
+python3 -c 'from pathlib import Path; import sys; assert Path(sys.argv[1]).open("rb").read(4) == bytes.fromhex("7f454c46")' "$BIN" || {
   echo "R2C=BLOCKED non_elf_binary" >&2; exit 2;
 }
 "$BIN" -version >"$EVID/mame-version.txt" 2>&1
