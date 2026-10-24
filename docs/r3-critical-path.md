@@ -1,3 +1,16 @@
+## T1–T3 — Cierre de ejecución ROM-free (24/10/2026)
+
+**Implementado:** `scripts/r42_validation_closure.py` ejecuta tests Node H (9), escala 5k/40.001/100k y regresión Node/Python; comprueba contratos de TAP, hash, primera divergencia y DMA. `tests/test_r42_validation_closure.py` contiene ocho tests de cierre con procesos simulados, ejecutados con Python real: **8/8 PASS**. Un TAP sintético de nueve tests bajo Node 22 real también validó el parser, pero **NO** representa ejecución de la suite H.
+
+**Ejecución T1/T2 en este entorno:** `BLOCKED_MISSING_CHECKOUT`. Node y Python están disponibles; GitHub no es alcanzable desde la terminal. No afirmar que la suite real, escala H o regresión integral hayan pasado. **T3:** runner y documentación publicados; cierre real requiere ejecutar las pruebas en un checkout completo, reparar cualquier fallo y repetir los gates. Sin MAME ni Actions. [Contrato y evidencia](r42-validation-closure.md).
+
+```bash
+git pull --ff-only
+python3 scripts/r42_validation_closure.py
+```
+
+---
+
 ## R4.2.H — Cierre funcional ROM-free (24/10/2026)
 
 H1 cadena F-shaped sintética → G board → renderer compartido; H2 SHA/estado/DMA fail-closed; H3 escala 5k/40.001/100k en ventanas sin nuevo reset; H4 diagnóstico por primera divergencia de evento, byte y píxel; H5 CLI, tests y evidencia agregada. [Contrato y pasos](r42h-romfree-checkpoint.md).
