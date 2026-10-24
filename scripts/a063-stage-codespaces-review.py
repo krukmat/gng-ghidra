@@ -70,7 +70,7 @@ def summarize(run: Path, number: int) -> str:
     result = [f"### Run {number}", ""]
     ck = read_small(run, "checkpoint.txt")
     for s in ck.splitlines():
-        if re.match(r"^(?:schema|status|native_validation|a063_certified)=", s):
+        if re.match(r"^(?:schema|status|native_validation|a063_certified|build_exit_code|build_jobs)=", s):
             result.append("- " + scrub(s))
     if ck == "[missing or oversized]":
         result.append("- checkpoint=NOT_AVAILABLE")
@@ -87,6 +87,20 @@ def summarize(run: Path, number: int) -> str:
             if type(v) in (str, bool, int) or (isinstance(v, list)
                 and len(v) <= 30 and all(type(item) is str and len(item) < 90 for item in v)):
                 result.append(f"- replay.{key}={scrub(json.dumps(v, ensure_ascii=False))}")
+    # Report numeric cgroup OOM event deltas only, never unfiltered host logs.
+    def memory_events(filename: str) -> dict[str, int]:
+        data = read_small(run, filename)
+        values = {}
+        for raw in data.splitlines():
+            parts = raw.split()
+            if len(parts) == 2 and parts[0] in ("oom", "oom_kill", "oom_group_kill") and parts[1].isdigit():
+                values[parts[0]] = int(parts[1])
+        return values
+    before = memory_events("memory-before.txt")
+    after = memory_events("memory-after.txt")
+    for key in ("oom", "oom_kill", "oom_group_kill"):
+        if key in before and key in after and after[key] >= before[key]:
+            result.append(f"- build_memory.{key}_delta={after[key]-before[key]}")
     for log in ("romfree.log", "mame-build.log", "patch-check.log", "patch-apply.log"):
         p = run / log
         if not p.is_file() or p.is_symlink():
