@@ -7,11 +7,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MAME_SRC=""
 JOBS=2
+RESUME_PATCHED=0
 while (($#)); do
   case "$1" in
     --mame-source)
       (($# >= 2)) || { echo "R2C=BLOCKED missing_source" >&2; exit 2; }
       MAME_SRC="$2"; shift 2 ;;
+    --resume-patched)
+      RESUME_PATCHED=1; shift ;;
     --jobs)
       (($# >= 2)) || { echo "R2C=BLOCKED missing_jobs" >&2; exit 2; }
       JOBS="$2"; shift 2 ;;
@@ -43,9 +46,15 @@ cd "$ROOT"
 [[ "$(git -C "$MAME_SRC" rev-parse HEAD)" == "f34f02505e32c1993c6a782b6814232cbfc74e36" ]] || {
   echo "R2C=BLOCKED mame0289_upstream_commit_mismatch" >&2; exit 2;
 }
-[[ -z "$(git -C "$MAME_SRC" status --porcelain --untracked-files=no)" ]] || {
-  echo "R2C=BLOCKED mame_driver_must_be_clean" >&2; exit 2;
-}
+if [[ "$RESUME_PATCHED" -eq 1 ]]; then
+  python3 "$ROOT/scripts/a063_patch_mame_oracle.py" --mame-source "$MAME_SRC" --verify-applied || {
+    echo "R2C=BLOCKED patched_mame_does_not_match_exact_expected_source" >&2; exit 2;
+  }
+else
+  [[ -z "$(git -C "$MAME_SRC" status --porcelain --untracked-files=no)" ]] || {
+    echo "R2C=BLOCKED mame_driver_must_be_clean" >&2; exit 2;
+  }
+fi
 EVID_ROOT="${A063_EVIDENCE_ROOT:-$HOME/a063-private-romfree-evidence}"
 python3 - "$ROOT" "$EVID_ROOT" <<'PY'
 import sys
@@ -83,13 +92,20 @@ if (d.get("status"),d.get("cases"),d.get("passed"),
     d.get("synthetic_trace_only")) != ("PASS",17,17,True):
     raise SystemExit("R2C=BLOCKED replay_incomplete")
 PY
-python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SRC" \
-  2>&1 | tee "$EVID/patch-check.log"
-python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SRC" --apply \
-  2>&1 | tee "$EVID/patch-apply.log"
+if [[ "$RESUME_PATCHED" -eq 1 ]]; then
+  printf 'A063_PATCH=PREVIOUS_INTERRUPTED_BUILD_RESUME\n' >"$EVID/patch-check.log"
+  python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SRC" --verify-applied \
+    2>&1 | tee "$EVID/patch-apply.log"
+else
+  python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SRC" \
+    2>&1 | tee "$EVID/patch-check.log"
+  python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SRC" --apply \
+    2>&1 | tee "$EVID/patch-apply.log"
+fi
 git -C "$MAME_SRC" diff --check
 
 # The patch is now applied in the separate MAME checkout, never in main.
+printf 'R2C_BUILD_MODE=%s jobs=%s\n' "$([[ "$RESUME_PATCHED" -eq 1 ]] && echo incremental_resume || echo initial_build)" "$JOBS"
 BUILD_START_EPOCH="$(date +%s)"
 (
   cd "$MAME_SRC"
