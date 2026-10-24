@@ -4,7 +4,9 @@
  * Aggregate output only. No trace, ROM or private bytes are exported.
  * Never promotes F's unauthenticated source to native CPU/raster equivalence.
  */
-import {readFile,writeFile,mkdir,createReadStream} from 'node:fs/promises';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {createReadStream} from 'node:fs';
+import {fileURLToPath} from 'node:url';
 import {resolve,relative,isAbsolute,dirname,join} from 'node:path';
 import {replayR42gTimeline} from '../src/r42g_incremental_timeline.mjs';
 
@@ -18,7 +20,7 @@ const privatePath=p=>{
 };
 export async function* readR42gJsonlLines(filename){
   // Stream one newline-terminated record at a time, preserving raw SHA data.
-  const stream=(await import('node:fs')).createReadStream(filename);
+  const stream=createReadStream(filename);
   let rest=Buffer.alloc(0);
   for await (const chunk of stream){
     rest=Buffer.concat([rest,chunk]);
@@ -98,5 +100,5 @@ async function main(){
   if(output.status!=='STATE_REPLAYED_TEMPORAL_PROOF_MISSING')
     process.exitCode=2;
 }
-if(process.argv[1]&&resolve(process.argv[1])===new URL(import.meta.url).pathname)
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))
   main().catch(e=>{console.error('R42G_REPLAY_BLOCKED '+e.message);process.exitCode=2;});
