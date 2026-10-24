@@ -66,3 +66,25 @@ test('reject forged witness counts and duplicated group keys',()=>{
   const duplicate=evidence();duplicate.groups[0]={...duplicate.groups[1]};
   assert.throws(()=>validateNativeBankReportDetail(duplicate),/A064_NATIVE_BANK_DISTRIBUTION_MISMATCH/);
 });
+
+test('128 deterministic distributions reject compensating per-PC count changes',()=>{
+  for(let seed=0;seed<128;seed++){
+    const x=evidence();
+    const hits=[2+seed%5,2+(seed*3)%7,2+(seed*5)%9,2+(seed*7)%11];
+    x.report.bank_pc_pairs.forEach((pair,i)=>{pair.samples=hits[i];});
+    x.counts=new Map([
+      ['0:16384',hits[0]],['0:16386',hits[1]],
+      ['3:16384',hits[2]],['3:16386',hits[3]]
+    ]);
+    x.report.observed_bank_counts['0']=hits[0]+hits[1];
+    x.report.observed_bank_counts['3']=hits[2]+hits[3];
+    x.bankedSamples=hits.reduce((a,b)=>a+b,0);
+    assert.equal(validateNativeBankReportDetail(x),true);
+    // Sum and even per-bank totals stay unchanged; only the distribution
+    // within one bank was tampered with.
+    x.report.bank_pc_pairs[0].samples++;
+    x.report.bank_pc_pairs[1].samples--;
+    assert.throws(()=>validateNativeBankReportDetail(x),
+      /A064_NATIVE_BANK_DISTRIBUTION_MISMATCH/);
+  }
+});
