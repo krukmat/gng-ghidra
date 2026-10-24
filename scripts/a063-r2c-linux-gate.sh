@@ -24,7 +24,7 @@ done
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || {
   echo "R2C=BLOCKED invalid_jobs" >&2; exit 2;
 }
-for app in python3 node git make sha256sum find c++; do
+for app in python3 node git make sha256sum find c++ stat date; do
   command -v "$app" >/dev/null || {
     echo "R2C=BLOCKED missing_prerequisite" >&2; exit 2;
   }
@@ -40,7 +40,7 @@ cd "$ROOT"
 [[ "$(git -C "$MAME_SRC" describe --tags --exact-match HEAD)" == "mame0289" ]] || {
   echo "R2C=BLOCKED wrong_mame_tag" >&2; exit 2;
 }
-[[ -z "$(git -C "$MAME_SRC" status --porcelain -- src/mame/capcom/gng.cpp)" ]] || {
+[[ -z "$(git -C "$MAME_SRC" status --porcelain --untracked-files=no)" ]] || {
   echo "R2C=BLOCKED mame_driver_must_be_clean" >&2; exit 2;
 }
 EVID_ROOT="${A063_EVIDENCE_ROOT:-$HOME/a063-private-romfree-evidence}"
@@ -85,6 +85,7 @@ python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SRC" --apply   2>
 git -C "$MAME_SRC" diff --check
 
 # The patch is now applied in the separate MAME checkout, never in main.
+BUILD_START_EPOCH="$(date +%s)"
 (
   cd "$MAME_SRC"
   make SUBTARGET=gnga063 SOURCES=src/mame/capcom/gng.cpp REGENIE=1 -j"$JOBS"
@@ -103,6 +104,9 @@ while IFS= read -r path; do
 done < <(find "$MAME_SRC" -maxdepth 3 -type f \\( -name '*gnga063*' -o -name 'mame' \\) -print)
 [[ -n "$BIN" ]] || {
   echo "R2C=BLOCKED compiled_mame_binary_not_found" >&2; exit 2;
+}
+[[ "$(stat -c %Y "$BIN")" -ge "$BUILD_START_EPOCH" ]] || {
+  echo "R2C=BLOCKED stale_mame_binary_not_build_evidence" >&2; exit 2;
 }
 "$BIN" -version >"$EVID/mame-version.txt" 2>&1
 sha256sum "$BIN" >"$EVID/mame-binary.sha256"
