@@ -13,7 +13,7 @@ done
 bash -n scripts/r2-mame-probe.sh scripts/a063-native-miniprobe.sh \
   scripts/a063-native-oracle-miniprobe.sh scripts/r3-bank-provenance-capture.sh \
   scripts/a063-r2b-romfree.sh scripts/a063-r2c-linux-gate.sh scripts/a063-r2d-linux-preflight.sh \
-  scripts/a063-codespaces-bootstrap.sh scripts/a063-publish-codespaces-review.sh
+  scripts/a063-codespaces-bootstrap.sh scripts/a063-publish-codespaces-review.sh scripts/a063-r2e-validate-and-report.sh
 python3 -m json.tool .devcontainer/devcontainer.json >/dev/null
 python3 -m py_compile scripts/a063-export-review.py
 python3 -m py_compile \
