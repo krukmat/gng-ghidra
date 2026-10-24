@@ -118,7 +118,17 @@ function track(c,address){
   else if(address>=0x3900&&address<=0x39ff)c.base[address-0x3900]=1;
   else if(address>=0x3b08&&address<=0x3b0b)c.scroll[address-0x3b08]=1;
 }
-function compareR0(states,reference){
+function firstByteMismatch(a,b,region){
+  if(!(a instanceof Uint8Array)||!(b instanceof Uint8Array)||a.length!==b.length)
+    throw Error('R42G_R0_RAW_REGION_INVALID_'+region);
+  for(let i=0;i<a.length;i++)if(a[i]!==b[i]){
+    return Object.freeze({region,byte_offset:i,
+      address:region==='VRAM'?0x2000+i:null,
+      channel:region==='PALETTE_RGBA'?['R','G','B','A'][i%4]:null});
+  }
+  return null;
+}
+function compareR0(states,reference,referenceBytes,actualBytes){
   if(reference===undefined||reference===null)return null;
   if(reference.schema!=='gng.r42e.reference-integrity.v1'||
      reference.status!=='REFERENCE_BYTES_MATCH_MANIFEST_ORIGIN_UNATTESTED'||
@@ -133,10 +143,33 @@ function compareR0(states,reference){
     scroll_y:states.scroll.y===reference.scroll.y,
   };
   const differing=Object.keys(matching).filter(k=>!matching[k]);
+  let firstMismatch=null;
+  if(referenceBytes!==undefined){
+    if(!(referenceBytes?.video_ram instanceof Uint8Array)||
+       !(referenceBytes?.buffered_sprites instanceof Uint8Array)||
+       !(referenceBytes?.palette instanceof Uint8Array)||
+       referenceBytes.video_ram.length!==4096||
+       referenceBytes.buffered_sprites.length!==512||
+       referenceBytes.palette.length!==1024||
+       hash(referenceBytes.video_ram)!==reference.video_ram_sha256||
+       hash(referenceBytes.buffered_sprites)!==reference.buffered_sprite_sha256||
+       hash(referenceBytes.palette)!==reference.palette_sha256)
+      throw Error('R42G_R0_RAW_BYTES_HASH_UNVERIFIED');
+    firstMismatch=
+      firstByteMismatch(actualBytes.video_ram,referenceBytes.video_ram,'VRAM')||
+      firstByteMismatch(actualBytes.buffered_sprites,referenceBytes.buffered_sprites,'SPRITE_DMA')||
+      firstByteMismatch(actualBytes.palette,referenceBytes.palette,'PALETTE_RGBA')||
+      (states.scroll.x!==reference.scroll.x?
+        Object.freeze({region:'SCROLL_X',byte_offset:null,address:0x3b08,channel:null}):
+       states.scroll.y!==reference.scroll.y?
+        Object.freeze({region:'SCROLL_Y',byte_offset:null,address:0x3b0a,channel:null}):null);
+  }
   return Object.freeze({
     status:differing.length?'SNAPSHOT_COMPONENT_MISMATCH':
       'COMPONENTS_EQUAL_TEMPORAL_ALIGNMENT_UNVERIFIED',
     matching:Object.freeze(matching),differing:Object.freeze(differing),
+    first_byte_mismatch:firstMismatch,
+    raw_bytes_compared:referenceBytes!==undefined,
     pixels_compared:false,origin_attested:false,timing_proven:false
   });
 }
@@ -144,7 +177,7 @@ function compareR0(states,reference){
  * rawLines is a stream/iterable of complete UTF-8 JSON lines INCLUDING \n.
  * Backpressure is caller-controlled. Only aggregate output is returned.
  */
-export async function replayR42gTimeline({rawLines,timeline,bootstrap,reference,graphics}){
+export async function replayR42gTimeline({rawLines,timeline,bootstrap,reference,referenceBytes,graphics}){
   validTimeline(timeline);
   if(rawLines==null||typeof rawLines[Symbol.asyncIterator]!=='function'&&
      typeof rawLines[Symbol.iterator]!=='function')
@@ -209,6 +242,8 @@ export async function replayR42gTimeline({rawLines,timeline,bootstrap,reference,
     autonomous_cpu_frame_rendered:false,game_playable:false
   };
   if(!coverage.full_state)return Object.freeze(result);
+  if(referenceBytes!==undefined&&reference===undefined)
+    throw Error('R42G_R0_RAW_BYTES_REQUIRE_AUDIT');
   const video=board.snapshotAddressSpace({requireVideoInitialized:true})
     .slice(0x2000,0x3000);
   const registers=board.snapshotVideoRegisters();
@@ -219,7 +254,10 @@ export async function replayR42gTimeline({rawLines,timeline,bootstrap,reference,
     scroll:Object.freeze({...registers.scroll})
   });
   result.components=states;
-  result.reference_comparison=compareR0(states,reference);
+  result.reference_comparison=compareR0(states,reference,referenceBytes,{
+    video_ram:video,buffered_sprites:board.snapshotBufferedSprites(),
+    palette:registers.palette
+  });
   if(graphics!==undefined){
     const frame=renderGngbBoardFrame({board,...graphics});
     result.frame_sha256=hash(frame.rgba);
