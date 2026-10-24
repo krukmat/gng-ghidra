@@ -117,7 +117,8 @@ def check_scale(step: dict, manifest: dict | None) -> bool:
             [x.get("window_count") for x in entries] == [1, 2, 3] and
             all(x.get("state") == "SYNTHETIC_E2E_COMPONENTS_VERIFIED" and
                 x.get("native_proof") is False and
-                re.fullmatch(r"[a-f0-9]{64}", x.get("state_sha256", ""))
+                isinstance(x.get("state_sha256"), str) and
+                re.fullmatch(r"[a-f0-9]{64}", x["state_sha256"])
                 for x in entries))
 
 
