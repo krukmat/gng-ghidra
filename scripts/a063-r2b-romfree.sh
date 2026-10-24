@@ -15,10 +15,12 @@ bash -n scripts/r2-mame-probe.sh scripts/a063-native-miniprobe.sh \
   scripts/a063-r2b-romfree.sh scripts/a063-r2c-linux-gate.sh scripts/a063-r2d-linux-preflight.sh \
   scripts/a063-codespaces-bootstrap.sh
 python3 -m json.tool .devcontainer/devcontainer.json >/dev/null
+python3 -m py_compile scripts/a063-export-review.py
 python3 -m py_compile \
   scripts/a063_trace_contract.py scripts/a063_capture_integrity.py \
   scripts/a063_bank_oracle_gate.py scripts/a063_oracle_replay.py \
   scripts/a063_patch_mame_oracle.py
+python3 -m unittest discover -s tests -p 'test_a063_export_review.py' -v
 python3 -m unittest discover -s tests -p 'test_a063_oracle_replay.py' -v
 python3 scripts/a063_oracle_replay.py
 python3 -m unittest discover -s tests -p 'test_a063_mame_patch.py' -v
