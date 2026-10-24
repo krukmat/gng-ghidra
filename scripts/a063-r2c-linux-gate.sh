@@ -24,7 +24,7 @@ done
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || {
   echo "R2C=BLOCKED invalid_jobs" >&2; exit 2;
 }
-for app in python3 node git make sha256sum find c++ stat date; do
+for app in python3 node git make sha256sum find c++ stat date tee grep head cut mktemp strings; do
   command -v "$app" >/dev/null || {
     echo "R2C=BLOCKED missing_prerequisite" >&2; exit 2;
   }
@@ -111,6 +111,17 @@ done < <(find "$MAME_SRC" -maxdepth 3 -type f \( -name '*gnga063*' -o -name 'mam
   echo "R2C=BLOCKED stale_mame_binary_not_build_evidence" >&2; exit 2;
 }
 "$BIN" -version >"$EVID/mame-version.txt" 2>&1
+# Both checks require executable content from the patched driver; the
+# binary must advertise the target set and contain the diagnostic symbol.
+"$BIN" -listfull gngb >"$EVID/mame-driver-list.txt" 2>&1 || {
+  echo "R2C=BLOCKED gngb_driver_missing_in_compiled_binary" >&2; exit 2;
+}
+grep -q 'gngb' "$EVID/mame-driver-list.txt" || {
+  echo "R2C=BLOCKED gngb_driver_not_listed" >&2; exit 2;
+}
+strings -a "$BIN" | grep -Fq 'gng_a063_bank' || {
+  echo "R2C=BLOCKED diagnostic_symbol_missing_in_compiled_binary" >&2; exit 2;
+}
 sha256sum "$BIN" >"$EVID/mame-binary.sha256"
 sha256sum "$ROOT/patches/mame0289-a063-bank-oracle.patch" >"$EVID/mame-patch.sha256"
 git -C "$MAME_SRC" diff -- src/mame/capcom/gng.cpp >"$EVID/mame-patch-applied.diff"
