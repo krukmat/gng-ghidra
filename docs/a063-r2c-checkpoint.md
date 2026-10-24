@@ -54,3 +54,31 @@ Después: aplicar con `--apply` y compilar binario aparte. El test con ROM priva
 - [MAME device API](https://github.com/mamedev/mame/blob/mame0289/src/emu/device.h)
 
 Privacidad: no se han añadido ROMs, bytes privados, capturas reales ni trazas CPU. No se ha realizado merge ni usado CI de GitHub.
+
+## Seguimiento sin Mac — verificación adicional 2026-10-24
+
+- **17/17 casos sintéticos PASS, ejecutados** en copia local parcial, con
+  funciones reales del clasificador/replay y dependencias periféricas
+  simuladas. Nuevo rechazo de cambios bancarios que superen el total de
+  escrituras de control observadas cuando no haya reset.
+- **32/32 unittest parciales PASS**, en sandbox aislado de R1/R2 con
+  dependencias suplidas (8 contratos + 6 integridad + 5 smoke + 2 parche
+  sintético + 11 comparador). No representan el test suite integral.
+- **PASS_STATIC_UPSTREAM_PATCH**: los dos hunks del parche se aplicaron
+  textualmente sobre el archivo **completo** `gng.cpp` del tag oficial
+  `mame0289` mediante un verificador de aplicación de diff en memoria;
+  líneas originales 36 y 543, contextos/cuentas correctos. El cuerpo de
+  `bankswitch_w` se mantuvo idéntico. En fuentes MAME del mismo tag se
+  verificó que el driver espera a sus hijos antes de `machine_start()`,
+  y que la CPU crea su depurador durante el arranque con `-debug`.
+- **Bloqueo medido:** `git ls-remote` no puede resolver github.com
+  desde el contenedor local. El repositorio es privado y solo accesible
+  desde el conector GitHub; no se ha obtenido un checkout local completo
+  de los ~190 archivos, ni fuente/build íntegros de MAME.
+- La nueva protección de transición es una cota de plausibilidad:
+  `bank_transitions <= total_bank_control_writes` sin reset; no atribuye
+  la escritura exacta a cada instrucción ni sustituye la evidencia nativa.
+
+**Cierre:** `R2C_STATIC_AND_ISOLATED_PASS__FULL_REGRESSION_AND_MAME_BUILD_BLOCKED`.
+No inventar `ROM_FREE_READY`, no ejecutar GitHub Actions. La siguiente
+validación factible requiere un entorno de checkout privado ejecutable.
