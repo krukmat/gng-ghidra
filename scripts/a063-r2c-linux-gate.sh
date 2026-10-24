@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# R2.C: opt-in ROM-free integration + actual MAME 0.289 subset build on Linux.
+# Never touches private ROMs, GitHub Actions or gng-ghidra/main.
+# Usage: bash scripts/a063-r2c-linux-gate.sh --mame-source /clean/mame0289 [--jobs 2]
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+MAME_SRC=""
+JOBS=2
+while (($#)); do
+  case "$1" in
+    --mame-source)
+      (($# >= 2)) || { echo "R2C=BLOCKED missing_source" >&2; exit 2; }
+      MAME_SRC="$2"; shift 2 ;;
+    --jobs)
+      (($# >= 2)) || { echo "R2C=BLOCKED missing_jobs" >&2; exit 2; }
+      JOBS="$2"; shift 2 ;;
+    *) echo "R2C=BLOCKED unrecognized_argument" >&2; exit 2 ;;
+  esac
+done
+[[ -n "$MAME_SRC" && -d "$MAME_SRC/.git" ]] || {
+  echo "R2C=BLOCKED explicit_complete_mame_git_tree_required" >&2; exit 2;
+}
+[[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || {
+  echo "R2C=BLOCKED invalid_jobs" >&2; exit 2;
+}
+for app in python3 node git make sha256sum find; do
+  command -v "$app" >/dev/null || {
+    echo "R2C=BLOCKED missing_prerequisite" >&2; exit 2;
+  }
+done
+MAME_SRC="$(cd "$MAME_SRC" && pwd -P)"
+cd "$ROOT"
+[[ -d .git && "$(git branch --show-current)" == "feature/a063-r1-forensics-contract" ]] || {
+  echo "R2C=BLOCKED wrong_or_incomplete_gng_checkout" >&2; exit 2;
+}
+[[ -z "$(git status --porcelain --untracked-files=no)" ]] || {
+  echo "R2C=BLOCKED tracked_sources_dirty" >&2; exit 2;
+}
+[[ "$(git -C "$MAME_SRC" describe --tags --exact-match HEAD)" == "mame0289" ]] || {
+  echo "R2C=BLOCKED wrong_mame_tag" >&2; exit 2;
+}
+[[ -z "$(git -C "$MAME_SRC" status --porcelain -- src/mame/capcom/gng.cpp)" ]] || {
+  echo "R2C=BLOCKED mame_driver_must_be_clean" >&2; exit 2;
+}
+EVID_ROOT="${A063_EVIDENCE_ROOT:-$HOME/a063-private-romfree-evidence}"
+python3 - "$ROOT" "$EVID_ROOT" <<'PY'
+import sys
+from pathlib import Path
+repo=Path(sys.argv[1]).resolve()
+target=Path(sys.argv[2]).resolve()
+if target==repo or target.is_relative_to(repo):
+    raise SystemExit("R2C=BLOCKED evidence_must_stay_outside_repository")
+PY
+mkdir -p "$EVID_ROOT"
+chmod 700 "$EVID_ROOT"
+EVID="$(mktemp -d "$EVID_ROOT/r2c-XXXXXXXX")"
+chmod 700 "$EVID"
+printf '%s\n' "R2C=EXECUTING evidence=$EVID"
+printf 'schema=A063_R2C_ROM_FREE_EVIDENCE_V1\nstatus=BLOCKED_UNTIL_ALL_GATES_PASS\n' >"$EVID/checkpoint.txt"
+{
+  printf 'branch=%s\n' "$(git branch --show-current)"
+  printf 'gng_commit=%s\n' "$(git rev-parse HEAD)"
+  printf 'mame_commit=%s\n' "$(git -C "$MAME_SRC" rev-parse HEAD)"
+  printf 'mame_tag=%s\n' "$(git -C "$MAME_SRC" describe --tags --exact-match HEAD)"
+  printf 'python=%s\n' "$(python3 --version)"
+  printf 'node=%s\n' "$(node --version)"
+  printf 'compiler=%s\n' "$(c++ --version | head -n1)"
+} >"$EVID/environment.txt"
+
+set -o pipefail
+bash scripts/a063-r2b-romfree.sh 2>&1 | tee "$EVID/romfree.log"
+grep -Fxq 'GNG_LOCAL_REGRESSION=PASS_ROM_FREE_A0_2_TO_A0_6_3' "$EVID/romfree.log"
+grep -Fxq 'A063_R2B=ROMFREE_CHECKS_PASS_NOT_NATIVE_NOT_A063_CERTIFIED' "$EVID/romfree.log"
+python3 scripts/a063_oracle_replay.py | tee "$EVID/replay.json"
+python3 - "$EVID/replay.json" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1],encoding='utf-8'))
+if (d.get("status"),d.get("cases"),d.get("passed"),
+    d.get("synthetic_trace_only")) != ("PASS",17,17,True):
+    raise SystemExit("R2C=BLOCKED replay_incomplete")
+PY
+python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SRC"   2>&1 | tee "$EVID/patch-check.log"
+python3 scripts/a063_patch_mame_oracle.py --mame-source "$MAME_SRC" --apply   2>&1 | tee "$EVID/patch-apply.log"
+git -C "$MAME_SRC" diff --check
+
+# The patch is now applied in the separate MAME checkout, never in main.
+(
+  cd "$MAME_SRC"
+  make SUBTARGET=gnga063 SOURCES=src/mame/capcom/gng.cpp REGENIE=1 -j"$JOBS"
+) 2>&1 | tee "$EVID/mame-build.log"
+
+# Avoid assuming a MAME executable location; verify actual 0.289 binary.
+BIN=""
+while IFS= read -r path; do
+  [[ -x "$path" ]] || continue
+  if "$path" -version 2>&1 | head -n 2 | grep -qE '0\\.289([^0-9]|$)'; then
+    if [[ -n "$BIN" ]]; then
+      echo "R2C=BLOCKED multiple_mame_binaries" >&2; exit 2
+    fi
+    BIN="$path"
+  fi
+done < <(find "$MAME_SRC" -maxdepth 3 -type f \\( -name '*gnga063*' -o -name 'mame' \\) -print)
+[[ -n "$BIN" ]] || {
+  echo "R2C=BLOCKED compiled_mame_binary_not_found" >&2; exit 2;
+}
+"$BIN" -version >"$EVID/mame-version.txt" 2>&1
+sha256sum "$BIN" >"$EVID/mame-binary.sha256"
+sha256sum "$ROOT/patches/mame0289-a063-bank-oracle.patch" >"$EVID/mame-patch.sha256"
+git -C "$MAME_SRC" diff -- src/mame/capcom/gng.cpp >"$EVID/mame-patch-applied.diff"
+printf '%s\n' 'schema=A063_R2C_ROM_FREE_EVIDENCE_V1' \
+  'status=R2C_ROM_FREE_READY' \
+  'native_validation=NOT_PERFORMED' \
+  'a063_certified=NO' \
+  "gng_commit=$(git rev-parse HEAD)" \
+  "mame_commit=$(git -C "$MAME_SRC" rev-parse HEAD)" \
+  "binary_sha256=$(sha256sum "$BIN" | cut -d' ' -f1)" >"$EVID/checkpoint.txt"
+sha256sum "$EVID"/* >"$EVID/manifest.sha256"
+printf 'R2C=ROM_FREE_READY_NOT_NATIVE_NOT_A063_CERTIFIED evidence=%s\n' "$EVID"
