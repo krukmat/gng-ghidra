@@ -124,7 +124,7 @@ test('G3: rejected gaps, clock regressions, invalid address and masks',async()=>
 });
 test('G3: truncation, wrong stream hash, extra events and missing final checkpoint reject',async()=>{
   const s=seed();
-  const x=minimal();x.lines[0]=Buffer.from(x.lines[0].toString().replace('"data":0','"data":1'));
+  const x=minimal();x.lines[0]=Buffer.from(x.lines[0].toString().slice(0,-1));
   await assert.rejects(replay(x,{bootstrap:s}),/R42G_LINE_BOUNDARY_OR_SIZE_INVALID/);
   const y=minimal();y.lines[0]=Buffer.from(y.lines[0].toString().replace('"data":0','"data":1')+'');
   await assert.rejects(replay(y,{bootstrap:s}),/R42G_TRACE_OR_DIGEST_MISMATCH/);
@@ -163,7 +163,8 @@ test('G4: optional synthetic graphics allow pixels only after full state',async(
   const a=await replay(minimal(),{bootstrap:s,graphics});
   assert.match(a.frame_sha256,/^[0-9a-f]{64}$/);
   assert.equal(a.game_playable,false);
-  const missing=makeTrace([['WRITE8',0x1e00,0],['CHECKPOINT']]);
+  const writes=Array.from({length:512},(_,i)=>['WRITE8',0x1e00+i,0xf8]);
+  const missing=makeTrace([...writes,['DMA',0x3c00,0],['CHECKPOINT']]);
   const b=await replay(missing,{graphics});
   assert.equal(b.frame_sha256,null);
 });
