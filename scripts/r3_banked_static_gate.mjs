@@ -15,6 +15,7 @@ import {pathToFileURL,fileURLToPath} from 'node:url';
 import {compileAt,emitStaticModule,checkedState,diffRegisters}
   from './r3_static_trace_probe.mjs';
 import {runNativeBootWriteGate} from './r3_compare_sprite_writes.mjs';
+import {validateNativeBankReportDetail} from './r3_banked_report_integrity.mjs';
 import {inspectNativeSyncPrestates} from './r3_sync_boundary.mjs';
 
 export const BANK_START=0x4000,BANK_END=0x5fff,BANK_SIZE=8192;
@@ -73,6 +74,9 @@ export function compileNativeBankedPairs({
     throw Error('A064_BANKED_NATIVE_COVERAGE_REPORT_MISMATCH');
   const groups=[...grouped.values()]
     .sort((a,b)=>a.bank-b.bank||a.pc-b.pc);
+  // Totals alone can conceal a swapped bank/PC attribution. Require
+  // the full A0.6.3 histogram to match this same-run witness.
+  validateNativeBankReportDetail({report:nativeBankReport,groups,counts,bankedSamples});
   const byBank=new Map();
   for(const g of groups){
     if(!g.spec)continue;

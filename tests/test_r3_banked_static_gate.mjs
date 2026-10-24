@@ -30,6 +30,14 @@ function fixtureData(){
     bank_window_pc_samples:4,
     native_banked_prestate_bank_identified:4,
     distinct_observed_bank_pc_pairs:4,
+    distinct_bank_window_pcs:2,
+    observed_bank_counts:{'0':2,'1':0,'2':0,'3':2,'4':0},
+    bank_pc_pairs:[
+      {bank:0,pc:'0x4000',samples:1},
+      {bank:0,pc:'0x4002',samples:1},
+      {bank:3,pc:'0x4000',samples:1},
+      {bank:3,pc:'0x4002',samples:1}
+    ],
     native_per_instruction_mapped_ROM_signature_verified:true
   };
   return {fixed,packed,rows,witness,nativeBankReport};
