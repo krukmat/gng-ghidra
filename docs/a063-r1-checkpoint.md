@@ -107,3 +107,41 @@ It marks runs with too few prestates, no switch, or inconsistent frame bank
 samples as **INCONCLUSIVE**, not PASS. Even successful exact byte-pair matches
 remain a ROM equality check pending a genuinely independent native
 bank-entry-at-instruction observation. No frame->instruction interpolation.
+
+## R1.A–R1.C autonomous checkpoint — 2026-10-24
+
+Implemented exclusively on `feature/a063-r1-forensics-contract`; no
+GitHub Actions, no ROM or raw native CPU trace in the repository.
+
+| Task | Implementation | Local evidence | Native evidence |
+| --- | --- | --- | --- |
+| R1.A adversarial | Added tests for 32/64-bit sign extension, apparent word/dword reads, misplaced CPU argument, truncated line and repeated S0/S1. Strict parser rejects duplicate signature fields. | Code prepared; integrated repo test execution pending | Not available |
+| R1.B integrity | Private preflight now hashes MAME binary and all native-capture reporters plus R1 scripts, and postflight binds exact debugger action, source hashes, MAME return status, git HEAD/clean tree and seven private artifacts. Independent hash verification before diagnosing. | Six synthetic mutation/chain checks passed in isolated working copy | Not available |
+| R1.C private smoke | Fixed R2 report-path rejection under exact `out/r3/a063-smoke`; ROM-only bootstrap independent of earlier `out/r2`; strict per-prestate pair equality to authenticated five-bank ROM; frame checks explicitly non-instruction-correlated. | Five isolated classification checks passed with parser dependencies stubbed | Not available |
+
+**Isolated ROM-free testing actually executed:** 8/8 contract tests, 6/6
+postflight mutation tests and 5/5 smoke-status classification tests
+(**19/19 PASS** in partial local fixtures). Python compilation checks for
+the two new R1 scripts passed. **This is not a full repository checkout
+regression**; no native MAME/ROM execution was possible in the working
+environment. The new five adversarial parser tests and images-only inventory
+test have been added to the repository suite but must still execute in a
+complete checkout.
+
+**Current gate:** `R1_IMPLEMENTED_IN_BRANCH_NOT_FULLY_REGRESSED`.
+`A063_R1_READY` and `A0.6.3 PASS` are NOT asserted. External C2 needs
+private historical capture to isolate the >0xFF incident, followed by C3
+mini-probe and a genuinely independent bank-at-instruction observation.
+`AUTHENTIC_ROM_PAIR_MATCHES_NEEDS_INSTRUCTION_BOUNDARY_ORACLE`
+means exactly that: matched byte pairs are not a second native oracle.
+
+**ROM-free regression when a complete checkout is available:**
+
+```bash
+git checkout feature/a063-r1-forensics-contract
+git pull --ff-only
+bash -n scripts/a063-native-miniprobe.sh scripts/r2-mame-probe.sh scripts/r3-bank-provenance-capture.sh
+bash scripts/r3-local-regression.sh
+```
+
+Do not run full `r3-bank-provenance-capture.sh` merely to test R1.
