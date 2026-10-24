@@ -150,8 +150,9 @@ def main() -> None:
     root = Path(__file__).resolve().parents[1]
     allowed_r2 = (root / "out" / "r2").resolve()
     allowed_smoke = (root / "out" / "r3" / "a063-smoke").resolve()
+    allowed_oracle = (root / "out" / "r3" / "a063-oracle-smoke").resolve()
     folder = args.dir.resolve()
-    if not (folder.is_relative_to(allowed_r2) or folder == allowed_smoke):
+    if not (folder.is_relative_to(allowed_r2) or folder in (allowed_smoke, allowed_oracle)):
         ap.error("outputs must remain under out/r2 or exact private A063 smoke directory")
     folder.mkdir(parents=True, exist_ok=True)
     out = folder / "pre-instruction.jsonl"

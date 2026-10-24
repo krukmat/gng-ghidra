@@ -30,7 +30,17 @@ MACHINE="$(python3 -c 'import json;print(json.load(open("out/reference/mame-roms
 # independent directory and never overwrites prior R2/R3 trace evidence.
 OUTPUT="$ROOT/out/r2/mame-probe"
 SECONDS_TO_RUN=8
-if [[ "${GNG_A063_SMOKE:-0}" == "1" ]]; then
+if [[ "${GNG_A063_ORACLE_SMOKE:-0}" == "1" && "${GNG_A063_SMOKE:-0}" == "1" ]]; then
+  fail a063_oracle_and_legacy_smoke_mutually_exclusive
+fi
+if [[ "${GNG_A063_ORACLE_SMOKE:-0}" == "1" ]]; then
+  [[ "$MAME_BIN" == */* ]] || fail a063_oracle_requires_explicit_mame_binary_path
+  OUTPUT="$ROOT/out/r3/a063-oracle-smoke"
+  SECONDS_TO_RUN=2
+  export GNG_R2_PROBE_FRAMES=2
+elif [[ "${GNG_A063_ORACLE_SMOKE:-0}" != "0" ]]; then
+  fail a063_invalid_oracle_smoke_mode
+elif [[ "${GNG_A063_SMOKE:-0}" == "1" ]]; then
   OUTPUT="$ROOT/out/r3/a063-smoke"
   SECONDS_TO_RUN=2
   export GNG_R2_PROBE_FRAMES=2
@@ -53,6 +63,15 @@ PY
   fi
 elif [[ "${GNG_A063_SMOKE:-0}" != "0" ]]; then
   fail a063_invalid_smoke_mode
+fi
+if [[ "${GNG_A063_ORACLE_SMOKE:-0}" == "1" ]]; then
+  # Preserve partial or crashed oracle evidence; never reuse a prior run.
+  if [[ -d "$OUTPUT" ]]; then
+    for artifact in "$OUTPUT"/* "$OUTPUT"/.[!.]* "$OUTPUT"/..?*; do
+      [[ ! -e "$artifact" && ! -L "$artifact" ]] ||
+        fail a063_oracle_capture_exists_preserve_evidence
+    done
+  fi
 fi
 mkdir -p "$OUTPUT"
 # Fresh evidence required; never accept an old trace on a failed debug run.
@@ -102,9 +121,12 @@ if [[ -n "${GNG_A06_BANKSIG_HEX0:-}" || -n "${GNG_A06_BANKSIG_HEX1:-}" ]]; then
   # ambiguous joins across debugger callbacks, loops, or reset boundaries.
   [[ -n "${GNG_A063_PREFLIGHT:-}" ]] ||
     fail a063_requires_private_preflight
+  ORACLE_OPT=""
+  if [[ "${GNG_A063_ORACLE_SMOKE:-0}" == "1" ]]; then ORACLE_OPT="--oracle"; fi
   TRACE_ACTION="$(python3 scripts/a063_trace_contract.py emit \
     --first "$GNG_A06_BANKSIG_HEX0" \
-    --second "$GNG_A06_BANKSIG_HEX1")" || fail a063_trace_contract_invalid
+    --second "$GNG_A06_BANKSIG_HEX1" $ORACLE_OPT)" ||
+    fail a063_trace_contract_invalid
 fi
 printf 'trace %s,:maincpu,noloop,%s\ng\n' "$OUTPUT/cpu.trace" "$TRACE_ACTION" > "$DEBUGSCRIPT"
 echo "GNG_R2_TRACE_MODE=$GNG_R2_TRACE_MODE"

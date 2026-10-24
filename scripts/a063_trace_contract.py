@@ -19,6 +19,8 @@ ROOT=Path(__file__).resolve().parents[1]
 CPU_SYMBOLS=("pc","a","b","x","y","u","s","dp","cc")
 CPU_FORMAT="PC=%04X A=%02X B=%02X X=%04X Y=%04X U=%04X S=%04X DP=%02X CC=%02X"
 SIGNATURE_FORMAT="GNG_A06_BANKSIG S0=%02X S1=%02X"
+ORACLE_FORMAT="GNG_A063_ENTRY E=%02X"
+ORACLE_SYMBOL="gng_a063_bank"
 SCHEMA="gng.a063.private-capture-preflight.v1"
 # Freeze ALL scripts that can change the native trace or its source records.
 SOURCE_FILES=(
@@ -31,6 +33,8 @@ SOURCE_FILES=(
     "scripts/r3_bank_inventory.py",
     "scripts/prepare_r3_flat_rom.py",
     "scripts/a063_smoke_signature_gate.py",
+    "scripts/a063_bank_oracle_gate.py",
+    "scripts/a063-native-oracle-miniprobe.sh",
     "scripts/a063-native-miniprobe.sh",
     "scripts/a063_capture_integrity.py",
     "scripts/a063_trace_contract.py",
@@ -51,17 +55,19 @@ def validate_offsets(first: str,second: str) -> tuple[int,int]:
         raise ContractError("A063_R1_OFFSET_SCOPE_INVALID")
     return x,y
 
-def build_action(first: str,second: str) -> str:
-    """Construct ONE trace action containing nine CPU and two byte reads."""
+def build_action(first: str,second: str, *, oracle: bool=False) -> str:
+    """One debugger trace action; optional live driver bank.entry oracle."""
     a,b=validate_offsets(first,second)
-    specifiers=re.findall(r"%(?:0[24])X",CPU_FORMAT+" "+SIGNATURE_FORMAT)
-    if len(specifiers)!=11 or len(CPU_SYMBOLS)!=9:
-        raise ContractError("A063_R1_FORMAT_ARITY_INVALID")
-    args=",".join((*CPU_SYMBOLS,f"b@{a:04x}",f"b@{b:04x}"))
-    return ('{tracelog "GNG_R2_PRE '+CPU_FORMAT+" "+SIGNATURE_FORMAT+'",'+args+'}')
+    extra=" "+ORACLE_FORMAT if oracle else ""
+    specifiers=re.findall(r"%(?:0[24])X",CPU_FORMAT+" "+SIGNATURE_FORMAT+extra)
+    if len(specifiers)!=(12 if oracle else 11) or len(CPU_SYMBOLS)!=9:
+        raise ContractError("A063_R2_FORMAT_ARITY_INVALID")
+    symbols=(*CPU_SYMBOLS,f"b@{a:04x}",f"b@{b:04x}")
+    args=",".join((*symbols,ORACLE_SYMBOL) if oracle else symbols)
+    return ('{tracelog "GNG_R2_PRE '+CPU_FORMAT+" "+SIGNATURE_FORMAT+extra+'",'+args+'}')
 
-def validate_action(action: str,first: str,second: str) -> None:
-    if action!=build_action(first,second):
+def validate_action(action: str,first: str,second: str, *, oracle: bool=False) -> None:
+    if action!=build_action(first,second,oracle=oracle):
         raise ContractError("A063_R1_TRACE_ACTION_MISMATCH")
     if action.count("tracelog")!=1 or "tracesym" in action or "&" in action:
         raise ContractError("A063_R1_TRACE_ACTION_MISMATCH")
@@ -73,10 +79,11 @@ def _digest(path: Path) -> str:
             sha.update(block)
     return sha.hexdigest()
 
-def create_preflight(first: str,second: str,mame_bin: str,output: Path,*,root: Path=ROOT) -> dict:
+def create_preflight(first: str,second: str,mame_bin: str,output: Path,*,
+                     root: Path=ROOT,oracle: bool=False) -> dict:
     """Bind action and emulator to local sources BEFORE the native run."""
-    action=build_action(first,second)
-    validate_action(action,first,second)
+    action=build_action(first,second,oracle=oracle)
+    validate_action(action,first,second,oracle=oracle)
     resolved_root=root.resolve()
     private_root=(resolved_root/"out"/"r3").resolve()
     destination=output.resolve()
@@ -116,6 +123,10 @@ def create_preflight(first: str,second: str,mame_bin: str,output: Path,*,root: P
         "bank_identity_per_instruction_proven":False,
         "raw_addresses_rom_bytes_and_traces_exported":False,
     }
+    if oracle:
+        manifest["oracle_mode"]=True
+        manifest["oracle_driver_symbol"]=ORACLE_SYMBOL
+        manifest["oracle_bank_entry_expression_count"]=1
     destination.parent.mkdir(parents=True,exist_ok=True)
     serialized=json.dumps(manifest,sort_keys=True,indent=2)+"\n"
     if destination.exists():
@@ -176,6 +187,8 @@ def main() -> None:
         p=commands.add_parser(mode)
         p.add_argument("--first",required=True)
         p.add_argument("--second",required=True)
+        p.add_argument("--oracle",action="store_true",
+                       help="requires diagnostic MAME driver bank.entry symbol")
         if mode=="preflight":
             p.add_argument("--mame-bin",default="mame")
             p.add_argument("--output",type=Path,
@@ -186,12 +199,14 @@ def main() -> None:
     args=parser.parse_args()
     try:
         if args.mode=="emit":
-            print(build_action(args.first,args.second))
+            print(build_action(args.first,args.second,oracle=args.oracle))
         elif args.mode=="validate":
-            validate_action(build_action(args.first,args.second),args.first,args.second)
+            validate_action(build_action(args.first,args.second,oracle=args.oracle),
+                            args.first,args.second,oracle=args.oracle)
             print("A063_R1_TRACE_CONTRACT=PASS_ROM_FREE")
         elif args.mode=="preflight":
-            create_preflight(args.first,args.second,args.mame_bin,args.output)
+            create_preflight(args.first,args.second,args.mame_bin,args.output,
+                             oracle=args.oracle)
             print("A063_R1_PREFLIGHT=PASS_NOT_NATIVE_PROVENANCE")
         else:
             print(json.dumps(

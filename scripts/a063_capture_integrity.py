@@ -54,9 +54,11 @@ def capture_postflight(root: Path, output: Path, preflight: Path, first: str,
     out = output.resolve()
     private_r2 = (root / "out" / "r2").resolve()
     private_smoke = (root / "out" / "r3" / "a063-smoke").resolve()
+    oracle_smoke = (root / "out" / "r3" / "a063-oracle-smoke").resolve()
+    oracle_smoke = (root / "out" / "r3" / "a063-oracle-smoke").resolve()
     private_r3 = (root / "out" / "r3").resolve()
     preflight = preflight.resolve()
-    if not (out.is_relative_to(private_r2) or out == private_smoke):
+    if not (out.is_relative_to(private_r2) or out in (private_smoke, oracle_smoke)):
         raise contract.ContractError("A063_POSTFLIGHT_PRIVATE_CAPTURE_LOCATION_REQUIRED")
     if (not preflight.is_relative_to(private_r3) or
             not preflight.name.startswith("private-") or
@@ -65,7 +67,16 @@ def capture_postflight(root: Path, output: Path, preflight: Path, first: str,
     if type(mame_exit) is not int or not 0 <= mame_exit <= 255:
         raise contract.ContractError("A063_POSTFLIGHT_EXIT_CODE_INVALID")
     contract.validate_offsets(first, second)
-    planned_action = contract.build_action(first, second)
+    try:
+        planned = json.loads(preflight.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise contract.ContractError("A063_POSTFLIGHT_PREFLIGHT_INVALID") from exc
+    oracle = planned.get("oracle_mode", False)
+    if type(oracle) is not bool or (oracle and out != oracle_smoke):
+        raise contract.ContractError("A063_POSTFLIGHT_ORACLE_MODE_INVALID")
+    if out == oracle_smoke and not oracle:
+        raise contract.ContractError("A063_POSTFLIGHT_ORACLE_REQUIRED")
+    planned_action = contract.build_action(first, second, oracle=oracle)
     expected_action_sha = hashlib.sha256(planned_action.encode()).hexdigest()
     try:
         planned = json.loads(preflight.read_text(encoding="utf-8"))
@@ -87,6 +98,9 @@ def capture_postflight(root: Path, output: Path, preflight: Path, first: str,
         emulator_digest = digest(Path(exe).resolve())
     except OSError as exc:
         raise contract.ContractError("A063_POSTFLIGHT_HASH_UNAVAILABLE") from exc
+    if (oracle and (planned.get("oracle_driver_symbol") != contract.ORACLE_SYMBOL or
+                    planned.get("oracle_bank_entry_expression_count") != 1)):
+        raise contract.ContractError("A063_POSTFLIGHT_ORACLE_BINDING_INVALID")
     if (planned.get("schema") != contract.SCHEMA or
             planned.get("trace_action_sha256") != expected_action_sha or
             planned.get("emulator_binary_sha256") != emulator_digest or
@@ -153,7 +167,7 @@ def verify_postflight(root: Path, output: Path, preflight: Path) -> dict:
     out = output.resolve()
     private_r2 = (root / "out" / "r2").resolve()
     private_smoke = (root / "out" / "r3" / "a063-smoke").resolve()
-    if not (out.is_relative_to(private_r2) or out == private_smoke):
+    if not (out.is_relative_to(private_r2) or out in (private_smoke, oracle_smoke)):
         raise contract.ContractError("A063_POSTFLIGHT_PRIVATE_CAPTURE_LOCATION_REQUIRED")
     path = out / "private-a063-postflight.json"
     try:
