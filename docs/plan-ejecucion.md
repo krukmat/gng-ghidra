@@ -646,6 +646,16 @@ Los plazos son **timeboxes orientativos en días laborables desde el inicio**, n
 
 **Entrega:** demo Node y reporte de primera divergencia. **GO:** tramo real con interrupción, checkpoints y escrituras equivalentes, sin intérprete. **NO-GO al D14:** no hay prueba suficiente o la complejidad exige atajos no verificables. Si falla, **replantear el alcance con el operador**, sin convertir el producto a emulador de forma encubierta.
 
+### R4.2.F — Instrumentación opcional MAME de eventos visuales (24/10/2026)
+
+- **F1:** contrato `gng.r42f.native-video-metadata.v1` y JSONL secuencial con `seq`, tipo, frame y tiempo emulado. Raster exacto indisponible explícitamente.
+- **F2:** `r42f_native_video_taps.lua` registra escrituras sprite/FG/BG/paleta, reutiliza los taps existentes de scroll y DMA, sin alterar los datos ni activar instrumentation por defecto.
+- **F3:** `capture_real_frame.py --r42f-timeline` enlaza la corrida con ID aleatorio y valida JSONL/metadata con `r42f_validate_timeline.py`; hashes y recuentos solo acreditan coherencia local.
+- **F4:** tests adversariales ROM-free para orden, máscara, DMA, rango, tiempo, duplicados, truncamiento, falseamiento de raster y procedencia.
+- **F5:** runner local y documentación. No GitHub Actions, ROM ni certificación nativa sin MAME.
+
+La cobertura empieza tras instalar los taps en el script autoboot. **No demuestra orden de instrucciones MC6809, PC/banco A0.6.3, IRQ, VBlank ni posición raster real**. [Contrato y comando privado](r42f-native-video-timeline.md).
+
 ### R4.2.E — Evidencia estructural R0 y correlación limitada (24/10/2026)
 
 E1 contrato de procedencia R0; E2 integridad SHA-256 de FG/BG/DMA/paleta/PNG; E3 comparación de snapshots con checkpoints R4.2.D sin reclamar eventos nativos; E4 mutaciones adversariales ROM-free; E5 CLI local y documentación. El capturador R0 no registra aún escrituras ordenadas por instrucción: **timeline y VBlank no certificados**. Detalles: [contrato R4.2.E](r42e-native-correlation-contract.md).
