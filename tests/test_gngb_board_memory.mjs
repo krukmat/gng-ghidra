@@ -46,7 +46,7 @@ test('uninitialized RAM is unknown; unmodeled MMIO, ROM and bank reads/writes fa
   assert.throws(()=>board.read8(0x3c00),/UNMODELED_IO_OR_ROM_READ/);
   assert.throws(()=>board.read8(0x5000),/UNMODELED_IO_OR_ROM_READ/);
   assert.throws(()=>board.read8(0x6000),/UNMODELED_IO_OR_ROM_READ/);
-  assert.throws(()=>board.write8(0x3c00,1),/UNMODELED_IO_OR_ROM_WRITE/);
+  assert.throws(()=>board.write8(0x3c00,1),/SPRITE_DMA_SOURCE_INCOMPLETE/);
   assert.throws(()=>board.write8(0x6000,1),/UNMODELED_IO_OR_ROM_WRITE/);
   assert.throws(()=>board.write8(0x1000,256),/BYTE_OUT_OF_RANGE/);
   assert.throws(()=>board.read8(-1),/ADDRESS_OUT_OF_RANGE/);
@@ -127,7 +127,7 @@ test('4,096 static STA/STB indexed stores fill FG/BG RAM with no opcode interpre
   });
 });
 
-test('existing 16-bit sprite writer is mapped big-endian, but DMA latch is unmodeled',async()=>{
+test('existing 16-bit sprite writer is big-endian, DMA requires complete source',async()=>{
   await withStaticCompiler(compiledStep=>{
     const board=createGngbBoardMemory();
     const state=board.stepStatic(compiledStep,cpu(0x600c,{
@@ -139,12 +139,15 @@ test('existing 16-bit sprite writer is mapped big-endian, but DMA latch is unmod
     assert.equal(board.read8(0x1e01),0x57);
     assert.throws(()=>board.snapshotRawSprites(),/UNINITIALIZED_RENDERER_MEMORY/);
     assert.throws(()=>board.writeSpriteWord(0x1e01,0xabcd),/OUT_OF_RANGE/);
-    assert.throws(()=>board.write8(0x3c00,0),/UNMODELED_IO_OR_ROM_WRITE/);
+    assert.throws(()=>board.write8(0x3c00,0),/SPRITE_DMA_SOURCE_INCOMPLETE/);
     for(let address=0x1e02;address<0x2000;address++)board.write8(address,0);
     const snapshot=board.snapshotRawSprites();
     assert.deepEqual(snapshot,snapshotSprites(board.snapshotAddressSpace()));
     assert.deepEqual(spriteFromBuffer(snapshot,0).bytes.slice(0,2),[0x13,0x57]);
     assert.equal(board.stats().writes_by_region.SPRITE_RAM,512);
+    board.write8(0x3c00,0);
+    assert.deepEqual(board.snapshotBufferedSprites(),snapshot);
+    assert.equal(board.stats().sprite_dma_transfers,1);
   });
 });
 
@@ -162,7 +165,7 @@ test('static step commits atomically or rolls back on invalid byte, unmodeled IO
       writeByte(0x2000,0x12);
       writeByte(0x3c00,0x20);
       return {...r,PC:r.PC+1};
-    },source),/UNMODELED_IO_OR_ROM_WRITE/);
+    },source),/GNGB_MIXED_DMA_AND_RAM_EFFECTS_UNSUPPORTED/);
     assert.throws(()=>board.read8(0x2000),/UNINITIALIZED_RAM_READ/);
     assert.throws(()=>board.stepStatic((r,_word,writeByte)=>{
       writeByte(0x2000,0x12);
