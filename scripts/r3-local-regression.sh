@@ -64,4 +64,6 @@ python3 -m unittest discover -s tests -p 'test_r3_bank_provenance.py' -v
 python3 -m unittest discover -s tests -p 'test_mame_visual_oracle.py' -v
 python3 -m py_compile scripts/capture_real_frame.py scripts/r42f_validate_timeline.py tests/test_r42f_timeline.py
 python3 -m unittest discover -s tests -p 'test_r42f_timeline.py' -v
+python3 -m py_compile scripts/r42_validation_closure.py tests/test_r42_validation_closure.py
+python3 -m unittest discover -s tests -p 'test_r42_validation_closure.py' -v
 echo "GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42H"
