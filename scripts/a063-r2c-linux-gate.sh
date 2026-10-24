@@ -108,7 +108,7 @@ git -C "$MAME_SRC" diff --check
 printf 'R2C_BUILD_MODE=%s jobs=%s\n' "$([[ "$RESUME_PATCHED" -eq 1 ]] && echo incremental_resume || echo initial_build)" "$JOBS"
 BUILD_START_EPOCH="$(date +%s)"
 if [[ -f /sys/fs/cgroup/memory.events ]]; then
-  cp /sys/fs/cgroup/memory.events "$EVID/memory-before.txt"
+  cp /sys/fs/cgroup/memory.events "$EVID/memory-before.txt" || :
 fi
 set +e
 (
@@ -118,7 +118,7 @@ set +e
 BUILD_RC=${PIPESTATUS[0]}
 set -e
 if [[ -f /sys/fs/cgroup/memory.events ]]; then
-  cp /sys/fs/cgroup/memory.events "$EVID/memory-after.txt"
+  cp /sys/fs/cgroup/memory.events "$EVID/memory-after.txt" || :
 fi
 if [[ "$BUILD_RC" -ne 0 ]]; then
   printf '%s\n' 'schema=A063_R2C_ROM_FREE_EVIDENCE_V1' \
