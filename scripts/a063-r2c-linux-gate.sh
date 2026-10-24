@@ -107,10 +107,29 @@ git -C "$MAME_SRC" diff --check
 # The patch is now applied in the separate MAME checkout, never in main.
 printf 'R2C_BUILD_MODE=%s jobs=%s\n' "$([[ "$RESUME_PATCHED" -eq 1 ]] && echo incremental_resume || echo initial_build)" "$JOBS"
 BUILD_START_EPOCH="$(date +%s)"
+if [[ -f /sys/fs/cgroup/memory.events ]]; then
+  cp /sys/fs/cgroup/memory.events "$EVID/memory-before.txt"
+fi
+set +e
 (
   cd "$MAME_SRC"
   make SUBTARGET=gnga063 SOURCES=src/mame/capcom/gng.cpp REGENIE=1 -j"$JOBS"
 ) 2>&1 | tee "$EVID/mame-build.log"
+BUILD_RC=${PIPESTATUS[0]}
+set -e
+if [[ -f /sys/fs/cgroup/memory.events ]]; then
+  cp /sys/fs/cgroup/memory.events "$EVID/memory-after.txt"
+fi
+if [[ "$BUILD_RC" -ne 0 ]]; then
+  printf '%s\n' 'schema=A063_R2C_ROM_FREE_EVIDENCE_V1' \
+    'status=R2C_BUILD_FAILED' \
+    "build_exit_code=$BUILD_RC" \
+    "build_jobs=$JOBS" \
+    'native_validation=NOT_PERFORMED' \
+    'a063_certified=NO' >"$EVID/checkpoint.txt"
+  printf 'R2C=BLOCKED mame_build_failed exit_code=%s evidence=%s\n' "$BUILD_RC" "$EVID" >&2
+  exit "$BUILD_RC"
+fi
 
 # Avoid assuming a MAME executable location; verify actual 0.289 binary.
 BIN=""
