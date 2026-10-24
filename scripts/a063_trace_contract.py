@@ -35,6 +35,7 @@ SOURCE_FILES=(
     "scripts/a063_smoke_signature_gate.py",
     "scripts/a063_bank_oracle_gate.py",
     "scripts/a063_patch_mame_oracle.py",
+    "patches/mame0289-a063-bank-oracle.patch",
     "scripts/a063-native-oracle-miniprobe.sh",
     "scripts/a063-native-miniprobe.sh",
     "scripts/a063_capture_integrity.py",
