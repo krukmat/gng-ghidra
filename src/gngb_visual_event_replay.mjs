@@ -16,7 +16,6 @@ import {isGngVideoRegisterWrite} from './gngb_video_registers.mjs';
 export const R42D_EVENT_SCHEMA='gng.r42.visual-events.v1';
 const LIMIT=40000,FRAME_BYTES=256*224*4;
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
-const hex=/^[0-9a-f]{64}$/;
 function keysOnly(event,fields){
   const keys=Object.keys(event).sort();
   return keys.length===fields.length &&
@@ -49,10 +48,6 @@ function validate(events){
         throw Error('R42D_UNSUPPORTED_BUS_WRITE');
     }else throw Error('R42D_EVENT_KIND_UNSUPPORTED');
     return Object.freeze({seq,kind:e.kind,address:e.address,value:e.value});
-  }).map((event,seq)=> {
-    // Extra map keeps an immutable, normalized event list; caller can
-    // subsequently mutate its own input without affecting this replay.
-    return event;
   });
 }
 function witness(e){
@@ -81,9 +76,10 @@ function capturedCheckpoint(id,seq,board,frame){
   });
 }
 /** Executes an already validated, ROM-free logical event stream. */
-export function replayGngbVisualEvents({events,chars,tiles,sprites}){
+export function replayGngbVisualEvents({events,chars,tiles,sprites,source='SYNTHETIC_LAB'}){
   // Reject false native provenance; native capture ingestion requires a
   // separately authenticated adapter and is outside this ROM-free gate.
+  if(source!=='SYNTHETIC_LAB')throw Error('R42D_NATIVE_SOURCE_NOT_AUTHENTICATED');
   const normalized=validate(events);
   if(!(chars instanceof Uint8Array)||chars.length!==0x4000||
      !(tiles instanceof Uint8Array)||tiles.length!==0x18000||
