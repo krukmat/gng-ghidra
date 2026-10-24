@@ -8,6 +8,7 @@ command -v node >/dev/null || {
   echo "GNG_LOCAL_REGRESSION=BLOCKED node_missing" >&2
   exit 2
 }
+node --check src/gngb_sprite_dma.mjs
 node --check src/gngb_board_memory.mjs
 node --check src/gngb_video_bridge.mjs
 node --check src/gngb_banked_rom.mjs
@@ -18,6 +19,8 @@ node --check scripts/r3_native_video_write_gate.mjs
 node --check scripts/r3_banked_static_gate.mjs
 node --check scripts/r3_banked_report_integrity.mjs
 node --test \
+  tests/test_gngb_sprite_dma.mjs \
+  tests/test_gngb_sprite_dma_board.mjs \
   tests/test_gngb_board_memory.mjs \
   tests/test_gngb_video_bridge.mjs \
   tests/test_gngb_banked_rom.mjs \
