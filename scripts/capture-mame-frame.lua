@@ -139,6 +139,22 @@ local function dumpbytes(path, data)
     assert(f:close(), "failed to close " .. path)
 end
 
+-- Optional R4.2.F event recorder. Disabled by default so R0 semantics
+-- remain unchanged. Python supplies an ABSOLUTE path, run id and cap.
+-- The recorder never upgrades a capture to native CPU/raster equivalence.
+local r42f = nil
+if os.getenv("GNG_R42F_TIMELINE") == "1" then
+    local module = assert(os.getenv("GNG_R42F_MODULE"), "R42F_MODULE_REQUIRED")
+    local chunk = assert(loadfile(module), "R42F_MODULE_NOT_FOUND")
+    r42f = chunk()({
+        dir=dir,space=space,screen=screen,machine=machine,
+        driver=system.name,target=target
+    })
+    -- Retain write tap handles for the entire session.
+    gng_r42f_sprite_video_tap = r42f.handles[1]
+    gng_r42f_palette_tap = r42f.handles[2]
+end
+
 -- install_write_tap callback sees the CPU address, data and mask and must
 -- return original data unmodified. Retain subscriptions until process exits.
 -- Keep pass-through tap handles alive across frame callbacks; local
@@ -146,6 +162,7 @@ end
 gng_capture_scroll_tap = space:install_write_tap(
     0x3b08, 0x3b0b, "gng-capture-scroll",
     function(address, data, mask)
+        if r42f then r42f.scroll_tap(address,data,mask) end
         if address >= 0x3b08 and address <= 0x3b0b then
             scroll[address - 0x3b08 + 1] = data & 0xff
         end
@@ -155,6 +172,7 @@ gng_capture_dma_tap = space:install_write_tap(
     0x3c00, 0x3c00, "gng-capture-buffered-sprites",
     function(address, data, mask)
         -- Sprite DMA stores a COPY of source RAM, not a view of mutable RAM.
+        if r42f then r42f.dma_tap(address,data,mask) end
         sprite_buffer = readshare(sprites, 0x200)
         dma_count = dma_count + 1
         return data
@@ -227,6 +245,7 @@ local function snapshot()
         system.name, screen:frame_number(), dma_count,
         x, y, scroll[1], scroll[2], scroll[3], scroll[4], pc_json,
         replay_json))
+    if r42f then r42f.finish(screen:frame_number()) end
     completed = true
     print("GNG_MAME_REFERENCE=CAPTURED frame=" .. screen:frame_number() ..
         " dma=" .. dma_count .. " scroll_x=" .. x .. " scroll_y=" .. y)
