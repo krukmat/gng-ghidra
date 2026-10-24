@@ -10,6 +10,7 @@ import unittest
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
 from r42f_validate_timeline import validate_r42f
+from capture_real_frame import capture
 
 RUN="0123456789abcdef0123456789abcdef"
 
@@ -124,11 +125,20 @@ class VideoTimelineTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"R42F_DUPLICATE_JSON_KEY"):
                 validate(path)
 
+    def test_wrapper_dry_run_enables_timeline_without_accessing_private_mame(self):
+        with tempfile.TemporaryDirectory() as d:
+            plan=capture("mame","gngb",Path(d),
+                ROOT/"out/r3/r42f-dry-run-only",600,
+                dry_run=True,r42f_timeline=True)
+            self.assertEqual(plan["status"],"DRY_RUN_NOT_CAPTURED")
+            self.assertTrue(plan["r42f_timeline_requested"])
+            self.assertIn("-autoboot_script",plan["command"])
+
     def test_lua_tap_contract_and_wrapper_flag_exist(self):
         lua=(ROOT/"scripts/r42f_native_video_taps.lua").read_text()
         parent=(ROOT/"scripts/capture-mame-frame.lua").read_text()
         wrapper=(ROOT/"scripts/capture_real_frame.py").read_text()
-        self.assertIn("install_write_tap(0x1e00",lua.replace("tap(","install_write_tap("))
+        self.assertIn("handlers[1]=tap(0x1e00,0x2fff",lua)
         self.assertIn("tap(0x3800,0x39ff",lua)
         self.assertIn('if r42f then r42f.scroll_tap',parent)
         self.assertIn('if r42f then r42f.dma_tap',parent)
