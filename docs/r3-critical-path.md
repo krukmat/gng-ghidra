@@ -1,5 +1,11 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## A0.6.3 — plan de desbloqueo (24/10/2026)
+
+La ruta ejecutable y los criterios de decisión están consolidados en [docs/a063-unblock.md](a063-unblock.md). Primero forense offline de firmas en la captura privada; solo si son inválidas se corrige la instrumentación y se repite MAME una vez. La API Lua `memory.banks[tag].entry` es una alternativa potencial, pero por sí sola no aporta correspondencia por instrucción. **Sin trazas/ROM privadas, no se puede certificar A0.6.3 a distancia.**
+
+---
+
 ## A0.6.4.H1 — exactitud de histograma bancario sin hardware (24/10/2026)
 
 Se incorporó `scripts/r3_banked_report_integrity.mjs`, que exige coincidencia exacta entre las filas `(bank, pc, samples)` del reporte A0.6.3, los pares agrupados del witness y los totales por banco/PC. Un cambio de banco o redistribución de muestras con idénticos totales globales **se rechaza**, al igual que filas duplicadas, formato de dirección inválido, bancos desconocidos y muestras cero. El gate `compileNativeBankedPairs` ahora lo llama después del chequeo de totales agregados, antes de compilar módulos. Se añadieron siete tests Node ROM-free (incluyendo 128 mutaciones deterministas compensadas) y se incluyeron en `scripts/r3-local-regression.sh`.
