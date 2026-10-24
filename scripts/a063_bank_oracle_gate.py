@@ -84,7 +84,7 @@ def evaluate(root: Path)->dict:
     root=root.resolve()
     out=root/"out/r3/a063-oracle-smoke"
     pre=root/"out/r3/a063-oracle-preflight/private-a063-preflight.json"
-    verify_postflight(root,out,pre)
+    verify_postflight(root,out,pre,mame_bin=os.environ.get("GNG_R3_MAME_BIN"))
     plan=json.loads(pre.read_text(encoding="utf-8"))
     if plan.get("oracle_mode") is not True:
         raise ValueError("A063_ORACLE_PREFLIGHT_MODE_MISSING")
