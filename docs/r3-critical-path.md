@@ -1,5 +1,24 @@
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
+## A0.6.3 — continuación sin Mac ni ROM privada (24/10/2026)
+
+**Objetivo:** avanzar en gates sintéticos sin confundir una regresión ROM-free con la certificación de banco real. El repositorio sigue en `main`, sin GitHub Actions.
+
+1. **A0.6.3.H1 — integridad de implementación (independiente de captura).**
+   - H1.1: revisar sintaxis de `r3_bank_provenance.py` y parser del preestado; un `\\n` literal dentro de la firma de `diagnose_trace_signatures` fue corregido en `669ff08`.
+   - H1.2: comprobar guardas de correspondencia (nueve registros, PC, número de línea y firma de banco) y carácter exclusivamente diagnóstico del enmascaramiento de 8 bits. Revisión estática: 11/11 invariantes comprobadas; **no significa suite ejecutada**.
+2. **A0.6.3.H2 — validación remota ROM-free (sin hardware ni secretos).**
+   - H2.1: crear un Codespace temporal en GitHub desde navegador móvil, *si está habilitado*, sin publicar ROM ni archivos `out/`.
+   - H2.2: ejecutar `bash scripts/r3-local-regression.sh`. Criterio: todas las pruebas Node/Python pasan en un checkout limpio de `main`. El runner no llama a MAME ni necesita ROM. No reactivar Actions.
+3. **A0.6.3.N1 — validación nativa pendiente (requiere privados conservados en Mac).**
+   - N1.1: `python3 scripts/r3_bank_provenance.py diagnose` sobre las trazas privadas; revisar recuentos de overflow y contraste agregado contra bancos auténticos.
+   - N1.2: aceptar banco por preinstrucción solo con firmas auténticas válidas y witness 1:1. Nunca inferir `A0.6.3=PASS` de ejemplos sintéticos ni de aplicar `&0xff`.
+   - N1.3: únicamente tras N1.2, ejecutar `bash scripts/r3-banked-critical-path.sh` para certificar A0.6.4.
+
+**Dependencias:** H1 → H2; N1 depende de disponer de evidencia privada en Mac, no de H2 por sí sola. A0.6.4 real depende de N1.2. Un Codespace sin ROM sirve exclusivamente para H2. Sin acceso al Mac, mantener **A0.6.3 y A0.6.4 reales bloqueados**; continuar hardening, fixtures y compilación estática sin atribuir bancos nativos inventados.
+
+---
+
 ## A0.6.3 — diagnóstico offline de firmas fuera de rango (22/10/2026)
 
 **Resultado nativo:** 60/60 Node, 6/6 Python inventario y 13/13 Python procedencia PASS en Mac; 17.135/17.135 líneas tienen PC y ambas firmas; 0 divergencias CPU/PC/línea. Las 17.135 firmas tienen por lo menos un campo mayor que 0xFF, de modo que `report` se bloquea correctamente por `A063_NATIVE_SIGNATURE_EXCEEDS_BYTE`. **No es A0.6.3 PASS.**
