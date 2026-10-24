@@ -133,6 +133,17 @@ class ClosureTests(unittest.TestCase):
                            manifest_loader=lambda _:data,write=False)
         self.assertEqual(result["status"],"FAILED_VALIDATION")
 
+    def test_malformed_sha_type_is_contract_failure_not_crash(self):
+        for bad in (None, 17, ["not-a-sha"], {"hex":"a"*64}):
+            with self.subTest(type=type(bad).__name__):
+                data=manifest()
+                data["scales"][1]["state_sha256"]=bad
+                report=run_closure(ROOT,runner=fake_runner,
+                    manifest_loader=lambda _, m=data:m,write=False)
+                self.assertEqual(report["status"],"FAILED_VALIDATION")
+                self.assertEqual(report["tasks"]["T1"]["scale"]["failure_category"],
+                                 "EVIDENCE_OR_FIXTURE_CONTRACT_MISMATCH")
+
     def test_report_step_does_not_leak_test_logs(self):
         report=run_closure(ROOT,runner=fake_runner,manifest_loader=lambda _:manifest(),write=False)
         self.assertIn('stdout_sha256',report['tasks']['T1']['tests'])
