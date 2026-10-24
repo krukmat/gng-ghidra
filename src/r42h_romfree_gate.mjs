@@ -123,8 +123,19 @@ function firstDifference(before,after){
   return null;
 }
 export function compareR42hEndpoints(a,b){
-  const firstEvent=a.variant===b.variant?null:(
-    a.variant==='POST_DMA_WRITE'||b.variant==='POST_DMA_WRITE'?2:0);
+  if(a.count!==b.count)
+    throw Error('R42H_INCOMPARABLE_EVENT_LENGTHS');
+  let firstEvent=null;
+  for(let seq=0;seq<a.count;seq++){
+    const left=r42hEvent(seq,a.count,a.variant);
+    const right=r42hEvent(seq,b.count,b.variant);
+    if(left.kind!==right.kind||left.address!==right.address||
+       left.data!==right.data||left.mask!==right.mask||
+       left.frame!==right.frame||left.emu_seconds!==right.emu_seconds){
+      firstEvent=seq;
+      break;
+    }
+  }
   const regions=[
     ['VIDEO_RAM',a.snapshot.video,b.snapshot.video,0x2000],
     ['SPRITE_DMA',a.snapshot.sprite,b.snapshot.sprite,0x1e00],
