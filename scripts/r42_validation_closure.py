@@ -91,6 +91,20 @@ def check_scale(step: dict, manifest: dict | None) -> bool:
             diag.get("native_mame_executed") is not False or
             diag.get("repeat_identical") is not True):
         return False
+    changed=diag.get("changed",{})
+    byte=changed.get("first_byte_divergence",{}) if isinstance(changed,dict) else {}
+    pixel=changed.get("first_pixel_divergence",{}) if isinstance(changed,dict) else {}
+    frozen=diag.get("post_dma_write",{})
+    if (not isinstance(changed,dict) or changed.get("first_event_seq")!=0 or
+            not isinstance(byte,dict) or byte.get("region")!="SPRITE_DMA" or
+            byte.get("byte_offset")!=3 or
+            not isinstance(pixel,dict) or
+            (pixel.get("x"),pixel.get("y"),pixel.get("channel"))!=(34,66,"R") or
+            not isinstance(frozen,dict) or frozen.get("first_event_seq")!=2 or
+            frozen.get("first_pixel_divergence") is not None or
+            not isinstance(frozen.get("equal_components"),dict) or
+            frozen["equal_components"].get("pixels") is not True):
+        return False
     entries = manifest.get("scales")
     return (isinstance(entries, list) and
             [x.get("event_count") for x in entries if isinstance(x, dict)] == SCALES and
