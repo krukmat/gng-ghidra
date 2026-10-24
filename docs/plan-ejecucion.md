@@ -646,6 +646,21 @@ Los plazos son **timeboxes orientativos en días laborables desde el inicio**, n
 
 **Entrega:** demo Node y reporte de primera divergencia. **GO:** tramo real con interrupción, checkpoints y escrituras equivalentes, sin intérprete. **NO-GO al D14:** no hay prueba suficiente o la complejidad exige atajos no verificables. Si falla, **replantear el alcance con el operador**, sin convertir el producto a emulador de forma encubierta.
 
+### R4.2.D — Secuenciación y checkpoints visuales (24/10/2026)
+
+**D1:** contrato ROM-free `gng.r42.visual-events.v1`: `WRITE8` (RAM o MMIO visual documentado), `DMA` (solo `0x3c00`) y `CHECKPOINT` (identificador único). Secuencias `seq=0..N-1`, validación completa de la estructura antes del replay y rechazo de cualquier evento desconocido o supuesto origen MAME.
+
+**D2/D3:** `src/gngb_visual_event_replay.mjs` aplica cada evento sobre la board real de laboratorio (no decodifica instrucciones MC6809). Los checkpoints requieren RAM FG/BG, buffer DMA y los registros de paleta/scroll inicializados; preservan RGBA, VRAM, sprites y paleta en copias defensivas con SHA-256 y scroll inmutable. Los checkpoints son **puntos explícitos de laboratorio**; no implican VBlank nativo ni un frame de juego.
+
+**D4:** render `256×224` con compositor compartido R1/R4.2.B y estados internos R4.2.C. Graphics ROM sintéticos en tests; ROM propietaria no incluida ni generada.
+
+**D5:** `compareGngbVisualReplays` separa **primera divergencia de evento** de **primera divergencia RGBA** (coordenada X/Y y canal), y distingue un evento que cambia sin alterar píxeles. Pruebas negativas de orden, DMA irregular, estados incompletos, MMIO desconocido, atributos sobrantes, mutación de snapshots y origen nativo falsamente atribuido.
+
+**D6:** `node scripts/r42d_visual_replay_lab.mjs` reproduce dos ejecuciones idénticas y una tercera con una modificación de sprite; verifica que el cambio visual no aparece hasta el siguiente DMA. Genera `out/r3/r42d-event-replay/report.json` y `checkpoints.html`, **solo material sintético**, sin GitHub Actions. `bash scripts/r3-local-regression.sh` incorpora las 10 pruebas de eventos y 2 del script, además de las existentes. En este entorno se ejecutaron **10/10 tests de eventos en V8 aislado**, con el código real del repo pero un hash determinista suplente de `node:crypto`; **no** se ha ejecutado todavía la suite Node/Python completa, y sus SHA-256 reales deben verificarse allí. No llamar a esto certificación A0.6.3 ni R4/V2.
+
+**Siguiente dependencia:** correlacionar esos eventos/checkpoints con taps autenticados de MAME por captura y sincronización raster/IRQ. Sigue bloqueada la ejecución autónoma por A0.6.3 + SYNC/IRQ; la presencia de un HTML no es evidencia nativa.
+
+
 ### R4.2.C — Scroll y paleta desde MMIO de la board (24/10/2026)
 
 Implementado el modelo `RGBx_444` (256 entradas, dos planos de bytes) y scroll little-endian de cuatro registros. El compositor compartido R1/R4.2 utiliza de forma predeterminada el estado de la board; overrides explícitos quedan solo como ruta de fixture/referencia claramente señalada. El board rechaza estado incompleto y efectos mixtos sin evidencia de orden de bus. Pruebas ROM-free; NO se reclama equivalencia temporal DMA/paleta/IRQ ni primer fotograma autónomo.
