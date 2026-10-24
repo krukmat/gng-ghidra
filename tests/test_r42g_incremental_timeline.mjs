@@ -122,6 +122,16 @@ test('G3: rejected gaps, clock regressions, invalid address and masks',async()=>
   }
   assert.equal(original.timeline.dma,1);
 });
+test('T4: G rejects duplicate JSONL keys and unicode-escaped aliases, even with correct SHA',async()=>{
+  for(const replacement of ['"seq":0,"seq":0','"seq":0,"\\u0073eq":0']){
+    const trace=minimal();
+    trace.lines[0]=Buffer.from(trace.lines[0].toString('utf8')
+      .replace('"seq":0',replacement),'utf8');
+    trace.timeline.jsonl_sha256=createHash('sha256')
+      .update(Buffer.concat(trace.lines)).digest('hex');
+    await assert.rejects(replay(trace,{bootstrap:seed()}),/R42G_DUPLICATE_JSON_KEY/);
+  }
+});
 test('G3: truncation, wrong stream hash, extra events and missing final checkpoint reject',async()=>{
   const s=seed();
   const x=minimal();x.lines[0]=Buffer.from(x.lines[0].toString().slice(0,-1));
