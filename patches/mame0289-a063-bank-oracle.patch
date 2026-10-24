@@ -1,0 +1,25 @@
+diff --git a/src/mame/capcom/gng.cpp b/src/mame/capcom/gng.cpp
+--- a/src/mame/capcom/gng.cpp
++++ b/src/mame/capcom/gng.cpp
+@@ -35,6 +35,8 @@
+ #include "emu.h"
+ 
++#include "debug/debugcpu.h"
++#include "debug/express.h"
+ #include "cpu/m6809/m6809.h"
+ #include "cpu/z80/z80.h"
+ #include "machine/74259.h"
+@@ -541,6 +543,13 @@ void gng_state::machine_start()
+ 	m_mainbank->configure_entries(0, 4, &rombase[0x10000], 0x2000);
+ 	m_mainbank->configure_entry(4, &rombase[0x4000]);
+ 
++	// A063 local diagnostic only: expose the *live* selected bank as a
++	// read-only MC6809 debugger expression. The standard bank switch
++	// handler and memory map remain untouched; no ROM contents are logged.
++	if (m_maincpu->debug())
++		m_maincpu->debug()->symtable().add("gng_a063_bank",
++			[this]() -> u64 { return m_mainbank->entry(); });
++
+ 	save_item(NAME(m_scrollx));
+ 	save_item(NAME(m_scrolly));
+ }
