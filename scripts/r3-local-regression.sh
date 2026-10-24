@@ -66,4 +66,6 @@ python3 -m py_compile scripts/capture_real_frame.py scripts/r42f_validate_timeli
 python3 -m unittest discover -s tests -p 'test_r42f_timeline.py' -v
 python3 -m py_compile scripts/r42_validation_closure.py tests/test_r42_validation_closure.py
 python3 -m unittest discover -s tests -p 'test_r42_validation_closure.py' -v
+python3 -m py_compile scripts/r42_t5_preflight.py tests/test_r42_t5_preflight.py
+python3 -m unittest discover -s tests -p 'test_r42_t5_preflight.py' -v
 echo "GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42H"
