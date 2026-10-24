@@ -1,7 +1,7 @@
 diff --git a/src/mame/capcom/gng.cpp b/src/mame/capcom/gng.cpp
 --- a/src/mame/capcom/gng.cpp
 +++ b/src/mame/capcom/gng.cpp
-@@ -35,5 +35,7 @@
+@@ -36,5 +36,7 @@
  #include "emu.h"
  
 +#include "debug/debugcpu.h"
@@ -9,7 +9,7 @@ diff --git a/src/mame/capcom/gng.cpp b/src/mame/capcom/gng.cpp
  #include "cpu/m6809/m6809.h"
  #include "cpu/z80/z80.h"
  #include "machine/74259.h"
-@@ -541,6 +543,13 @@ void gng_state::machine_start()
+@@ -543,6 +545,13 @@ void gng_state::machine_start()
  	m_mainbank->configure_entries(0, 4, &rombase[0x10000], 0x2000);
  	m_mainbank->configure_entry(4, &rombase[0x4000]);
  
