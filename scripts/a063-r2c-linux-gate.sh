@@ -97,7 +97,7 @@ BUILD_START_EPOCH="$(date +%s)"
 BIN=""
 while IFS= read -r path; do
   [[ -x "$path" ]] || continue
-  if "$path" -version 2>&1 | head -n 2 | grep -qE '0\.289([^0-9]|$)'; then
+  if "$path" -version 2>&1 | grep -E '0\.289([^0-9]|$)' >/dev/null; then
     if [[ -n "$BIN" ]]; then
       echo "R2C=BLOCKED multiple_mame_binaries" >&2; exit 2
     fi
@@ -119,7 +119,7 @@ done < <(find "$MAME_SRC" -maxdepth 3 -type f \( -name '*gnga063*' -o -name 'mam
 grep -q 'gngb' "$EVID/mame-driver-list.txt" || {
   echo "R2C=BLOCKED gngb_driver_not_listed" >&2; exit 2;
 }
-strings -a "$BIN" | grep -Fq 'gng_a063_bank' || {
+strings -a "$BIN" | grep -F 'gng_a063_bank' >/dev/null || {
   echo "R2C=BLOCKED diagnostic_symbol_missing_in_compiled_binary" >&2; exit 2;
 }
 sha256sum "$BIN" >"$EVID/mame-binary.sha256"
