@@ -49,6 +49,7 @@ export function r42gBootstrapDigest(seed){
      !['LAB_SYNTHETIC','PRE_TAP_UNATTESTED'].includes(seed.origin))
     throw Error('R42G_BOOTSTRAP_PROVENANCE_INVALID');
   const d=createHash('sha256');
+  d.update(Buffer.from(seed.schema+'|'+seed.origin+'|','utf8'));
   for(const [key,len] of LAYOUT){
     const bytes=seed[key];
     if(!(bytes instanceof Uint8Array)||bytes.length!==len)
