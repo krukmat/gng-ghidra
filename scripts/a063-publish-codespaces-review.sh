@@ -40,12 +40,12 @@ for marker in (
     r"(?i)GNG_R2_PRE", r"(?i)GNG_A06_BANKSIG",
     r"(?i)GNG_A063_ENTRY",
     r"(?i)BEGIN .{0,30} PRIVATE KEY",
-    r"(?i)Authorization\\s*:",
+    r"(?i)Authorization\s*:",
     r"github_pat_[A-Za-z0-9_]+",
-    r"\\bgh[pousr]_[A-Za-z0-9_]+",
-    r"(?i)Bearer\\s+\\S+",
-    r"(?i)\\b(?:token|password|secret|api[_-]?key)\\s*[:=]\\s*\\S+",
-    r"\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
+    r"\bgh[pousr]_[A-Za-z0-9_]+",
+    r"(?i)Bearer\s+\S+",
+    r"(?i)\b(?:token|password|secret|api[_-]?key)\s*[:=]\s*\S+",
+    r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
 ):
     if re.search(marker, content):
         raise SystemExit(2)
