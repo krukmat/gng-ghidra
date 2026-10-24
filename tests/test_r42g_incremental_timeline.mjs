@@ -153,6 +153,42 @@ test('G4: compare component hashes only, no pixel/timing equivalence claim',asyn
   const diff=await replay(t,{bootstrap:s,reference:ref});
   assert.deepEqual(diff.reference_comparison.differing,['palette']);
 });
+test('G4: SHA-bound private reference reports first divergent byte without exposing values',async()=>{
+  const t=minimal(),s=seed(),baseline=await replay(t,{bootstrap:s});
+  const actual={
+    video_ram:s.video_ram.slice(),
+    buffered_sprites:s.sprite_ram.slice(),
+    palette:new Uint8Array(1024),
+  };
+  // R4.2.C RGBx_444 with zeroed planes still gives alpha=255.
+  for(let i=0;i<256;i++)actual.palette[4*i+3]=255;
+  const ref={
+    schema:'gng.r42e.reference-integrity.v1',
+    status:'REFERENCE_BYTES_MATCH_MANIFEST_ORIGIN_UNATTESTED',
+    independent_capture_attested:false,native_event_timeline_available:false,
+    video_ram_sha256:baseline.components.video_ram_sha256,
+    buffered_sprite_sha256:baseline.components.buffered_sprite_sha256,
+    palette_sha256:baseline.components.palette_sha256,
+    scroll:{x:0,y:0}
+  };
+  const equal=await replay(t,{bootstrap:s,reference:ref,referenceBytes:actual});
+  assert.equal(equal.reference_comparison.raw_bytes_compared,true);
+  assert.equal(equal.reference_comparison.first_byte_mismatch,null);
+  const altered={...actual,video_ram:actual.video_ram.slice()};
+  altered.video_ram[17]^=1;
+  ref.video_ram_sha256=createHash('sha256').update(altered.video_ram).digest('hex');
+  const compared=await replay(t,{bootstrap:s,reference:ref,referenceBytes:altered});
+  assert.equal(compared.reference_comparison.first_byte_mismatch.region,'VRAM');
+  assert.equal(compared.reference_comparison.first_byte_mismatch.byte_offset,17);
+  assert.equal(compared.reference_comparison.first_byte_mismatch.address,0x2011);
+  assert.equal(compared.reference_comparison.pixels_compared,false);
+  assert.equal('expected_byte' in compared.reference_comparison.first_byte_mismatch,false);
+  const corrupted={...altered,video_ram:altered.video_ram.slice()};
+  corrupted.video_ram[17]^=1;
+  await assert.rejects(replay(t,{bootstrap:s,reference:ref,referenceBytes:corrupted}),
+    /R42G_R0_RAW_BYTES_HASH_UNVERIFIED/);
+});
+
 test('G4: optional synthetic graphics allow pixels only after full state',async()=>{
   const graphics={
     chars:new Uint8Array(0x4000).fill(255),
