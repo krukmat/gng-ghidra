@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Callable
 
@@ -83,12 +84,16 @@ def check_scale(step: dict, manifest: dict | None) -> bool:
             manifest.get("status") != "ROM_FREE_LAB_GATE_PASS_NATIVE_UNVERIFIED" or
             manifest.get("million_event_stress_required") is not False or
             manifest.get("mame_executed") is not False or
-            manifest.get("autonomous_cpu_frame_rendered") is not False):
+            manifest.get("autonomous_cpu_frame_rendered") is not False or
+            manifest.get("node_python_whole_suite_verified") is not False or
+            manifest.get("github_actions_used") is not False):
         return False
     diag = manifest.get("diagnostic")
     if (not isinstance(diag, dict) or
             diag.get("status") != "SYNTHETIC_E2E_DIAGNOSTIC_PASS" or
             diag.get("native_mame_executed") is not False or
+            diag.get("native_pixel_equivalence_verified") is not False or
+            diag.get("autonomous_cpu_frame_rendered") is not False or
             diag.get("repeat_identical") is not True):
         return False
     changed=diag.get("changed",{})
@@ -138,8 +143,12 @@ def run_closure(root: Path, *, runner=subprocess.run,
                 manifest_loader: Callable[[Path], dict] | None = None,
                 write: bool = True) -> dict:
     root = root.resolve()
-    required = ["src/r42h_romfree_gate.mjs", "tests/test_r42h_romfree_gate.mjs",
-                "scripts/r3-local-regression.sh"]
+    required = [
+        "src/r42h_romfree_gate.mjs", "src/r42g_incremental_timeline.mjs",
+        "src/gngb_board_memory.mjs", "src/gngb_frame_pipeline.mjs",
+        "tests/test_r42h_romfree_gate.mjs", "scripts/r42h_romfree_gate.mjs",
+        "scripts/r42_validation_closure.py", "scripts/r3-local-regression.sh",
+    ]
     if runner is subprocess.run and not all((root / name).is_file() for name in required):
         report = {
             "schema": SCHEMA, "status": "BLOCKED_MISSING_CHECKOUT",
@@ -162,12 +171,23 @@ def run_closure(root: Path, *, runner=subprocess.run,
     if manifest_loader is None:
         manifest_loader = lambda p: json.loads(p.read_text(encoding="utf-8"))
     stage1 = run_command(CMD_TESTS, root, 300, runner)
-    stage2 = run_command(CMD_SCALE, root, 900, runner)
-    manifest_path = root / "out/r3/r42h-romfree-checkpoint.json"
+    # An output unique to this invocation makes stale manifest reuse impossible.
+    # The private H aggregate is removed after validation; an existing ordinary
+    # out/r3/r42h-romfree-checkpoint.json is never read, changed or deleted.
+    manifest_name = "r42h-closure-" + uuid.uuid4().hex + ".json"
+    manifest_path = root / "out/r3" / manifest_name
+    manifest_relpath = "out/r3/" + manifest_name
+    stage2 = run_command(CMD_SCALE + ["--out", manifest_relpath], root, 900, runner)
     try:
         manifest = manifest_loader(manifest_path) if stage2["exit_code"] == 0 else None
     except (OSError, ValueError, json.JSONDecodeError):
         manifest = None
+    finally:
+        try:
+            manifest_path.unlink(missing_ok=True)
+        except OSError:
+            # Cleanup is best-effort: never turn a missing/invalid test into PASS.
+            pass
     stage3 = run_command(CMD_REGRESSION, root, 1200, runner)
     checks = [check_tests(stage1), check_scale(stage2, manifest), check_regression(stage3)]
     steps = [report_step(stage, ok) for stage, ok in
