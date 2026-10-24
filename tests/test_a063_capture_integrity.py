@@ -81,6 +81,36 @@ class IntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(contract.ContractError, "EXISTS_PRESERVE"):
             self.finalize()
 
+    def test_oracle_capture_requires_unchanged_explicit_binary(self):
+        # Private diagnostic source hashes and action must be bound to
+        # the exact 0.289 MAME binary through BOTH postflight stages.
+        self.output = self.root / "out/r3/a063-oracle-smoke"
+        self.output.mkdir(parents=True)
+        self.preflight = (
+            self.root / "out/r3/a063-oracle-preflight/private-a063-preflight.json"
+        )
+        contract.create_preflight("4000", "5000", str(self.mame),
+                                  self.preflight, root=self.root, oracle=True)
+        for filename in integrity.ARTIFACTS:
+            (self.output / filename).write_text("synthetic fixture\n")
+        action = contract.build_action("4000", "5000", oracle=True)
+        (self.output / "start-debugger.txt").write_text(
+            f"trace {self.output / 'cpu.trace'},:maincpu,noloop,{action}\\ng\\n")
+        (self.output / "pretrace-report.json").write_text(
+            json.dumps({"status": "PRE_INSTRUCTION_FORMAT_PARSED", "snapshots": 300}))
+        (self.output / "capabilities.json").write_text(
+            json.dumps({"status": "PARTIAL_NATIVE_INSTRUMENTATION"}))
+        self.assertTrue(self.finalize()["capture_artifacts_complete"])
+        with self.assertRaisesRegex(contract.ContractError, "ORACLE_BINARY_REQUIRED"):
+            integrity.verify_postflight(self.root, self.output, self.preflight)
+        integrity.verify_postflight(self.root, self.output, self.preflight,
+                                    mame_bin=str(self.mame))
+        self.mame.write_text('#!/bin/sh\\necho "MAME test 0.289"\\necho tampered\\n')
+        self.mame.chmod(0o755)
+        with self.assertRaisesRegex(contract.ContractError, "ORACLE_BINARY_CHANGED"):
+            integrity.verify_postflight(self.root, self.output, self.preflight,
+                                        mame_bin=str(self.mame))
+
     def test_reject_public_location(self):
         with self.assertRaisesRegex(contract.ContractError, "PRIVATE_CAPTURE"):
             integrity.capture_postflight(self.root, self.root / "docs",
