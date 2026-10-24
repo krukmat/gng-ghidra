@@ -1,3 +1,15 @@
+## R4.2.C — Scroll + palette RGBx_444 gobernados por la board (24/10/2026)
+
+**C1/C2:** verificados sobre MAME `gng.cpp` y `emupal.h`: `0x3B08/09` X little-endian, `0x3B0A/0B` Y; paleta extendida `0x3800–0x38FF` = byte alto y paleta base `0x3900–0x39FF` = byte bajo, formato `RGBx_444` (`R=ext[7:4]`, `G=ext[3:0]`, `B=base[7:4]`, expansión x17; byte bajo nibble bajo ignorado). No se infieren valores tras reset: `snapshotVideoRegisters()` exige cuatro bytes scroll y los **512** bytes de RAM de paleta escritos explícitamente. Este requisito fail-closed es conservador, no una afirmación de comportamiento nativo POR.
+
+**C3:** `src/gngb_video_registers.mjs` se integra en `src/gngb_board_memory.mjs` (solo MMIO de escritura). `renderGngbBoardFrame({board,chars,tiles,sprites})` obtiene scroll y paleta **de la board** sin inyección manual, conservando el buffer DMA independiente. Por compatibilidad ROM-free del bloque B, la sobreescritura explícita *emparejada* `palette+scroll` continúa disponible, pero se etiqueta `EXPLICIT_LAB_OR_REFERENCE`, nunca `BOARD_MMIO`. `read8` en MMIO mantiene rechazo salvo política B4 de 0x3C00.
+
+**C4:** `stepStatic` admite hasta dos escrituras de registro de vídeo por instrucción, valida estado CPU antes de commit y rechaza mezclas RAM/MMIO/DMA no corroboradas por bus. Pruebas ROM-free: endianess, red/green/blue, datos incompletos, aislamiento, cambios de píxeles por scroll/paleta, reset, DMA inalterado, callbacks B4 y rollback.
+
+**C5:** nuevos `tests/test_gngb_video_registers.mjs` y `tests/test_gngb_video_mmio_board.mjs` en `scripts/r3-local-regression.sh`. No GitHub Actions, no ROM privada, no equivalencia temporal de paleta/raster ni frame autónomo. El gate nativo de R4 continúa dependiendo de A0.6.3 e IRQ/SYNCACK.
+
+---
+
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
 
 ## R4.2.B — Pixel compositor compartido R1 → board DMA (24/10/2026)

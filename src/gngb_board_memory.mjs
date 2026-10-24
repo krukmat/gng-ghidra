@@ -14,6 +14,8 @@ import {snapshotSprites,drawOrder,SPRITE_RAM_START,SPRITE_RAM_LENGTH}
   from './sprite_memory.mjs';
 import {createGngbSpriteDma,GNG_SPRITE_DMA_TRIGGER}
   from './gngb_sprite_dma.mjs';
+import {createGngbVideoRegisters,isGngVideoRegisterWrite,videoRegisterRegion}
+  from './gngb_video_registers.mjs';
 import {checkedState} from '../scripts/r3_static_trace_probe.mjs';
 
 export const GNG_RAM_END = 0x2fff;
@@ -43,6 +45,7 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
   const bytes = new Uint8Array(65536);
   const known = new Uint8Array(GNG_RAM_END + 1);
   const dma=createGngbSpriteDma();
+  const videoRegisters=createGngbVideoRegisters();
   let writeCount = 0;
   let writesPerRegion = Object.create(null);
 
@@ -58,6 +61,10 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
     if(addr===GNG_SPRITE_DMA_TRIGGER){
       // A control write latches sprites, never stores a CPU RAM byte.
       dma.trigger(addr,value,bytes,known);
+      return;
+    }
+    if(isGngVideoRegisterWrite(addr)){
+      videoRegisters.write8(addr,value);
       return;
     }
     assertWritable(addr, value);
@@ -110,6 +117,7 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
     // This is CPU sprite RAM, NOT a claim that the 0x3c00 DMA occurred.
     return snapshotSprites(bytes);
   }
+  function snapshotVideoRegisters(){return videoRegisters.snapshot();}
   function snapshotBufferedSprites(){return dma.snapshot();}
   function bufferedSpriteDrawOrder(){return drawOrder(dma.snapshot());}
   function clearLabState() {
@@ -117,6 +125,7 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
     bytes.fill(0);
     known.fill(0);
     dma.clear();
+    videoRegisters.clear();
     writeCount = 0;
     writesPerRegion = Object.create(null);
   }
@@ -141,7 +150,15 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
         staged.push({addr,value});
         return;
       }
-      assertWritable(addr,value);
+      const video=isGngVideoRegisterWrite(addr);
+      if(video){
+        if(staged.some(e=>!isGngVideoRegisterWrite(e.addr)))
+          throw Error('R42_MIXED_MMIO_AND_RAM_EFFECTS_UNSUPPORTED');
+      }else{
+        assertWritable(addr,value);
+        if(staged.some(e=>isGngVideoRegisterWrite(e.addr)))
+          throw Error('R42_MIXED_MMIO_AND_RAM_EFFECTS_UNSUPPORTED');
+      }
       if(staged.some(e=>e.addr===GNG_SPRITE_DMA_TRIGGER))
         throw Error('GNGB_MIXED_DMA_AND_RAM_EFFECTS_UNSUPPORTED');
       if(staged.length>=2)
@@ -167,7 +184,8 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
       // No raw byte/address export. The complete contents remain available
       // through the explicit private snapshot for the existing renderer.
       writes_by_region: staged.reduce((acc, e) => {
-        const reg = e.addr===GNG_SPRITE_DMA_TRIGGER?'SPRITE_DMA':classify(e.addr);
+        const reg = e.addr===GNG_SPRITE_DMA_TRIGGER?'SPRITE_DMA':
+          videoRegisterRegion(e.addr)||classify(e.addr);
         acc[reg] = (acc[reg] || 0) + 1;
         return acc;
       }, Object.create(null)),
@@ -180,6 +198,7 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
       initialized_ram_bytes: known.reduce((sum, item) => sum + item, 0),
       writes_by_region: {...writesPerRegion},
       ...dma.stats(),
+      ...videoRegisters.stats(),
       native_video_bus_equivalence_verified: false,
       banked_rom_irq_sync_dma_verified: false,
       game_playable: false,
@@ -188,6 +207,7 @@ export function createGngbBoardMemory({readUnmapped3c00} = {}) {
   return Object.freeze({
     read8, write8, writeSpriteWord, stepStatic, tile,
     snapshotAddressSpace, snapshotRawSprites, snapshotBufferedSprites,
+    snapshotVideoRegisters,
     bufferedSpriteDrawOrder, clearLabState, stats,
   });
 }

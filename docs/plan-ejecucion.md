@@ -646,6 +646,10 @@ Los plazos son **timeboxes orientativos en días laborables desde el inicio**, n
 
 **Entrega:** demo Node y reporte de primera divergencia. **GO:** tramo real con interrupción, checkpoints y escrituras equivalentes, sin intérprete. **NO-GO al D14:** no hay prueba suficiente o la complejidad exige atajos no verificables. Si falla, **replantear el alcance con el operador**, sin convertir el producto a emulador de forma encubierta.
 
+### R4.2.C — Scroll y paleta desde MMIO de la board (24/10/2026)
+
+Implementado el modelo `RGBx_444` (256 entradas, dos planos de bytes) y scroll little-endian de cuatro registros. El compositor compartido R1/R4.2 utiliza de forma predeterminada el estado de la board; overrides explícitos quedan solo como ruta de fixture/referencia claramente señalada. El board rechaza estado incompleto y efectos mixtos sin evidencia de orden de bus. Pruebas ROM-free; NO se reclama equivalencia temporal DMA/paleta/IRQ ni primer fotograma autónomo.
+
 ### R4.2.A — DMA sprites + entradas al renderer (24/10/2026)
 
 Subbloque de R4.2 preparado y conectado al board en `main`, independiente de la recuperación bancaria A0.6.3:

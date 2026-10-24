@@ -9,6 +9,7 @@ command -v node >/dev/null || {
   exit 2
 }
 node --check src/gngb_sprite_dma.mjs
+node --check src/gngb_video_registers.mjs
 node --check src/gngb_board_memory.mjs
 node --check src/gngb_video_bridge.mjs
 node --check src/gngb_frame_renderer.mjs
@@ -22,6 +23,8 @@ node --check scripts/r3_native_video_write_gate.mjs
 node --check scripts/r3_banked_static_gate.mjs
 node --check scripts/r3_banked_report_integrity.mjs
 node --test \
+  tests/test_gngb_video_registers.mjs \
+  tests/test_gngb_video_mmio_board.mjs \
   tests/test_gngb_sprite_dma.mjs \
   tests/test_gngb_sprite_dma_board.mjs \
   tests/test_gngb_board_memory.mjs \
