@@ -91,10 +91,10 @@ def validate_r42f(directory:Path,*,run_id:str,frame:int,
                 raise ValueError("R42F_FRAME_TIME_OR_RASTER_INVALID")
             kind=row["kind"]
             if kind in ("DMA","WRITE8"):
-                if checkpoints or not _exact_int(row["address"],0,65535) or
+                if (checkpoints or not _exact_int(row["address"],0,65535) or
                         not _exact_int(row["data"],0,255) or
                         not _exact_int(row["mask"],255,255) or
-                        not _addr_valid(kind,row["address"]):
+                        not _addr_valid(kind,row["address"])):
                     raise ValueError("R42F_BUS_EVENT_INVALID")
                 if kind=="DMA":
                     dmas+=1
