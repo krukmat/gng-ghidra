@@ -40,6 +40,9 @@ cd "$ROOT"
 [[ "$(git -C "$MAME_SRC" describe --tags --exact-match HEAD)" == "mame0289" ]] || {
   echo "R2C=BLOCKED wrong_mame_tag" >&2; exit 2;
 }
+[[ "$(git -C "$MAME_SRC" rev-parse HEAD)" == "f34f02505e32c1993c6a782b6814232cbfc74e36" ]] || {
+  echo "R2C=BLOCKED mame0289_upstream_commit_mismatch" >&2; exit 2;
+}
 [[ -z "$(git -C "$MAME_SRC" status --porcelain --untracked-files=no)" ]] || {
   echo "R2C=BLOCKED mame_driver_must_be_clean" >&2; exit 2;
 }
