@@ -131,6 +131,10 @@ fi
   done
 ) &
 HEARTBEAT_PID=$!
+# Prevent an orphan periodic reporter on failure, Ctrl+C, or remote hangup.
+trap 'kill "${HEARTBEAT_PID:-}" 2>/dev/null || :' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 printf 'R2C_BUILD_POLICY jobs=%s heartbeat_seconds=%s limit_minutes=%s\n' \
   "$JOBS" "$HEARTBEAT_SECONDS" "$BUILD_LIMIT_MINUTES"
 set +e
@@ -143,6 +147,8 @@ BUILD_RC=${PIPESTATUS[0]}
 set -e
 kill "$HEARTBEAT_PID" 2>/dev/null || :
 wait "$HEARTBEAT_PID" 2>/dev/null || :
+HEARTBEAT_PID=""
+trap - EXIT INT TERM
 BUILD_ELAPSED_SECONDS="$(($(date +%s) - BUILD_START_EPOCH))"
 if [[ -f /sys/fs/cgroup/memory.events ]]; then
   cp /sys/fs/cgroup/memory.events "$EVID/memory-after.txt" || :
