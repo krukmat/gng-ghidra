@@ -55,8 +55,14 @@ def compare(rom_banks: list[int], live_banks: list[int], samples: dict)->dict:
         raise ValueError("A063_ORACLE_ROM_BANK_DISAGREEMENT")
     writes=samples.get("sampled_control_writes_before_handler")
     resets=samples.get("native_soft_reset_notifications",0)
-    if type(writes) is not int or writes<0 or type(resets) is not int or resets<0:
+    invalid=samples.get("unparseable_native_bank_samples",0)
+    total=samples.get("total_bank_control_writes",writes)
+    if (type(writes) is not int or writes<0 or type(resets) is not int or resets<0
+        or type(invalid) is not int or invalid<0
+        or type(total) is not int or total<writes):
         raise ValueError("A063_ORACLE_WRITE_OR_RESET_SAMPLE_INVALID")
+    if invalid:
+        raise ValueError("A063_ORACLE_NATIVE_SAMPLES_INVALID")
     distinct=len(set(rom_banks))
     if len(rom_banks)<256:
         status="INCONCLUSIVE_TOO_FEW_PRESTATES"
@@ -72,6 +78,8 @@ def compare(rom_banks: list[int], live_banks: list[int], samples: dict)->dict:
         "rom_pair_vs_live_bank_mismatch_count":0,
         "distinct_authentic_banks_observed":distinct,
         "native_bank_control_write_samples":writes,
+        "native_bank_control_write_count":total,
+        "unparseable_native_bank_samples":invalid,
         "native_soft_reset_notifications":resets,
         "live_bank_entry_read_at_instruction_boundary":True,
         "native_bank_per_instruction_full_run_proven":False,
