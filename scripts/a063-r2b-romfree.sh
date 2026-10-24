@@ -24,5 +24,6 @@ python3 -m unittest discover -s tests -p 'test_a063_export_review.py' -v
 python3 -m unittest discover -s tests -p 'test_a063_oracle_replay.py' -v
 python3 scripts/a063_oracle_replay.py
 python3 -m unittest discover -s tests -p 'test_a063_mame_patch.py' -v
+python3 -m unittest discover -s tests -p 'test_a063_mame_resume.py' -v
 bash scripts/r3-local-regression.sh
 echo "A063_R2B=ROMFREE_CHECKS_PASS_NOT_NATIVE_NOT_A063_CERTIFIED"
