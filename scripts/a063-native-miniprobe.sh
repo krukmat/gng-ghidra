@@ -5,6 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 fail(){ echo "A063_MINIPROBE=BLOCKED reason=$1" >&2; exit 2; }
+# Fresh operator environment: prepare the CRC-verified flat ROM without overwriting stale data.
+python3 scripts/prepare_r3_flat_rom.py >/dev/null || fail private_flat_rom_invalid
 # No dependency on an earlier R2 native trace: CRC-validated images only.
 python3 scripts/r3_bank_inventory.py --images-only >/dev/null || fail private_rom_images_invalid
 SIGS="$(python3 scripts/r3_bank_provenance.py prepare)" || fail private_fingerprint_not_ready
