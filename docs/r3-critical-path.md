@@ -1,3 +1,11 @@
+## R4.2.F — Cronología de escrituras de vídeo MAME (24/10/2026)
+
+**Estado de implementación:** F1–F5 preparados en `main`, con captura opt-in de taps Lua, evento JSONL acotado, ID de corrida, validador estructural Python, tests adversariales y documentación. La ejecución real de MAME con ROM privada y la suite completa Node/Python se reportarán por separado; **ninguna coincidencia sintética constituye evidencia nativa**. [Ver contrato, límites y comando](r42f-native-video-timeline.md).
+
+**Riesgo conocido:** las APIs Lua documentan `screen.frame_number` y `machine.time`, pero no posición vpos/hpos exacta. Los campos raster permanecen explícitamente `null`. El log es orden de taps invocados desde autoboot, no secuencia CPU por instrucción garantizada. Las discrepancias de máscara/orden bloquean la captura en vez de normalizar datos.
+
+---
+
 ## R4.2.E — Auditoría estructural R0 / preparación de correlación MAME (24/10/2026)
 
 El contrato y la ruta de uso están en [docs/r42e-native-correlation-contract.md](r42e-native-correlation-contract.md). E1–E5 implementan verificación de los cinco artefactos R0, metadata de frame/DMA/scroll, comparación informativa de estado con checkpoint sintético D, CLI privado y tests adversariales. **No hay secuencia temporal de MAME verificable** en el formato R0 existente; una coincidencia de snapshots no certifica orden nativo de eventos, pixels del PNG ni VBlank. No usar este bloque para cerrar A0.6.3.
