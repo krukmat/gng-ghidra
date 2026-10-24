@@ -130,3 +130,33 @@ The staging tool extracts only status, replay metadata and a small
 selection of already-scrubbed error lines. Unlike the ZIP, it **does
 not include whole ROM-free logs**. Share the first missing error
 category separately if it is omitted by the allowlist.
+
+## One-command review publishing (user authorized)
+
+Once the Codespace has been updated to include this entrypoint:
+
+```bash
+git pull --ff-only
+bash scripts/a063-publish-codespaces-review.sh
+```
+
+The script generates the report again, retaining the **last** 42 diagnostic
+lines per ROM-free log, verifies that only a bounded redacted Markdown
+summary is staged, then commits and pushes **only**
+`docs/audit/a063-r2e-codespaces-summary.md` to
+`feature/a063-r1-forensics-contract`. If nothing changed, it reports
+`A063_REVIEW_PUBLISH=UNCHANGED_NO_COMMIT`.
+
+It fails closed if the branch or remote differs, tracked files are dirty,
+another file is staged, the redaction gate finds recognizable secrets,
+or Git cannot push. It never stages full logs or ZIP files, and never
+changes `main`.
+
+**Limitations:** redaction is best-effort; this is a private repository
+with persistent commit history, not a secure secret vault. The report
+contains only a small, curated subset of test/build diagnostics. If it
+rejects a suspected secret, do not override the safety gate.
+
+When it prints `A063_REVIEW_PUBLISH=PASS_REDACTED_SUMMARY_ONLY`,
+tell the assistant **"subido"**; it can then fetch and diagnose the
+latest checkpoint directly from GitHub.
