@@ -93,3 +93,17 @@ any prior `out/r2` snapshot. Both R2 private reporters now accept the exact
 
 Unit-test status must be established by executing the full checkout regression;
 remote GitHub commits alone are not execution proof. A0.6.3 remains BLOCKED.
+
+## R1.A adversarial coverage + R1.C strict ROM smoke check
+
+The separate `test_a063_adversarial.py` rejects 32-bit/64-bit sign extension,
+wide apparent memory reads, CPU-argument displacement, truncated records and
+duplicate signature fields. Synthetic fixtures cannot attest MAME itself.
+
+`a063_smoke_signature_gate.py` now invokes the existing strict native parser
+with five CRC-authenticated private ROM banks for **every** native smoke
+prestate. Only aggregated safe counters are emitted to ignored `out/r3`.
+It marks runs with too few prestates, no switch, or inconsistent frame bank
+samples as **INCONCLUSIVE**, not PASS. Even successful exact byte-pair matches
+remain a ROM equality check pending a genuinely independent native
+bank-entry-at-instruction observation. No frame->instruction interpolation.

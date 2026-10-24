@@ -84,6 +84,8 @@ def parse_debugger_bank_signatures(raw_trace: str, rows: list[dict],
         # The fingerprint and all nine CPU registers must be from the
         # same native debugger line; matching only PC is insufficient.
         if (line.count("GNG_R2_PRE")!=1 or line.count(MARK)!=1
+            or len(re.findall(r"\bS0\s*=",line))!=1
+            or len(re.findall(r"\bS1\s*=",line))!=1
             or len(pmatches)!=1 or len(smatches)!=1
             or len(cpu_matches)!=1):
             raise ValueError("A063_TRACE_MARKERS_NOT_SAME_INSTRUCTION")

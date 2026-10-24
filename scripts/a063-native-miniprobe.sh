@@ -34,11 +34,15 @@ python3 scripts/r3_bank_provenance.py diagnose \
 python3 scripts/a063_trace_contract.py triage \
   --input "$OUT/private-diagnostic.json" > "$OUT/private-triage.json" \
   || fail native_triage_failed
+# R1.A-C: enforce authentic ROM pair equality for EVERY captured prestate.
+# This is NOT independent entry-at-instruction evidence and never R2 PASS.
+python3 scripts/a063_smoke_signature_gate.py ||
+  fail authentic_rom_signature_check_failed
 python3 - "$OUT/private-triage.json" <<'PY'
 import json,sys
 from pathlib import Path
 report=json.loads(Path(sys.argv[1]).read_text())
 if report["decision"]!="R1_READY_FOR_PRIVATE_STRICT_PARSER_ONLY":
     raise SystemExit("A063_MINIPROBE=BLOCKED native_signature_invalid_or_misaligned")
-print("A063_MINIPROBE=BYTE_SHAPE_ONLY_NOT_BANK_PROVENANCE")
+print("A063_MINIPROBE=ROM_SIGNATURES_CHECKED_NOT_NATIVE_BANK_PROVENANCE")
 PY

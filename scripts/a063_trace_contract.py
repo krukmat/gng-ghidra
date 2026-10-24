@@ -29,6 +29,8 @@ SOURCE_FILES=(
     "scripts/r3-bank-provenance-capture.sh",
     "scripts/r3_bank_provenance.py",
     "scripts/r3_bank_inventory.py",
+    "scripts/prepare_r3_flat_rom.py",
+    "scripts/a063_smoke_signature_gate.py",
     "scripts/a063-native-miniprobe.sh",
     "scripts/a063_capture_integrity.py",
     "scripts/a063_trace_contract.py",
