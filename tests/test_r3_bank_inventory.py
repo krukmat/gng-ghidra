@@ -117,5 +117,32 @@ class BankInventoryTests(unittest.TestCase):
         self.assertFalse(bank.private_destination(ROOT / "out" / "r3"))
 
 
+    def test_images_only_prepares_authenticated_banks_without_prior_r2(self):
+        private=ROOT / "out" / "r3"
+        private.mkdir(parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=private) as td:
+            scratch=Path(td)
+            flat=scratch/"fixed.bin"
+            packed=bytes([3])*bank.PACKED_SIZE
+            fixed=bytes([4])*65536
+            flat.write_bytes(fixed)
+            out=scratch/"images"
+            with patch.object(bank,"assemble_banks",return_value=(packed,fixed)):
+                ready=bank.prepare_images_only(scratch/"not-needed-during-mock.zip",flat,out)
+                self.assertEqual(ready["authentic_bank_entries"],5)
+                self.assertFalse(ready["previous_native_trace_required"])
+                self.assertFalse(ready["bank_identity_per_instruction_proven"])
+                image=out/"private-banked-rom.bin"
+                self.assertEqual(image.read_bytes(),packed)
+                self.assertEqual(image.stat().st_mode & 0o777,0o600)
+                self.assertEqual(bank.prepare_images_only(None,flat,out),ready)
+                image.write_bytes(bytes([9])+packed[1:])
+                with self.assertRaisesRegex(ValueError,"BANK_IMAGE_MISMATCH"):
+                    bank.prepare_images_only(None,flat,out)
+                with self.assertRaisesRegex(ValueError,"PRIVATE_IMAGE_OUTPUT"):
+                    bank.prepare_images_only(None,flat,ROOT/"docs")
+
+
+
 if __name__ == "__main__":
     unittest.main()
