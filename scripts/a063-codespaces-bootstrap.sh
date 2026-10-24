@@ -58,5 +58,5 @@ elif [[ "$MODE" == "--resume" ]]; then
     --mame-source "$MAME_SOURCE" --jobs "${A063_MAME_JOBS:-1}"
 else
   bash scripts/a063-r2c-linux-gate.sh --mame-source "$MAME_SOURCE" \
-    --jobs "${A063_MAME_JOBS:-2}"
+    --jobs "${A063_MAME_JOBS:-1}"
 fi
