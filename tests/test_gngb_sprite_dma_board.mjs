@@ -84,9 +84,9 @@ test('renderer adapter reads DMA buffer, never uncopied CPU sprite bytes',()=>{
   assert.equal(spriteFromBuffer(snapshotGngbRendererInputs(board).bufferedSprites,0).x,60);
   board.write8(0x3c00,0);
   assert.equal(spriteFromBuffer(snapshotGngbRendererInputs(board).bufferedSprites,0).x,100);
-  inputs.videoAddressSpace[0x2000]=0;
+  inputs.videoAddressSpace[0x2000]=0x7f;
   inputs.bufferedSprites[3]=0;
-  assert.notEqual(board.read8(0x2000),0);
+  assert.equal(board.read8(0x2000),0);
   assert.equal(board.snapshotBufferedSprites()[3],100);
   assert.equal(inputs.native_dma_timing_verified,false);
   assert.equal(inputs.autonomous_cpu_frame_rendered,false);
