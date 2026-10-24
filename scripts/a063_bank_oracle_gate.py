@@ -63,6 +63,13 @@ def compare(rom_banks: list[int], live_banks: list[int], samples: dict)->dict:
         raise ValueError("A063_ORACLE_WRITE_OR_RESET_SAMPLE_INVALID")
     if invalid:
         raise ValueError("A063_ORACLE_NATIVE_SAMPLES_INVALID")
+    transitions=sum(before!=after for before,after in zip(rom_banks,rom_banks[1:]))
+    # A bank may stay selected after a control write, but it cannot
+    # change without a write unless reset intervenes. This is a
+    # consistency bound, NOT per-edge attribution from frame samples.
+    if ("total_bank_control_writes" in samples and not resets
+            and transitions > total):
+        raise ValueError("A063_ORACLE_TRANSITIONS_EXCEED_CONTROL_WRITES")
     distinct=len(set(rom_banks))
     if len(rom_banks)<256:
         status="INCONCLUSIVE_TOO_FEW_PRESTATES"
@@ -79,6 +86,7 @@ def compare(rom_banks: list[int], live_banks: list[int], samples: dict)->dict:
         "distinct_authentic_banks_observed":distinct,
         "native_bank_control_write_samples":writes,
         "native_bank_control_write_count":total,
+        "observed_instruction_bank_transitions":transitions,
         "unparseable_native_bank_samples":invalid,
         "native_soft_reset_notifications":resets,
         "live_bank_entry_read_at_instruction_boundary":True,

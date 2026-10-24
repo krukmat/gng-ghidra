@@ -11,8 +11,8 @@ import a063_oracle_replay as replay
 class R2BReplayTests(unittest.TestCase):
     def test_fourteen_adversarial_scenarios(self):
         result=replay.replay_cases()
-        self.assertEqual(result["cases"],16)
-        self.assertEqual(result["passed"],16,result["failed_case_names"])
+        self.assertEqual(result["cases"],17)
+        self.assertEqual(result["passed"],17,result["failed_case_names"])
         self.assertEqual(result["status"],"PASS")
         self.assertTrue(result["synthetic_trace_only"])
         self.assertFalse(result["native_bank_provenance_proven"])

@@ -94,6 +94,13 @@ class NativeOracleTests(unittest.TestCase):
             with self.subTest(sample=sample), self.assertRaises(ValueError):
                 oracle.compare(self.banks*60,self.banks*60,sample)
 
+    def test_impossible_transition_count_rejected(self):
+        # Two mapped bank changes cannot follow a single write and no reset.
+        s={"sampled_control_writes_before_handler":1,
+           "total_bank_control_writes":1,"native_soft_reset_notifications":0}
+        with self.assertRaisesRegex(ValueError,"TRANSITIONS_EXCEED_CONTROL_WRITES"):
+            oracle.compare(self.banks*60,self.banks*60,s)
+
     def test_corrupt_bank_sequence_fails(self):
         for a,b in [([0],[True]),([0],[5]),([0],[0,0]),([],[])]:
             with self.subTest(a=a,b=b),self.assertRaises(ValueError):

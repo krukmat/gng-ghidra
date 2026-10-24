@@ -124,6 +124,16 @@ def replay_cases()->dict:
         cases.append(("corrupt_native_sample",False))
     except ValueError:
         cases.append(("corrupt_native_sample",True))
+    try:
+        from a063_bank_oracle_gate import compare
+        compare(ordered,ordered,{
+            "sampled_control_writes_before_handler":1,
+            "total_bank_control_writes":2,
+            "native_soft_reset_notifications":0,
+        })
+        cases.append(("transitions_exceed_writes",False))
+    except ValueError:
+        cases.append(("transitions_exceed_writes",True))
     totals={"schema":"gng.a063.r2b-romfree-replay.v1",
             "status":"PASS" if all(passed for _,passed in cases) else "FAIL",
             "cases":len(cases),
