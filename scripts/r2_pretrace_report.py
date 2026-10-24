@@ -148,10 +148,11 @@ def main() -> None:
     ap.add_argument("--dir", type=Path, default=Path("out/r2/mame-probe"))
     args = ap.parse_args()
     root = Path(__file__).resolve().parents[1]
-    allowed = (root / "out" / "r2").resolve()
+    allowed_r2 = (root / "out" / "r2").resolve()
+    allowed_smoke = (root / "out" / "r3" / "a063-smoke").resolve()
     folder = args.dir.resolve()
-    if not folder.is_relative_to(allowed):
-        ap.error("outputs must remain under private out/r2")
+    if not (folder.is_relative_to(allowed_r2) or folder == allowed_smoke):
+        ap.error("outputs must remain under out/r2 or exact private A063 smoke directory")
     folder.mkdir(parents=True, exist_ok=True)
     out = folder / "pre-instruction.jsonl"
     out.unlink(missing_ok=True)

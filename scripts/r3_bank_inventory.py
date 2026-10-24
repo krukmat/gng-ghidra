@@ -222,6 +222,33 @@ def inventory(zip_path: Path, flat_path: Path, observations_path: Path,
     return report
 
 
+def prepare_images_only(zip_path: Path, flat_path: Path, output_dir: Path) -> dict:
+    """CRC-attest private bank images WITHOUT requiring an earlier R2 trace.
+
+    This is source preparation, never instruction or bank-switch evidence.
+    """
+    if not private_destination(output_dir):
+        raise ValueError("A063_PRIVATE_IMAGE_OUTPUT_REQUIRED")
+    packed, flat = assemble_banks(zip_path)
+    if flat_path.read_bytes() != flat:
+        raise ValueError("A063_EXISTING_PRIVATE_FIXED_ROM_MISMATCH")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    image = output_dir / "private-banked-rom.bin"
+    if image.exists():
+        if image.read_bytes() != packed:
+            raise ValueError("A063_EXISTING_PRIVATE_BANK_IMAGE_MISMATCH")
+    else:
+        with image.open("xb") as stream:
+            stream.write(packed)
+    image.chmod(0o600)
+    return {
+        "status": "A063_AUTHENTIC_PRIVATE_BANK_IMAGES_READY_ROM_ONLY",
+        "authentic_bank_entries": BANK_COUNT,
+        "previous_native_trace_required": False,
+        "bank_identity_per_instruction_proven": False,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--zip", type=Path, default=ROOT / "roms/gng.zip")
@@ -232,10 +259,14 @@ def main():
                         default=ROOT / "out/r2/mame-probe/observations.tsv")
     parser.add_argument("--out", type=Path,
                         default=ROOT / "out/r3/banked-rom")
+    parser.add_argument("--images-only", action="store_true",
+                        help="CRC-valid bank images without prior R2 samples")
     args = parser.parse_args()
     try:
-        report = inventory(args.zip, args.flat, args.observations,
-                           args.trace, args.out)
+        report = (prepare_images_only(args.zip, args.flat, args.out)
+                  if args.images_only else
+                  inventory(args.zip, args.flat, args.observations,
+                            args.trace, args.out))
     except (ValueError, OSError, KeyError, json.JSONDecodeError, zipfile.BadZipFile) as exc:
         parser.error(str(exc))
     print(json.dumps(report, indent=2))

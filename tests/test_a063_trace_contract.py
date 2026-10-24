@@ -119,6 +119,22 @@ class TraceContractTests(unittest.TestCase):
         self.assertNotIn('r3-banked-critical-path.sh',mini)
         self.assertNotIn('r3_bank_provenance.py report',mini)
 
+    def test_r2_parsers_allow_only_exact_private_smoke_output(self):
+        for name in ("r2_pretrace_report.py", "r2_probe_report.py"):
+            source=(ROOT/"scripts"/name).read_text()
+            self.assertIn('allowed_smoke = (root / "out" / "r3" / "a063-smoke").resolve()',source)
+            self.assertIn('directory == allowed_smoke' if name=="r2_probe_report.py"
+                          else 'folder == allowed_smoke',source)
+
+    def test_miniprobe_does_not_require_prior_r2(self):
+        shell=(ROOT/"scripts/a063-native-miniprobe.sh").read_text()
+        inventory=(ROOT/"scripts/r3_bank_inventory.py").read_text()
+        self.assertIn("r3_bank_inventory.py --images-only",shell)
+        self.assertIn("def prepare_images_only(",inventory)
+        self.assertIn("previous_native_trace_required",inventory)
+        self.assertIn("a063-smoke-preflight/private-a063-preflight.json",shell)
+        self.assertNotIn("r3_bank_inventory.py >/dev/null",shell)
+
     @staticmethod
     def sample_diagnostic():
         n=17135

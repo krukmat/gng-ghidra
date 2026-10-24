@@ -5,14 +5,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 fail(){ echo "A063_MINIPROBE=BLOCKED reason=$1" >&2; exit 2; }
-python3 scripts/r3_bank_inventory.py >/dev/null || fail private_rom_inventory_invalid
+# No dependency on an earlier R2 native trace: CRC-validated images only.
+python3 scripts/r3_bank_inventory.py --images-only >/dev/null || fail private_rom_images_invalid
 SIGS="$(python3 scripts/r3_bank_provenance.py prepare)" || fail private_fingerprint_not_ready
 read -r FIRST SECOND <<< "$SIGS"
 [[ -n "$FIRST" && -n "$SECOND" ]] || fail fingerprint_offsets_missing
 python3 scripts/a063_trace_contract.py preflight \
   --first "$FIRST" --second "$SECOND" \
   --mame-bin "${GNG_R3_MAME_BIN:-mame}" \
-  --output "$ROOT/out/r3/banked-provenance/private-a063-preflight.json" \
+  --output "$ROOT/out/r3/a063-smoke-preflight/private-a063-preflight.json" \
   >/dev/null || fail capture_contract_invalid
 # Existing MAME probe remains under out/r2 by default; this isolated mode
 # stops after two frames (or two seconds) and refuses to overwrite old smoke.

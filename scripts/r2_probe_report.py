@@ -289,9 +289,10 @@ def main() -> None:
     directory = args.dir.resolve()
     # Never allow accidental artifacts in tracked repo code/docs/tests.
     root = Path(__file__).resolve().parents[1]
-    allowed = (root / "out" / "r2").resolve()
-    if not directory.is_relative_to(allowed):
-        parser.error("private probe output must be within out/r2")
+    allowed_r2 = (root / "out" / "r2").resolve()
+    allowed_smoke = (root / "out" / "r3" / "a063-smoke").resolve()
+    if not (directory.is_relative_to(allowed_r2) or directory == allowed_smoke):
+        parser.error("probe output must remain under out/r2 or exact private A063 smoke directory")
     report = classify(directory / "observations.tsv", directory / "cpu.trace")
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "capabilities.json").write_text(
