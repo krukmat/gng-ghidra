@@ -13,7 +13,8 @@ done
 bash -n scripts/r2-mame-probe.sh scripts/a063-native-miniprobe.sh \
   scripts/a063-native-oracle-miniprobe.sh scripts/r3-bank-provenance-capture.sh \
   scripts/a063-r2b-romfree.sh scripts/a063-r2c-linux-gate.sh scripts/a063-r2d-linux-preflight.sh \
-  scripts/a063-codespaces-bootstrap.sh scripts/a063-publish-codespaces-review.sh scripts/a063-r2e-validate-and-report.sh scripts/a063-r2e-session.sh
+  scripts/a063-codespaces-bootstrap.sh scripts/a063-publish-codespaces-review.sh scripts/a063-r2e-validate-and-report.sh scripts/a063-r2e-session.sh \
+  scripts/a063-m5-docker.sh scripts/a063-m5-docker-inner.sh
 python3 -m json.tool .devcontainer/devcontainer.json >/dev/null
 python3 -m py_compile scripts/a063-export-review.py
 python3 -m py_compile \
@@ -25,5 +26,6 @@ python3 -m unittest discover -s tests -p 'test_a063_oracle_replay.py' -v
 python3 scripts/a063_oracle_replay.py
 python3 -m unittest discover -s tests -p 'test_a063_mame_patch.py' -v
 python3 -m unittest discover -s tests -p 'test_a063_mame_resume.py' -v
+python3 -m unittest discover -s tests -p 'test_a063_m5_docker_contract.py' -v
 bash scripts/r3-local-regression.sh
 echo "A063_R2B=ROMFREE_CHECKS_PASS_NOT_NATIVE_NOT_A063_CERTIFIED"
