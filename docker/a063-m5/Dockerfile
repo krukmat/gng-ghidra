@@ -12,5 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
 RUN node --version && python3 --version && gcc --version | head -n 1
+RUN mkdir -p /workspace/scripts /workspace/patches /mame /evidence
 ENV PYTHONDONTWRITEBYTECODE=1
 WORKDIR /workspace
