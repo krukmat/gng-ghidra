@@ -1,5 +1,16 @@
 # A0.6.3 — Plan M5 Pro con Docker Linux ARM64 (pendiente de ejecutar)
 
+
+> **Checkpoint actualizado (25/10/2026):** M5.D0–D4 PASS; MAME 0.289 ELF
+> AArch64 verificado, SHA-256 `80c447cd81fa91be8bf3159e22dedab157798a4f1a189e6680849179b0ac282d`.
+> M5.D5 capturó 41.426 preestados y el postflight fue íntegro, pero el
+> **diagnóstico confirmado es `D5_DIAGNOSIS=A063_ORACLE_BANK_OUT_OF_RANGE`**.
+> **No es aún una discrepancia ROM-vs-bank comprobada**: el parser del oráculo
+> rechazó un marcador E fuera de 0..4 antes de ejecutar `compare()`.
+> Congelar captura y depurar offline, sin recompilar ni repetir MAME.
+> Ver [reporte de investigación](audit/a063-m5-d5-oracle-out-of-range-handoff.md)
+> y [prompt del agente local](agents/a063-m5-d5-local-agent-prompt.md).
+
 **Fecha:** 2026-10-24  
 **Rama aislada:** `feature/a063-r1-forensics-contract`. No modificar `main`, no activar GitHub Actions.  
 **Coste incremental permitido:** 0 EUR. Nada de Codespaces, VPS, Docker Build Cloud, máquinas cloud ni suscripciones.
