@@ -95,3 +95,57 @@ Se deben crear scripts de entrada `scripts/a063-m5-docker.sh {prepare,build,veri
 3. Una VM Docker apagada/suspendida detiene el proceso. Los volúmenes persistentes conservan artefactos si no se destruye la VM. Si hace falta, evitar el reposo del Mac mientras compila.
 4. El oráculo instalado en la VM no puede acceder a una ROM privada sin un **montaje local explícito**. Nunca asumir que el éxito ROM-free certifica bancos reales.
 5. Tiempo real del build desconocido; medir la primera ejecución en lugar de prometer cifras.
+
+
+## Quick start en el M5 (M5.D0–D2 implementado; NO compila MAME todavía)
+
+Para no cambiar el checkout `main` que conserva tu evidencia privada, crear un
+**checkout separado** de la rama feature:
+
+```bash
+git clone --single-branch --branch feature/a063-r1-forensics-contract \
+  https://github.com/krukmat/gng-ghidra.git "$HOME/gng-a063-m5"
+cd "$HOME/gng-a063-m5"
+bash scripts/a063-m5-docker.sh check
+```
+
+`check` no hace descargas: valida macOS ARM64, rama correcta, Docker
+Engine Linux ARM64 y socket UNIX local. Si falla porque Docker no está
+instalado, hay dos alternativas **gratuitas**: usar el Docker Desktop
+personal que ya tengas o instalar `colima`, `docker` y
+`docker-buildx` con Homebrew. Colima debe estar arrancado en modo
+ARM64 (por ejemplo, `colima start --vm-type vz --arch aarch64 --cpus 6
+--memory 16 --disk 80`). El runner NO instala software ni inicia
+servicios de pago por sí mismo.
+
+Tras `A063_M5_D0=PASS_LOCAL_MAC_DOCKER_ARM64`:
+
+```bash
+bash scripts/a063-m5-docker.sh prepare
+```
+
+Este segundo comando descarga **únicamente** imágenes Docker públicas y
+fuente abierta MAME, compila la **imagen del entorno** (no MAME), crea
+dos volúmenes Docker persistentes, valida el commit/tag upstream,
+aplica/verifica el parche aprobado y publica automáticamente **solo**
+`docs/audit/a063-m5-d0-d2-status.md` en la rama feature.
+
+La imagen se construye con contexto `docker/a063-m5/` únicamente.
+Al contenedor solo se montan `scripts/` y `patches/` (lectura),
+nunca `roms/` ni `out/`. Se rechaza cualquier contexto Docker remoto
+y cualquier constructor que no sea el controlador Docker local.
+No Docker Build Cloud, no GitHub Actions, no publicación de imágenes.
+
+Consulta sin reconstruir:
+
+```bash
+bash scripts/a063-m5-docker.sh status
+```
+
+**Aceptación D0–D2:** `A063_M5_D0_D2=PASS_PREPARED_NOT_COMPILED_REPORT_PUSHED`.
+Los objetos de MAME no se borrarán al cerrar el contenedor porque viven
+en `gng-a063-mame0289-arm64-v1`. No borrar el volumen ni la VM Colima.
+
+**Pendiente:** implementar/ejecutar D3–D4 (build + gate ELF ARM64).
+D5/D6 usarán la ROM y los archivos `out/` originales del Mac únicamente
+mediante un montaje privado explícito; no forman parte de `prepare`.
