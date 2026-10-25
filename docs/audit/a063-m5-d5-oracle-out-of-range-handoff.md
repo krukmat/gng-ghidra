@@ -3,8 +3,13 @@
 **Checkpoint:** 2026-10-25  
 **Repositorio privado:** `krukmat/gng-ghidra`  
 **Rama:** `feature/a063-r1-forensics-contract` (NO modificar `main`)  
-**Estado:** `M5.D5=BLOCKED_ORACLE_BANK_OUT_OF_RANGE`; `A0.6.3/A0.6.4=NOT_CERTIFIED`  
+**Estado actual:** `D5_FIXED_ROMFREE_NOT_NATIVE`; `D5_RECAPTURE_REQUIRED`; `A0.6.3/A0.6.4=NOT_CERTIFIED`
 **Objetivo:** identificar y resolver la causa real de un valor de banco nativo inválido **sin repetir la captura mientras pueda analizarse offline**.
+
+**Diagnóstico completado:** falta el separador entre E y el PC que añade MAME.
+Ver [causa confirmada, fix mínimo, tests y siguiente checkpoint](a063-m5-d5-delimiter-diagnosis.md).
+La evidencia y las hipótesis siguientes conservan el contexto del handoff original;
+la captura antigua sigue rechazada y no se ha recompilado ni recapturado.
 
 ## 1. Evidencia confirmada
 

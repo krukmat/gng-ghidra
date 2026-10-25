@@ -66,7 +66,9 @@ def build_action(first: str,second: str, *, oracle: bool=False) -> str:
         raise ContractError("A063_R2_FORMAT_ARITY_INVALID")
     symbols=(*CPU_SYMBOLS,f"b@{a:04x}",f"b@{b:04x}")
     args=",".join((*symbols,ORACLE_SYMBOL) if oracle else symbols)
-    return ('{tracelog "GNG_R2_PRE '+CPU_FORMAT+" "+SIGNATURE_FORMAT+extra+'",'+args+'}')
+    # MAME appends its disassembly PC immediately after this action. Delimit
+    # the last value so those hexadecimal digits cannot extend E (or S1).
+    return ('{tracelog "GNG_R2_PRE '+CPU_FORMAT+" "+SIGNATURE_FORMAT+extra+' ",'+args+'}')
 
 def validate_action(action: str,first: str,second: str, *, oracle: bool=False) -> None:
     if action!=build_action(first,second,oracle=oracle):
