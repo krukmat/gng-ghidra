@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import secrets
 from pathlib import Path
 import shutil
 import struct
@@ -21,6 +22,7 @@ BOT_CHECKPOINTS=(920,980,1060,1300,1510,1660)
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from r0_bot_sequence import prepare_sequence, check_replay
+from r42f_validate_timeline import validate_r42f
 
 SCHEMA="gng.mame-video-capture.v1"
 FILES={
@@ -120,13 +122,16 @@ def command(mame:str,system:str,rompath:Path,lua:Path)->list[str]:
 
 def capture(mame:str,system:str,rompath:Path,directory:Path,frame:int,
             *,dry_run:bool=False,timeout:int=180,
-            bot_sequence:Path|None=None)->dict:
+            bot_sequence:Path|None=None,r42f_timeline:bool=False)->dict:
     if not 2<=frame<=7200:
         raise ValueError("Capture frame must be between 2 and 7200")
     root=Path(__file__).resolve().parents[1]
     lua=(root/"scripts/capture-mame-frame.lua").resolve()
     if not lua.is_file():
         raise ValueError("MAME Lua reference script missing")
+    r42f_module=(root/"scripts/r42f_native_video_taps.lua").resolve()
+    if r42f_timeline and not r42f_module.is_file():
+        raise ValueError("R42F MAME Lua tap module missing")
     rompath=rompath.resolve()
     if not rompath.is_dir():
         raise ValueError("MAME ROM directory missing: "+str(rompath))
@@ -140,6 +145,7 @@ def capture(mame:str,system:str,rompath:Path,directory:Path,frame:int,
     if dry_run:
         return {"status":"DRY_RUN_NOT_CAPTURED","command":plan,
                 "output":str(directory),"frame":frame,
+                "r42f_timeline_requested":r42f_timeline,
                 "input_replay":None if not replay else {
                     "sha256":replay["sha256"],"events":replay["event_count"]}}
     if not shutil.which(mame) and not Path(mame).is_file():
@@ -148,7 +154,8 @@ def capture(mame:str,system:str,rompath:Path,directory:Path,frame:int,
     directory.mkdir(parents=True,exist_ok=True)
     for filename in [*FILES.values(),"reference.png","state.json",
                      "manifest.json","bot-checkpoints.html","mame.log",
-                     "reproducibility.json"]:
+                     "reproducibility.json",
+                     "r42f-native-events.jsonl","r42f-native-metadata.json"]:
         (directory/filename).unlink(missing_ok=True)
     if replay:
         (directory/"checkpoints").mkdir(exist_ok=True)
@@ -159,6 +166,16 @@ def capture(mame:str,system:str,rompath:Path,directory:Path,frame:int,
     env["GNG_CAPTURE_FRAME"]=str(frame)
     env.pop("GNG_BOT_EVENTS",None)
     env.pop("GNG_BOT_SHA256",None)
+    for key in ("GNG_R42F_TIMELINE","GNG_R42F_MODULE","GNG_R42F_RUN_ID",
+                "GNG_R42F_MAX_EVENTS"):
+        env.pop(key,None)
+    r42f_run_id=None
+    if r42f_timeline:
+        r42f_run_id=secrets.token_hex(16)
+        env["GNG_R42F_TIMELINE"]="1"
+        env["GNG_R42F_MODULE"]=str(r42f_module)
+        env["GNG_R42F_RUN_ID"]=r42f_run_id
+        env["GNG_R42F_MAX_EVENTS"]="1000000"
     if replay:
         env["GNG_BOT_EVENTS"]=replay["wire"]
         env["GNG_BOT_SHA256"]=replay["sha256"]
@@ -174,6 +191,13 @@ def capture(mame:str,system:str,rompath:Path,directory:Path,frame:int,
     if replay and "GNG_BOT_FIELDS=RESOLVED_MAME_NAMES" not in result.stdout:
         raise ValueError("MAME bot Lua did not report initialized fields; see private mame.log")
     manifest=validate_capture(directory,frame,system,replay)
+    if r42f_timeline:
+        timeline=validate_r42f(directory,run_id=r42f_run_id,
+                              frame=frame,driver=system,
+                              dma_count=manifest["sprite_dma_count"])
+        if timeline["last_frame"]!=manifest["frame"]:
+            raise ValueError("R42F timeline and R0 final frame disagree")
+        manifest["r42f_native_timeline"]=timeline
     if replay:
         pictures="\n".join(
             f'<figure><img src="checkpoints/{item["file"]}" '
@@ -204,20 +228,24 @@ def main()->None:
     parser.add_argument("--out",type=Path,default=Path("out/reference/mame"))
     parser.add_argument("--frame",type=int,default=600)
     parser.add_argument("--dry-run",action="store_true")
+    parser.add_argument("--r42f-timeline",action="store_true",
+                        help="Private write timeline, without CPU/raster synchronization proof")
     parser.add_argument("--bot-sequence",type=Path,help="JSON frame/input schedule (lab-only)")
     parser.add_argument("--repeats",type=int,default=1,choices=(1,2,3),
                         help="Capture 1–3 independent runs; compare private artifact hashes")
     args=parser.parse_args()
     try:
         result=capture(args.mame,args.system,args.rompath,args.out,args.frame,
-                       dry_run=args.dry_run,bot_sequence=args.bot_sequence)
+                       dry_run=args.dry_run,bot_sequence=args.bot_sequence,
+                        r42f_timeline=args.r42f_timeline)
         if args.repeats>1 and not args.dry_run:
             keys=("foreground","background","sprites","palette","reference")
             first={k:result["artifacts"][k]["sha256"] for k in keys}
             for i in range(2,args.repeats+1):
                 trial=capture(args.mame,args.system,args.rompath,
                               args.out/f"repeat-{i:02d}",args.frame,
-                              bot_sequence=args.bot_sequence)
+                              bot_sequence=args.bot_sequence,
+                               r42f_timeline=args.r42f_timeline)
                 other={k:trial["artifacts"][k]["sha256"] for k in keys}
                 if (first!=other or result["cpu_pc"]!=trial["cpu_pc"] or
                         result["sprite_dma_count"]!=trial["sprite_dma_count"] or
@@ -240,6 +268,9 @@ def main()->None:
               str(result["sprite_dma_count"])+
               " scroll="+str([result["scroll_x"],result["scroll_y"]]))
         print("GNG_MAME_CAPTURE_MANIFEST="+str(args.out/"manifest.json"))
+        if args.r42f_timeline:
+            print("GNG_R42F_STRUCTURAL_TIMELINE="+
+                  result["r42f_native_timeline"]["status"])
         if result["input_replay"]:
             replay=result["input_replay"]
             print("GNG_BOT_INPUTS=OBSERVED coin_frames="+str(replay["effective_coin_frames"])+

@@ -1,5 +1,12 @@
 # Plan operativo v2 — del fotograma real al juego recompilado
 
+## Checkpoint ROM-free T5 — cerrado en MacBook M5 (25/10/2026)
+
+`main` incluye el arreglo `37ce986` de duplicados JSONL. Tras `git pull --ff-only`, ejecución real comunicada del operador: G Node **12/12 PASS**, y `python3 scripts/r42_validation_closure.py` retornó **`PASS_ROM_FREE_ONLY`** (`T1=PASS`, `T2=PASS`, `T3=ROM_FREE_CLOSED`). T5.1–T5.5 cerradas en alcance ROM-free; el `BLOCKED_MISSING_CHECKOUT` anterior describe solo el intento en terminal aislada. [Evidencia y limitaciones](r42-t5-closure-checkpoint.md).
+
+**Continuación:** priorizar A0.6.3 banco por instrucción con Mac M5 y MAME/estado pre-taps F–G, después IRQ/SYNC/VBlank y comparación de primer frame autónomo. Mantener pruebas sintéticas congeladas. **Sin afirmaciones de equivalencia nativa.**
+
+
 **Fecha de revisión:** 2026-10-22  
 **Fuente de verdad de tareas:** [issues R0–R6](https://github.com/krukmat/gng-ghidra/issues?q=is%3Aissue+is%3Aopen) y este documento.  
 **Historial de visores V0–V1.3:** [roadmap anterior](roadmap.md); **contrato técnico R0:** [frame-oracle.md](frame-oracle.md).
@@ -645,6 +652,68 @@ Los plazos son **timeboxes orientativos en días laborables desde el inicio**, n
 - **R3.6:** comparar fidelidad y esfuerzo frente al pipeline P-code actual y emitir **GO/NO-GO**.
 
 **Entrega:** demo Node y reporte de primera divergencia. **GO:** tramo real con interrupción, checkpoints y escrituras equivalentes, sin intérprete. **NO-GO al D14:** no hay prueba suficiente o la complejidad exige atajos no verificables. Si falla, **replantear el alcance con el operador**, sin convertir el producto a emulador de forma encubierta.
+
+### T1/T2/T3 — Cierre de regresión ROM-free reproducible (24/10/2026)
+
+T1: Node H de 9 casos + escalas 5k/40.001/100k, SHA256 y diagnóstico. T2: suite `scripts/r3-local-regression.sh` con Node/Python y gate F. T3: reparación de defectos comprobados, nuevo pase integral, salida agregada `out/r3/r42-validation-closure.json` sin ROM ni logs. **El ejecutor está implementado y probado (8/8 casos Python de aislamiento); las ejecuciones Node H y suite integral permanecen bloqueadas en la terminal actual por falta de checkout GitHub**. El bloqueo no es fallo del producto; realizar `python3 scripts/r42_validation_closure.py` sobre un clon completo. Sin GitHub Actions. [Documento operativo](r42-validation-closure.md).
+
+### T5 — Regresión Node/Python auténtica (24/10/2026)
+
+T5.1 `BLOCKED_MISSING_CHECKOUT`: GitHub privado accesible mediante connector, no clonado desde terminal. Nuevo preflight `scripts/r42_t5_preflight.py` y cinco pruebas reales PASS en Python 3.13.5. T5.2–T5.4 BLOCKED, sin reportar tests del repo o escala como ejecutados; T5.5 checkpoint publicado. [Reporte T5](r42-t5-closure-checkpoint.md). No abrir nuevas tasks ROM-free si no hay entorno ejecutable.
+
+### T4 — Auditoría autónoma del cierre T1–T3 (24/10/2026)
+
+T4.1/3/4: corregida reutilización de resultados obsoletos, tratamiento de SHA mal tipado y JSONL con claves duplicadas; 12 tests Python del controlador y casos adversariales G. T4.2: 8/8 pruebas dirigidas en Python 3.13 PASS, 5/5 casos dirigidos del parser en Node 22 PASS; los 12 tests Python del checkout y regresión integral siguen pendientes. T4.5: informe [T4](r42-t4-autonomous-audit.md). No abrir nuevas escenas R4.2. **T1–T3 sin PASS** hasta ejecución real.
+
+### R4.2.H — Consolidación ROM-free y congelación del laboratorio (24/10/2026)
+
+H1 F-shaped sintético → G → board → renderer; H2 integridad, cobertura y DMA; H3 pruebas 5k/40.001/100k (1M opcional); H4 comparación primer evento/byte/píxel con informe sin valores privados; H5 tests y documentación. Implementado en main; 9/9 tests aislados en V8 con hash no criptográfico, Node/Python integral pendiente. **No** usar H como certificación MAME, R4/V2 ni banco A0.6.3. Congelar expansión visual al finalizar. [Contrato R4.2.H](r42h-romfree-checkpoint.md).
+
+### R4.2.G — Puente F→board de video, ROM-free (24/10/2026)
+
+G1 revisión del contrato F; G2 estado de captura inicial, no asumir bytes inexistentes; G3 procesamiento incremental de hasta 1M eventos y ventanas de 40K sin reset; G4 comparación hashes/primer byte frente a R0; G5 CLI, tests y docs. La equivalencia nativa requiere pruebas externas y no está certificada. [Contrato R4.2.G](r42g-event-replay-bridge.md).
+
+### R4.2.F — Instrumentación opcional MAME de eventos visuales (24/10/2026)
+
+- **F1:** contrato `gng.r42f.native-video-metadata.v1` y JSONL secuencial con `seq`, tipo, frame y tiempo emulado. Raster exacto indisponible explícitamente.
+- **F2:** `r42f_native_video_taps.lua` registra escrituras sprite/FG/BG/paleta, reutiliza los taps existentes de scroll y DMA, sin alterar los datos ni activar instrumentation por defecto.
+- **F3:** `capture_real_frame.py --r42f-timeline` enlaza la corrida con ID aleatorio y valida JSONL/metadata con `r42f_validate_timeline.py`; hashes y recuentos solo acreditan coherencia local.
+- **F4:** tests adversariales ROM-free para orden, máscara, DMA, rango, tiempo, duplicados, truncamiento, falseamiento de raster y procedencia.
+- **F5:** runner local y documentación. No GitHub Actions, ROM ni certificación nativa sin MAME.
+
+La cobertura empieza tras instalar los taps en el script autoboot. **No demuestra orden de instrucciones MC6809, PC/banco A0.6.3, IRQ, VBlank ni posición raster real**. [Contrato y comando privado](r42f-native-video-timeline.md).
+
+### R4.2.E — Evidencia estructural R0 y correlación limitada (24/10/2026)
+
+E1 contrato de procedencia R0; E2 integridad SHA-256 de FG/BG/DMA/paleta/PNG; E3 comparación de snapshots con checkpoints R4.2.D sin reclamar eventos nativos; E4 mutaciones adversariales ROM-free; E5 CLI local y documentación. El capturador R0 no registra aún escrituras ordenadas por instrucción: **timeline y VBlank no certificados**. Detalles: [contrato R4.2.E](r42e-native-correlation-contract.md).
+
+### R4.2.D — Secuenciación y checkpoints visuales (24/10/2026)
+
+**D1:** contrato ROM-free `gng.r42.visual-events.v1`: `WRITE8` (RAM o MMIO visual documentado), `DMA` (solo `0x3c00`) y `CHECKPOINT` (identificador único). Secuencias `seq=0..N-1`, validación completa de la estructura antes del replay y rechazo de cualquier evento desconocido o supuesto origen MAME.
+
+**D2/D3:** `src/gngb_visual_event_replay.mjs` aplica cada evento sobre la board real de laboratorio (no decodifica instrucciones MC6809). Los checkpoints requieren RAM FG/BG, buffer DMA y los registros de paleta/scroll inicializados; preservan RGBA, VRAM, sprites y paleta en copias defensivas con SHA-256 y scroll inmutable. Los checkpoints son **puntos explícitos de laboratorio**; no implican VBlank nativo ni un frame de juego.
+
+**D4:** render `256×224` con compositor compartido R1/R4.2.B y estados internos R4.2.C. Graphics ROM sintéticos en tests; ROM propietaria no incluida ni generada.
+
+**D5:** `compareGngbVisualReplays` separa **primera divergencia de evento** de **primera divergencia RGBA** (coordenada X/Y y canal), y distingue un evento que cambia sin alterar píxeles. Pruebas negativas de orden, DMA irregular, estados incompletos, MMIO desconocido, atributos sobrantes, mutación de snapshots y origen nativo falsamente atribuido.
+
+**D6:** `node scripts/r42d_visual_replay_lab.mjs` reproduce dos ejecuciones idénticas y una tercera con una modificación de sprite; verifica que el cambio visual no aparece hasta el siguiente DMA. Genera `out/r3/r42d-event-replay/report.json` y `checkpoints.html`, **solo material sintético**, sin GitHub Actions. `bash scripts/r3-local-regression.sh` incorpora las 10 pruebas de eventos y 2 del script, además de las existentes. En este entorno se ejecutaron **10/10 tests de eventos en V8 aislado**, con el código real del repo pero un hash determinista suplente de `node:crypto`; **no** se ha ejecutado todavía la suite Node/Python completa, y sus SHA-256 reales deben verificarse allí. No llamar a esto certificación A0.6.3 ni R4/V2.
+
+**Siguiente dependencia:** correlacionar esos eventos/checkpoints con taps autenticados de MAME por captura y sincronización raster/IRQ. Sigue bloqueada la ejecución autónoma por A0.6.3 + SYNC/IRQ; la presencia de un HTML no es evidencia nativa.
+
+
+### R4.2.C — Scroll y paleta desde MMIO de la board (24/10/2026)
+
+Implementado el modelo `RGBx_444` (256 entradas, dos planos de bytes) y scroll little-endian de cuatro registros. El compositor compartido R1/R4.2 utiliza de forma predeterminada el estado de la board; overrides explícitos quedan solo como ruta de fixture/referencia claramente señalada. El board rechaza estado incompleto y efectos mixtos sin evidencia de orden de bus. Pruebas ROM-free; NO se reclama equivalencia temporal DMA/paleta/IRQ ni primer fotograma autónomo.
+
+### R4.2.A — DMA sprites + entradas al renderer (24/10/2026)
+
+Subbloque de R4.2 preparado y conectado al board en `main`, independiente de la recuperación bancaria A0.6.3:
+- **R4.2.A1:** 0x3C00 dispara copia lógica de 512 bytes de sprite RAM CPU a buffer separado; sin inicialización de fuente no hay DMA válido.
+- **R4.2.A2:** adapter con el decodificador JS existente, memoria FG/BG y sprites copiados; no hay píxeles ni frame real generado.
+- **R4.2.A3:** pruebas ROM-free de atomicidad, copias, replay, rechazo y entradas del renderer. Comando: `bash scripts/r3-local-regression.sh`.
+
+Sigue pendiente la conexión al renderer Canvas, la certificación de la transferencia nativa/timing y la ejecución continua con bancos, IRQ y `SYNC`. No presentar este avance como V2 ni como R4.2 cerrado. Detalles: [ruta crítica](r3-critical-path.md).
 
 ### R4 / V2 — Primer frame generado por JS recompilado · Semanas 3–4 · [Issue #5](https://github.com/krukmat/gng-ghidra/issues/5)
 

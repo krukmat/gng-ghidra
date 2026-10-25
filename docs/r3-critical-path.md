@@ -1,4 +1,128 @@
+## Estado ROM-free vigente — T5 PASS en MacBook M5 (25/10/2026)
+
+**T5.1–T5.5 CERRADAS** para regresión ROM-free. En `gng-ghidra/main`, el operador ejecutó `node --test tests/test_r42g_incremental_timeline.mjs` (**12/12 PASS**) y `python3 scripts/r42_validation_closure.py` (`PASS_ROM_FREE_ONLY`, `T1=PASS`, `T2=PASS`, `T3=ROM_FREE_CLOSED`), después de incorporar el fix `37ce986`. El bloqueo de checkout señalado en el registro anterior fue **resuelto por ejecución desde MacBook M5**, no en la terminal aislada. [Checkpoint vigente](r42-t5-closure-checkpoint.md).
+
+**Siguiente camino crítico:** A0.6.3 identidad de banco por instrucción → capturas nativas MAME/F y estado inicial real → correlación IRQ/SYNC/VBlank → primer frame autónomo. No se debe atribuir certificación nativa al PASS ROM-free.
+
+---
+
+## T5 — Preflight, suite real y checkpoint bloqueado (24/10/2026)
+
+T5.1 intentó obtener checkout privado en la terminal de ejecución: `git` bloqueado por DNS/credenciales; por ello T5.2–T5.4 Node/Python integrales siguen **BLOCKED_MISSING_CHECKOUT**, no PASS. T5.5 publicó `scripts/r42_t5_preflight.py` con **5/5 pruebas Python reales PASS** en Python 3.13.5, Node v22.16.0 disponible, pruebas integradas en runner. Fuente GitHub y ejecutada verificadas por SHA de blob idéntico. Sin ROM, MAME ni GitHub Actions. [Checkpoint T5](r42-t5-closure-checkpoint.md).
+
+---
+
+## T4 — Auditoría autónoma y corrección del cierre (24/10/2026)
+
+**Código publicado en `main`:** cierre T1–T3 con informe H por ejecución (elimina posibilidad de reusar evidencia obsoleta), rechazo de SHA-256 mal tipado y banderas nativas falsas; G rechaza claves duplicadas JSONL/aliases Unicode. `tests/test_r42_validation_closure.py` tiene 12 tests; el test G de claves duplicadas está integrado en runner. **Validación disponible:** 5/5 casos aislados del parser en V8, 9/9 verificaciones de integración/contrato; 8/8 tests Python dirigidos de check_scale y 5/5 casos Node dirigidos del parser PASS en runtime real; Node/Python integral y los 12 tests Python de repositorio **no se ejecutaron en esta terminal**, que no tiene checkout GitHub. Sin atribución de equivalencia MAME ni A0.6.3. [Detalle y reproducción](r42-t4-autonomous-audit.md).
+
+---
+
+## T1–T3 — Cierre de ejecución ROM-free (24/10/2026)
+
+**Implementado:** `scripts/r42_validation_closure.py` ejecuta tests Node H (9), escala 5k/40.001/100k y regresión Node/Python; comprueba contratos de TAP, hash, primera divergencia y DMA. `tests/test_r42_validation_closure.py` contiene ocho tests de cierre con procesos simulados, ejecutados con Python real: **8/8 PASS**. Un TAP sintético de nueve tests bajo Node 22 real también validó el parser, pero **NO** representa ejecución de la suite H.
+
+**Ejecución T1/T2 en este entorno:** `BLOCKED_MISSING_CHECKOUT`. Node y Python están disponibles; GitHub no es alcanzable desde la terminal. No afirmar que la suite real, escala H o regresión integral hayan pasado. **T3:** runner y documentación publicados; cierre real requiere ejecutar las pruebas en un checkout completo, reparar cualquier fallo y repetir los gates. Sin MAME ni Actions. [Contrato y evidencia](r42-validation-closure.md).
+
+```bash
+git pull --ff-only
+python3 scripts/r42_validation_closure.py
+```
+
+---
+
+## R4.2.H — Cierre funcional ROM-free (24/10/2026)
+
+H1 cadena F-shaped sintética → G board → renderer compartido; H2 SHA/estado/DMA fail-closed; H3 escala 5k/40.001/100k en ventanas sin nuevo reset; H4 diagnóstico por primera divergencia de evento, byte y píxel; H5 CLI, tests y evidencia agregada. [Contrato y pasos](r42h-romfree-checkpoint.md).
+
+**Verificación disponible:** 9/9 tests en V8 aislado con hash suplente (no SHA256 Node) y fuentes de GitHub; 100k eventos en 3 ventanas, mutación de sprite (byte offset 3, píxel 34/66 canal R) y escritura CPU posterior al DMA sin efecto visible. Los tests Node reales y la regresión Python integrada siguen pendientes de ejecución. La certificación nativa por F, A0.6.3, IRQ/SYNC, MAME framebuffer **no** está cerrada.
+
+**Decisión:** congelar expansión del laboratorio visual R4.2 después de H; no abrir R4.2.I por inercia. Enfocar esfuerzo siguiente en evidencias externas pendientes, no sumar escenas sintéticas.
+
+---
+
+## R4.2.G — Puente F→board sin certificación MAME (24/10/2026)
+
+G1: esquema F verificado y test F incorporado en runner; ejecución nativa Node/Python pendiente. G2: cobertura explícita de RAM sprite/VRAM/paleta/scroll y bootstrap SHA-256 opcional, sin inicialización inventada. G3: replay incremental y checksum del JSONL F hasta 1M eventos (ventanas de 40K con estado persistente). G4: SHA-256 de los componentes visuales y primer offset de divergencia frente a R0 verificado, sin copiar bytes al informe. G5: pruebas ROM-free, CLI y roadmap actualizados.
+
+**ROM-free verificado:** 11/11 tests del módulo en V8 con hash sustituto; humo del CLI con filesystem simulado PASS; 4 tests de CLI incorporados pero pendientes de Node. El runner Node/Python integral, los taps MAME y el origen temporal permanecen pendientes.
+
+**STOP:** no afirmar correspondencia por instrucción, raster, IRQ ni equivalencia nativa. [Contrato y comandos](r42g-event-replay-bridge.md).
+
+---
+
+## R4.2.F — Cronología de escrituras de vídeo MAME (24/10/2026)
+
+**Estado de implementación:** F1–F5 preparados en `main`, con captura opt-in de taps Lua, evento JSONL acotado, ID de corrida, validador estructural Python, tests adversariales y documentación. La ejecución real de MAME con ROM privada y la suite completa Node/Python se reportarán por separado; **ninguna coincidencia sintética constituye evidencia nativa**. [Ver contrato, límites y comando](r42f-native-video-timeline.md).
+
+**Riesgo conocido:** las APIs Lua documentan `screen.frame_number` y `machine.time`, pero no posición vpos/hpos exacta. Los campos raster permanecen explícitamente `null`. El log es orden de taps invocados desde autoboot, no secuencia CPU por instrucción garantizada. Las discrepancias de máscara/orden bloquean la captura en vez de normalizar datos.
+
+---
+
+## R4.2.E — Auditoría estructural R0 / preparación de correlación MAME (24/10/2026)
+
+El contrato y la ruta de uso están en [docs/r42e-native-correlation-contract.md](r42e-native-correlation-contract.md). E1–E5 implementan verificación de los cinco artefactos R0, metadata de frame/DMA/scroll, comparación informativa de estado con checkpoint sintético D, CLI privado y tests adversariales. **No hay secuencia temporal de MAME verificable** en el formato R0 existente; una coincidencia de snapshots no certifica orden nativo de eventos, pixels del PNG ni VBlank. No usar este bloque para cerrar A0.6.3.
+
+---
+
+# R4.2.D — Secuenciación determinista de vídeo (24/10/2026)
+
+**D1:** contrato ROM-free `gng.r42.visual-events.v1`: `WRITE8` (RAM o MMIO visual documentado), `DMA` (solo `0x3c00`) y `CHECKPOINT` (identificador único). Secuencias `seq=0..N-1`, validación completa de la estructura antes del replay y rechazo de cualquier evento desconocido o supuesto origen MAME.
+
+**D2/D3:** `src/gngb_visual_event_replay.mjs` aplica cada evento sobre la board real de laboratorio (no decodifica instrucciones MC6809). Los checkpoints requieren RAM FG/BG, buffer DMA y los registros de paleta/scroll inicializados; preservan RGBA, VRAM, sprites y paleta en copias defensivas con SHA-256 y scroll inmutable. Los checkpoints son **puntos explícitos de laboratorio**; no implican VBlank nativo ni un frame de juego.
+
+**D4:** render `256×224` con compositor compartido R1/R4.2.B y estados internos R4.2.C. Graphics ROM sintéticos en tests; ROM propietaria no incluida ni generada.
+
+**D5:** `compareGngbVisualReplays` separa **primera divergencia de evento** de **primera divergencia RGBA** (coordenada X/Y y canal), y distingue un evento que cambia sin alterar píxeles. Pruebas negativas de orden, DMA irregular, estados incompletos, MMIO desconocido, atributos sobrantes, mutación de snapshots y origen nativo falsamente atribuido.
+
+**D6:** `node scripts/r42d_visual_replay_lab.mjs` reproduce dos ejecuciones idénticas y una tercera con una modificación de sprite; verifica que el cambio visual no aparece hasta el siguiente DMA. Genera `out/r3/r42d-event-replay/report.json` y `checkpoints.html`, **solo material sintético**, sin GitHub Actions. `bash scripts/r3-local-regression.sh` incorpora las 10 pruebas de eventos y 2 del script, además de las existentes. En este entorno se ejecutaron **12/12 pruebas ROM-free** (10 de eventos + 2 del CLI) con fuentes actuales descargados de GitHub en V8 aislado y un hash determinista suplente de `node:crypto` (el CLI y el código publicado sí usan SHA-256 de Node). Fixture: **5.140 eventos, 5 checkpoints**, repetición idéntica y mutación observada en secuencia **5132**, primera divergencia visual en `second-dma`, pixel `(132, 66)`, canal `G`. El montaje/serialización HTML con `Buffer` y la escritura de artefactos se validaron solo mediante dobles de prueba; **no** se ha ejecutado la suite Node/Python integral ni el CLI completo bajo Node porque el entorno shell no puede resolver `github.com`. Sus SHA-256 y los ficheros generados deben comprobarse en un checkout real, sin reactivar Actions. No llamar a esto certificación A0.6.3 ni R4/V2.
+
+**Siguiente dependencia:** correlacionar esos eventos/checkpoints con taps autenticados de MAME por captura y sincronización raster/IRQ. Sigue bloqueada la ejecución autónoma por A0.6.3 + SYNC/IRQ; la presencia de un HTML no es evidencia nativa.
+
+
+---
+
+## R4.2.C — Scroll + palette RGBx_444 gobernados por la board (24/10/2026)
+
+**C1/C2:** verificados sobre MAME `gng.cpp` y `emupal.h`: `0x3B08/09` X little-endian, `0x3B0A/0B` Y; paleta extendida `0x3800–0x38FF` = byte alto y paleta base `0x3900–0x39FF` = byte bajo, formato `RGBx_444` (`R=ext[7:4]`, `G=ext[3:0]`, `B=base[7:4]`, expansión x17; byte bajo nibble bajo ignorado). No se infieren valores tras reset: `snapshotVideoRegisters()` exige cuatro bytes scroll y los **512** bytes de RAM de paleta escritos explícitamente. Este requisito fail-closed es conservador, no una afirmación de comportamiento nativo POR.
+
+**C3:** `src/gngb_video_registers.mjs` se integra en `src/gngb_board_memory.mjs` (solo MMIO de escritura). `renderGngbBoardFrame({board,chars,tiles,sprites})` obtiene scroll y paleta **de la board** sin inyección manual, conservando el buffer DMA independiente. Por compatibilidad ROM-free del bloque B, la sobreescritura explícita *emparejada* `palette+scroll` continúa disponible, pero se etiqueta `EXPLICIT_LAB_OR_REFERENCE`, nunca `BOARD_MMIO`. `read8` en MMIO mantiene rechazo salvo política B4 de 0x3C00.
+
+**C4:** `stepStatic` admite hasta dos escrituras de registro de vídeo por instrucción, valida estado CPU antes de commit y rechaza mezclas RAM/MMIO/DMA no corroboradas por bus. Pruebas ROM-free: endianess, red/green/blue, datos incompletos, aislamiento, cambios de píxeles por scroll/paleta, reset, DMA inalterado, callbacks B4 y rollback.
+
+**C5:** nuevos `tests/test_gngb_video_registers.mjs` y `tests/test_gngb_video_mmio_board.mjs` en `scripts/r3-local-regression.sh`. Validación de los fuentes actuales descargados de GitHub en V8 con dependencias inyectadas: **11/11 pruebas nuevas + 10/10 pruebas de DMA/renderer preexistentes**. El fixture de scroll se corrigió para respetar el recorte de 16 líneas del raster; no hubo que modificar el cálculo de scroll. **La regresión integral Node/Python aún NO se ha ejecutado** en este entorno. No GitHub Actions, no ROM privada, no equivalencia temporal de paleta/raster ni frame autónomo. El gate nativo de R4 continúa dependiendo de A0.6.3 e IRQ/SYNCACK.
+
+---
+
 # Ruta crítica del port recompilado — R3.5 → R4 (22/10/2026)
+
+## R4.2.B — Pixel compositor compartido R1 → board DMA (24/10/2026)
+
+Se extrajo a `src/gngb_frame_renderer.mjs` el compositor **RGBA 256×224** que antes estaba embebido exclusivamente en `reference_frame_view.py`. Preserva el mismo orden de R1: BG back → sprites del buffer DMA → BG front → FG, transparencia y recorte superior de 16 píxeles. El generador privado R1 ahora inyecta el módulo compartido al HTML y lo usa para la comparación con PNG MAME.
+
+`src/gngb_frame_pipeline.mjs` integra el módulo mediante `snapshotGngbRendererInputs` de R4.2.A, exigiendo RAM FG/BG completa y transferencia de sprites `0x3C00` previa; dibuja únicamente desde el buffer congelado, nunca desde sprite RAM CPU sin DMA. Entradas obligatorias: imágenes gráficas privadas CRC-verificadas y paleta/scroll proporcionados explícitamente. Sin esas fuentes **se bloquea**, no se inventan datos ni se declara V2.
+
+Seis tests ROM-free verifican píxeles BG/sprite/FG, orden de prioridad, clip, aislamiento antes/después de DMA y fallo ante datos incompletos. Se incluyeron en `scripts/r3-local-regression.sh`.
+
+**Regresión de compatibilidad R1:** cuatro hashes FNV-1a de 229.376 canales RGBA cada uno, obtenidos con el compositor HTML anterior del commit `65eace2` y fixtures deterministas. En la comparación directa con el nuevo compositor: **0 diferencias** para los cuatro casos. El test `tests/test_gngb_frame_renderer_r1_parity.mjs` congela esos valores; no son capturas MAME ni pruebas de juego real. `tests/test_mame_visual_oracle.py` también exige que la página R1 inyecte la nueva función sin marcadores pendientes.
+
+**Salida visual ROM-free reproducible:** `node scripts/r42_visual_fixture.mjs` genera `out/r3/r42-visual-fixture/compare.html` y `report.json`. Los dos lienzos 256×224 muestran una modificación de RAM de sprites que **solo aparece después de la segunda transferencia DMA**. El HTML contiene píxeles exclusivamente sintéticos, no ROM, y está marcado visiblemente como prueba de laboratorio. Se añaden pruebas del HTML, del delta pixel a pixel y del split-priority de BG grupo 1 frente a sprites. No se utiliza como evidencia MAME ni V2.
+
+ El gate real de R4 / V2 **sigue dependiendo de A0.6.3, IRQ/SYNCACK, timing DMA y ejecución CPU continua**; este bloque solo conecta el canal de píxeles del laboratorio, no demuestra un frame de juego generado por código recompilado.
+
+---
+
+## R4.2.A — Sprite DMA lógico y renderer input adapter (24/10/2026)
+
+**A1 — DMA aislado:** nuevo `src/gngb_sprite_dma.mjs` acoplado al adapter `src/gngb_board_memory.mjs`. La escritura en `0x3C00` copia **512 bytes completos** de la RAM CPU `0x1E00–0x1FFF` a un buffer privado. No se interpreta el valor escrito como dato del buffer. Sin RAM completamente inicializada, error sin efectos. `snapshotRawSprites` sigue mostrando CPU RAM, mientras que `snapshotBufferedSprites` solo existe tras DMA. Un reset de laboratorio invalida el buffer.
+
+**A2 — Conexión a los decodificadores existentes:** `snapshotGngbRendererInputs(board)` entrega instantáneas separadas: 4.096 bytes FG/BG dentro de la imagen 64 KiB, 512 bytes de sprites bufferizados, **1.024 tiles FG, 1.024 BG** decodificados con `video_memory.mjs`, y sprites ordenados por `sprite_memory.mjs`. El adapter falla si falta RAM de vídeo inicializada o no ocurrió DMA. No dibuja píxeles ni reemplaza el renderer Canvas actual; R4.2.B seguirá encargándose del frame efectivo.
+
+**A3 — Pruebas:** 5 tests del núcleo DMA y 4 tests de integración board/renderer; incluidos en `scripts/r3-local-regression.sh`. Se ejecutaron 5/5 con Node v22 (módulo DMA sin dependencias) y 9/9 en prueba aislada cargando los **archivos exactos de GitHub**, con sus dependencias JS inyectadas (no es la batería Node integrada). La regresión completa del repositorio sigue pendiente de un entorno con checkout; no activar GitHub Actions.
+
+**Gate ROM-free:** sin byte inicializado, DMA rechaza; cambios de CPU RAM posteriores no se ven en pantalla hasta nueva captura; la lectura de `0x3C00` conserva la política previa B4, otras escrituras MMIO siguen rechazadas; los efectos DMA de código generado se confirman antes de commit y se revierten si falla CPU o se mezclan writes ambiguos. **Alcance no certificado:** ciclos de DMA/halt CPU, efecto exacto observado en MAME, sprite-buffer/renderer completo, IRQ/SYNC, banco A0.6.3, frame R4 autónomo.
+
+---
 
 ## A0.6.3 — plan de desbloqueo (24/10/2026)
 

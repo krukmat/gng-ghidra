@@ -7,6 +7,7 @@
  */
 import {createGngbBoardMemory} from './gngb_board_memory.mjs';
 import {readTile} from './video_memory.mjs';
+import {drawOrder} from './sprite_memory.mjs';
 
 const SITES=new Set([0x6041,0x6043,0x6055,0x6057]);
 const KEYS=['PC','A','B','X','Y','U','S','DP','CC'];
@@ -108,5 +109,36 @@ export function replayNativeVerifiedVideoToBoard({rows,sync,compiledStep,nativeV
     game_playable:false,
     rom_or_video_byte_data_exported:false,
     next_task:'Resolve banked ROM and IRQ/SYNC to run compiled CPU continuously; preserve the proven video board memory path'
+  };
+}
+
+/**
+ * R4.2.A2: renderer input snapshot, from already-written CPU video RAM and
+ * an explicit, independent DMA sprite buffer. Reuses the existing tile and
+ * sprite decoders. This is NOT a rendered frame or autonomous CPU execution.
+ */
+export function snapshotGngbRendererInputs(board){
+  if(!board||typeof board.snapshotAddressSpace!=='function'||
+      typeof board.snapshotBufferedSprites!=='function')
+    throw Error('R42_RENDERER_BOARD_REQUIRED');
+  const videoAddressSpace=board.snapshotAddressSpace({requireVideoInitialized:true});
+  const bufferedSprites=board.snapshotBufferedSprites();
+  const foregroundTiles=[],backgroundTiles=[];
+  for(let row=0;row<32;row++)for(let col=0;col<32;col++){
+    foregroundTiles.push(readTile(videoAddressSpace,'fg',col,row));
+    backgroundTiles.push(readTile(videoAddressSpace,'bg',col,row));
+  }
+  return {
+    schema:'gng.r42.renderer-input-snapshot.v1',
+    videoAddressSpace,
+    bufferedSprites,
+    foregroundTiles,
+    backgroundTiles,
+    spriteDrawOrder:drawOrder(bufferedSprites),
+    dma_snapshot_explicit:true,
+    native_dma_timing_verified:false,
+    sprite_buffer_matches_native_mame:false,
+    autonomous_cpu_frame_rendered:false,
+    game_playable:false
   };
 }
