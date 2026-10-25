@@ -1,6 +1,8 @@
 # A0.6.3 / M5.D5 — delimitación del oráculo
 
 **Fecha:** 2026-10-25
+**Actualización posterior (25/10/2026):** la recaptura v2 ya se ejecutó y pasó **`A063_ORACLE_MINIPROBE=PASS_SAMPLED_INSTRUCTIONS_ONLY_NOT_FULL_A063`**, con 41.426 preestados, MAME exit=0 y postflight íntegro. La sección de recaptura siguiente es **histórica; NO ejecutar de nuevo**. Continuar en [M5.D6 handoff](a063-m5-d6-full-native-handoff.md). **A0.6.3/A0.6.4 siguen pendientes.**
+
 **Rama:** `feature/a063-r1-forensics-contract`
 **Causa:** `CONFIRMED` — falta un separador al final del formato de `tracelog`.
 **Error reproducido offline:** `A063_ORACLE_BANK_OUT_OF_RANGE`.
