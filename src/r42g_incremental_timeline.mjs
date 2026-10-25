@@ -238,7 +238,12 @@ export async function replayR42gTimeline({rawLines,timeline,bootstrap,reference,
       requireUniqueJsonKeys(raw);
       event=JSON.parse(raw);
     }
-    catch{throw Error('R42G_JSONL_INVALID')}
+    catch(err){
+      // Preserve the explicit duplicate-key verdict, including Unicode aliases.
+      // A generic parse failure must not hide a contract violation.
+      if(err?.message==='R42G_DUPLICATE_JSON_KEY')throw err;
+      throw Error('R42G_JSONL_INVALID');
+    }
     const e=mapR42fVideoEvent(event,seq,{frame:lastFrame,time:lastTime});
     if(checkpoints)throw Error('R42G_EVENTS_AFTER_CHECKPOINT');
     if(e.kind==='CHECKPOINT'){
