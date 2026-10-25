@@ -1,5 +1,12 @@
 # Plan operativo v2 — del fotograma real al juego recompilado
 
+## Checkpoint ROM-free T5 — cerrado en MacBook M5 (25/10/2026)
+
+`main` incluye el arreglo `37ce986` de duplicados JSONL. Tras `git pull --ff-only`, ejecución real comunicada del operador: G Node **12/12 PASS**, y `python3 scripts/r42_validation_closure.py` retornó **`PASS_ROM_FREE_ONLY`** (`T1=PASS`, `T2=PASS`, `T3=ROM_FREE_CLOSED`). T5.1–T5.5 cerradas en alcance ROM-free; el `BLOCKED_MISSING_CHECKOUT` anterior describe solo el intento en terminal aislada. [Evidencia y limitaciones](r42-t5-closure-checkpoint.md).
+
+**Continuación:** priorizar A0.6.3 banco por instrucción con Mac M5 y MAME/estado pre-taps F–G, después IRQ/SYNC/VBlank y comparación de primer frame autónomo. Mantener pruebas sintéticas congeladas. **Sin afirmaciones de equivalencia nativa.**
+
+
 **Fecha de revisión:** 2026-10-22  
 **Fuente de verdad de tareas:** [issues R0–R6](https://github.com/krukmat/gng-ghidra/issues?q=is%3Aissue+is%3Aopen) y este documento.  
 **Historial de visores V0–V1.3:** [roadmap anterior](roadmap.md); **contrato técnico R0:** [frame-oracle.md](frame-oracle.md).

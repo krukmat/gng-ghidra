@@ -1,4 +1,24 @@
-# T5 — Checkpoint de regresión real (24/10/2026)
+# T5 — Checkpoint de regresión real (24–25/10/2026)
+
+## Actualización de validación real — MacBook M5 (25/10/2026)
+
+**Estado vigente: `PASS_ROM_FREE_ONLY`. El bloqueo de checkout T5 quedó resuelto en el MacBook M5.**
+
+Evidencia comunicada por el operador tras ejecutar en el checkout completo, rama `main`, commit `37ce98651c97d61244d1ffe1304cf61622c6b31c`:
+
+- `git pull --ff-only` avanzó `8d2da0a..37ce986`, incorporando la reparación de `R42G_DUPLICATE_JSON_KEY`.
+- `node --test tests/test_r42g_incremental_timeline.mjs`: **12 tests PASS, 0 fallos, 0 skipped**, duración informada: **224.274583 ms**.
+- `python3 scripts/r42_validation_closure.py`: **`PASS_ROM_FREE_ONLY`**; **T1 `PASS`**, **T2 `PASS`**, **T3 `ROM_FREE_CLOSED`**. El script exige nueve tests H, escala 5.000/40.001/100.000 eventos y marcador final de regresión Node/Python; de acuerdo con el resultado informado, todas esas condiciones se cumplieron.
+- Preflight anterior en M5: `READY_TO_ATTEMPT_REGRESSION`, 58 archivos referenciados presentes, `node v22.23.0`, `python 3.15.0`, HEAD `8d2da0a` antes del pull de reparación.
+- El informe agregado de ejecución local está en `out/r3/r42-validation-closure.json`, **no se ha adjuntado ni subido**. No se publican logs de máquina ni archivos ROM; el resultado documentado procede de la salida de terminal comunicada por el operador.
+
+**Decisión:** T5.1–T5.5 **cerradas para alcance ROM-free**. No repetir pruebas sintéticas sin defecto reproducible. Siguiente ruta crítica: evidencia nativa A0.6.3 (banco por instrucción), MAME taps F/cobertura pre-tap, IRQ/SYNC/VBlank y primer frame autónomo recompilado.
+
+**Límite de evidencia:** no se ha ejecutado/certificado MAME en esta validación; no hay equivalencia nativa de bancos, instrucciones, tiempos o píxeles. El informe PASS certifica exclusivamente el cierre del laboratorio ROM-free.
+
+---
+
+## Registro histórico previo — bloqueo del entorno aislado (24/10/2026)
 
 ## Resultado
 
