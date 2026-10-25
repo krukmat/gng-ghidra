@@ -1,6 +1,8 @@
 # A0.6.3 — M5.D5: investigación del oráculo nativo (handoff)
 
 **Checkpoint:** 2026-10-25  
+**Actualización:** D5 mini-oráculo corregido ya pasó en volumen privado v2 el 25/10/2026: `A063_ORACLE_MINIPROBE=PASS_SAMPLED_INSTRUCTIONS_ONLY_NOT_FULL_A063`. Este archivo conserva el fallo y diagnóstico **históricos**; próximos pasos vigentes en [handoff D6](a063-m5-d6-full-native-handoff.md). No volver a capturar D5.
+
 **Repositorio privado:** `krukmat/gng-ghidra`  
 **Rama:** `feature/a063-r1-forensics-contract` (NO modificar `main`)  
 **Estado actual:** `D5_FIXED_ROMFREE_NOT_NATIVE`; `D5_RECAPTURE_REQUIRED`; `A0.6.3/A0.6.4=NOT_CERTIFIED`
