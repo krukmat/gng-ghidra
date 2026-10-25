@@ -13,6 +13,17 @@
 > Contexto histórico: [handoff](audit/a063-m5-d5-oracle-out-of-range-handoff.md)
 > y [prompt del agente local](agents/a063-m5-d5-local-agent-prompt.md).
 
+
+> **Checkpoint confirmado por el operador (25/10/2026, posterior al fix):**
+> M5.D5 nativo **PASS** en volumen nuevo
+> `gng-a063-private-capture-arm64-delimited-v2`:
+> `A063_ORACLE_MINIPROBE=PASS_SAMPLED_INSTRUCTIONS_ONLY_NOT_FULL_A063`,
+> MAME exit=0, 41.426 preestados, postflight íntegro.
+> La nota histórica anterior `D5_RECAPTURE_REQUIRED` ya fue satisfecha;
+> no repetir mini-probe. **A0.6.3/A0.6.4 siguen NOT_CERTIFIED.**
+> Siguiente bloque: [M5.D6 full-native handoff](audit/a063-m5-d6-full-native-handoff.md)
+> + [prompt agente local](agents/a063-m5-d6-full-native-prompt.md).
+
 **Fecha:** 2026-10-24  
 **Rama aislada:** `feature/a063-r1-forensics-contract`. No modificar `main`, no activar GitHub Actions.  
 **Coste incremental permitido:** 0 EUR. Nada de Codespaces, VPS, Docker Build Cloud, máquinas cloud ni suscripciones.
