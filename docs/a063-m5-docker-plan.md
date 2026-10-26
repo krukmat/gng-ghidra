@@ -1,4 +1,12 @@
-# A0.6.3 — Plan M5 Pro con Docker Linux ARM64 (D5 pendiente de revalidación)
+# A0.6.3 — Plan M5 Pro con Docker Linux ARM64 (D6 nativo completado)
+
+> **Dirección vigente (26/10/2026):** D6.T0–T3 ejecutadas en la feature branch.
+> `A063_FULL_NATIVE_BANK_PROVENANCE_PASS` para 17.135 preestados;
+> `BANKED_CODEGEN_WITH_NATIVE_CHECKPOINT_PREFIX_ONLY`, sin equivalencia global
+> A0.6.4 ni frame autónomo. [Cierre D6 y límites](audit/a063-m5-d6-native-closure.md).
+> Conservar MAME, D5 y ambas capturas D6. Seguir con cobertura/efectos e
+> IRQ/SYNC/estado inicial; no repetir mini-probe. Las notas siguientes son
+> el historial operativo anterior.
 
 
 > **Checkpoint actualizado (25/10/2026):** M5.D0–D4 PASS; MAME 0.289 ELF

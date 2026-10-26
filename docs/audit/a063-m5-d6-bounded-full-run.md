@@ -2,7 +2,11 @@
 
 Fecha: 2026-10-26. Rama: `feature/a063-r1-forensics-contract`.
 
-Dirección actual: mantener los gates de boot/B4/VRAM intactos y probar una
+Actualización posterior: la implementación siguiente se versionó en `9cb19f5`;
+la nueva corrida de cuatro frames pasó T2/T3. Resultados efectivos y límites
+en el [cierre nativo D6](a063-m5-d6-native-closure.md).
+
+Dirección de este checkpoint de implementación: mantener los gates de boot/B4/VRAM intactos y probar una
 corrida completa de cuatro frames en un volumen nuevo, después de validar
 y versionar la implementación. No recortar trazas ni actualizar los hashes
 de la captura anterior para adaptarlos a código nuevo. T3 usará exclusivamente
@@ -89,4 +93,5 @@ Se usó una copia pública aislada en
 Log ROM-free: `/private/tmp/gng-d6-bounded-romfree.log`. Se compararon hashes
 de todos los archivos de código y tests con los de la copia ejecutada.
 
-En este checkpoint de implementación, la nueva captura y T3 siguen pendientes.
+Al entregar este checkpoint de implementación, la nueva captura y T3 estaban
+pendientes; su ejecución posterior está documentada en el cierre nativo.

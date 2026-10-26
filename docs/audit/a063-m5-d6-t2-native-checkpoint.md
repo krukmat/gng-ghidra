@@ -2,7 +2,11 @@
 
 Fecha: 2026-10-26. Rama: `feature/a063-r1-forensics-contract`.
 
-Dirección actual: conservar la captura D6 existente y revisar el bloqueo del
+Actualización posterior: D6 v2 pasó T2/T3 con el gate original y full-oracle
+nativo PASS; ver [cierre y límites](a063-m5-d6-native-closure.md).
+Este documento conserva el checkpoint histórico de D6 v1, que no se modifica.
+
+Dirección de este checkpoint histórico: conservar la captura D6 existente y revisar el bloqueo del
 contrato de boot antes de continuar con T3. No recapturar ni relajar el gate
 para obtener PASS. T0 está PASS y T1 está `PASS_ROM_FREE_ONLY`; T2 produjo
 evidencia completa con postflight íntegro, pero su comando terminó en 2.

@@ -1,8 +1,17 @@
-## Estado ROM-free vigente — T5 PASS en MacBook M5 (25/10/2026)
+## Estado nativo vigente — D6 full bank provenance PASS (26/10/2026)
+
+D6.T0–T3 ejecutadas en la rama feature: `A063_FULL_NATIVE_BANK_PROVENANCE_PASS`
+para los 17.135 preestados de la corrida D6 v2 y codegen
+`BANKED_CODEGEN_WITH_NATIVE_CHECKPOINT_PREFIX_ONLY`. Siguiente camino crítico:
+cobertura/efectos A0.6.4 e IRQ/SYNC/VBlank/estado inicial → ejecución continua
+JS/TS → primer frame autónomo. [Cierre, evidencia y límites](audit/a063-m5-d6-native-closure.md).
+No modificar `main` ni repetir la captura por inercia.
+
+## Historial ROM-free — T5 PASS en MacBook M5 (25/10/2026)
 
 **T5.1–T5.5 CERRADAS** para regresión ROM-free. En `gng-ghidra/main`, el operador ejecutó `node --test tests/test_r42g_incremental_timeline.mjs` (**12/12 PASS**) y `python3 scripts/r42_validation_closure.py` (`PASS_ROM_FREE_ONLY`, `T1=PASS`, `T2=PASS`, `T3=ROM_FREE_CLOSED`), después de incorporar el fix `37ce986`. El bloqueo de checkout señalado en el registro anterior fue **resuelto por ejecución desde MacBook M5**, no en la terminal aislada. [Checkpoint vigente](r42-t5-closure-checkpoint.md).
 
-**Siguiente camino crítico:** A0.6.3 identidad de banco por instrucción → capturas nativas MAME/F y estado inicial real → correlación IRQ/SYNC/VBlank → primer frame autónomo. No se debe atribuir certificación nativa al PASS ROM-free.
+**Camino crítico al cerrar T5:** A0.6.3 identidad de banco por instrucción → capturas nativas MAME/F y estado inicial real → correlación IRQ/SYNC/VBlank → primer frame autónomo. D6 actualiza ese primer gate arriba. No se debe atribuir certificación nativa al PASS ROM-free.
 
 ---
 

@@ -1,10 +1,25 @@
 # Plan operativo v2 — del fotograma real al juego recompilado
 
+## Checkpoint nativo D6 — bancos por instrucción verificados (26/10/2026)
+
+En `feature/a063-r1-forensics-contract`, D6.T0–T3 ejecutadas: captura completa
+de cuatro frames, 17.135 preestados, MAME/runner/gates exit 0 y
+`A063_FULL_NATIVE_BANK_PROVENANCE_PASS`. Codegen:
+`BANKED_CODEGEN_WITH_NATIVE_CHECKPOINT_PREFIX_ONLY`, 4.955 checkpoints de
+registros coincidentes y cero divergencias, con efectos/cobertura pendientes.
+[Evidencia y límites del cierre D6](audit/a063-m5-d6-native-closure.md).
+No se modificó `main`; no se demuestra primer frame ni juego autónomo.
+
+**Dirección actual:** resolver la cobertura/efectos pendientes de A0.6.4 y
+causalidad IRQ/SYNC/VBlank/estado inicial antes de la ejecución JS/TS continua
+hasta un primer frame. No repetir el mini-oráculo ni expandir rutinas aisladas
+sin relación con ese checkpoint. El historial siguiente conserva la evolución.
+
 ## Checkpoint ROM-free T5 — cerrado en MacBook M5 (25/10/2026)
 
 `main` incluye el arreglo `37ce986` de duplicados JSONL. Tras `git pull --ff-only`, ejecución real comunicada del operador: G Node **12/12 PASS**, y `python3 scripts/r42_validation_closure.py` retornó **`PASS_ROM_FREE_ONLY`** (`T1=PASS`, `T2=PASS`, `T3=ROM_FREE_CLOSED`). T5.1–T5.5 cerradas en alcance ROM-free; el `BLOCKED_MISSING_CHECKOUT` anterior describe solo el intento en terminal aislada. [Evidencia y limitaciones](r42-t5-closure-checkpoint.md).
 
-**Continuación:** priorizar A0.6.3 banco por instrucción con Mac M5 y MAME/estado pre-taps F–G, después IRQ/SYNC/VBlank y comparación de primer frame autónomo. Mantener pruebas sintéticas congeladas. **Sin afirmaciones de equivalencia nativa.**
+**Continuación histórica de T5:** banco por instrucción primero, después IRQ/SYNC/VBlank y comparación de primer frame autónomo. D6 ya cerró el contrato bancario para su corrida; la dirección vigente figura arriba. Mantener pruebas sintéticas congeladas.
 
 
 **Fecha de revisión:** 2026-10-22  

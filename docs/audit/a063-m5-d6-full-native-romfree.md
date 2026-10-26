@@ -2,10 +2,10 @@
 
 Fecha: 2026-10-26. Rama exclusiva: `feature/a063-r1-forensics-contract`.
 
-Actualización posterior: T2 se ejecutó una vez con MAME exit 0 y postflight
-íntegro, pero wrapper exit 2 por contrato de boot/B4. Ver
-[checkpoint T2](a063-m5-d6-t2-native-checkpoint.md). Este documento conserva
-el checkpoint histórico T0/T1 anterior a esa captura.
+Actualización posterior: T2/T3 se completaron con D6 v2 y full-oracle nativo
+PASS, con codegen todavía limitado. Ver [cierre D6](a063-m5-d6-native-closure.md)
+y el [primer intento T2](a063-m5-d6-t2-native-checkpoint.md). Este documento
+conserva el checkpoint histórico T0/T1 anterior a esas capturas.
 
 Dirección de este checkpoint histórico: completar D6.T0–T1 antes de cualquier
 preflight/captura D6.
