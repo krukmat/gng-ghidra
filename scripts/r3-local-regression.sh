@@ -83,6 +83,7 @@ node --check tests/test_v3_b2a_cpu_ports.mjs
 node --check scripts/v3_b2a_build.mjs
 node --check scripts/v3_b2a_coin_smoke.mjs
 bash -n scripts/v3_b2a_gate.sh
+bash -n scripts/v3_b2a_local.sh
 node --check tests/test_v3_b1_input_contract.mjs
 bash -n scripts/v3_b1_t1_gate.sh
 node --check src/gngb_block_key.mjs

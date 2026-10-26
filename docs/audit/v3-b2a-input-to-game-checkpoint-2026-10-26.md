@@ -75,3 +75,11 @@ Modificar `src/gngb_runtime.mjs` y `src/mc6809_aot.mjs`
 no extiende automáticamente dicha certificación al nuevo runtime.
 La comparación V3 vs V2 (hashes/IRQ) controla esa regresión
 de no-input; la equivalencia MAME con botones pertenece a T4.
+
+## Entrada única para el operador
+
+`bash scripts/v3_b2a_local.sh` ejecuta los tres pasos anteriores
+sobre `main`, validando primero el árbol local limpio; no altera
+la certificación V2 ni sobrescribe un paquete privado existente.
+Solo es de **una ejecución**: en caso de fallo conservar `out/v3/`
+y compartir los marcadores antes de hacer otra tentativa.
