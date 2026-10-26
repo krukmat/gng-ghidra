@@ -17,6 +17,7 @@ const unary=['NEG','COM','LSR','ROR','ASR','ASL','ROL','DEC','INC','TST','CLR'];
 export const EFFECT_PROFILE_FAMILIES=Object.freeze([
   'NOP','ORCC_IMM','ANDCC_IMM','LDA_IMM','LDB_IMM','LDX_IMM','LDU_IMM',
   'LDD_IMM','LDY_IMM','LDS_IMM','STD_X_POSTINC','LEAY_MINUS_1',
+  'LEAX_INDEXED','LEAY_INDEXED','LEAS_INDEXED','LEAU_INDEXED',
   'STA_INDEXED','STB_INDEXED','CMPX_IMM',...branches,'LBRA','JMP_EXT',
   ...unary.flatMap(name=>[name+'_A',name+'_B']),UNSUPPORTED
 ]);

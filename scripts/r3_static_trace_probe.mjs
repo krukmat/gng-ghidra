@@ -146,6 +146,26 @@ export function compileIndexedByteStore(op,postbyte){
     writesRamByte:true,index_register:base,index_mode:label};
 }
 
+/**
+ * A0.6.4 post-D6: compile MC6809 LEAX/LEAY/LEAS/LEAU only with the
+ * zero-offset, non-indirect ,R postbyte: the single LEA form observed in
+ * the D6 v2 bank window. Per the MC6809 datasheet LEAX/LEAY change only Z
+ * and LEAS/LEAU change no flags. ,R neither reads memory nor modifies R.
+ * The NMI arming done by loading S is CPU-internal and not modeled here.
+ * Offsets, auto-increment/decrement and indirect postbytes stay rejected.
+ */
+export function compileIndexedLea(op,postbyte){
+  if(!Number.isInteger(op)||op<0x30||op>0x33||
+      !Number.isInteger(postbyte)||postbyte<0||postbyte>255||
+      (postbyte&0x9f)!==0x84)return null;
+  const target=['X','Y','S','U'][op&3],base=['X','Y','U','S'][(postbyte>>5)&3];
+  let stmt='r.'+target+'=r.'+base+';';
+  if(target==='X'||target==='Y')
+    stmt+='r.CC=(r.CC&~4)|(r.'+target+'===0?4:0);';
+  return {len:2,name:'LEA'+target+'_INDEXED',statement:stmt,
+    index_register:base,index_mode:'ZERO'};
+}
+
 export function compileAt(rom,pc,{banked=false}={}){
   // Banked AOT is opt-in and must be supplied a verified, bank-selected
   // 64 KiB ROM view by the native bank/PC provenance gate. The standard
@@ -156,7 +176,7 @@ export function compileAt(rom,pc,{banked=false}={}){
     return null;
   const op=rom[pc], b1=rom[pc+1], b2=rom[pc+2];
   const imm16=(b1<<8)|b2;
-  let len=0,stmt='',name='';
+  let len=0,stmt='',name='',lea=null;
   const load=(reg,val,bits)=>'r.'+reg+'='+hex(val)+';r.CC=changeNZV(r.CC,r.'+reg+','+bits+');';
   if(op===0x12){len=1;name='NOP';}
   else if(op===0x1a){len=2;name='ORCC_IMM';stmt='r.CC=(r.CC|'+hex(b1)+')&255;';}
@@ -185,6 +205,10 @@ export function compileAt(rom,pc,{banked=false}={}){
     // ROM-attested 6809 LEAY -1,Y: modifies Z only.
     len=2;name='LEAY_MINUS_1';
     stmt='r.Y=(r.Y-1)&65535;r.CC=(r.CC&~4)|(r.Y===0?4:0);';
+  }else if(op>=0x30&&op<=0x33){
+    lea=compileIndexedLea(op,b1);
+    if(!lea)return null;
+    len=lea.len;name=lea.name;stmt=lea.statement;
   }else if(op===0xa7||op===0xe7){
     const indexed=compileIndexedByteStore(op,b1);
     if(!indexed)return null;
@@ -216,6 +240,7 @@ export function compileAt(rom,pc,{banked=false}={}){
       index_register:compileIndexedByteStore(op,b1).index_register,
       index_mode:compileIndexedByteStore(op,b1).index_mode
     }:{}),
+    ...(lea?{index_register:lea.index_register,index_mode:lea.index_mode}:{}),
   };
 }
 

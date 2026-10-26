@@ -55,6 +55,7 @@ node --test \
   tests/test_r42h_romfree_gate.mjs \
   tests/test_gngb_banked_rom.mjs \
   tests/test_r3_compiler_family_batch.mjs \
+  tests/test_r3_lea_indexed.mjs \
   tests/test_r3_dynamic_coverage.mjs \
   tests/test_r3_indexed_store_gate.mjs \
   tests/test_r3_banked_static_gate.mjs \

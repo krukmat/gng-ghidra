@@ -16,6 +16,11 @@ hasta un primer frame. El seguimiento RO identifica una muestra `LEA_INDEXED`
 y 2.477 stores de RAM principal; compara 7.432 checkpoints de registros sin
 divergencias y endurece el parser IRQ/SYNC con tests sintéticos.
 [Resultados y tareas ejecutables siguientes](audit/a063-post-d6-critical-gaps.md).
+`LEA_INDEXED` quedó resuelto como diagnóstico (`LEAX ,R`): sobre D6 v2 RO,
+7.434/7.434 muestras bancarias con codegen y 7.433 checkpoints coincidentes,
+sin divergencias ([detalle y límites](audit/a064-lea-indexed-codegen.md)).
+Siguiente: [prueba nativa de RAM principal](agents/a063-main-ram-native-tap-task.md),
+preparada y no ejecutada.
 No repetir el mini-oráculo ni expandir rutinas aisladas
 sin relación con ese checkpoint. El historial siguiente conserva la evolución.
 

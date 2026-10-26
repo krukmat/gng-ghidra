@@ -8,6 +8,8 @@ de IRQ/SYNC/VBlank y estado inicial. Después se podrá medir ejecución JS/TS
 continua hasta un primer frame. [Tareas siguientes](#tareas-siguientes).
 El [cierre D6](a063-m5-d6-native-closure.md) conserva sus resultados originales;
 este diagnóstico no promociona el estado de A0.6.4.
+Actualización: la tarea 1 quedó resuelta como diagnóstico en
+[`LEA_INDEXED`](a064-lea-indexed-codegen.md); los resultados de abajo se conservan.
 
 ## Objetivos y resultados de este bloque
 
@@ -113,6 +115,7 @@ recompiló; su oráculo bancario no aporta por sí mismo estos marcadores IRQ.
    máscara. Un match de registros o la predicción de escrituras no sustituye ese
    tap. Probar runner/contrato antes de autorizar otra captura; el gate de
    boot actual sigue requiriendo su cobertura exacta y debe preservarse.
+   Tarea preparada, no ejecutada: [RAM nativa](../agents/a063-main-ram-native-tap-task.md).
 3. **IRQ/SYNC/VBlank/estado inicial:** preparar un entorno y destino nuevos,
    separados del binario/evidencia protegidos. La aceptación deberá enlazar
    hash de binario/fuentes, run y epoch; observar reset, líneas, SYNC y
