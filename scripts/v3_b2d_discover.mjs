@@ -17,6 +17,7 @@ import {compileProgram} from '../src/mc6809_aot.mjs';
 import {createBoard,GngbRuntimeError} from '../src/gngb_runtime.mjs';
 import {locateRamCode,romBytes} from './r35_t5_run.mjs';
 import {B2D_FRAMES,B2D_PROFILES,B2D_COVERAGE_FRAMES,b2dCoverageFrames,b2dTape} from '../src/v3_b2d_tapes.mjs';
+import {createB2DCoverageCache} from '../src/v3_b2d_pass_cache.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const B2B=join(ROOT,'out/v3/b2b/frozen');
@@ -205,6 +206,7 @@ async function main(){
     addTarget({bank:null,pc:0x6a8d,overlay:null});
   }
   let completed=false,last=null,built,iterations=previousIterations;
+  const passed=createB2DCoverageCache(B2D_PROFILES);
   const MAX_ADDITIONAL=96;
   for(let attempt=1;attempt<=MAX_ADDITIONAL;attempt++){
     iterations=previousIterations+attempt;
@@ -216,10 +218,19 @@ async function main(){
     console.log('V3_B2D_BLOCKS='+built.blockCount);
     let pending=null;
     for(const profile of B2D_PROFILES){
+      if(passed.has(profile)){
+        // No CPU state, graphics or frames are replayed from the cache.
+        // Only this AOT-run proof is retained; final frozen replay will
+        // rerun everything and verify the original frame+bus hash.
+        console.log('V3_B2D_PROFILE_'+profile.toUpperCase()+'='+
+          b2dCoverageFrames(profile)+'_PASS_REUSE_PROOF');
+        continue;
+      }
       const r=replay(code,blocks,profile);
       console.log('V3_B2D_PROFILE_'+profile.toUpperCase()+'='+r.hashes.length+
         '_'+r.result.status);
       if(r.result.status!=='FRAMES_DONE'){pending=r;break;}
+      passed.remember(profile,r,b2dCoverageFrames(profile));
     }
     if(!pending){completed=true;break;}
     last=pending;
@@ -239,6 +250,7 @@ async function main(){
     }
     fail('CPU_'+(last.result.code??last.result.status));
   }
+  if(completed)last=null; // No stale UNCOMPILED result on successful runs.
   const basic={schema:'gng.v3.b2d-discovery.v1',
     status:completed?'CANDIDATE_COMPLETE':'BLOCKED_ITERATION_LIMIT',
     iterations,blocks:built.blockCount,
@@ -283,6 +295,10 @@ async function main(){
        JSON.stringify(a.hashes)!==JSON.stringify(b.hashes)||
        JSON.stringify(a.reads)!==JSON.stringify(b.reads))
       fail('FROZEN_PROFILE_NOT_DETERMINISTIC_'+profile);
+    // Cached discovery proofs are merely an optimization. If any
+    // code expansion perturbed a previously finished path, reject
+    // this bundle rather than silently promoting changed gameplay.
+    passed.attest(profile,a,b2dCoverageFrames(profile));
     result[profile]={hashes:a.hashes,reads:a.reads};
   }
   const effects={
