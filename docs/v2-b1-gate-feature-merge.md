@@ -76,3 +76,11 @@ no declarar V2 cerrado.
 R3.5.B2.T5 documenta 600 frames desde reset y 594 totalmente definidos
 y exactos. Es una **base para B1**, no prueba de que B1.T1–T6 hayan
 pasado. Este cambio no inicia ni aprueba automáticamente el merge.
+
+## Implementación B1 publicada (26/10/2026)
+
+El gate operativo ya tiene scripts ROM-free, freezer AOT privado, dos
+runs offline de 600 frames, comparador posterior frente a MAME y
+preflight de merge. [Comandos, evidencias y límites](v2-b1-operational-gate-2026-10-26.md).
+**No afirmar PASS B1.T2–T6** hasta observar resultados locales.
+No tocar `main` todavía.

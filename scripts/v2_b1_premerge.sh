@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# V2.B1.T6.1: read-only premerge safety check; NEVER moves main.
+set -euo pipefail
+[[ $# -eq 0 ]] || { echo V2_B1_T6=BLOCKED_INVALID_ARGS; exit 2; }
+[[ "$(git branch --show-current)" == feature/a063-r1-forensics-contract ]] ||
+ { echo V2_B1_T6=BLOCKED_WRONG_BRANCH; exit 2; }
+[[ -z "$(git status --porcelain --untracked-files=no)" ]] ||
+ { echo V2_B1_T6=BLOCKED_DIRTY_TREE; exit 2; }
+[[ -f out/v2/b1/certification.json ]] ||
+ { echo V2_B1_T6=BLOCKED_V2_CERT_MISSING; exit 2; }
+node - <<'NODE' || { echo V2_B1_T6=BLOCKED_V2_CERT_INVALID; exit 2; }
+const {readFileSync}=require('node:fs');
+const r=JSON.parse(readFileSync('out/v2/b1/certification.json','utf8'));
+if(r.schema!=='gng.v2.b1-certification.v1'||
+   r.status!=='V2_AUTONOMOUS_FRAME_CERTIFIED'||
+   r.frames!==600||r.state_exact_frames<594||r.pixel_exact_frames<594)
+  process.exit(2);
+NODE
+git show-ref --verify --quiet refs/heads/main ||
+ { echo V2_B1_T6=BLOCKED_LOCAL_MAIN_MISSING; exit 2; }
+# Never trust the local main revision until freshly fetched by the operator.
+python3 - <<'PY' || { echo V2_B1_T6=BLOCKED_PRIVATE_FILE_IN_MERGE; exit 2; }
+import subprocess,re
+changed=subprocess.check_output(
+    ['git','diff','--name-only','-z','main...HEAD']).decode().split('\0')
+for p in changed:
+    if not p:
+        continue
+    if p.startswith(('out/','roms/','out-synthetic/')) or re.search(
+        r'(?i)(?:\.zip|\.bin|\.rom|\.png|\.jpg|\.log|\.trace|\.gpr)$',p):
+        raise SystemExit(2)
+PY
+echo V2_B1_T6=PREFLIGHT_PASS_NOT_MERGED_MAIN_UNTOUCHED

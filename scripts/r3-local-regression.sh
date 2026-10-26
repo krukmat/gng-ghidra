@@ -65,7 +65,23 @@ node --test \
   tests/test_r3_native_irq_report.mjs \
   tests/test_r3_native_video_write_gate.mjs \
   tests/test_video_memory.mjs \
-  tests/test_sprite_memory.mjs
+  tests/test_sprite_memory.mjs \
+  tests/test_r35_t5_aot_runtime.mjs \
+  tests/test_r35_t5_render_check.mjs \
+  tests/test_v2_b1_block_identity.mjs \
+  tests/test_v2_b1_frozen.mjs \
+  tests/test_v2_b1_observable.mjs \
+  tests/test_v2_b1_irq_negative.mjs \
+  tests/test_v2_b1_gate_lib.mjs \
+  tests/test_v2_b1_event_compare.mjs
+node --check src/gngb_block_key.mjs
+node --check src/v2_b1_frozen.mjs
+node --check src/v2_b1_observable.mjs
+node --check src/v2_b1_gate_lib.mjs
+node --check scripts/v2_b1_freeze.mjs
+node --check scripts/v2_b1_run_frozen.mjs
+node --check scripts/v2_b1_native_gate.mjs
+bash -n scripts/v2_b1_certify.sh
 bash -n scripts/r3-native-irq-verify.sh
 python3 -m unittest discover -s tests -p 'test_r3_prepare_native_mame_hook.py' -v
 python3 -m unittest discover -s tests -p 'test_r35_t4_source_preflight.py' -v
