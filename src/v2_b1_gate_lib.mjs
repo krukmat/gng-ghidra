@@ -2,6 +2,7 @@
 import {readFileSync,lstatSync} from 'node:fs';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
+import {rendererUnknownCount} from './v2_b1_observable.mjs';
 export const RECORD_BYTES=0x3800;
 const deny=k=>{throw Error('V2_B1_'+k);};
 const digest=b=>createHash('sha256').update(b).digest('hex');
@@ -42,6 +43,8 @@ export function verifySlot(out,slot){
     let unknown=0;
     for(const k of mask)if(k!==255)unknown++;
     if(unknown!==report.unknowns[i])deny('SLOT_UNKNOWN_MISMATCH');
+    if(rendererUnknownCount({known:mask,sprite_buffer_valid:m.sprite_buffer_valid})!==
+       report.visible_unknowns[i])deny('SLOT_RENDERER_UNKNOWN_MISMATCH');
   }
   if(digest(report.frame_hashes.join('\n')+'\n')!==report.sequence_sha256)
     deny('SLOT_SEQUENCE_HASH_MISMATCH');

@@ -56,7 +56,10 @@ export function compareEvents(ours,native,lastCycle){
     const a=sel(ours,kind),b=sel(native,kind);
     const capped=kind.startsWith('SYNC_');
     const n=capped?Math.min(a.length,b.length):Math.max(a.length,b.length);
-    let first=null;
+    let first=capped&&a.length<b.length
+      ?{i:a.length,ours:null,native:b[a.length]}:null;
+    if(capped&&b.length===0&&a.length>0)
+      first={i:0,ours:a[0],native:null};
     for(let i=0;i<n;i++){
       if(JSON.stringify(a[i])!==JSON.stringify(b[i])){first={i,ours:a[i]??null,native:b[i]??null};break;}
     }

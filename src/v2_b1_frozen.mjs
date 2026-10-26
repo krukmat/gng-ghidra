@@ -137,5 +137,5 @@ export async function runFrozen(dir,{frames,onFrame}={}){
     first_fully_known:unknowns.findIndex(x=>x===0)+1||null,
     first_renderer_known:visibleUnknowns.findIndex(x=>x===0)+1||null,
     events:board.state.events,
-    blocks:blocks.size};
+    blocks:blocks.size,last_cycle:board.state.C};
 }

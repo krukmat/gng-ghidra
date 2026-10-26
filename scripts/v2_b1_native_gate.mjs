@@ -1,0 +1,90 @@
+#!/usr/bin/env node
+/** V2.B1: oracle comparison ONLY after both frozen JS-only runs finished. */
+import {execFileSync} from 'node:child_process';
+import {readFileSync,writeFileSync,existsSync} from 'node:fs';
+import {join,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {verifySlot,compareSlots,RECORD_BYTES} from '../src/v2_b1_gate_lib.mjs';
+import {rendererUnknownCount} from '../src/v2_b1_observable.mjs';
+import {parseNativeEvents,compareEvents,compareRecord} from './r35_t5_run.mjs';
+import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
+import {gngbGraphics,rendererInputs,decodePng,diffRgba} from './r35_t5_render_check.mjs';
+import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
+
+const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
+const dir=join(ROOT,'out/v2/b1'),ref=join(ROOT,'out/r35/t43-ref');
+const fail=code=>{throw Error('V2_B1_'+code);};
+function main(){
+  if(process.argv.slice(2).join(' ')!=='--gate')fail('USAGE_GATE_ONLY');
+  const output=join(dir,'certification.json');
+  if(existsSync(output))fail('CERTIFICATION_ALREADY_EXISTS');
+  const one=verifySlot(dir,'one'),two=verifySlot(dir,'two');
+  compareSlots(one,two);
+  const {report,frames,known,rows}=one;
+  if(report.frames!==600||!Number.isInteger(report.last_cycle)||
+     report.last_cycle<599*CYCLES_PER_FRAME)fail('FRAME_COUNT_OR_TIMING');
+  const raw=readFileSync(join(ref,'frames.bin'));
+  const metas=readFileSync(join(ref,'frames.jsonl'),'utf8')
+    .split('\n').filter(Boolean).map(x=>JSON.parse(x));
+  if(raw.length!==600*RECORD_BYTES||metas.length!==600)
+    fail('REFERENCE_LENGTH_MISMATCH');
+  const native=parseNativeEvents(readFileSync(join(ref,'native-events.log'),'utf8'));
+  const events=compareEvents(report.events,native,
+    Math.min(report.frames*CYCLES_PER_FRAME-1,report.last_cycle));
+  if(Object.values(events).some(x=>x.first_divergence))
+    fail('NATIVE_EVENT_DIVERGENCE');
+  if(!events.SYNC_ENTER.compared||!events.SYNC_EXIT.compared||
+     !events.LINE_DELIVERED.compared||!events.VECTOR_FETCH.compared)
+    fail('NATIVE_EVENT_COVERAGE_INSUFFICIENT');
+  const zip=join(ROOT,'roms/gng.zip');
+  const gfx=gngbGraphics(n=>execFileSync('unzip',['-p',zip,n],
+    {maxBuffer:1<<20,stdio:['ignore','pipe','ignore']}));
+  let stateExact=0,pixelExact=0,firstRenderable=null,firstFullyKnown=null;
+  const observed=[];
+  for(let i=0;i<600;i++){
+    const start=i*RECORD_BYTES,end=start+RECORD_BYTES,meta=rows[i];
+    const current={index:i+1,record:frames.subarray(start,end),
+      known:known.subarray(start,end),...meta};
+    const reference=raw.subarray(start,end),nativeMeta=metas[i];
+    if(nativeMeta.index!==i+1)fail('REFERENCE_FRAME_INDEX');
+    const cmp=compareRecord(current,reference,nativeMeta);
+    if(cmp.mismatch||cmp.metaDiff.length)fail('FRAME_STATE_MISMATCH');
+    const complete=cmp.unknown===0;
+    if(complete){stateExact++;firstFullyKnown??=i+1;}
+    const visUnknown=rendererUnknownCount(current);
+    if(visUnknown!==report.visible_unknowns[i])fail('VISIBLE_KNOWN_MASK_DIFFERENCE');
+    if(visUnknown===0){
+      firstRenderable??=i+1;
+      const ours=renderGngbRgba(rendererInputs(current.record,
+        {scroll:meta.scroll,latch:meta.latch},gfx));
+      const file=join(ref,'png',String(nativeMeta.frame).padStart(4,'0')+'.png');
+      const expected=decodePng(readFileSync(file));
+      if(ours.width!==expected.width||ours.height!==expected.height||
+         diffRgba(ours.rgba,expected.rgba,expected.width).count!==0)
+        fail('PIXEL_MISMATCH');
+      pixelExact++;
+    }
+    observed.push({frame:i+1,state_complete:complete,renderer_known:visUnknown===0});
+  }
+  if(stateExact<594||pixelExact<594||firstRenderable===null||
+     firstFullyKnown===null)fail('V2_COVERAGE_NOT_SUFFICIENT');
+  const result={schema:'gng.v2.b1-certification.v1',
+    status:'V2_AUTONOMOUS_FRAME_CERTIFIED',frames:600,
+    blocks:report.blocks,state_exact_frames:stateExact,pixel_exact_frames:pixelExact,
+    first_renderer_known:firstRenderable,first_fully_known:firstFullyKnown,
+    first_six_not_auto_certified:true,
+    events_compared:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,v.compared])),
+    aot_run_digest:report.sequence_sha256,
+    observed};
+  writeFileSync(output,JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});
+  console.log('V2_AUTONOMOUS_FRAME_CERTIFIED');
+  console.log('V2_B1_FRAMES='+result.frames);
+  console.log('V2_B1_STATE_EXACT='+stateExact);
+  console.log('V2_B1_PIXEL_EXACT='+pixelExact);
+  console.log('V2_B1_FIRST_RENDERER_KNOWN='+firstRenderable);
+}
+try{main();}catch(e){
+  console.error('V2_B1_T5=BLOCKED_'+
+    (String(e.message).startsWith('V2_B1_')?String(e.message).slice(6):'PRIVATE_INPUT_OR_IO'));
+  process.exitCode=2;
+}
