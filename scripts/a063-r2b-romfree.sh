@@ -18,6 +18,9 @@ bash -n scripts/r2-mame-probe.sh scripts/a063-native-miniprobe.sh \
   # Full-native launchers are syntax-checked without running a capture.
 bash -n scripts/a063-full-native-capture.sh scripts/a063-full-native-inner.sh \
   scripts/r3-banked-critical-path.sh
+bash -n scripts/a063-main-ram-native-capture.sh
+node --test tests/test_r3_native_main_ram_write_gate.mjs
+python3 -m unittest discover -s tests -p 'test_a063_main_ram_contract.py' -v
 python3 -m unittest discover -s tests -p 'test_a063_full*.py' -v
 python3 -m json.tool .devcontainer/devcontainer.json >/dev/null
 python3 -m py_compile scripts/a063-export-review.py
