@@ -10,8 +10,14 @@ Intento 1 bloqueado por `-Werror=misleading-indentation` en el overlay
 eventos en el binario. **T4.3 PASS** (captura única desde arranque en frío,
 600 frames de referencia) y **T4.4 decidido**: VBlank IRQ por frame,
 `HOLD_LINE` hasta reconocimiento y SYNC enmascarado que continúa
-([captura y decisión](audit/r35-b2-t43-capture-2026-10-26.md)). Siguiente:
-runtime JS/TS continuo desde reset hasta un frame de referencia.
+([captura y decisión](audit/r35-b2-t43-capture-2026-10-26.md)).
+
+**T5 PASS — primer frame autónomo:** código MC6809 recompilado estáticamente
+a JS, ejecutado desde reset en frío durante 600 frames sin estado del
+oráculo. Todos los eventos nativos coinciden al ciclo; 0 bytes distintos en
+los 600 registros de frame; 594 frames (7–600) exactos en estado completo y
+en píxeles frente al PNG de MAME. El renderer es exacto en 600/600 con el
+estado de MAME ([runtime T5](audit/r35-b2-t5-runtime-2026-10-26.md)).
 
 
 **R3.5.B2 checkpoint ROM-free (26/10/2026):** B2.T1 auditó el hook MC6809
