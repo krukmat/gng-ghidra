@@ -44,13 +44,16 @@ ejecutados en Mac: `GNG_LOCAL_REGRESSION=PASS_ROM_FREE_A0_2_TO_A0_6_3`,
 **Siguiente bloque:** [V3.B1.T2 — puertos dinámicos en runtime](v3-b1-t2-runtime-ports-2026-10-26.md).
 T2 está planificado y pendiente de implementación y gates.
 
-**V3.B1.T2 — Entradas CPU en runtime (depende de T1).**
-T2.1 Sustituir constantes de SYSTEM/P1/P2 por fuente
-determinista consultada en la lectura de CPU, no inyección
-de estado. T2.2 Rechazar eventos mal formados, tiempos
-no monótonos y valores desconocidos. DIPs quedan fijos.
-**PASS:** sin entradas reproduce los 600 frames V2;
-con entradas cambia solo lecturas explícitas.
+**V3.B1.T2 — Primer efecto del jugador en el GnG recompilado (depende de T1).**
+T2.1 Asegurar el ciclo exacto de lectura del bus CPU; T2.2
+conectar SYSTEM/P1/P2 al proveedor de entradas; T2.3 probar
+malformaciones y combinaciones; T2.4 certificar `no-input` contra
+la ejecución V2 sin alterar su bundle; T2.5 observar en el juego
+original AOT una lectura de `coin1` y su primera consecuencia
+(control flow/estado o bloqueo `UNCOMPILED` acotado).
+**PASS:** `V3_B1_T2_DYNAMIC_PORT_READ_PASS` respaldado por
+evidencia sintética y observación sobre GnG real. No declara
+todavía créditos funcionales, partida ni movimiento.
 
 **V3.B1.T3 — Replay y nuevas rutas AOT (depende de T2).**
 T3.1 Input tape versionado con timing y hash. T3.2 Descubrimiento
