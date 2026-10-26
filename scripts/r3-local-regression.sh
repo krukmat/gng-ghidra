@@ -73,11 +73,14 @@ node --test \
   tests/test_v2_b1_observable.mjs \
   tests/test_v2_b1_irq_negative.mjs \
   tests/test_v2_b1_gate_lib.mjs \
-  tests/test_v2_b1_event_compare.mjs
+  tests/test_v2_b1_event_compare.mjs \
+  tests/test_v2_b1_coverage.mjs
 node --check src/gngb_block_key.mjs
 node --check src/v2_b1_frozen.mjs
 node --check src/v2_b1_observable.mjs
 node --check src/v2_b1_gate_lib.mjs
+node --check src/v2_b1_coverage.mjs
+node --check scripts/v2_b1_coverage_diagnose.mjs
 node --check scripts/v2_b1_freeze.mjs
 node --check scripts/v2_b1_run_frozen.mjs
 node --check scripts/v2_b1_native_gate.mjs

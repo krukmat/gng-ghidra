@@ -54,3 +54,27 @@ ejecutado la suite Node de repositorio, empaquetado ni gate nativo
 en este entorno de GitHub sin ROM privada.** Los PASS previos de
 R3.5.B2.T5 no sustituyen B1. El merge queda condicionado a
 `V2_AUTONOMOUS_FRAME_CERTIFIED` real y validación post-merge.
+
+## V2.B1.T5 — Diagnóstico de cobertura tras determinismo PASS (26/10/2026)
+
+El operador reportó `V2_B1_T4_DETERMINISM=PASS_TWO_INDEPENDENT_RUNS`
+con 600 frames, pero `V2_B1_T5=BLOCKED_V2_COVERAGE_NOT_SUFFICIENT`.
+El gate T5 ha llegado al control de *cantidad de frames conocidos*:
+no se reportaron divergencias en eventos, estado conocido ni píxeles
+evaluados. **Eso no certifica V2**: falta entender por qué el número
+de frames plenamente conocidos/visibles es inferior al mínimo de 594.
+
+Se implementó `scripts/v2_b1_coverage_diagnose.mjs`: diagnóstico
+solo lectura sobre `out/v2/b1/one|two`, valida integridad de ambos
+runs y emite únicamente números por región/marcadores fijos. Sin ROM,
+captura, MAME ni regeneración de artefactos. No alterará el umbral
+ni inventará inicialización de sprite buffer.
+
+```bash
+git pull --ff-only
+node --test tests/test_v2_b1_coverage.mjs
+node scripts/v2_b1_coverage_diagnose.mjs
+```
+
+Compartir `V2_B1_DIAG_*`. Hasta conocer el desglose, no corregir
+máscaras y no modificar `main`.
