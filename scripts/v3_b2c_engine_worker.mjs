@@ -10,13 +10,14 @@ import {pathToFileURL} from 'node:url';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {rendererUnknownCount} from '../src/v2_b1_observable.mjs';
 import {validateLiveFrames} from '../src/v3_b2c_session_policy.mjs';
+import {createPortReadWitness} from '../src/v3_b2c_port_witness.mjs';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
 import {gngbGraphics,rendererInputs} from './r35_t5_render_check.mjs';
 
 const inputs=new Int32Array(workerData.inputs);
 const advance=new Int32Array(workerData.advance);
 const send=(message,transfer=[])=>parentPort.postMessage(message,transfer);
-let seenCoin=0,seenStart=0,seenP1=0,totalReads=0;
+const witness=createPortReadWitness();
 let lastGood=0;
 let cpu;
 try{
@@ -40,21 +41,17 @@ try{
 
   cpu=createBoard(code,blocks,{frames:requestedFrames,
     portRead:(addr,cycle)=>Atomics.load(inputs,addr-0x3000),
-    onPortRead:read=>{
-      totalReads++;
-      if(read.addr===0x3000){
-        if((read.value&0x40)===0)seenCoin++;
-        if((read.value&0x01)===0)seenStart++;
-      }else if(read.addr===0x3001)seenP1++;
-    },
+    onPortRead:read=>witness.observe(read),
     onFrame:frame=>{
       // Snapshot is emitted by the ACTUAL runtime. Never infer the
       // uninitialized sprite DMA buffer from zeros or MAME captures.
       const unknown=rendererUnknownCount(frame);
+      const io=witness.snapshot();
       const packet={type:'frame',index:frame.index,known:unknown===0,
         unknownBytes:unknown,cycle:cpu.state.C,
-        reads:totalReads,coinReads:seenCoin,startReads:seenStart,
-        p1Reads:seenP1,lastGoodFrame:lastGood};
+        reads:io.busReads,coinReads:io.activeSamples.coin1,
+        startReads:io.activeSamples.start1,p1Reads:io.p1Reads,
+        witness:io,lastGoodFrame:lastGood};
       let transfer=[];
       if(unknown===0){
         const image=renderGngbRgba(rendererInputs(frame.record,
@@ -74,12 +71,14 @@ try{
     }
   });
   const result=cpu.run();
+  const finalIO=witness.snapshot();
   send({type:'halt',status:result.status,
     frame:cpu.state.records.length,sessionFrames:requestedFrames,
     missing:result.status==='UNCOMPILED'?{
       bank:result.bank,pc:result.pc,overlay:result.overlay}:null,
-    reads:totalReads,coinReads:seenCoin,startReads:seenStart,
-    p1Reads:seenP1});
+    reads:finalIO.busReads,coinReads:finalIO.activeSamples.coin1,
+    startReads:finalIO.activeSamples.start1,p1Reads:finalIO.p1Reads,
+    witness:finalIO});
 }catch(e){
   send({type:'error',code:e?.code??e?.message??'UNEXPECTED',
     frame:cpu?.state.records?.length??0});
