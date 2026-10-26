@@ -11,6 +11,7 @@ import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {rendererUnknownCount} from '../src/v2_b1_observable.mjs';
 import {validateLiveFrames} from '../src/v3_b2c_session_policy.mjs';
 import {createPortReadWitness} from '../src/v3_b2c_port_witness.mjs';
+import {inspectRealFrame} from '../src/v3_b2c_pixel_probe.mjs';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
 import {gngbGraphics,rendererInputs} from './r35_t5_render_check.mjs';
 
@@ -59,6 +60,7 @@ try{
         if(image.width!==256||image.height!==224||
            image.rgba.length!==256*224*4)throw Error('V3_B2C_RENDER_GEOMETRY');
         const pixels=Uint8Array.from(image.rgba);
+        packet.pixelProbe=inspectRealFrame(pixels);
         packet.rgba=pixels.buffer;transfer=[pixels.buffer];
         packet.lastGoodFrame=lastGood=frame.index;
       }
