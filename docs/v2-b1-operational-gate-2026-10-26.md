@@ -78,3 +78,25 @@ node scripts/v2_b1_coverage_diagnose.mjs
 
 Compartir `V2_B1_DIAG_*`. Hasta conocer el desglose, no corregir
 máscaras y no modificar `main`.
+
+## T5 cobertura — corrección de contrato pre-DMA
+
+Diagnóstico local del operador: `STATE_EXACT=594`,
+`RENDERER_KNOWN=290`, `DMA_VALID=290`,
+`FIRST_RENDERER_KNOWN=311`. El problema no es la CPU:
+la nueva definición exige un DMA observado antes de certificar
+píxeles. No se puede exigir 594 píxeles comparados sin
+desconocer este estado previo.
+
+`certifyV2Coverage` separa ambos dominios y exige 256 frames
+completos contiguos, sin huecos, pixel exactos, con al menos dos
+imágenes visuales distintas, además de 594 estados y eventos.
+La evidencia 311–600 **solo pasa** cuando los 290 PNGs comparados
+realmente coinciden. No recalcular ROM ni reejecutar AOT; basta
+repetir el gate final (si no existe ya `certification.json`).
+
+```bash
+git pull --ff-only
+node --test tests/test_v2_b1_coverage_policy.mjs
+node scripts/v2_b1_native_gate.mjs --gate
+```

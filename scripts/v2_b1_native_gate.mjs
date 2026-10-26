@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /** V2.B1: oracle comparison ONLY after both frozen JS-only runs finished. */
 import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {verifySlot,compareSlots,RECORD_BYTES} from '../src/v2_b1_gate_lib.mjs';
 import {rendererUnknownCount} from '../src/v2_b1_observable.mjs';
+import {certifyV2Coverage} from '../src/v2_b1_coverage.mjs';
 import {parseNativeEvents,compareEvents,compareRecord} from './r35_t5_run.mjs';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
 import {gngbGraphics,rendererInputs,decodePng,diffRgba} from './r35_t5_render_check.mjs';
@@ -43,8 +45,7 @@ function main(){
   const zip=join(ROOT,'roms/gng.zip');
   const gfx=gngbGraphics(n=>execFileSync('unzip',['-p',zip,n],
     {maxBuffer:1<<20,stdio:['ignore','pipe','ignore']}));
-  let stateExact=0,pixelExact=0,firstRenderable=null,firstFullyKnown=null;
-  const observed=[];
+  const observed=[],pixelDigests=Array(600).fill(null);
   for(let i=0;i<600;i++){
     const start=i*RECORD_BYTES,end=start+RECORD_BYTES,meta=rows[i];
     const current={index:i+1,record:frames.subarray(start,end),
@@ -54,11 +55,9 @@ function main(){
     const cmp=compareRecord(current,reference,nativeMeta);
     if(cmp.mismatch||cmp.metaDiff.length)fail('FRAME_STATE_MISMATCH');
     const complete=cmp.unknown===0;
-    if(complete){stateExact++;firstFullyKnown??=i+1;}
     const visUnknown=rendererUnknownCount(current);
     if(visUnknown!==report.visible_unknowns[i])fail('VISIBLE_KNOWN_MASK_DIFFERENCE');
     if(visUnknown===0){
-      firstRenderable??=i+1;
       const ours=renderGngbRgba(rendererInputs(current.record,
         {scroll:meta.scroll,latch:meta.latch},gfx));
       const file=join(ref,'png',String(nativeMeta.frame).padStart(4,'0')+'.png');
@@ -66,16 +65,17 @@ function main(){
       if(ours.width!==expected.width||ours.height!==expected.height||
          diffRgba(ours.rgba,expected.rgba,expected.width).count!==0)
         fail('PIXEL_MISMATCH');
-      pixelExact++;
+      pixelDigests[i]=createHash('sha256').update(ours.rgba).digest('hex');
     }
     observed.push({frame:i+1,state_complete:complete,renderer_known:visUnknown===0});
   }
-  if(stateExact<594||pixelExact<594||firstRenderable===null||
-     firstFullyKnown===null)fail('V2_COVERAGE_NOT_SUFFICIENT');
+  // The MAME sprite buffer is not certified before first real DMA.
+  // Validate every eligible frame; never silently lower correctness of a
+  // frame or infer a blank sprite buffer from the reference's zeros.
+  const coverage=certifyV2Coverage(observed,pixelDigests);
   const result={schema:'gng.v2.b1-certification.v1',
     status:'V2_AUTONOMOUS_FRAME_CERTIFIED',frames:600,
-    blocks:report.blocks,state_exact_frames:stateExact,pixel_exact_frames:pixelExact,
-    first_renderer_known:firstRenderable,first_fully_known:firstFullyKnown,
+    blocks:report.blocks,...coverage,
     first_six_not_auto_certified:true,
     events_compared:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,v.compared])),
     aot_run_digest:report.sequence_sha256,source_git_head:source,
@@ -83,9 +83,12 @@ function main(){
   writeFileSync(output,JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});
   console.log('V2_AUTONOMOUS_FRAME_CERTIFIED');
   console.log('V2_B1_FRAMES='+result.frames);
-  console.log('V2_B1_STATE_EXACT='+stateExact);
-  console.log('V2_B1_PIXEL_EXACT='+pixelExact);
-  console.log('V2_B1_FIRST_RENDERER_KNOWN='+firstRenderable);
+  console.log('V2_B1_STATE_EXACT='+coverage.state_exact_frames);
+  console.log('V2_B1_PIXEL_EXACT='+coverage.pixel_exact_frames);
+  console.log('V2_B1_PIXEL_INTERVAL='+coverage.pixel_interval_start+'..'+coverage.pixel_interval_end);
+  console.log('V2_B1_PRIOR_PIXELS_UNVERIFIED='+coverage.prior_frames_pixel_unverified);
+  console.log('V2_B1_DISTINCT_PIXELS='+coverage.pixels_distinct);
+  console.log('V2_B1_FIRST_RENDERER_KNOWN='+coverage.first_renderer_known);
 }
 try{main();}catch(e){
   console.error('V2_B1_T5=BLOCKED_'+

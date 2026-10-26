@@ -13,7 +13,12 @@ const {readFileSync}=require('node:fs');
 const r=JSON.parse(readFileSync('out/v2/b1/certification.json','utf8'));
 if(r.schema!=='gng.v2.b1-certification.v1'||
    r.status!=='V2_AUTONOMOUS_FRAME_CERTIFIED'||
-   r.frames!==600||r.state_exact_frames<594||r.pixel_exact_frames<594||
+   r.frames!==600||r.state_exact_frames<594||
+   r.pixel_exact_frames<256||r.pixel_interval_start<7||
+   r.pixel_interval_end!==600||
+   r.pixel_exact_frames!==601-r.pixel_interval_start||
+   r.prior_frames_pixel_unverified!==r.pixel_interval_start-1||
+   r.pixels_distinct<2||
    typeof r.source_git_head!=='string'||!/^[0-9a-f]{40}$/.test(r.source_git_head))
   process.exit(2);
 NODE

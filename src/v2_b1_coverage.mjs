@@ -51,3 +51,51 @@ export function summarizeCoverage(slot,{required=594}={}){
     cause
   };
 }
+
+/**
+ * B1 certification policy: a contiguous tail of genuinely rendered frames.
+ * Frames preceding sprite DMA are NOT treated as pixel-equivalent merely
+ * because MAME's blank buffer compares equal to zero-filled storage.
+ */
+export const MIN_V2_CONTIGUOUS_PIXEL_FRAMES=256;
+export function certifyV2Coverage(observed,pixelHashes,{
+  requiredState=594,minimumPixels=MIN_V2_CONTIGUOUS_PIXEL_FRAMES
+}={}){
+  if(!Array.isArray(observed)||!Array.isArray(pixelHashes)||
+     observed.length!==600||pixelHashes.length!==observed.length||
+     !Number.isInteger(requiredState)||requiredState<1||requiredState>600||
+     !Number.isInteger(minimumPixels)||minimumPixels<1||minimumPixels>600)
+    throw Error('V2_B1_CERT_COVERAGE_INPUT_INVALID');
+  const status=(i)=>observed[i];
+  if(observed.some((r,i)=>r?.frame!==i+1||
+    typeof r.state_complete!=='boolean'||typeof r.renderer_known!=='boolean'))
+    throw Error('V2_B1_CERT_FRAME_SEQUENCE_INVALID');
+  const firstFullyKnown=observed.findIndex(r=>r.state_complete===true);
+  const firstRendererKnown=observed.findIndex(r=>r.renderer_known===true);
+  const knownCount=observed.filter(r=>r.state_complete).length;
+  if(knownCount<requiredState||firstFullyKnown<0||
+     observed.slice(firstFullyKnown).some(r=>!r.state_complete))
+    throw Error('V2_B1_CERT_STATE_COVERAGE_INSUFFICIENT');
+  if(firstRendererKnown<0)throw Error('V2_B1_CERT_NO_RENDERABLE_FRAME');
+  const tail=observed.slice(firstRendererKnown);
+  // The approved pixel interval must be contiguous, fully known, and end at
+  // frame 600. A frame missing DMA mid-tail invalidates that interval.
+  if(tail.length<minimumPixels||tail.some(r=>!r.renderer_known||!r.state_complete))
+    throw Error('V2_B1_CERT_PIXEL_INTERVAL_INSUFFICIENT');
+  const hashes=tail.map((_,i)=>pixelHashes[firstRendererKnown+i]);
+  if(hashes.some(h=>typeof h!=='string'||!/^[0-9a-f]{64}$/.test(h))||
+     pixelHashes.slice(0,firstRendererKnown).some(h=>h!==null))
+    throw Error('V2_B1_CERT_PIXEL_PROVENANCE_INCOMPLETE');
+  const distinct=new Set(hashes).size;
+  if(distinct<2)throw Error('V2_B1_CERT_NO_VISUAL_CHANGE');
+  return {
+    first_fully_known:firstFullyKnown+1,
+    first_renderer_known:firstRendererKnown+1,
+    state_exact_frames:knownCount,
+    pixel_exact_frames:tail.length,
+    pixel_interval_start:firstRendererKnown+1,
+    pixel_interval_end:observed.length,
+    pixels_distinct:distinct,
+    prior_frames_pixel_unverified:firstRendererKnown
+  };
+}
