@@ -6,7 +6,7 @@
 import {createServer} from 'node:http';
 import {Worker} from 'node:worker_threads';
 import {resolve,join} from 'node:path';
-import {existsSync} from 'node:fs';
+import {existsSync,readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createLiveControls} from '../src/v3_b2c_live_controls.mjs';
 
@@ -14,7 +14,19 @@ const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 // Use the offline-discovered gameplay bundle when available. Otherwise
 // run the verified B2A Coin1 build; missing AOT blocks stop the CPU.
 const B2B=join(ROOT,'out/v3/b2b/frozen');
-const BUNDLE=existsSync(B2B)?B2B:join(ROOT,'out/v3/b2a/frozen');
+const B2A=join(ROOT,'out/v3/b2a/frozen');
+const B2A_PROOF=join(ROOT,'out/v3/b2a/coin-smoke.json');
+const B2B_REPORT=join(ROOT,'out/v3/b2b/discovery-report.json');
+function b2bReady(){
+  if(!existsSync(B2B)||!existsSync(B2B_REPORT))return false;
+  try{
+    const r=JSON.parse(readFileSync(B2B_REPORT,'utf8'));
+    return r.status==='DISCOVERY_COMPLETE'&&
+      r.no_input==='PASS_600_FRAMES_IDENTICAL_V2'&&
+      r.frozen_determinism==='PASS_TWO_FROZEN_1000_FRAME_RUNS';
+  }catch{return false;}
+}
+const BUNDLE=b2bReady()?B2B:B2A;
 const ZIP=join(ROOT,'roms/gng.zip');
 const PORT=18609;
 const live=createLiveControls();
@@ -104,18 +116,36 @@ async function main(){
     throw Error('V3_B2C_USAGE_SERVE_ONLY');
   if(!existsSync(BUNDLE)||!existsSync(ZIP))
     throw Error('V3_B2C_PRIVATE_BUNDLE_OR_ROM_MISSING');
+  if(!existsSync(B2A_PROOF))throw Error('V3_B2C_B2A_PROOF_MISSING');
+  let proof;
+  try{proof=JSON.parse(readFileSync(B2A_PROOF,'utf8'))}
+  catch{throw Error('V3_B2C_B2A_PROOF_INVALID')}
+  if(proof.status!=='INPUT_ROUTE_UNCOMPILED'&&
+     proof.status!=='INPUT_STATE_CHANGED')
+    throw Error('V3_B2C_B2A_NOT_PROVEN');
   console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B2B?'B2B':'B2A'));
   const worker=new Worker(new URL('./v3_b2c_engine_worker.mjs',import.meta.url),
     {workerData:{bundle:BUNDLE,zip:ZIP,inputs:inputs.buffer,
       advance:advance.buffer}});
   let lastTickTime=Date.now();
+  let firstRealFrame=false,firstCoinRead=false;
   worker.on('message',m=>{
     if(m.type==='boot'){source=m.source;blocks=m.blocks;}
     if(m.type==='frame'){
       latest=m.index;cycle=m.cycle;known=m.known;unknownBytes=m.unknownBytes;
       lastGood=m.lastGoodFrame;
       reads={all:m.reads,coin:m.coinReads,start:m.startReads,p1:m.p1Reads};
-      if(m.rgba)frame=Buffer.from(m.rgba);
+      if(m.rgba){
+        frame=Buffer.from(m.rgba);
+        if(!firstRealFrame){
+          firstRealFrame=true;
+          console.log('V3_B2C_FIRST_FRAME=PASS_REAL_AOT_RENDER frame='+m.index);
+        }
+      }
+      if(m.coinReads>0&&!firstCoinRead){
+        firstCoinRead=true;
+        console.log('V3_B2C_COIN=PASS_REAL_CPU_READ frame='+m.index);
+      }
       // CPU executes one genuine frame per timer tick, never simulates video.
       const wait=Math.max(0,17-(Date.now()-lastTickTime));
       setTimeout(()=>{
