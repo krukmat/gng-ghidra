@@ -3,8 +3,8 @@
  * Frame/cycle pairs replay actual hardware input port transitions only.
  */
 import {createHash} from 'node:crypto';
-import {CYCLES_PER_FRAME,defineInputSchedule,readScheduledPort}
-  from './gngb_input_contract.mjs';
+import {defineInputSchedule,readScheduledPort} from './gngb_input_contract.mjs';
+import {CYCLES_PER_FRAME} from './gngb_runtime.mjs';
 export const B2D_FRAMES=1500;
 export const B2D_TAPE_SCHEMA='gng.v3.b2d.coverage.v1';
 const e=(frame,control,pressed)=>Object.freeze({
