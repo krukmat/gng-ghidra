@@ -8,8 +8,9 @@
  * same-run source hash manifest. RAM/MMIO stores and possible external IRQ
  * boundaries are NOT reported as confirmed register+bus equivalence.
  */
-import {readFile,mkdir,writeFile} from 'node:fs/promises';
+import {readFile,mkdir,writeFile,lstat} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
 import {resolve,relative,isAbsolute} from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {compileAt,emitStaticModule,checkedState,diffRegisters}
@@ -22,6 +23,55 @@ export const BANK_START=0x4000,BANK_END=0x5fff,BANK_SIZE=8192;
 const BANK_COUNT=5;
 const HASH_REGEX=/^[0-9a-f]{64}$/;
 const HEX=n=>'0x'+n.toString(16).padStart(4,'0');
+export function validateFullOracleEvidence({report,oracle,rows,witness}){
+  if(report?.full_oracle_status!=='A063_FULL_NATIVE_BANK_PROVENANCE_PASS'||
+      report.native_bank_per_instruction_full_run_proven!==true||
+      report.full_oracle_same_run_postflight_verified!==true||
+      oracle?.status!=='A063_FULL_NATIVE_BANK_PROVENANCE_PASS'||
+      oracle.native_bank_per_instruction_full_run_proven!==true||
+      !Array.isArray(rows)||rows.length<2||!Array.isArray(witness)||
+      witness.length!==rows.length)
+    throw Error('A064_FULL_NATIVE_ORACLE_REQUIRED');
+  let epoch=0,changes=0;
+  const counts={'0':0,'1':0};
+  for(const mark of witness){
+    if(!Number.isSafeInteger(mark?.epoch)||mark.epoch<epoch||mark.epoch>epoch+1)
+      throw Error('A064_FULL_NATIVE_EPOCH_INVALID');
+    if(mark.epoch!==epoch){epoch=mark.epoch;changes++;}
+    counts[String(epoch)]++;
+  }
+  if(witness[0].epoch!==0||epoch!==1||changes!==1)
+    throw Error('A064_FULL_NATIVE_TWO_EPOCHS_REQUIRED');
+  for(const evidence of [report,oracle]){
+    if(evidence.rom_pair_vs_live_bank_comparisons!==rows.length||
+        evidence.rom_pair_vs_live_bank_mismatch_count!==0||
+        evidence.explicit_reset_epoch_count!==2||
+        evidence.all_epochs_compared_without_frame_inference!==true||
+        !Number.isSafeInteger(evidence.verified_post_selector_bank_transitions)||
+        evidence.verified_post_selector_bank_transitions<1||
+        Object.keys(evidence.native_prestate_count_by_epoch??{}).length!==2||
+        Object.entries(counts).some(([e,n])=>evidence.native_prestate_count_by_epoch[e]!==n))
+      throw Error('A064_FULL_NATIVE_COVERAGE_MISMATCH');
+  }
+  return true;
+}
+export function validateFullOraclePaths(locations,manifest){
+  const canonical={flat:'out/gngb-flat.bin',banks:'out/r3/banked-rom/private-banked-rom.bin',
+    trace:'out/r2/mame-probe/pre-instruction.jsonl',rawtrace:'out/r2/mame-probe/cpu.trace',
+    observations:'out/r2/mame-probe/observations.tsv',
+    witness:'out/r3/banked-provenance/private-bank-per-prestate.jsonl',
+    capabilities:'out/r2/mame-probe/capabilities.json',
+    preflight:'out/r3/banked-provenance/private-a063-preflight.json',
+    postflight:'out/r2/mame-probe/private-a063-postflight.json',
+    full_oracle:'out/r2/mame-probe/private-a063-full-oracle-check.json',
+    bank_report:'out/r3/banked-provenance/report.json'};
+  if(resolve(manifest)!==resolve('out/r3/banked-provenance/private-source-manifest.json')||
+      Object.keys(locations).length!==Object.keys(canonical).length||
+      Object.entries(canonical).some(([key,path])=>
+        typeof locations[key]!=='string'||resolve(locations[key])!==resolve(path)))
+    throw Error('A064_FULL_ORACLE_EXACT_SAME_RUN_PATHS_REQUIRED');
+  return true;
+}
 export function compileNativeBankedPairs({
   fixed,packed,rows,witness,nativeBankReport
 }){
@@ -105,7 +155,10 @@ export function verifyNativeBankedStaticSteps({
       effectful++;continue;
     }
     // Last row has no independent following prestate.
-    if(i+1>=rows.length){needsNextBoundary++;continue;}
+    if(i+1>=rows.length||
+        (entry.epoch!==undefined&&entry.epoch!==witness[i+1]?.epoch)){
+      needsNextBoundary++;continue;
+    }
     const runner=compiledByBank.get(entry.bank);
     if(typeof runner!=='function')
       throw Error('A064_BANK_STATIC_MODULE_NOT_GENERATED');
@@ -171,20 +224,29 @@ async function main(){
   const rel=relative(resolve('out/r3'),target);
   if(!rel||rel==='..'||rel.startsWith('../')||isAbsolute(rel))
     throw Error('A064_PRIVATE_OUTPUT_REQUIRED');
+  try{
+    await lstat(target);
+    throw Error('A064_OUTPUT_EXISTS_PRESERVE_PRIOR_EVIDENCE');
+  }catch(error){if(error.code!=='ENOENT')throw error;}
   const locations={
     flat:arg('--flat','out/gngb-flat.bin'),
     banks:arg('--banks','out/r3/banked-rom/private-banked-rom.bin'),
     trace:arg('--trace','out/r2/mame-probe/pre-instruction.jsonl'),
     rawtrace:arg('--rawtrace','out/r2/mame-probe/cpu.trace'),
     observations:arg('--observations','out/r2/mame-probe/observations.tsv'),
-    witness:arg('--witness','out/r3/banked-provenance/private-bank-per-prestate.jsonl')
+    witness:arg('--witness','out/r3/banked-provenance/private-bank-per-prestate.jsonl'),
+    capabilities:arg('--capabilities','out/r2/mame-probe/capabilities.json'),
+    preflight:arg('--preflight','out/r3/banked-provenance/private-a063-preflight.json'),
+    postflight:arg('--postflight','out/r2/mame-probe/private-a063-postflight.json'),
+    full_oracle:arg('--full-oracle-check','out/r2/mame-probe/private-a063-full-oracle-check.json'),
+    bank_report:arg('--bank-report','out/r3/banked-provenance/report.json')
   };
   const manifestPath=arg('--manifest',
     'out/r3/banked-provenance/private-source-manifest.json');
-  const nativeReportPath=arg('--bank-report',
-    'out/r3/banked-provenance/report.json');
+  validateFullOraclePaths(locations,manifestPath);
   const manifest=JSON.parse(await readFile(manifestPath,'utf8'));
-  if(manifest.schema!=='gng.a06.private-bank-evidence-manifest.v1')
+  if(manifest.schema!=='gng.a06.private-bank-evidence-manifest.v1'||
+      manifest.full_oracle_same_run_postflight_verified!==true)
     throw Error('A064_PRIVATE_NATIVE_SOURCE_MANIFEST_REQUIRED');
   const buffers={};
   for(const [key,path] of Object.entries(locations)){
@@ -196,15 +258,23 @@ async function main(){
       throw Error('A064_STALE_OR_REPLACED_NATIVE_EVIDENCE_'+key);
     buffers[key]=bytes;
   }
-  const report=JSON.parse(await readFile(nativeReportPath,'utf8'));
+  const binary=arg('--mame-bin',process.env.GNG_R3_MAME_BIN);
+  if(typeof binary!=='string'||!binary.includes('/'))
+    throw Error('A064_FULL_ORACLE_BINARY_REQUIRED');
+  const chain=spawnSync('python3',['scripts/a063_capture_integrity.py','--verify',
+    '--output',resolve('out/r2/mame-probe'),'--preflight',locations.preflight,
+    '--mame-bin',binary],{encoding:'utf8',timeout:30000});
+  if(chain.status!==0)throw Error('A064_FULL_ORACLE_POSTFLIGHT_INVALID');
+  const report=JSON.parse(buffers.bank_report.toString('utf8'));
   const rows=buffers.trace.toString('utf8').trimEnd()
     .split('\n').map(JSON.parse);
   const witness=buffers.witness.toString('utf8').trimEnd()
     .split('\n').map(JSON.parse);
+  validateFullOracleEvidence({report,oracle:JSON.parse(buffers.full_oracle),rows,witness});
   const boot=await runNativeBootWriteGate({
     romPath:locations.flat,tracePath:locations.trace,
     observationsPath:locations.observations,
-    capabilitiesPath:arg('--capabilities','out/r2/mame-probe/capabilities.json'),
+    capabilitiesPath:locations.capabilities,
     outDir:resolve(target,'same-run-native-boot')
   });
   if(boot.status!=='PASS_BOOT_SPRITE_RAM_WRITE_BYTES'||
@@ -226,8 +296,11 @@ async function main(){
   const result=verifyNativeBankedStaticSteps({
     rows,witness,compiled,compiledByBank
   });
+  result.full_native_bank_oracle_same_run_verified=true;
   await writeFile(resolve(target,'report.json'),JSON.stringify(result,null,2)+'\n');
-  console.log(JSON.stringify(result,null,2));
+  console.log('A064_BANKED_STATIC='+result.status);
+  console.log('A064_MATCHED_REGISTER_CHECKPOINTS='+result.independently_matched_register_checkpoints);
+  console.log('A064_DIFFERING_REGISTER_CHECKPOINTS='+result.differing_register_checkpoints);
   if(result.status==='BANKED_STATIC_CPU_OR_EXTERNAL_EVENT_DIVERGENCE')
     process.exitCode=2;
 }

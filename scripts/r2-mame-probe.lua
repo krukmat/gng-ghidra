@@ -33,6 +33,10 @@ local function record(...)
     assert(file:write(table.concat(values, "\t") .. "\n"))
 end
 local debugger = machine.debugger
+local full_oracle = os.getenv("GNG_A063_FULL_ORACLE") == "1"
+if full_oracle then
+    assert(debugger and cpu.debug, "A063 full oracle requires native debugger")
+end
 record("PROBE", "r2-mame-capability-v1")
 record("DRIVER", machine.system.name)
 record("DEBUGGER_AVAILABLE", debugger and "1" or "0")
@@ -204,6 +208,13 @@ gng_r2_reset_subscription = emu.add_machine_reset_notifier(function()
     if finished or file_closed then return end
     resetCount = resetCount + 1
     record("RESET_NOTIFICATION", screen:frame_number(), pc())
+    if full_oracle then
+        -- Native debugger writes this boundary to the SAME trace stream.
+        -- Epoch attribution never uses the sampled frame or callback PC.
+        debugger:command(string.format(
+            'tracelog "\\nGNG_A063_RESET EPOCH=%d\\n"', resetCount))
+        record("A063_ORACLE_RESET_EPOCH", resetCount)
+    end
 end)
 gng_r2_frame_subscription = emu.add_machine_frame_notifier(function()
     if finished then return end

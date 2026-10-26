@@ -4,7 +4,9 @@
 **Repositorio:** `krukmat/gng-ghidra` (privado)  
 **Rama exclusiva:** `feature/a063-r1-forensics-contract`; `main` no se modifica.  
 **Checkpoint de entrada:** `D5_NATIVE_MINIPROBE_PASS_NOT_FULL_A063` (**declarado por el operador y confirmado por su salida de terminal**).  
-**Estado de salida:** pendiente de implementación y ejecución D6; **A0.6.3/A0.6.4 NOT_CERTIFIED**.  
+**Estado actual (2026-10-26):** D6.T0 PASS + D6.T1 `PASS_ROM_FREE_ONLY`;
+implementación y validación en [checkpoint ROM-free](a063-m5-d6-full-native-romfree.md).
+D6.T2/T3 preparados y **no ejecutados**; **A0.6.3/A0.6.4 NOT_CERTIFIED**.
 **Coste incremental:** 0 EUR; únicamente Mac M5 Pro + Colima/Docker local ARM64.
 
 ## 1. Evidencia de entrada — NO repetir trabajo superado

@@ -8,6 +8,22 @@ fail() { echo "GNG_R2_PROBE=BLOCKED reason=$1" >&2; exit 2; }
 command -v python3 >/dev/null || fail python_missing
 MAME_BIN="${GNG_R3_MAME_BIN:-mame}"
 command -v "$MAME_BIN" >/dev/null || fail mame_missing
+FULL_ORACLE="${GNG_A063_FULL_ORACLE:-0}"
+[[ "$FULL_ORACLE" == "0" || "$FULL_ORACLE" == "1" ]] || fail invalid_full_oracle_mode
+if [[ "$FULL_ORACLE" == "1" ]]; then
+  [[ "${GNG_A063_ORACLE_SMOKE:-0}" == "0" && "${GNG_A063_SMOKE:-0}" == "0" ]] ||
+    fail full_oracle_and_smoke_mutually_exclusive
+  [[ "$MAME_BIN" == */* && "${GNG_R2_TRACE_MODE:-}" == "printf" &&
+     -n "${GNG_A063_PREFLIGHT:-}" && -n "${GNG_A06_BANKSIG_HEX0:-}" &&
+     -n "${GNG_A06_BANKSIG_HEX1:-}" ]] || fail full_oracle_contract_required
+  [[ "${GNG_R2_PROBE_SOFT_RESET:-0}" == "1" &&
+     "${GNG_R2_PROBE_SPRITE_RAM:-0}" == "1" &&
+     "${GNG_A04_VIDEO_WRITE_TAP:-0}" == "1" &&
+     "${GNG_R36_CAPTURE_UNMAP_POLICY:-0}" == "1" &&
+     -n "${GNG_R36_TARGET_READ_ADDRESS:-}" ]] || fail full_oracle_native_taps_required
+  [[ ! -e "$ROOT/out/r2/mame-probe" && ! -L "$ROOT/out/r2/mame-probe" ]] ||
+    fail full_oracle_capture_exists_preserve_evidence
+fi
 # Bash 3.2 on macOS treats an expanded empty array as unbound under
 # `set -u`. Use scalar mode plus positional arguments instead.
 NATIVE_LOG_EVENTS="${GNG_R3_MAME_NATIVE_EVENTS:-0}"
@@ -125,7 +141,7 @@ if [[ -n "${GNG_A06_BANKSIG_HEX0:-}" || -n "${GNG_A06_BANKSIG_HEX1:-}" ]]; then
   [[ -n "${GNG_A063_PREFLIGHT:-}" ]] ||
     fail a063_requires_private_preflight
   ORACLE_OPT=""
-  if [[ "${GNG_A063_ORACLE_SMOKE:-0}" == "1" ]]; then ORACLE_OPT="--oracle"; fi
+  if [[ "${GNG_A063_ORACLE_SMOKE:-0}" == "1" || "$FULL_ORACLE" == "1" ]]; then ORACLE_OPT="--oracle"; fi
   TRACE_ACTION="$(python3 scripts/a063_trace_contract.py emit \
     --first "$GNG_A06_BANKSIG_HEX0" \
     --second "$GNG_A06_BANKSIG_HEX1" $ORACLE_OPT)" ||

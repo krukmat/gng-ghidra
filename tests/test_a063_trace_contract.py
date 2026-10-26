@@ -76,6 +76,28 @@ class TraceContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(contract.ContractError,"PRIVATE_MANIFEST"):
                     contract.create_preflight("4000","5000","no-such-mame",output,root=root)
 
+    def test_full_oracle_preflight_requires_explicit_oracle_and_exact_location(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            output=root/contract.FULL_ORACLE_PREFLIGHT
+            with self.assertRaisesRegex(contract.ContractError,"REQUIRES_ORACLE_OPT_IN"):
+                contract.create_preflight("4000","5000","unused",output,
+                                          root=root,full_oracle=True)
+            with self.assertRaisesRegex(contract.ContractError,"EXACT_PREFLIGHT_REQUIRED"):
+                contract.create_preflight("4000","5000","unused",
+                    root/"out/r3/arbitrary/private-preflight.json",
+                    root=root,oracle=True,full_oracle=True)
+
+    def test_full_action_has_exactly_twelve_atomic_unmasked_expressions(self):
+        action=contract.build_action("4000","5000",oracle=True)
+        args=action.split('\",',1)[1].rstrip('}').split(',')
+        self.assertEqual(args,[*contract.CPU_SYMBOLS,"b@4000","b@5000",
+                               contract.ORACLE_SYMBOL])
+        self.assertEqual(len(args),12)
+        self.assertEqual(action.count("tracelog"),1)
+        self.assertIn(contract.ORACLE_FORMAT+' \"',action)
+        self.assertNotIn("&",action)
+
     def test_triage_17135_aligned_overflow_never_passes(self):
         summary=contract.classify_diagnostic(self.sample_diagnostic())
         self.assertEqual(summary["decision"],"R1_REQUIRE_NATIVE_READ_CAUSE_ISOLATION")

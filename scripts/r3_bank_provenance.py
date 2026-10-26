@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -84,8 +85,8 @@ def parse_debugger_bank_signatures(raw_trace: str, rows: list[dict],
         # The fingerprint and all nine CPU registers must be from the
         # same native debugger line; matching only PC is insufficient.
         if (line.count("GNG_R2_PRE")!=1 or line.count(MARK)!=1
-            or len(re.findall(r"\bS0\s*=",line))!=1
-            or len(re.findall(r"\bS1\s*=",line))!=1
+            or len(re.findall(r"\bS0\s*=",line,re.I))!=1
+            or len(re.findall(r"\bS1\s*=",line,re.I))!=1
             or len(pmatches)!=1 or len(smatches)!=1
             or len(cpu_matches)!=1):
             raise ValueError("A063_TRACE_MARKERS_NOT_SAME_INSTRUCTION")
@@ -96,10 +97,20 @@ def parse_debugger_bank_signatures(raw_trace: str, rows: list[dict],
         if len(entries)>=len(rows):
             raise ValueError("A063_PRESTATE_AND_SIGNATURE_PC_NOT_ALIGNED")
         row=rows[len(entries)]
-        if row.get("pc")!=position:
+        if not isinstance(row,dict) or type(row.get("pc")) is not int or row.get("pc")!=position:
             raise ValueError("A063_PRESTATE_AND_SIGNATURE_PC_NOT_ALIGNED")
-        if row.get("seq")!=len(entries):
+        if type(row.get("seq")) is not int or row.get("seq")!=len(entries):
             raise ValueError("A063_NATIVE_PRESTATE_SEQUENCE_INVALID")
+        state=row.get("before")
+        if (row.get("schema")!="gng.r2.pre-instruction.v1"
+                or row.get("kind")!="pre_instruction"
+                or row.get("origin")!="mame-native-tracelog"
+                or not isinstance(state,dict) or set(state)!=set(NATIVE_CPU_FIELDS)
+                or any(type(state[key]) is not int or not 0<=state[key]<16**width
+                       for key,width in NATIVE_CPU_FIELDS.items())
+                or any(len(re.findall(r"\b"+key+r"\s*=",line,re.I))!=1
+                       for key in NATIVE_CPU_FIELDS)):
+            raise ValueError("A063_NATIVE_CPU_REGISTERS_AND_PRESTATE_NOT_ALIGNED")
         native_cpu={key:int(value,16) for key,value in
                     zip(NATIVE_CPU_FIELDS,cpu_matches[0].groups())}
         if native_cpu["PC"]!=position or native_cpu!=row.get("before"):
@@ -107,7 +118,8 @@ def parse_debugger_bank_signatures(raw_trace: str, rows: list[dict],
         # R2 records physical line numbers. Check when available to
         # distinguish repeated identical PCs across unrelated samples.
         if (row.get("trace_line") is not None
-            and row["trace_line"]!=trace_line_number):
+            and (type(row["trace_line"]) is not int
+                 or row["trace_line"]!=trace_line_number)):
             raise ValueError("A063_NATIVE_PRESTATE_TRACE_LINE_NOT_ALIGNED")
         bank=lookup.get(signature)
         if bank is None:
@@ -246,7 +258,7 @@ def diagnose_trace_signatures(raw_trace: str, rows: list[dict],
 
 def analyze_bank_provenance(rows: list[dict], entries: list[int],
                             packed: bytes, fixed: bytes,
-                            native_observations: str) -> dict:
+                            native_observations: str, *, epochs: list[int] | None = None) -> dict:
     if len(entries)!=len(rows) or len(packed)!=PACKED_SIZE or len(fixed)!=65536:
         raise ValueError("A063_BAD_SOURCE_OR_NATIVE_PRESTATE_COUNT")
     trace="\n".join(json.dumps(row) for row in rows)
@@ -267,7 +279,8 @@ def analyze_bank_provenance(rows: list[dict], entries: list[int],
             prev=rows[i-1]
             # Soft reset can change the selected bank without a CPU write:
             # this boundary is not evidence of a bankswitch_w call.
-            if prev["pc"]==0x6016 and pc==0x6000:
+            if ((epochs is not None and epochs[i]!=epochs[i-1]) or
+                    (epochs is None and prev["pc"]==0x6016 and pc==0x6000)):
                 continue
             prev_pc=prev["pc"]
             instruction_selector=False
@@ -339,41 +352,111 @@ def run_prepare(args):
     print(f"{0x4000+offsets[0]:04x} {0x4000+offsets[1]:04x}")
 
 def run_report(args):
+    # Reporting is now a full-oracle operation. Historical non-oracle
+    # workflows may still be inspected but cannot produce a fresh witness.
+    from a063_capture_integrity import verify_postflight
+    from a063_bank_oracle_gate import (parse_driver_entries,parse_full_epochs,
+                                       compare_full,FULL_PASS)
+    from a063_trace_contract import build_action
+    root=ROOT.resolve()
+    capture=root/"out/r2/mame-probe"
+    expected_output=root/"out/r3/banked-provenance"
+    if (args.output.resolve()!=expected_output or
+            args.trace.resolve()!=capture/"pre-instruction.jsonl" or
+            args.rawtrace.resolve()!=capture/"cpu.trace" or
+            args.observations.resolve()!=capture/"observations.tsv" or
+            args.zip.resolve()!=root/"roms/gng.zip" or
+            args.flat.resolve()!=root/"out/gngb-flat.bin" or
+            args.banks.resolve()!=root/"out/r3/banked-rom/private-banked-rom.bin"):
+        raise ValueError("A063_FULL_EXACT_SAME_RUN_PATHS_REQUIRED")
+    preflight=args.preflight.resolve()
+    plan=json.loads(preflight.read_text(encoding="utf-8"))
+    if (plan.get("oracle_mode") is not True or
+            plan.get("oracle_capture_scope")!="full" or
+            plan.get("capture_output_relative")!="out/r2/mame-probe"):
+        raise ValueError("A063_FULL_ORACLE_PREFLIGHT_REQUIRED")
+    verify_postflight(root,capture,preflight,mame_bin=args.mame_bin)
+    witness=args.output/"private-bank-per-prestate.jsonl"
+    source_manifest=args.output/"private-source-manifest.json"
+    bank_report=args.output/"report.json"
+    full_oracle=capture/"private-a063-full-oracle-check.json"
+    if any(path.exists() for path in (witness,source_manifest,bank_report,full_oracle)):
+        raise ValueError("A063_FULL_REPORT_EXISTS_PRESERVE_PRIOR_EVIDENCE")
     packed,fixed=load_authenticated_images(args.zip,args.flat,args.banks)
-    if not private_destination(args.output):
-        raise ValueError("A063_PRIVATE_OUTPUT_REQUIRED")
     manifest=json.loads((args.output/"private-signature-offsets.json").read_text())
     offsets=tuple(manifest["offsets"])
     if offsets!=choose_signature_offsets(packed):
         raise ValueError("A063_SIGNATURE_OFFSETS_NOT_AUTHENTIC")
+    authentic_action=build_action(f"{0x4000+offsets[0]:04x}",
+                                 f"{0x4000+offsets[1]:04x}",oracle=True)
+    if plan.get("trace_action_sha256")!=hashlib.sha256(authentic_action.encode()).hexdigest():
+        raise ValueError("A063_FULL_PREFLIGHT_OFFSETS_NOT_AUTHENTIC")
     rows=[json.loads(line) for line in args.trace.read_text().splitlines() if line]
+    rawtrace=args.rawtrace.read_text()
+    observations=args.observations.read_text()
     entries=parse_debugger_bank_signatures(
-        args.rawtrace.read_text(),rows,packed,offsets)
+        rawtrace,rows,packed,offsets)
+    live=parse_driver_entries(rawtrace,rows)
+    epochs=parse_full_epochs(rawtrace,rows,observations)
+    oracle=compare_full(entries,live,rows,epochs,fixed,packed,observations)
+    if oracle["status"]!=FULL_PASS:
+        raise ValueError("A063_FULL_ORACLE_TRANSITION_COVERAGE_INCONCLUSIVE")
     report=analyze_bank_provenance(
-        rows,entries,packed,fixed,args.observations.read_text())
+        rows,entries,packed,fixed,observations,epochs=epochs)
+    report.update({
+        "full_oracle_status":FULL_PASS,
+        "full_oracle_same_run_postflight_verified":True,
+        "native_bank_per_instruction_full_run_proven":True,
+        "rom_pair_vs_live_bank_comparisons":len(rows),
+        "rom_pair_vs_live_bank_mismatch_count":0,
+        "explicit_reset_epoch_count":oracle["explicit_reset_epoch_count"],
+        "native_prestate_count_by_epoch":oracle["native_prestate_count_by_epoch"],
+        "verified_post_selector_bank_transitions":oracle["verified_post_selector_bank_transitions"],
+        "all_epochs_compared_without_frame_inference":True,
+    })
     # Required by the next A0.6.4 bank/PC compilation gate. Stored only
     # inside the private evidence directory, with sequence continuity.
-    witness=args.output/"private-bank-per-prestate.jsonl"
-    witness.write_text("".join(
-        json.dumps({"seq":i,"pc":rows[i]["pc"],"bank":entry},
-                   separators=(",",":"))+"\n"
-        for i,entry in enumerate(entries)),encoding="utf-8")
     report["private_bank_per_instruction_witness_written"]=True
     # Bind the witness to the exact native capture. A0.6.4 must refuse a
     # report copied from an earlier capture or a modified packed bank image.
     files={
         "flat":args.flat,"banks":args.banks,"trace":args.trace,
         "rawtrace":args.rawtrace,"observations":args.observations,
-        "witness":witness,
+        "capabilities":capture/"capabilities.json",
+        "preflight":preflight,"postflight":capture/"private-a063-postflight.json",
     }
     fingerprints={name:hashlib.sha256(path.read_bytes()).hexdigest()
                   for name,path in files.items()}
-    (args.output/"private-source-manifest.json").write_text(
-        json.dumps({"schema":"gng.a06.private-bank-evidence-manifest.v1",
-                    "sha256":fingerprints},sort_keys=True)+"\n")
+    if (fingerprints["flat"]!=hashlib.sha256(fixed).hexdigest() or
+            fingerprints["banks"]!=hashlib.sha256(packed).hexdigest()):
+        raise ValueError("A063_FULL_AUTHENTICATED_ROM_CHANGED_DURING_REPORT")
+    # Re-check the chain after reading all inputs and before creating any
+    # witness. A mutation during analysis must not acquire a PASS artifact.
+    verify_postflight(root,capture,preflight,mame_bin=args.mame_bin)
+    if any(hashlib.sha256(path.read_bytes()).hexdigest()!=fingerprints[name]
+           for name,path in files.items()):
+        raise ValueError("A063_FULL_INPUT_CHANGED_DURING_REPORT")
+    oracle["full_oracle_same_run_postflight_verified"]=True
     report["private_evidence_hash_manifest_written"]=True
-    (args.output/"report.json").write_text(json.dumps(report,indent=2)+"\n")
-    print(json.dumps(report,indent=2))
+    def write_private(path,text):
+        with path.open("x",encoding="utf-8") as stream:
+            os.chmod(path,0o600)
+            stream.write(text)
+    write_private(full_oracle,json.dumps(oracle,indent=2,sort_keys=True)+"\n")
+    write_private(witness,"".join(
+        json.dumps({"seq":i,"pc":rows[i]["pc"],"bank":entry,"epoch":epochs[i]},
+                   separators=(",",":"))+"\n"
+        for i,entry in enumerate(entries)))
+    write_private(bank_report,json.dumps(report,indent=2,sort_keys=True)+"\n")
+    fingerprints.update({name:hashlib.sha256(path.read_bytes()).hexdigest()
+                         for name,path in {"witness":witness,"bank_report":bank_report,
+                                           "full_oracle":full_oracle}.items()})
+    write_private(source_manifest,json.dumps({
+        "schema":"gng.a06.private-bank-evidence-manifest.v1",
+        "full_oracle_same_run_postflight_verified":True,
+        "sha256":fingerprints},sort_keys=True)+"\n")
+    print("A063_FULL_ORACLE="+FULL_PASS)
+    print("A063_FULL_PRESTATE_COMPARISONS="+str(len(rows)))
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
@@ -385,6 +468,9 @@ def main():
     p.add_argument("--trace",type=Path,default=ROOT/"out/r2/mame-probe/pre-instruction.jsonl")
     p.add_argument("--rawtrace",type=Path,default=ROOT/"out/r2/mame-probe/cpu.trace")
     p.add_argument("--output",type=Path,default=ROOT/"out/r3/banked-provenance")
+    p.add_argument("--preflight",type=Path,
+                   default=ROOT/"out/r3/banked-provenance/private-a063-preflight.json")
+    p.add_argument("--mame-bin",default=os.environ.get("GNG_R3_MAME_BIN"))
     args=p.parse_args()
     try:
         if args.mode=="diagnose":

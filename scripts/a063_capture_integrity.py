@@ -23,6 +23,70 @@ ARTIFACTS = (
 SCHEMA = "gng.a063.private-capture-postflight.v1"
 
 
+def capture_scope(root: Path, out: Path, preflight: Path, planned: dict) -> tuple[bool, bool]:
+    """Full oracle is an explicit plan, never inferred from an output path."""
+    oracle = planned.get("oracle_mode", False)
+    scope = planned.get("oracle_capture_scope")
+    full = scope == "full"
+    oracle_smoke = (root / "out/r3/a063-oracle-smoke").resolve()
+    if (type(oracle) is not bool or scope not in (None, "full") or
+            (full and (not oracle or
+                       planned.get("capture_output_relative") != contract.FULL_ORACLE_OUTPUT or
+                       out != (root / contract.FULL_ORACLE_OUTPUT).resolve() or
+                       preflight != (root / contract.FULL_ORACLE_PREFLIGHT).resolve())) or
+            (oracle and not full and out != oracle_smoke)):
+        raise contract.ContractError("A063_POSTFLIGHT_ORACLE_MODE_INVALID")
+    if out == oracle_smoke and not oracle:
+        raise contract.ContractError("A063_POSTFLIGHT_ORACLE_REQUIRED")
+    if oracle and (planned.get("oracle_driver_symbol") != contract.ORACLE_SYMBOL or
+                   planned.get("oracle_bank_entry_expression_count") != 1):
+        raise contract.ContractError("A063_POSTFLIGHT_ORACLE_BINDING_INVALID")
+    return oracle, full
+
+
+def full_capture_observed(out: Path, capabilities: dict) -> bool:
+    """Require original full-run taps and one observed controlled soft reset.
+
+    These checks bind capture configuration, not bank or bus equivalence. The
+    full bank gate separately validates raw trace epoch boundaries and all E.
+    """
+    if not isinstance(capabilities, dict):
+        return False
+    try:
+        rows = [line.split("\t") for line in
+                (out / "observations.tsv").read_text(encoding="utf-8").splitlines()]
+    except (OSError, UnicodeError):
+        return False
+    required = {
+        "PROBE": "r2-mame-capability-v1", "DRIVER": "gngb",
+        "SPRITE_RAM_TAP_ENABLED": "1", "A04_VIDEO_WRITE_TAP_ENABLED": "1",
+        "R36_TARGETED_READ_ENABLED": "1", "R36_UNMAP_POLICY_ENABLED": "1",
+        "CONTROLLED_SOFT_RESET_REQUESTED": "1", "OBSERVED_RESET_COUNT": "1",
+        "A063_ORACLE_RESET_EPOCH": "1",
+    }
+    if any([row[1:] for row in rows if row[0] == tag] != [[value]]
+           for tag, value in required.items()):
+        return False
+    chronology = [row[0] for row in rows if row[0] in
+                  ("SOFT_RESET_REQUESTED", "RESET_NOTIFICATION")]
+    cap = capabilities.get("capabilities")
+    return (chronology == ["SOFT_RESET_REQUESTED", "RESET_NOTIFICATION"] and
+            isinstance(cap, dict) and
+            cap.get("controlled_soft_reset_observed") is True)
+
+
+def debugger_action_matches(out: Path, action_sha256: str) -> bool:
+    """Recheck the actual action during verification, rather than trust a flag."""
+    try:
+        text = (out / "start-debugger.txt").read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return False
+    prefix = f"trace {out / 'cpu.trace'},:maincpu,noloop,"
+    suffix = "\ng\n"
+    return (text.startswith(prefix) and text.endswith(suffix) and
+            hashlib.sha256(text[len(prefix):-len(suffix)].encode()).hexdigest() == action_sha256)
+
+
 def digest(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as fh:
@@ -70,22 +134,16 @@ def capture_postflight(root: Path, output: Path, preflight: Path, first: str,
         planned = json.loads(preflight.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise contract.ContractError("A063_POSTFLIGHT_PREFLIGHT_INVALID") from exc
-    oracle = planned.get("oracle_mode", False)
-    if type(oracle) is not bool or (oracle and out != oracle_smoke):
-        raise contract.ContractError("A063_POSTFLIGHT_ORACLE_MODE_INVALID")
-    if out == oracle_smoke and not oracle:
-        raise contract.ContractError("A063_POSTFLIGHT_ORACLE_REQUIRED")
+    if not isinstance(planned, dict):
+        raise contract.ContractError("A063_POSTFLIGHT_PREFLIGHT_INVALID")
+    oracle, full = capture_scope(root, out, preflight, planned)
     planned_action = contract.build_action(first, second, oracle=oracle)
     expected_action_sha = hashlib.sha256(planned_action.encode()).hexdigest()
-    try:
-        planned = json.loads(preflight.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise contract.ContractError("A063_POSTFLIGHT_PREFLIGHT_INVALID") from exc
     exe = shutil.which(mame_bin)
     if not exe:
         raise contract.ContractError("A063_POSTFLIGHT_MAME_UNAVAILABLE")
     source_files = planned.get("source_sha256")
-    if not isinstance(source_files, dict) or not source_files:
+    if not isinstance(source_files, dict) or set(source_files) != set(contract.SOURCE_FILES):
         raise contract.ContractError("A063_POSTFLIGHT_SOURCE_MANIFEST_MISSING")
     current = {}
     try:
@@ -97,9 +155,6 @@ def capture_postflight(root: Path, output: Path, preflight: Path, first: str,
         emulator_digest = digest(Path(exe).resolve())
     except OSError as exc:
         raise contract.ContractError("A063_POSTFLIGHT_HASH_UNAVAILABLE") from exc
-    if (oracle and (planned.get("oracle_driver_symbol") != contract.ORACLE_SYMBOL or
-                    planned.get("oracle_bank_entry_expression_count") != 1)):
-        raise contract.ContractError("A063_POSTFLIGHT_ORACLE_BINDING_INVALID")
     if (planned.get("schema") != contract.SCHEMA or
             planned.get("trace_action_sha256") != expected_action_sha or
             planned.get("emulator_binary_sha256") != emulator_digest or
@@ -119,7 +174,7 @@ def capture_postflight(root: Path, output: Path, preflight: Path, first: str,
     filenames = {}
     for name in ARTIFACTS:
         file = out / name
-        filenames[name] = digest(file) if file.is_file() else None
+        filenames[name] = digest(file) if file.is_file() and not file.is_symlink() else None
     reports_valid = False
     if filenames["pretrace-report.json"] and filenames["capabilities.json"]:
         try:
@@ -128,12 +183,14 @@ def capture_postflight(root: Path, output: Path, preflight: Path, first: str,
             reports_valid = (pre.get("status") == "PRE_INSTRUCTION_FORMAT_PARSED" and
                              pre.get("snapshots", 0) >= 2 and
                              cap.get("status") == "PARTIAL_NATIVE_INSTRUMENTATION")
-        except (ValueError, OSError):
+            if full:
+                reports_valid = reports_valid and full_capture_observed(out, cap)
+        except (ValueError, OSError, TypeError, AttributeError):
             pass
+    identity = identity if identity is not None else source_identity(root)
     complete = bool(mame_exit == 0 and debugger_matches and
                     all(filenames.values()) and reports_valid and
-                    (identity.get("tracked_tree_clean") if identity is not None
-                     else source_identity(root)["tracked_tree_clean"]))
+                    identity.get("tracked_tree_clean") is True)
     result = {
         "schema": SCHEMA,
         "status": ("A063_POSTFLIGHT_FILES_BOUND_NOT_PROVENANCE" if complete
@@ -141,6 +198,7 @@ def capture_postflight(root: Path, output: Path, preflight: Path, first: str,
         "private_preflight_sha256": digest(preflight),
         "source_sha256": current,
         "emulator_binary_sha256": emulator_digest,
+        "trace_action_sha256": expected_action_sha,
         "debugger_action_matches_preflight": debugger_matches,
         "artifacts_sha256": filenames,
         "mame_exit_code_observed_by_wrapper": mame_exit,
@@ -148,8 +206,12 @@ def capture_postflight(root: Path, output: Path, preflight: Path, first: str,
         "emulator_execution_independently_attested": False,
         "native_bank_identity_per_instruction_proven": False,
         "lowbyte_mask_accepted_as_proof": False,
-        **(identity if identity is not None else source_identity(root)),
+        **identity,
     }
+    if full:
+        result["oracle_capture_scope"] = "full"
+        result["capture_output_relative"] = contract.FULL_ORACLE_OUTPUT
+        result["full_capture_configuration_observed"] = reports_valid
     destination = out / "private-a063-postflight.json"
     try:
         with destination.open("x", encoding="utf-8") as stream:
@@ -165,6 +227,7 @@ def verify_postflight(root: Path, output: Path, preflight: Path,
                       *, mame_bin: str | None = None) -> dict:
     root = root.resolve()
     out = output.resolve()
+    preflight = preflight.resolve()
     private_r2 = (root / "out" / "r2").resolve()
     private_smoke = (root / "out" / "r3" / "a063-smoke").resolve()
     oracle_smoke = (root / "out" / "r3" / "a063-oracle-smoke").resolve()
@@ -174,20 +237,20 @@ def verify_postflight(root: Path, output: Path, preflight: Path,
     try:
         saved = json.loads(path.read_text(encoding="utf-8"))
         planned = json.loads(preflight.read_text(encoding="utf-8"))
-        actual_files = {name: digest(out / name) for name in ARTIFACTS}
+        actual_files = {name: digest(out / name) if not (out / name).is_symlink() else None
+                        for name in ARTIFACTS}
     except (ValueError, OSError) as exc:
         raise contract.ContractError("A063_POSTFLIGHT_EVIDENCE_MISSING") from exc
     if (not isinstance(saved, dict) or not isinstance(planned, dict)
+            or planned.get("schema") != contract.SCHEMA
             or not isinstance(saved.get("source_sha256"), dict)
             or planned.get("source_sha256") != saved.get("source_sha256")
             or saved.get("emulator_binary_sha256") != planned.get("emulator_binary_sha256")
             or set(planned.get("source_sha256", {})) != set(contract.SOURCE_FILES)):
         raise contract.ContractError("A063_POSTFLIGHT_PREFLIGHT_BINDING_MISMATCH")
-    if out == oracle_smoke:
-        if (planned.get("oracle_mode") is not True
-                or planned.get("oracle_driver_symbol") != contract.ORACLE_SYMBOL
-                or planned.get("oracle_bank_entry_expression_count") != 1
-                or not mame_bin or not shutil.which(mame_bin)):
+    oracle, full = capture_scope(root, out, preflight, planned)
+    if oracle:
+        if not mame_bin or not shutil.which(mame_bin):
             raise contract.ContractError("A063_POSTFLIGHT_ORACLE_BINARY_REQUIRED")
         if digest(Path(shutil.which(mame_bin)).resolve()) != saved["emulator_binary_sha256"]:
             raise contract.ContractError("A063_POSTFLIGHT_ORACLE_BINARY_CHANGED")
@@ -197,11 +260,26 @@ def verify_postflight(root: Path, output: Path, preflight: Path,
             saved.get("debugger_action_matches_preflight") is not True or
             saved.get("tracked_tree_clean") is not True or
             saved.get("artifacts_sha256") != actual_files or
+            not all(actual_files.values()) or
             saved.get("private_preflight_sha256") != digest(preflight) or
+            not debugger_action_matches(out, planned.get("trace_action_sha256", "")) or
+            (saved.get("trace_action_sha256") is not None and
+             saved["trace_action_sha256"] != planned.get("trace_action_sha256")) or
             any(digest(root / name) != value for name, value in
                 saved.get("source_sha256", {}).items()) or
             saved.get("native_bank_identity_per_instruction_proven") is not False):
         raise contract.ContractError("A063_POSTFLIGHT_CHAIN_MISMATCH")
+    if full:
+        try:
+            cap = json.loads((out / "capabilities.json").read_text(encoding="utf-8"))
+        except (ValueError, OSError) as exc:
+            raise contract.ContractError("A063_POSTFLIGHT_FULL_CAPTURE_INCOMPLETE") from exc
+        if (saved.get("oracle_capture_scope") != "full" or
+                saved.get("capture_output_relative") != contract.FULL_ORACLE_OUTPUT or
+                saved.get("full_capture_configuration_observed") is not True or
+                saved.get("trace_action_sha256") != planned.get("trace_action_sha256") or
+                not full_capture_observed(out, cap)):
+            raise contract.ContractError("A063_POSTFLIGHT_FULL_CAPTURE_INCOMPLETE")
     return {"status": "A063_POSTFLIGHT_CHAIN_INTACT_NOT_BANK_PROVENANCE",
             "native_bank_identity_per_instruction_proven": False}
 

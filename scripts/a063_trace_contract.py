@@ -21,9 +21,13 @@ CPU_FORMAT="PC=%04X A=%02X B=%02X X=%04X Y=%04X U=%04X S=%04X DP=%02X CC=%02X"
 SIGNATURE_FORMAT="GNG_A06_BANKSIG S0=%02X S1=%02X"
 ORACLE_FORMAT="GNG_A063_ENTRY E=%02X"
 ORACLE_SYMBOL="gng_a063_bank"
+FULL_ORACLE_OUTPUT="out/r2/mame-probe"
+FULL_ORACLE_PREFLIGHT="out/r3/banked-provenance/private-a063-preflight.json"
 SCHEMA="gng.a063.private-capture-preflight.v1"
 # Freeze ALL scripts that can change the native trace or its source records.
 SOURCE_FILES=(
+    "src/poc.py",
+    "src/graphics_preview.py",
     "scripts/r2-mame-probe.sh",
     "scripts/r2-mame-probe.lua",
     "scripts/r2_pretrace_report.py",
@@ -40,6 +44,24 @@ SOURCE_FILES=(
     "scripts/a063-native-miniprobe.sh",
     "scripts/a063_capture_integrity.py",
     "scripts/a063_trace_contract.py",
+    "scripts/a063-full-native-capture.sh",
+    "scripts/a063-full-native-inner.sh",
+    "scripts/r3-video-write-capture.sh",
+    "scripts/r3-mmio-read-capture.sh",
+    "scripts/prepare_mame_rom.py",
+    "scripts/r3-banked-critical-path.sh",
+    "scripts/r3_banked_static_gate.mjs",
+    "scripts/r3_banked_report_integrity.mjs",
+    "scripts/r3_compare_sprite_writes.mjs",
+    "scripts/r3_static_trace_probe.mjs",
+    "scripts/r3_sync_boundary.mjs",
+    "scripts/r3_next_frontier.mjs",
+    "scripts/r3_indexed_store_gate.mjs",
+    "scripts/r3_lda_extended_gate.mjs",
+    "scripts/r3_mmio_read_gate.mjs",
+    "scripts/r3_mmio_read_diagnostics.mjs",
+    "scripts/r3_unmapped_read_policy.mjs",
+    "scripts/r3_native_video_write_gate.mjs",
 )
 DIAGNOSTIC_SCHEMA="gng.a06.bank-trace-shape-diagnostic.v1"
 ADDRESS=re.compile(r"[0-9a-fA-F]{4}\Z",re.ASCII)
@@ -84,13 +106,20 @@ def _digest(path: Path) -> str:
     return sha.hexdigest()
 
 def create_preflight(first: str,second: str,mame_bin: str,output: Path,*,
-                     root: Path=ROOT,oracle: bool=False) -> dict:
+                     root: Path=ROOT,oracle: bool=False,
+                     full_oracle: bool=False) -> dict:
     """Bind action and emulator to local sources BEFORE the native run."""
     action=build_action(first,second,oracle=oracle)
     validate_action(action,first,second,oracle=oracle)
     resolved_root=root.resolve()
     private_root=(resolved_root/"out"/"r3").resolve()
     destination=output.resolve()
+    if full_oracle and not oracle:
+        raise ContractError("A063_FULL_ORACLE_REQUIRES_ORACLE_OPT_IN")
+    if full_oracle and destination!=(resolved_root/FULL_ORACLE_PREFLIGHT).resolve():
+        raise ContractError("A063_FULL_ORACLE_EXACT_PREFLIGHT_REQUIRED")
+    if full_oracle and (destination.exists() or output.is_symlink()):
+        raise ContractError("A063_FULL_ORACLE_PREFLIGHT_EXISTS_PRESERVE_EVIDENCE")
     if not destination.is_relative_to(private_root) or destination==private_root:
         raise ContractError("A063_R1_PRIVATE_MANIFEST_LOCATION_REQUIRED")
     if not destination.name.startswith("private-") or destination.suffix!=".json":
@@ -133,6 +162,9 @@ def create_preflight(first: str,second: str,mame_bin: str,output: Path,*,
         manifest["oracle_mode"]=True
         manifest["oracle_driver_symbol"]=ORACLE_SYMBOL
         manifest["oracle_bank_entry_expression_count"]=1
+    if full_oracle:
+        manifest["oracle_capture_scope"]="full"
+        manifest["capture_output_relative"]=FULL_ORACLE_OUTPUT
     destination.parent.mkdir(parents=True,exist_ok=True)
     serialized=json.dumps(manifest,sort_keys=True,indent=2)+"\n"
     if destination.exists():
@@ -196,6 +228,8 @@ def main() -> None:
         p.add_argument("--oracle",action="store_true",
                        help="requires diagnostic MAME driver bank.entry symbol")
         if mode=="preflight":
+            p.add_argument("--full-oracle",action="store_true",
+                           help="explicit full-capture opt-in; requires --oracle")
             p.add_argument("--mame-bin",default="mame")
             p.add_argument("--output",type=Path,
                 default=ROOT/"out/r3/banked-provenance/private-a063-preflight.json")
@@ -212,7 +246,7 @@ def main() -> None:
             print("A063_R1_TRACE_CONTRACT=PASS_ROM_FREE")
         elif args.mode=="preflight":
             create_preflight(args.first,args.second,args.mame_bin,args.output,
-                             oracle=args.oracle)
+                             oracle=args.oracle,full_oracle=args.full_oracle)
             print("A063_R1_PREFLIGHT=PASS_NOT_NATIVE_PROVENANCE")
         else:
             print(json.dumps(

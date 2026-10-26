@@ -5,7 +5,7 @@ import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {compileAt,emitStaticModule}
   from '../scripts/r3_static_trace_probe.mjs';
-import {compileNativeBankedPairs,verifyNativeBankedStaticSteps}
+import {compileNativeBankedPairs,verifyNativeBankedStaticSteps,validateFullOracleEvidence,validateFullOraclePaths}
   from '../scripts/r3_banked_static_gate.mjs';
 
 function fixtureData(){
@@ -127,5 +127,57 @@ test('a native checkpoint divergence is reported with fields only, never CPU or 
     assert.equal(result.first_divergence.pc,'0x4000');
     assert.deepEqual(result.first_divergence.mismatched_register_fields,['A']);
     assert.equal(result.native_cpu_fetch_transaction_correlated,false);
+  });
+});
+test('full native static gate requires full-oracle proof and exactly two ordered epochs',()=>{
+  const x=fixtureData();
+  const report={...x.nativeBankReport,
+    full_oracle_status:'A063_FULL_NATIVE_BANK_PROVENANCE_PASS',
+    native_bank_per_instruction_full_run_proven:true,
+    full_oracle_same_run_postflight_verified:true,
+    rom_pair_vs_live_bank_comparisons:x.rows.length,rom_pair_vs_live_bank_mismatch_count:0,
+    explicit_reset_epoch_count:2,all_epochs_compared_without_frame_inference:true,
+    verified_post_selector_bank_transitions:1,native_prestate_count_by_epoch:{'0':3,'1':4}};
+  const oracle={status:'A063_FULL_NATIVE_BANK_PROVENANCE_PASS',
+    native_bank_per_instruction_full_run_proven:true,
+    rom_pair_vs_live_bank_comparisons:x.rows.length,rom_pair_vs_live_bank_mismatch_count:0,
+    explicit_reset_epoch_count:2,all_epochs_compared_without_frame_inference:true,
+    verified_post_selector_bank_transitions:1,native_prestate_count_by_epoch:{'0':3,'1':4}};
+  const witness=x.witness.map((w,i)=>({...w,epoch:i<3?0:1}));
+  const data={report,oracle,rows:x.rows,witness};
+  assert.equal(validateFullOracleEvidence(data),true);
+  assert.throws(()=>validateFullOracleEvidence({...data,report:x.nativeBankReport}),/FULL_NATIVE_ORACLE/);
+  assert.throws(()=>validateFullOracleEvidence({...data,oracle:{...oracle,status:'MINIPROBE'}}),/FULL_NATIVE_ORACLE/);
+  assert.throws(()=>validateFullOracleEvidence({...data,oracle:{...oracle,rom_pair_vs_live_bank_comparisons:2}}),/COVERAGE/);
+  for(const epochs of [[0,0,0,0,0,0,0],[0,0,2,2,2,2,2],[0,1,0,1,1,1,1],[1,1,1,1,1,1,1]]){
+    assert.throws(()=>validateFullOracleEvidence({...data,
+      witness:witness.map((w,i)=>({...w,epoch:epochs[i]}))}),/EPOCH/);
+  }
+});
+test('full native paths reject custom traces even with a self-consistent alternate manifest',()=>{
+  const locations={flat:'out/gngb-flat.bin',banks:'out/r3/banked-rom/private-banked-rom.bin',
+    trace:'out/r2/mame-probe/pre-instruction.jsonl',rawtrace:'out/r2/mame-probe/cpu.trace',
+    observations:'out/r2/mame-probe/observations.tsv',
+    witness:'out/r3/banked-provenance/private-bank-per-prestate.jsonl',
+    capabilities:'out/r2/mame-probe/capabilities.json',
+    preflight:'out/r3/banked-provenance/private-a063-preflight.json',
+    postflight:'out/r2/mame-probe/private-a063-postflight.json',
+    full_oracle:'out/r2/mame-probe/private-a063-full-oracle-check.json',
+    bank_report:'out/r3/banked-provenance/report.json'};
+  const manifest='out/r3/banked-provenance/private-source-manifest.json';
+  assert.equal(validateFullOraclePaths(locations,manifest),true);
+  for(const key of Object.keys(locations))
+    assert.throws(()=>validateFullOraclePaths({...locations,[key]:'out/r3/alternate'},manifest),/EXACT_SAME_RUN/);
+  assert.throws(()=>validateFullOraclePaths(locations,'out/r3/alternate-manifest.json'),/EXACT_SAME_RUN/);
+});
+test('static checkpoint comparison never crosses a native reset epoch',async()=>{
+  await compiledFixture(x=>{
+    const rows=structuredClone(x.rows);
+    rows[2].before.A=5;rows[3].before.A=5;rows[4].before.A=5;
+    const witness=x.witness.map((w,i)=>({...w,epoch:i<2?0:1}));
+    const result=verifyNativeBankedStaticSteps({...x,rows,witness});
+    assert.equal(result.differing_register_checkpoints,0);
+    assert.equal(result.missing_next_native_checkpoint,1);
+    assert.equal(result.independently_matched_register_checkpoints,3);
   });
 });

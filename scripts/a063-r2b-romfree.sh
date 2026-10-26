@@ -15,6 +15,10 @@ bash -n scripts/r2-mame-probe.sh scripts/a063-native-miniprobe.sh \
   scripts/a063-r2b-romfree.sh scripts/a063-r2c-linux-gate.sh scripts/a063-r2d-linux-preflight.sh \
   scripts/a063-codespaces-bootstrap.sh scripts/a063-publish-codespaces-review.sh scripts/a063-r2e-validate-and-report.sh scripts/a063-r2e-session.sh \
   scripts/a063-m5-docker.sh scripts/a063-m5-docker-inner.sh
+  # Full-native launchers are syntax-checked without running a capture.
+bash -n scripts/a063-full-native-capture.sh scripts/a063-full-native-inner.sh \
+  scripts/r3-banked-critical-path.sh
+python3 -m unittest discover -s tests -p 'test_a063_full*.py' -v
 python3 -m json.tool .devcontainer/devcontainer.json >/dev/null
 python3 -m py_compile scripts/a063-export-review.py
 python3 -m py_compile \
