@@ -44,10 +44,10 @@ const SESSION_FRAMES=LIVE_FRAMES;
 let advance=null,worker=null,generation=0;
 let frame=null,latest=0,known=false,cycle=0,unknownBytes=null,source=null;
 let lastGood=0,blocks=0,halt=null;
-let reads={all:0,coin:0,start:0,p1:0};
+let reads={all:0,coin:0,start:0,p1:0},busWitness=null;
 const state=()=>({schema:'gng.v3.live-engine.v1',mode:'REAL_AOT',
   frame:latest,lastRenderedFrame:lastGood,frameKnown:known,
-  unknownBytes,cycle,blocks,reads,source,halt,controls:heldControls(),
+  unknownBytes,cycle,blocks,reads,busWitness,source,halt,controls:heldControls(),
   sessionFrames:SESSION_FRAMES,sessionId:generation});
 const html=`<!doctype html><html lang="es"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -63,6 +63,7 @@ kbd{background:#333e51;padding:2px 5px;border-radius:3px}
 </style></head><body><main>
 <h1>Ghosts 'n Goblins — Motor MC6809 recompilado a JavaScript</h1>
 <p id="status">Conectando con el motor real…</p>
+<p id="cpu-input">Esperando lecturas de controles por la CPU real…</p>
 <canvas id="screen" width="256" height="224"></canvas>
 <p><kbd>5</kbd> Coin · <kbd>1</kbd> Start ·
 <kbd>←↑↓→</kbd> Dirección · <kbd>Z</kbd> Ataque ·
@@ -79,7 +80,8 @@ ArrowLeft:'p1.left',ArrowRight:'p1.right',
 ArrowUp:'p1.up',ArrowDown:'p1.down',KeyZ:'p1.button1',KeyX:'p1.button2'};
 let last=-1,fetching=false,sessionId=null;
 const canvas=document.getElementById('screen'),ctx=canvas.getContext('2d');
-const status=document.getElementById('status'),detail=document.getElementById('detail');
+const status=document.getElementById('status'),detail=document.getElementById('detail'),
+  cpuInput=document.getElementById('cpu-input');
 function send(control,pressed){fetch('/input',{method:'POST',
 headers:{'Content-Type':'application/json'},body:JSON.stringify({control,pressed})}).catch(()=>{});}
 document.addEventListener('keydown',e=>{
@@ -108,7 +110,18 @@ async function tick(){
    status.textContent=s.halt?'Motor detenido: '+s.halt.status:
      s.frameKnown?'Ejecutando GnG real — frame '+s.frame:
      'CPU real en ejecución — esperando vídeo completamente conocido';
-   detail.textContent='Sesión: '+s.sessionId+' · Límite: '+s.sessionFrames+' frames\\n'+
+   const w=s.busWitness;
+   const samples=w?.activeSamples??{};
+   const list=Object.entries(samples).filter(([,count])=>count>0)
+     .map(([name,count])=>name+': '+count).join(' · ');
+   cpuInput.textContent=list?
+     'Entradas leídas por MC6809: '+list:
+     'Ninguna tecla activa leída por CPU (pulsación ≠ lectura)';
+   const lastRead=w?.lastActive;
+   detail.textContent='Última entrada leída: '+(lastRead?
+     lastRead.control+' ciclo '+lastRead.cycle+
+     ' PC 0x'+lastRead.pc?.toString(16):'NINGUNA')+'\\n'+
+     'Sesión: '+s.sessionId+' · Límite: '+s.sessionFrames+' frames\\n'+
      'Frames: '+s.frame+' · Último render válido: '+
      s.lastRenderedFrame+' · Bloques AOT: '+s.blocks+'\n'+
      'Lecturas Coin: '+s.reads.coin+' · Start: '+s.reads.start+
@@ -152,7 +165,7 @@ async function main(){
     releaseAll();
     frame=null;latest=0;known=false;cycle=0;unknownBytes=null;
     source=null;lastGood=0;blocks=0;halt=null;
-    reads={all:0,coin:0,start:0,p1:0};
+    reads={all:0,coin:0,start:0,p1:0};busWitness=null;
     advance=new Int32Array(new SharedArrayBuffer(4));
     const ack=advance;
     const fresh=new Worker(new URL('./v3_b2c_engine_worker.mjs',import.meta.url),
@@ -160,7 +173,8 @@ async function main(){
         advance:ack.buffer,sessionFrames:SESSION_FRAMES}});
     worker=fresh;
     let lastTickTime=Date.now();
-    let firstRealFrame=false,firstCoinRead=false;
+    let firstRealFrame=false;
+    const firstControlsPrinted=new Set();
     fresh.on('message',m=>{
       if(id!==generation)return; // discard messages from a terminated CPU
       if(m.type==='boot'){
@@ -172,6 +186,14 @@ async function main(){
         latest=m.index;cycle=m.cycle;known=m.known;unknownBytes=m.unknownBytes;
         lastGood=m.lastGoodFrame;
         reads={all:m.reads,coin:m.coinReads,start:m.startReads,p1:m.p1Reads};
+        busWitness=m.witness;
+        for(const [control,count] of Object.entries(m.witness?.activeSamples??{})){
+          if(count>0&&!firstControlsPrinted.has(control)){
+            firstControlsPrinted.add(control);
+            const label=control.toUpperCase().replace(/[^A-Z0-9]/g,'_');
+            console.log('V3_B2C_BUS_'+label+'=PASS_CPU_ACTIVE_READ frame='+m.index);
+          }
+        }
         if(m.rgba){
           frame=Buffer.from(m.rgba);
           if(!firstRealFrame){
@@ -179,8 +201,9 @@ async function main(){
             console.log('V3_B2C_FIRST_FRAME=PASS_REAL_AOT_RENDER frame='+m.index);
           }
         }
-        if(m.coinReads>0&&!firstCoinRead){
-          firstCoinRead=true;
+        if(m.coinReads>0&&firstControlsPrinted.has('coin1')&&
+           !firstControlsPrinted.has('legacy_coin_marker')){
+          firstControlsPrinted.add('legacy_coin_marker');
           console.log('V3_B2C_COIN=PASS_REAL_CPU_READ frame='+m.index);
         }
         const wait=Math.max(0,17-(Date.now()-lastTickTime));
@@ -192,6 +215,7 @@ async function main(){
       }
       if(m.type==='halt'||m.type==='error'){
         halt=m;
+        if(m.type==='halt'&&m.witness)busWitness=m.witness;
         console.error('V3_B2C_ENGINE='+m.type.toUpperCase()+'_'+
           (m.status??m.code));
         if(m.type==='halt'){
