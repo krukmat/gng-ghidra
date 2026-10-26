@@ -3,7 +3,7 @@
  * profile unchanged. Labels alone never select a bundle: report and
  * manifest digests must agree with the frozen assets.
  */
-import {B3_PROFILES,B3_HORIZONS} from './v3_b3_tapes.mjs';
+import {B3_CORE_PROFILES,B3_HORIZONS,b3Tape} from './v3_b3_tapes.mjs';
 export function b3Certified(report,manifest,parentManifest){
   if(!report||!manifest||!parentManifest||
      report.schema!=='gng.v3.b3-playable.v1'||
@@ -17,8 +17,16 @@ export function b3Certified(report,manifest,parentManifest){
      report.frozen_program_sha256!==manifest.files?.['program.mjs']||
      !Number.isInteger(manifest.blocks)||manifest.blocks<=parentManifest.blocks||
      report.blocks!==manifest.blocks||manifest.frames!==report.live_frames||
-     !report.profiles||typeof report.profiles!=='object'||
-     JSON.stringify(Object.keys(report.profiles))!==JSON.stringify(B3_PROFILES))
+     !report.profiles||typeof report.profiles!=='object')
     return false;
-  return B3_PROFILES.every(p=>report.profiles[p]?.frames===B3_HORIZONS[p]);
+  // Every certified tape must still be defined identically (hash), so a
+  // stale report cannot vouch for tapes that have since changed.
+  const names=Object.keys(report.profiles);
+  if(!B3_CORE_PROFILES.every(p=>names.includes(p)))return false;
+  return names.every(p=>{
+    try{
+      return report.profiles[p]?.frames===B3_HORIZONS[p]&&
+        report.profiles[p].tape_sha256===b3Tape(p).sha256;
+    }catch{return false;}
+  });
 }

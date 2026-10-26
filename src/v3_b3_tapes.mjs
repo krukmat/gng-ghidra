@@ -48,16 +48,36 @@ export function botEvents(seed,from,to){
   }
   return out;
 }
+/** G2.3 sustained play: the same bot plus Coin and Start every `period`
+ * frames. An open-loop bot reaches GAME OVER after ~1 min; these taps
+ * let the game itself accept a CONTINUE or a new game instead of falling
+ * back to attract. Mid-game Coin/Start are ordinary hardware inputs.
+ */
+export function sustainEvents(seed,from,to,period=900){
+  const system=[];
+  for(let f=from+period;f+100<to;f+=period)
+    system.push(...tap(f,'coin1',12),...tap(f+80,'start1',12));
+  return [...botEvents(seed,from,to),...system].sort((a,b)=>a.cycle-b.cycle);
+}
 const BOT_FRAMES=18000; // ~5 minutes at the board's ~59.64 Hz
 const bot=seed=>Object.freeze([...titleCoinStart,
   ...botEvents(seed,1200,BOT_FRAMES-60)]);
+const SUSTAIN_FRAMES=24000; // ~6.7 min: >= 5 min of play after the intro
+const sustain=seed=>Object.freeze([...titleCoinStart,
+  ...sustainEvents(seed,1200,SUSTAIN_FRAMES-60)]);
 const tapes=Object.freeze({
   idle:Object.freeze([]),humanEarlyCoin,titleCoinStart,arthurControls,
-  botA:bot(0xa11ce),botB:bot(0xb0b),botC:bot(0xc0ffee)
+  botA:bot(0xa11ce),botB:bot(0xb0b),botC:bot(0xc0ffee),
+  // Generation 2 (G2.3): sustained play through continue/new game.
+  sustainA:sustain(0x5a1a),sustainB:sustain(0x5b2b)
 });
+/** Profiles every selectable B3 generation must certify. */
+export const B3_CORE_PROFILES=Object.freeze(
+  ['idle','humanEarlyCoin','titleCoinStart','arthurControls']);
 export const B3_HORIZONS=Object.freeze({
   idle:6000,humanEarlyCoin:6000,titleCoinStart:6000,arthurControls:6000,
-  botA:BOT_FRAMES,botB:BOT_FRAMES,botC:BOT_FRAMES
+  botA:BOT_FRAMES,botB:BOT_FRAMES,botC:BOT_FRAMES,
+  sustainA:SUSTAIN_FRAMES,sustainB:SUSTAIN_FRAMES
 });
 export const B3_PROFILES=Object.freeze(Object.keys(tapes));
 export function b3Tape(profile){

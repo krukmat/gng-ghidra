@@ -12,7 +12,8 @@ cd "$ROOT"
 echo V3_B3_LOCAL_STAGE=ROM_FREE_GATE
 bash scripts/v3_b2c_gate.sh
 echo V3_B3_LOCAL_STAGE=REAL_OFFLINE_AOT
-if [[ -d out/v3/b3/frozen ]]; then
+GEN_DIR="$(node --input-type=module -e "import {b3GenerationDir} from './src/v3_b3_bundle.mjs';console.log(b3GenerationDir(process.cwd()))")"
+if [[ -d "$GEN_DIR/frozen" ]]; then
   echo V3_B3_LOCAL_MODE=ALREADY_FROZEN
 else
   node scripts/v3_b3_discover.mjs

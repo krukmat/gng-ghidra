@@ -10,13 +10,17 @@ import {join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import zlib from 'node:zlib';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
+import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {rendererUnknownCount} from '../src/v2_b1_observable.mjs';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
 import {gngbGraphics,rendererInputs} from './r35_t5_render_check.mjs';
 import {B3_HORIZONS,b3Tape} from '../src/v3_b3_tapes.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
-const DIR=join(ROOT,'out/v3/b3/frozen');
+const SELECTED=selectB3Bundle(ROOT);
+if(!SELECTED)throw Error('V3_B3_NO_CERTIFIED_BUNDLE');
+const DIR=SELECTED.dir;
+console.log('V3_B3_BUNDLE_GENERATION='+SELECTED.generation);
 const [profile,list]=process.argv.slice(2);
 const want=(list??'').split(',').map(Number);
 if(!profile||!want.length||want.some(f=>!Number.isInteger(f)||f<1||

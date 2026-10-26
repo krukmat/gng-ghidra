@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {B3_PROFILES,B3_HORIZONS,b3Tape,botEvents} from '../src/v3_b3_tapes.mjs';
+import {B3_PROFILES,B3_HORIZONS,b3Tape,botEvents,sustainEvents} from '../src/v3_b3_tapes.mjs';
 import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
 import {seedFromKey} from '../src/v3_b3_ondemand.mjs';
 import {blockKey} from '../src/gngb_block_key.mjs';
@@ -36,4 +36,11 @@ test('on-demand seeds round-trip the shared block identity',()=>{
     {bank:0,pc:0x4000,overlay:null},{bank:null,pc:0x1a00,overlay:2}])
     assert.deepEqual(seedFromKey(blockKey(s.bank,s.pc,s.overlay)),s);
   assert.throws(()=>seedFromKey(-1),/V3_B3_KEY_INVALID/);
+});
+test('sustain tapes re-insert Coin/Start periodically',()=>{
+  const ev=sustainEvents(7,1200,6000);
+  for(let i=1;i<ev.length;i++)assert.ok(ev[i].cycle>=ev[i-1].cycle);
+  assert.equal(ev.filter(e=>e.control==='coin1'&&e.pressed).length,5);
+  assert.equal(ev.filter(e=>e.control==='start1'&&e.pressed).length,5);
+  for(const p of ['sustainA','sustainB'])assert.equal(b3Tape(p).frames,24000);
 });

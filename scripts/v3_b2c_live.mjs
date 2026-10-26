@@ -13,14 +13,12 @@ import {LIVE_FRAMES} from '../src/v3_b2c_session_policy.mjs';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {b2dCertified} from '../src/v3_b2d_selection.mjs';
 import {b2eCertified} from '../src/v3_b2e_selection.mjs';
-import {b3Certified} from '../src/v3_b3_selection.mjs';
+import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {createVisibleFrameGate} from '../src/v3_b2c_visible_gate.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 // Use the offline-discovered gameplay bundle when available. Otherwise
 // run the verified B2A Coin1 build; missing AOT blocks stop the CPU.
-const B3=join(ROOT,'out/v3/b3/frozen');
-const B3_REPORT=join(ROOT,'out/v3/b3/discovery-report.json');
 const B2E=join(ROOT,'out/v3/b2e/frozen');
 const B2E_REPORT=join(ROOT,'out/v3/b2e/discovery-report.json');
 const B2D=join(ROOT,'out/v3/b2d/frozen');
@@ -59,17 +57,11 @@ function b2eReady(){
     return b2eCertified(report,manifest,parent);
   }catch{return false;}
 }
-function b3Ready(){
-  if(!existsSync(B3)||!existsSync(B3_REPORT)||!b2dReady())return false;
-  try{
-    const report=JSON.parse(readFileSync(B3_REPORT,'utf8'));
-    const {manifest}=loadFrozen(B3);
-    const {manifest:parent}=loadFrozen(B2D);
-    return b3Certified(report,manifest,parent);
-  }catch{return false;}
-}
-// B3 (first playable Coin/Start/Arthur route) outranks idle-only B2E.
-const BUNDLE=b3Ready()?B3:b2eReady()?B2E:b2dReady()?B2D:b2bReady()?B2B:B2A;
+// Newest certified B3 generation (playable Coin/Start/Arthur routes)
+// outranks idle-only B2E; it is only considered on a certified B2-D.
+const B3_SELECTED=b2dReady()?selectB3Bundle(ROOT):null;
+const B3=B3_SELECTED?.dir;
+const BUNDLE=B3??(b2eReady()?B2E:b2dReady()?B2D:b2bReady()?B2B:B2A);
 const ZIP=join(ROOT,'roms/gng.zip');
 const PORT=18609;
 const live=createLiveControls();
@@ -243,7 +235,7 @@ async function main(){
   if(proof.status!=='INPUT_ROUTE_UNCOMPILED'&&
      proof.status!=='INPUT_STATE_CHANGED')
     throw Error('V3_B2C_B2A_NOT_PROVEN');
-  console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B3?'B3':BUNDLE===B2E?'B2E':BUNDLE===B2D?'B2D':BUNDLE===B2B?'B2B':'B2A'));
+  console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B3?'B3_G'+B3_SELECTED.generation:BUNDLE===B2E?'B2E':BUNDLE===B2D?'B2D':BUNDLE===B2B?'B2B':'B2A'));
   const launch=()=>{
     const id=++generation;
     releaseAll();

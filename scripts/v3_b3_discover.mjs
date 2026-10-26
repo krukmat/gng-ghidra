@@ -26,11 +26,12 @@ import {b2dTape,b2dCoverageFrames,B2D_PROFILES} from '../src/v3_b2d_tapes.mjs';
 import {b2dCertified} from '../src/v3_b2d_selection.mjs';
 import {B3_PROFILES,B3_HORIZONS,b3Tape} from '../src/v3_b3_tapes.mjs';
 import {createOnDemandBlocks} from '../src/v3_b3_ondemand.mjs';
+import {B3_GENERATION,b3GenerationDir} from '../src/v3_b3_bundle.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const B2D=join(ROOT,'out/v3/b2d/frozen');
 const B2D_REPORT=join(ROOT,'out/v3/b2d/discovery-report.json');
-const OUT=join(ROOT,'out/v3/b3');
+const OUT=b3GenerationDir(ROOT);
 const FROZEN=join(OUT,'frozen');
 const REPORT=join(OUT,'discovery-report.json');
 export const B3_LIVE_FRAMES=6000;
@@ -182,6 +183,7 @@ async function main(){
   };
   renameSync(candidate,FROZEN);
   const report={schema:'gng.v3.b3-playable.v1',status:'DISCOVERY_COMPLETE',
+    generation:B3_GENERATION,
     parent_program_sha256:parent.files['program.mjs'],parent_blocks:parent.blocks,
     blocks:built.blockCount,seeds,
     extra_overlays:code.ramOverlays.slice(parentOverlays).map(ov=>
@@ -197,7 +199,8 @@ async function main(){
     source_git_head:head};
   writeFileSync(REPORT,JSON.stringify(report,null,2)+'\n',{mode:0o600});
   console.log('V3_B3_EFFECTS='+JSON.stringify(effects));
-  console.log('V3_B3_DISCOVERY=PASS_FROZEN_'+built.blockCount+'_BLOCKS');
+  console.log('V3_B3_DISCOVERY=PASS_GENERATION_'+B3_GENERATION+'_FROZEN_'+
+    built.blockCount+'_BLOCKS');
 }
 try{await main()}catch(e){
   console.error('V3_B3_DISCOVERY=BLOCKED_'+String(e.message).replace(/^V3_B3_/,''));
