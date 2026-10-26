@@ -80,6 +80,7 @@ node --test \
   tests/test_v3_b2a_cpu_ports.mjs \
   tests/test_v3_b2b_tape.mjs \
   tests/test_v3_b2b_foundation.mjs \
+  tests/test_v3_b2b_resume.mjs \
   tests/test_v3_b2c_live_controls.mjs \
   tests/test_v3_b2c_session_policy.mjs
 node --check src/gngb_input_contract.mjs
@@ -94,6 +95,8 @@ node --check scripts/v3_b2c_live.mjs
 node --check src/v3_b2c_live_controls.mjs
 node --check src/v3_b2b_foundation.mjs
 node --check tests/test_v3_b2b_foundation.mjs
+node --check src/v3_b2b_resume.mjs
+node --check tests/test_v3_b2b_resume.mjs
 node --check src/v3_b2c_session_policy.mjs
 node --check tests/test_v3_b2c_session_policy.mjs
 node --check tests/test_v3_b2c_live_controls.mjs

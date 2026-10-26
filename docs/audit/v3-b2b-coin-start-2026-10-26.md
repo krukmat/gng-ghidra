@@ -115,3 +115,50 @@ El gate esperado es
 `V3_B2B_DISCOVERY_ITERATION`. Se incluyen seis fixtures ROM-free
 de semillas históricas, metadatos inertes, drift y falsificaciones.
 **No se ha ejecutado todavía la regresión Mac ni el build privado.**
+
+## B2-B.Resume — Checkpoint 48 conservado (26/10/2026)
+
+Resultado Mac:
+```text
+V3_B2B_FOUNDATION=PASS_EXACT_FROZEN_AOT
+V3_B2B_FOUNDATION_BLOCKS=354
+V3_B2B_FOUNDATION_SEEDS=49
+V3_B2B_DISCOVERY_ITERATION=48
+V3_B2B_DISCOVERY_BLOCKS=621
+V3_B2B_DISCOVERY_FRAMES=892
+V3_B2B_DISCOVERY=BLOCKED_ITERATION_LIMIT
+```
+
+**Evidencia:** avance auténtico de 354 a 621 bloques (+267);
+892 frames de la secuencia Coin/Start/controles. El límite
+de 48 iteraciones es administrativo, no un fallo de MC6809.
+No declarar juego completo ni aprobación de Start únicamente
+porque el CPU alcance frame 892.
+
+**Cambio operativo:** `bash scripts/v3_b2b_local.sh` reconoce
+`out/v3/b2b/discovery-report.json` y llama a `--resume`.
+El checkpoint se valida fail-closed: esquema, perfil/hashes de tape,
+semillas históricas exactas, primera ruta B2-A, 48 targets únicos,
+último `UNCOMPILED`, count de bloques reproducible al excluir
+la última seed aún no compilada, overlays verificables. Compilar
+una vez el conjunto recuperado no significa repetir las 48
+ejecuciones previas; la primera nueva corrida es **iteración 49**.
+Límite por tanda nueva: **64 iteraciones adicionales**. Si
+persiste `UNCOMPILED`, el siguiente `--resume` continúa donde
+se guardó sin recomenzar. No se aumentó la duración del runtime
+ni se añadió intérprete.
+
+Los informes previos se archivan antes de promover la nueva
+versión en `out/v3/b2b/history/discovery-iteration-N.json`.
+Los nuevos overlays descubiertos se guardan únicamente en
+el reporte privado como bytes necesarios para reconstruirlos.
+Los reportes viejos que mencionen overlays adicionales **sin
+sus bytes** fallan expresamente con
+`V3_B2B_RESUME_OVERLAY_PROVENANCE_MISSING`, en vez de
+inventar o sobrescribir ROM.
+
+**Gates locales:** `V3_B2B_RESUME=PASS_ATTESTED_CHECKPOINT`,
+`V3_B2B_RESUME_FROM_ITERATION=48` y
+`V3_B2B_DISCOVERY_ITERATION=49`. Luego alcanzar
+`FRAMES_DONE`, pasar verificación frozen y gates
+Coin/Start, o conservar otro checkpoint para la próxima tanda.
