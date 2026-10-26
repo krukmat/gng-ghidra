@@ -3,8 +3,10 @@
 **R3.5.B2 checkpoint ROM-free (26/10/2026):** B2.T1 auditó el hook MC6809
 `r3_prepare_native_mame_hook.py`, el parser `r3_native_irq_report.mjs` y
 el runner heredado. B2.T2 endurece el runner para no sobrescribir `out/r2`
-y exige autorización nueva para T4. B2.T3 deja la suite local ROM-free
-pendiente de confirmación en Mac; no existe todavía binario MAME
+y exige autorización nueva para T4. B2.T3 quedó
+PASS_ROM_FREE según marcadores de la regresión integral previa y 8/8 tests
+Python adicionales ejecutados por el operador en `0f1f873`. La suite
+integral no se repitió en ese último HEAD. No existe todavía binario MAME
 instrumentado ni prueba real de wake IRQ/VBlank. Véase
 [checkpoint B2](audit/a063-r35-b2-t1-t3-readiness-2026-10-26.md).
 
