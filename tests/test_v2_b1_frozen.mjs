@@ -45,7 +45,7 @@ test('frozen bundle runs without zip, ROM loader or AOT compiler',async()=>{
 
 test('runtime AOT dependency guard rejects real imports, not comments',async()=>{
   const {dir}=await synthetic();
-  const {readFileSync:read,writeFileSync:write,rmSync}=await import('node:fs');
+  const {readFileSync:read}=await import('node:fs');
   const {join}=await import('node:path');
   // Freeze is single-shot and never overwrites an existing private package.
   const copy=join(dir,'..','second');
@@ -58,7 +58,7 @@ test('runtime AOT dependency guard rejects real imports, not comments',async()=>
   const generated=compileProgram(code,[{bank:null,pc:0x6000}],{libUrl:origin});
   assert.throws(()=>freezeBundle(copy,{generated:generated.source,code,
     overlays:[],modules:{...modules,
-      'gngb_block_key.mjs':original+"\\nimport './mc6809_aot.mjs';\\n"},
+      'gngb_block_key.mjs':original+"\nimport './mc6809_aot.mjs';\n"},
     provenance:{frames:1,blocks:1}}),/V2_B1_RUNTIME_IMPORTS_COMPILER/);
 });
 
