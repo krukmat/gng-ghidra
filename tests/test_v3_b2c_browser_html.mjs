@@ -40,3 +40,14 @@ test('live HTML exposes real operator Coin and Start hardware buttons',()=>{
   assert.match(js,/pulse\('start1'\)/);
   assert.match(source,/CPU_HALTED_RESTART/);
 });
+
+test('the operator controls pause only at real VBlank and resume CPU',()=>{
+  const html=new Function('return '+fixture[1])();
+  assert.match(html,/id="continue"/);
+  assert.match(html,/id="interaction-window"/);
+  const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  assert.match(script,/fetch\('\/continue'/);
+  assert.match(source,/createVisibleFrameGate/);
+  assert.match(source,/gate\.shouldAdvance/);
+  assert.match(source,/if\(data\.control==='coin1'&&data\.pressed\)resumeOperator\(\)/);
+});

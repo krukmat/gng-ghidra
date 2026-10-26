@@ -89,7 +89,8 @@ node --test \
   tests/test_v3_b2d_tapes.mjs \
   tests/test_v3_b2d_selection.mjs \
   tests/test_v3_b2d_pass_cache.mjs \
-  tests/test_v3_b2e_selection.mjs
+  tests/test_v3_b2e_selection.mjs \
+  tests/test_v3_b2c_visible_gate.mjs
 node --check src/gngb_input_contract.mjs
 node --check tests/test_v3_b2a_cpu_ports.mjs
 node --check scripts/v3_b2a_build.mjs
@@ -117,6 +118,8 @@ node --check tests/test_v3_b2d_tapes.mjs
 node --check tests/test_v3_b2d_selection.mjs
 node --check scripts/v3_b2e_discover.mjs
 node --check src/v3_b2e_selection.mjs
+node --check src/v3_b2c_visible_gate.mjs
+node --check tests/test_v3_b2c_visible_gate.mjs
 node --check tests/test_v3_b2e_selection.mjs
 bash -n scripts/v3_b2e_local.sh
 node --check src/v3_b2d_pass_cache.mjs

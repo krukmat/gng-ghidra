@@ -22,6 +22,9 @@ node --check src/v3_b2d_selection.mjs
 node --check tests/test_v3_b2d_selection.mjs
 node --check src/v3_b2e_selection.mjs
 node --check tests/test_v3_b2e_selection.mjs
+node --check src/v3_b2c_visible_gate.mjs
+node --check tests/test_v3_b2c_visible_gate.mjs
+node --test tests/test_v3_b2c_visible_gate.mjs
 node --test tests/test_v3_b2e_selection.mjs
 node --test tests/test_v3_b2d_selection.mjs
 node --test tests/test_v3_b2c_browser_html.mjs
