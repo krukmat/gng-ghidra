@@ -59,6 +59,52 @@ class T4BuildDiagnosisTests(unittest.TestCase):
                 self.assertEqual(self.classify(msg)["R35_T4_DIAG_CAUSE"],
                                  expected)
 
+
+    def test_compiler_component_and_known_public_api_only(self):
+        cases = [
+            (
+                "src/devices/cpu/m6809/m6809.cpp:471: error: "
+                "'total_cycles' was not declared in this scope\n",
+                ("M6809_CPP", "UNDECLARED_IDENTIFIER", "TOTAL_CYCLES"),
+            ),
+            (
+                "build/generated/emu/cpu/m6809/m6809.hxx:114: error: "
+                "'std::string_view' has no member named 'private_symbol'\n",
+                ("M6809_GENERATED", "MISSING_MEMBER", "STRING_VIEW"),
+            ),
+            (
+                "/private/unknown.cpp:2: error: "
+                "'sensitive_name' was not declared in this scope\n",
+                ("UNKNOWN", "UNDECLARED_IDENTIFIER", "UNKNOWN"),
+            ),
+            (
+                "src/devices/cpu/m6809/base6x09.lst:42: error: expected ';'\n",
+                ("M6809_MICROCODE", "SYNTAX", "UNKNOWN"),
+            ),
+        ]
+        for log, expected in cases:
+            with self.subTest(expected=expected):
+                got = M.compiler_details(log)
+                self.assertEqual(
+                    (got["R35_T4_DIAG_COMPONENT"],
+                     got["R35_T4_DIAG_ERROR_KIND"],
+                     got["R35_T4_DIAG_PUBLIC_API"]),
+                    expected
+                )
+                self.assertNotIn("sensitive_name", " ".join(got.values()))
+                self.assertNotIn("private", " ".join(got.values()))
+
+    def test_build_failure_still_fixed_category_with_details(self):
+        result = self.classify(
+            "src/devices/cpu/m6809/m6809.cpp:47: error: "
+            "'logerror' was not declared in this scope\n"
+            "make: *** [build] Error 1\n")
+        self.assertEqual(result["R35_T4_DIAG_CAUSE"],
+                         "COMPILER_OR_GENERATOR_ERROR")
+        self.assertEqual(result["R35_T4_DIAG_COMPONENT"], "M6809_CPP")
+        self.assertEqual(result["R35_T4_DIAG_PUBLIC_API"], "MAME_LOGERROR")
+
+
     @unittest.skipUnless(shutil.which("bash"), "bash unavailable")
     def test_wrapper_readonly_no_rebuild(self):
         source = SH.read_text()
