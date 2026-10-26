@@ -22,9 +22,14 @@ export class GngbRuntimeError extends Error{
   constructor(code,detail){super(code);this.code=code;this.detail=detail;}
 }
 
-export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PER_FRAME}={}){
+export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PER_FRAME,
+  portRead=null,onPortRead=null}={}){
   if(!Number.isInteger(cyclesPerFrame)||cyclesPerFrame<1)
     throw Error('V2_B1_INVALID_IRQ_PERIOD');
+  if(portRead!==null&&typeof portRead!=='function')
+    throw Error('V3_B2A_INVALID_PORT_READER');
+  if(onPortRead!==null&&typeof onPortRead!=='function')
+    throw Error('V3_B2A_INVALID_PORT_OBSERVER');
   const mem=new Uint8Array(0x3000),km=new Uint8Array(0x3000);
   const palExt=new Uint8Array(0x100),pal=new Uint8Array(0x100);
   // machine_reset: palette RAM filled with 00/55/aa/ff, scroll zeroed.
@@ -50,19 +55,35 @@ export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PE
     return code.banks[$.bank*0x2000+a-0x4000];
   };
   // Data read that must be known.
-  $.rd=a=>{
+  // New AOT code supplies the exact bus-read offset relative to the
+  // current instruction. No provider = byte-for-byte legacy V2 behavior.
+  $.rd=(a,offset)=>{
     if(a<0x3000){
       if(km[a]!==255)fail('R35_T5_UNKNOWN_READ',{addr:a,mask:km[a]});
       return mem[a];
     }
-    if(a<0x3005)return PORT_DEFAULTS[a-0x3000];
+    if(a<0x3005){
+      if(portRead!==null&&a<0x3003){
+        if(!Number.isSafeInteger(offset)||offset<0||offset>64)
+          fail('V3_B2A_READ_CYCLE_OFFSET_MISSING',{addr:a});
+        const cycle=$.C+offset;
+        if(!Number.isSafeInteger(cycle)||cycle<0)
+          fail('V3_B2A_READ_CYCLE_INVALID',{addr:a});
+        const value=portRead(a,cycle);
+        if(!Number.isInteger(value)||value<0||value>255)
+          fail('V3_B2A_PORT_VALUE_INVALID',{addr:a,cycle});
+        if(onPortRead)onPortRead({addr:a,cycle,pc:$.ipc,value});
+        return value;
+      }
+      return PORT_DEFAULTS[a-0x3000];
+    }
     if(a<0x4000)return 0; // write-only or unmapped: reads 0 (T4 native)
     return romByte(a);
   };
   // Stack read that carries its known mask in $.lk.
-  $.rk=a=>{
+  $.rk=(a,offset)=>{
     if(a<0x3000){$.lk=km[a];return mem[a];}
-    $.lk=255;return $.rd(a);
+    $.lk=255;return $.rd(a,offset);
   };
   const snapshot=()=>{
     const r=new Uint8Array(RECORD_BYTES),k=new Uint8Array(RECORD_BYTES);

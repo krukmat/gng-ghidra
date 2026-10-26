@@ -162,8 +162,8 @@ function genInsn(byte,pc,stopsTable){
       default:return false;
     }
     if(ind){
-      e.line('t=$.rd(ea);');e.acc();e.stop();
-      e.line('ea=t<<8|$.rd((ea+1)&65535);');e.acc();e.stop();
+      e.line(`t=$.rd(ea,${e.c});`);e.acc();e.stop();
+      e.line(`ea=t<<8|$.rd((ea+1)&65535,${e.c});`);e.acc();e.stop();
       e.acc();e.stop();
     }
     e.stop(); // @set_ea
@@ -182,7 +182,7 @@ function genInsn(byte,pc,stopsTable){
     let v;
     if(mode==='imm'){v=h(next8());e.acc();}
     else if(mode==='a'||mode==='b'){v=need(mode);}
-    else{e.line('v=$.rd(ea);');e.acc();v='v';}
+    else{e.line(`v=$.rd(ea,${e.c});`);e.acc();v='v';}
     if(at)e.stop();
     return v;
   };
@@ -197,8 +197,8 @@ function genInsn(byte,pc,stopsTable){
       const lo=next8();e.acc();e.stop();
       return h(hi<<8|lo);
     }
-    e.line('t=$.rd(ea)<<8;');e.acc();e.stop();
-    e.line('t|=$.rd((ea+1)&65535);');e.acc();e.stop();
+    e.line(`t=$.rd(ea,${e.c})<<8;`);e.acc();e.stop();
+    e.line(`t|=$.rd((ea+1)&65535,${e.c});`);e.acc();e.stop();
     return 't';
   };
 
@@ -223,7 +223,7 @@ function genInsn(byte,pc,stopsTable){
   const pullRegs=(path,sp,m)=>{
     const other=sp==='s'?'u':'s';
     const one=()=>{
-      path.line(`v=$.rk($.${sp});k=$.lk;$.${sp}=($.${sp}+1)&65535;`);
+      path.line(`v=$.rk($.${sp},${path.c});k=$.lk;$.${sp}=($.${sp}+1)&65535;`);
       path.acc();path.stop();
     };
     const byteTo=r=>{one();path.line(`$.${r}=v;$.k${r}=k;`);};
@@ -436,7 +436,7 @@ function genInsn(byte,pc,stopsTable){
       }
       case 0x3b:{                                            // RTI
         e.acc();e.stop();need('s');
-        e.line('v=$.rk($.s);k=$.lk;$.s=($.s+1)&65535;$.cc=v;$.kcc=k;');
+        e.line(`v=$.rk($.s,${e.c});k=$.lk;$.s=($.s+1)&65535;$.cc=v;$.kcc=k;`);
         e.acc();e.stop();
         e.line('if(!($.kcc&128))$.unknown("CC.E");');
         const full=e.clone(),part=e.clone();
