@@ -67,6 +67,10 @@ make -j4 SUBTARGET=gnga063 SOURCES=src/mame/capcom/gng.cpp REGENIE=1
 [[ -x "$TARGET/gnga063" ]] || fail COMPILED_BINARY_MISSING
 file "$TARGET/gnga063" | grep -q 'ARM aarch64' || fail COMPILED_BINARY_NOT_ARM64
 grep -aFq GNG_R35_NATIVE_V1 "$TARGET/gnga063" || fail INSTRUMENTED_MARKER_MISSING
+# The prefix alone could come from m6809.cpp; the microcode events must be linked too.
+for event in CPU_RESET LINE_DELIVERED SYNC_ENTER SYNC_EXIT IRQ_ENTRY VECTOR_FETCH; do
+  grep -aFq "GNG_R35_NATIVE_V1"$'\t'"$event"$'\t' "$TARGET/gnga063" || fail INSTRUMENTED_EVENT_MISSING
+done
 NEW_SHA="$(sha256sum "$TARGET/gnga063" | cut -d' ' -f1)"
 [[ "$NEW_SHA" != "$ORIG_SHA" ]] || fail INSTRUMENTED_BINARY_IDENTICAL_TO_ORIGINAL
 "$TARGET/gnga063" -version

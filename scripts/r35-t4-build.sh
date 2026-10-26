@@ -9,8 +9,10 @@ fail(){ printf 'R35_T4_BUILD=BLOCKED_%s\n' "$1" >&2; exit 2; }
 if [[ $# -eq 1 ]]; then ACTION="$1"; fi
 case "$ACTION" in --check|--prepare|--build) ;; *) fail INVALID_ACTION ;; esac
 ORIGINAL=gng-a063-mame0289-arm64-v1
-WORK=gng-r35-t4-mame-arm64-v1
-EVIDENCE=gng-r35-t4-evidence-arm64-v1
+# Attempt 2. The attempt-1 volumes (-v1) keep the preserved first build
+# failure (-Werror=misleading-indentation) and are never mounted here.
+WORK=gng-r35-t4-mame-arm64-v2
+EVIDENCE=gng-r35-t4-evidence-arm64-v2
 IMAGE=sha256:a3bd689f9d867b51cd4a25f01b3dfd8ed0218b53f09347a714271e6cd964c255
 [[ "$(git -C "$ROOT" branch --show-current 2>/dev/null)" == feature/a063-r1-forensics-contract ]] || fail FEATURE_BRANCH_REQUIRED
 [[ "$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null)" == "$ROOT" ]] || fail CHECKOUT_ROOT_REQUIRED
@@ -27,6 +29,8 @@ docker --context colima volume inspect "$ORIGINAL" >/dev/null 2>&1 || fail PROTE
 bash "$ROOT/scripts/r35-t4-source-preflight.sh" >/dev/null || fail PROTECTED_SOURCE_INVALID
 
 if [[ "$ACTION" == --check || "$ACTION" == --prepare ]]; then
+  # A fresh attempt is only spent once the overlay compiles ROM-free.
+  bash "$ROOT/scripts/r35-t4-overlay-compile-check.sh" >/dev/null 2>&1 || fail OVERLAY_COMPILE_CHECK_FAILED
   for name in "$WORK" "$EVIDENCE"; do
     if docker --context colima volume inspect "$name" >/dev/null 2>&1; then
       fail FRESH_ISOLATED_VOLUME_REQUIRED

@@ -7,6 +7,13 @@ from pathlib import Path
 
 INNER = re.compile(r"(?m)^R35_T4_INNER=BLOCKED_([A-Z0-9_]+)\s*$")
 SUCCEEDED = "R35_T4_BUILD=PASS_COMPILED_SEPARATE_ARM64_BINARY"
+# Public GCC option names; anything else is reported as OTHER.
+WERROR_FLAGS = (
+    "misleading-indentation", "unused-variable", "unused-but-set-variable",
+    "unused-function", "unused-label", "parentheses", "implicit-fallthrough",
+    "format", "format-security", "overloaded-virtual", "suggest-override",
+    "undef", "vla", "write-strings", "shadow", "dangling-else",
+)
 
 # No compiler line, symbol, path or disassembly ever leaves the private volume.
 # These fixed categories only narrow the next patch to a single component.
@@ -15,6 +22,7 @@ def compiler_details(log: str) -> dict[str, str]:
         "R35_T4_DIAG_COMPONENT": "UNKNOWN",
         "R35_T4_DIAG_ERROR_KIND": "UNKNOWN",
         "R35_T4_DIAG_PUBLIC_API": "UNKNOWN",
+        "R35_T4_DIAG_WERROR_FLAG": "NONE",
     }
     lines = log.splitlines()
     errors = [
@@ -28,16 +36,28 @@ def compiler_details(log: str) -> dict[str, str]:
     diagnostic = lines[i]
     components = (
         ("M6809_GENERATED", r"m6809\.hxx"),
+        ("HD6309_GENERATED", r"hd6309\.hxx"),
+        ("KONAMI_GENERATED", r"konami\.hxx"),
         ("M6809_CPP", r"(?:/|^)m6809\.cpp\b"),
         ("M6809_HEADER", r"(?:/|^)m6809\.h\b"),
         ("M6809_MICROCODE", r"base6x09\.lst"),
         ("M6809_GENERATOR", r"m6809make\.py"),
     )
-    for label, pattern in components:
-        if re.search(pattern, context):
+    # The failing line wins; with make -j, nearby context may name another TU.
+    for text in (diagnostic, context):
+        label = next((label for label, pattern in components
+                      if re.search(pattern, text)), None)
+        if label:
             summary["R35_T4_DIAG_COMPONENT"] = label
             break
+    # GCC prints level-taking options with a trailing '=' (-Wformat=).
+    flag = re.search(r"\[-Werror=([a-z0-9+-]+)=?\]", diagnostic)
+    if flag:
+        name = flag.group(1)
+        summary["R35_T4_DIAG_WERROR_FLAG"] = (
+            name.upper().replace("-", "_") if name in WERROR_FLAGS else "OTHER")
     for label, pattern in (
+        ("WARNING_AS_ERROR", r"\[-Werror="),
         ("MISSING_MEMBER", r"no member named|has no member|not a member of"),
         ("UNDECLARED_IDENTIFIER", r"not declared in this scope|undeclared identifier|was not declared"),
         ("TYPE_OR_OVERLOAD", r"no matching function|no viable|invalid conversion|cannot convert|could not convert|invalid use of"),
@@ -108,7 +128,7 @@ def classify(evidence: Path) -> dict[str, str]:
         known = {
             "MODIFIED_BUILD_SOURCE", "ORIGINAL_PATCH_INVALID",
             "COMPILED_BINARY_MISSING", "COMPILED_BINARY_NOT_ARM64",
-            "INSTRUMENTED_MARKER_MISSING",
+            "INSTRUMENTED_MARKER_MISSING", "INSTRUMENTED_EVENT_MISSING",
             "INSTRUMENTED_BINARY_IDENTICAL_TO_ORIGINAL",
             "PREPARE_CHECKPOINT_MISSING", "PREPARE_CHECKPOINT_INVALID",
             "PREPARED_SOURCE_MISSING", "BUILD_REVISION_MISMATCH",

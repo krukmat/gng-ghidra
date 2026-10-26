@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,6 +71,47 @@ class NativeMameOverlayTests(unittest.TestCase):
         self.assertIn("m_firq_line", compiled)
         self.assertIn("std::string_view(machine().system().name)", compiled)
         self.assertIn("@m_pc.b.l = read_vector(1)", compiled)
+
+    def test_event_formats_are_the_parser_contract(self):
+        patched = (probe.instrument_cpu(CPU) +
+                   probe.instrument_microcode(MICROCODE))
+        for literal in [
+            r'"GNG_R35_NATIVE_V1\tLINE_DELIVERED\t%s\t%d\t%04X\t%02X\t%llu\n"',
+            r'"GNG_R35_NATIVE_V1\tCPU_RESET\t%llu\n"',
+            r'"GNG_R35_NATIVE_V1\tSYNC_ENTER\t%04X\t%02X\t%llu\n"',
+            r'"GNG_R35_NATIVE_V1\tSYNC_EXIT\t%04X\t%02X\t%d\t%d\t%d\t%llu\n"',
+            r'"GNG_R35_NATIVE_V1\tIRQ_ENTRY\tIRQ\t%04X\t%02X\t%llu\n"',
+            r'"GNG_R35_NATIVE_V1\tIRQ_ENTRY\tFIRQ\t%04X\t%02X\t%llu\n"',
+            r'"GNG_R35_NATIVE_V1\tIRQ_ENTRY\tNMI\t%04X\t%02X\t%llu\n"',
+            r'"GNG_R35_NATIVE_V1\tVECTOR_FETCH\t%04X\t%04X\t%llu\n"',
+        ]:
+            self.assertEqual(patched.count(literal), 1, literal)
+
+    def test_inserted_code_survives_werror_and_microcode_generator(self):
+        # T4.2 attempt 1 failed on -Werror=misleading-indentation: unbraced,
+        # space-indented guards spliced into MAME's tab-indented sources.
+        guard = re.compile(
+            r'^(\t*)if \(std::string_view\(machine\(\)\.system\(\)\.name\)'
+            r' == "gngb"[^{]*?\)\n\1\{\n', re.M)
+        for original, patched, guards in (
+                (CPU, probe.instrument_cpu(CPU), 2),
+                (MICROCODE, probe.instrument_microcode(MICROCODE), 6)):
+            self.assertEqual(patched.count("if (std::string_view("), guards)
+            self.assertEqual(len(guard.findall(patched)), guards)
+            inserted = (Counter(patched.splitlines()) -
+                        Counter(original.splitlines()))
+            self.assertTrue(inserted)
+            for line in inserted:
+                self.assertFalse(line.startswith(" "), line)
+                self.assertNotIn(";", line[:-1], line)
+                self.assertFalse(line.lstrip().startswith(("%", "@")), line)
+
+    def test_snippet_indent_must_be_whole_levels(self):
+        self.assertEqual(probe.mame_snippet("\nif (x)\n{\n    y();\n}\n"),
+                         "if (x)\n{\n\ty();\n}\n")
+        for bad in ("  y();", "\ty();"):
+            with self.assertRaisesRegex(ValueError, "R35_MAME_SNIPPET_INDENT"):
+                probe.mame_snippet(bad)
 
     def test_upstream_source_drift_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "R35_MAME_ANCHOR_MISMATCH"):

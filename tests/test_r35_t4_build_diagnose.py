@@ -94,6 +94,42 @@ class T4BuildDiagnosisTests(unittest.TestCase):
                 self.assertNotIn("sensitive_name", " ".join(got.values()))
                 self.assertNotIn("private", " ".join(got.values()))
 
+    def test_attempt1_warning_as_error_shape(self):
+        # Synthetic shape of the ROM-free reproduction of T4.2 attempt 1.
+        log = (
+            "Compiling src/devices/cpu/m6809/m6809.cpp...\n"
+            "../../../../../src/devices/cpu/m6809/m6809.cpp: In member "
+            "function 'virtual void m6809_base_device::device_reset()':\n"
+            "../../../../../src/devices/cpu/m6809/m6809.cpp:261:5: error: "
+            "this 'if' clause does not guard... "
+            "[-Werror=misleading-indentation]\n"
+            "make: *** [optional.make:731] Error 1\n")
+        got = self.classify(log)
+        self.assertEqual(got["R35_T4_DIAG_CAUSE"], "COMPILER_OR_GENERATOR_ERROR")
+        self.assertEqual(got["R35_T4_DIAG_COMPONENT"], "M6809_CPP")
+        self.assertEqual(got["R35_T4_DIAG_ERROR_KIND"], "WARNING_AS_ERROR")
+        self.assertEqual(got["R35_T4_DIAG_WERROR_FLAG"],
+                         "MISLEADING_INDENTATION")
+
+    def test_level_options_print_with_trailing_equals(self):
+        for flag, expected in [("implicit-fallthrough=", "IMPLICIT_FALLTHROUGH"),
+                               ("format=", "FORMAT")]:
+            with self.subTest(flag=flag):
+                got = M.compiler_details(
+                    "src/devices/cpu/m6809/m6809.cpp:470:9: error: "
+                    f"this statement may fall through [-Werror={flag}]\n")
+                self.assertEqual(got["R35_T4_DIAG_WERROR_FLAG"], expected)
+
+    def test_failing_line_beats_parallel_make_context(self):
+        got = M.compiler_details(
+            "Compiling src/devices/cpu/m6809/m6809.cpp...\n"
+            "Compiling src/devices/cpu/m6809/hd6309.cpp...\n"
+            "../../../../generated/emu/cpu/m6809/hd6309.hxx:1840:5: error: "
+            "private words [-Werror=private-flag]\n")
+        self.assertEqual(got["R35_T4_DIAG_COMPONENT"], "HD6309_GENERATED")
+        self.assertEqual(got["R35_T4_DIAG_WERROR_FLAG"], "OTHER")
+        self.assertNotIn("private", " ".join(got.values()).lower())
+
     def test_build_failure_still_fixed_category_with_details(self):
         result = self.classify(
             "src/devices/cpu/m6809/m6809.cpp:47: error: "
@@ -117,8 +153,11 @@ class T4BuildDiagnosisTests(unittest.TestCase):
             self.assertNotIn(forbidden, source)
         self.assertEqual(subprocess.run(["bash", "-n", str(SH)],
                                         capture_output=True).returncode, 0)
-        self.assertEqual(subprocess.run(["bash", str(SH), "--build"],
-                                        capture_output=True).returncode, 2)
+        for args in (["--build"], ["v3"], ["v1", "v2"]):
+            self.assertEqual(subprocess.run(["bash", str(SH), *args],
+                                            capture_output=True).returncode, 2)
+        self.assertIn("ATTEMPT=\"${1:-v2}\"", source)
+        self.assertIn('echo "R35_T4_DIAG_ATTEMPT=$ATTEMPT"', source)
 
 
 if __name__ == "__main__":

@@ -3,9 +3,12 @@
 **R3.5.B2.T4 (26/10/2026):** T4.1 PASS reportado por operador en Mac,
 fuente MAME 0.289 protegida recuperable en Colima. T4.2 preparado como
 copia aislada del checkout y compilación ARM64 explícita, sin tocar
-MAME original ni capturas. Código publicado en
-[checkpoint de build](audit/r35-b2-t4-build-2026-10-26.md); **aún
-no se ha ejecutado T4.2**. No existe evidencia nativa IRQ/SYNC/VBlank.
+MAME original ni capturas. [Checkpoint de build](audit/r35-b2-t4-build-2026-10-26.md).
+Intento 1 bloqueado por `-Werror=misleading-indentation` en el overlay
+(causa reproducida sin ROM, corregida). **Intento 2 PASS:**
+`R35_T4_BUILD=PASS_INSTRUMENTED_BINARY_BUILT_NOT_CAPTURED`, con los seis
+eventos en el binario. Aún no existe evidencia nativa IRQ/SYNC/VBlank:
+T4.3 requiere autorización explícita.
 
 
 **R3.5.B2 checkpoint ROM-free (26/10/2026):** B2.T1 auditó el hook MC6809

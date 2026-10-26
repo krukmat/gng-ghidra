@@ -29,73 +29,101 @@ def replace_once(text: str, old: str, new: str, stage: str) -> str:
     return text.replace(old, new, 1)
 
 
+def mame_snippet(block: str) -> str:
+    """Re-indent a 4-space snippet with one tab per level, as MAME does.
+
+    MAME builds with -Wall -Werror. The first T4.2 build failed because
+    space-indented, unbraced guards spliced into tab-indented code tripped
+    -Werror=misleading-indentation, so every guard here is braced as well.
+    """
+    lines = []
+    for line in block.strip("\n").split("\n"):
+        body = line.lstrip(" ")
+        depth, partial = divmod(len(line) - len(body), 4)
+        if partial or body.startswith("\t"):
+            raise ValueError("R35_MAME_SNIPPET_INDENT")
+        lines.append("\t" * depth + body)
+    return "\n".join(lines) + "\n"
+
+
 def instrument_cpu(source: str) -> str:
     anchor = (
         "void m6809_base_device::execute_set_input(int inputnum, int state)\n"
         "{\n"
     )
-    logger = r'''
+    logger = mame_snippet(r'''
     if (std::string_view(machine().system().name) == "gngb" &&
-        (inputnum == M6809_IRQ_LINE ||
-         inputnum == M6809_FIRQ_LINE ||
-         inputnum == INPUT_LINE_NMI))
+            (inputnum == M6809_IRQ_LINE ||
+            inputnum == M6809_FIRQ_LINE ||
+            inputnum == INPUT_LINE_NMI))
     {
         logerror("GNG_R35_NATIVE_V1\tLINE_DELIVERED\t%s\t%d\t%04X\t%02X\t%llu\n",
-                 inputnum_string(inputnum), state != CLEAR_LINE,
-                 unsigned(m_pc.w), unsigned(m_cc),
-                 (unsigned long long)total_cycles());
+                inputnum_string(inputnum), state != CLEAR_LINE,
+                unsigned(m_pc.w), unsigned(m_cc),
+                (unsigned long long)total_cycles());
     }
-'''
+''')
     source = replace_once(source, anchor, anchor + logger, "INPUT_CALLBACK")
     anchor = (
         "\tm_cc |= CC_F;       // FIRQ disabled\n"
     )
     # Device reset also happens at cold power-on. This is a CPU reset
     # boundary only, not a proof of its external origin.
-    reset = r'''
+    reset = mame_snippet(r'''
     if (std::string_view(machine().system().name) == "gngb")
+    {
         logerror("GNG_R35_NATIVE_V1\tCPU_RESET\t%llu\n",
-                 (unsigned long long)total_cycles());
-'''
+                (unsigned long long)total_cycles());
+    }
+''')
     return replace_once(source, anchor, anchor + reset, "CPU_RESET")
 
 
 def instrument_microcode(source: str) -> str:
-    condition = 'std::string_view(machine().system().name) == "gngb"'
-    entry = r'''
+    # m6809make.py splits statements at ';' and treats a leading '%' or '@'
+    # as dispatch/cycle markers: snippets keep ';' last and start with 'if'.
+    # base6x09.lst is also included by hd6309.lst and konami.lst.
+    entry = mame_snippet(r'''
     if (std::string_view(machine().system().name) == "gngb")
+    {
         logerror("GNG_R35_NATIVE_V1\tSYNC_ENTER\t%04X\t%02X\t%llu\n",
-                 unsigned((m_pc.w - 1) & 0xffff), unsigned(m_cc),
-                 (unsigned long long)total_cycles());
-'''
-    exit_event = r'''
+                unsigned((m_pc.w - 1) & 0xffff), unsigned(m_cc),
+                (unsigned long long)total_cycles());
+    }
+''')
+    exit_event = mame_snippet(r'''
     if (std::string_view(machine().system().name) == "gngb")
+    {
         logerror("GNG_R35_NATIVE_V1\tSYNC_EXIT\t%04X\t%02X\t%d\t%d\t%d\t%llu\n",
-                 unsigned(m_pc.w), unsigned(m_cc), int(m_irq_line),
-                 int(m_firq_line), int(m_nmi_asserted),
-                 (unsigned long long)total_cycles());
-'''
+                unsigned(m_pc.w), unsigned(m_cc), int(m_irq_line),
+                int(m_firq_line), int(m_nmi_asserted),
+                (unsigned long long)total_cycles());
+    }
+''')
     old = "\tm_syncack_write_func(1);\n"
     source = replace_once(source, old, old + entry, "SYNC_ENTER")
     old = "\tm_syncack_write_func(0);\n"
     source = replace_once(source, old, old + exit_event, "SYNC_EXIT")
     for line in ("IRQ", "FIRQ", "NMI"):
         anchor = "\n" + line + ":\n"
-        callback = (
-            '\tif (' + condition + ')\n'
-            '\t\tlogerror("GNG_R35_NATIVE_V1\\tIRQ_ENTRY\\t' + line +
-            '\\t%04X\\t%02X\\t%llu\\n",\n'
-            '\t\t         unsigned(m_pc.w), unsigned(m_cc),\n'
-            '\t\t         (unsigned long long)total_cycles());\n'
-        )
+        callback = mame_snippet(r'''
+    if (std::string_view(machine().system().name) == "gngb")
+    {
+        logerror("GNG_R35_NATIVE_V1\tIRQ_ENTRY\t''' + line + r'''\t%04X\t%02X\t%llu\n",
+                unsigned(m_pc.w), unsigned(m_cc),
+                (unsigned long long)total_cycles());
+    }
+''')
         source = replace_once(source, anchor, anchor + callback, line + "_ENTRY")
     old = "\t@m_pc.b.l = read_vector(1);\n"
-    callback = (
-        '\tif (' + condition + ')\n'
-        '\t\tlogerror("GNG_R35_NATIVE_V1\\tVECTOR_FETCH\\t%04X\\t%04X\\t%llu\\n",\n'
-        '\t\t         unsigned(m_ea.w), unsigned(m_pc.w),\n'
-        '\t\t         (unsigned long long)total_cycles());\n'
-    )
+    callback = mame_snippet(r'''
+    if (std::string_view(machine().system().name) == "gngb")
+    {
+        logerror("GNG_R35_NATIVE_V1\tVECTOR_FETCH\t%04X\t%04X\t%llu\n",
+                unsigned(m_ea.w), unsigned(m_pc.w),
+                (unsigned long long)total_cycles());
+    }
+''')
     source = replace_once(source, old, old + callback, "VECTOR_FETCH")
     return source
 
