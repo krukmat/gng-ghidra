@@ -105,6 +105,56 @@ compatibilidad idle V2; si no, usa
   `UNCOMPILED`, queda bloqueada la jugabilidad, no el
   mérito de haber renderizado GnG real.
 
+## Checkpoint real recibido — 26/10/2026
+
+El operador reportó la ejecución **en Mac** del motor, con este
+resultado:
+
+```text
+GNG_LOCAL_REGRESSION=PASS_ROM_FREE_A0_2_TO_A0_6_3
+GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42H
+V3_B2C_WIRING=PASS_ROM_FREE
+V3_B2C_AOT_BUNDLE=B2A
+V3_B2C_REAL_ENGINE=STARTED http://127.0.0.1:18609
+V3_B2C_FIRST_FRAME=PASS_REAL_AOT_RENDER frame=311
+V3_B2C_ENGINE=HALT_FRAMES_DONE
+```
+
+**Interpretación precisa:** existe evidencia de ejecución real de
+CPU AOT y píxeles compuestos de su snapshot n.º 311. `FRAMES_DONE`
+no es un fallo de CPU: indica que el primer runner solicitaba
+exactamente `manifest.frames=600`, que define una ventana de
+certificación, **no la duración de una sesión interactiva**.
+Este resultado NO certifica pulsación de moneda, Start, movimiento
+o salto por parte del operador: en particular no existe
+`V3_B2C_COIN=PASS_REAL_CPU_READ` en esta corrida.
+
+### Corrección posterior (pendiente de ejecutar en Mac)
+
+El worker usa ahora `validateLiveFrames` y recibe
+`LIVE_FRAMES=6000` (100 segundos nominales de vídeo a 60 Hz),
+independiente del mínimo certificado de 600/1000 frames
+que figure en el bundle. Es un máximo acotado por memoria,
+**no** un motor ilimitado; termina normalmente al completar
+6.000 frames, o antes si encuentra un bloque AOT ausente.
+El navegador permite **Reiniciar GnG desde reset**: termina
+la CPU previa, libera todos los controles, carga el mismo AOT
+congelado y vuelve a ejecutar la inicialización real desde cero.
+No reinyecta estado ni empieza directamente en el frame 311.
+
+Se añadieron tests ROM-free de validación de límites en
+`tests/test_v3_b2c_session_policy.mjs`; son distintos de
+la ejecución privada pendiente.
+
+**Nuevo gate local necesario:** repetir
+`bash scripts/v3_b2c_gate.sh` con el commit actualizado
+y abrir el runner. Esperados:
+`V3_B2C_SESSION_FRAMES=6000` y, tras pulsar `5` cuando el
+juego sondea el puerto,
+`V3_B2C_COIN=PASS_REAL_CPU_READ`.
+Si aparece `HALT_UNCOMPILED`, conservar su banco/PC
+para continuar B2-B offline. No usar MAME como fallback.
+
 ## Ejecución prevista en el Mac
 
 ```bash
