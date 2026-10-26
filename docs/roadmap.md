@@ -1,3 +1,6 @@
+> **Entrada principal para otro modelo:** [GnG 100% jugable — ENTRYPOINT](agents/gng-100-playable-entrypoint.md).  
+> El plan y las dependencias son revisables; el objetivo de jugabilidad completa y fidelidad es invariable.
+
 > **Plan vigente hacia 100% jugable (26/10/2026):**
 > [Ruta crítica G0–G7 y gates H0–H6](plan-100pct-jugable-2026-10-26.md).
 > Prioridad absoluta: capturar Coin temprano y resolver bank=3 PC=0x519D

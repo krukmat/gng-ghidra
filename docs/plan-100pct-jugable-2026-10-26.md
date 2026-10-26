@@ -1,5 +1,7 @@
 # Plan de ejecución hacia GnG 100% jugable — V3→V4
 
+**Puerta de entrada para modelos sucesores:** [ENTRYPOINT — 100% jugable](agents/gng-100-playable-entrypoint.md). Este plan es sugerido y modificable; el objetivo funcional 100% no lo es.
+
 **Fecha:** 2026-10-26 · **Rama de trabajo:** main · **Estado:** planificación de dependencias, **NO** certificación de jugabilidad.
 **Prioridad:** funcionalidad real antes de cobertura AOT extensa; CPU del arcade original recompilada fuera de runtime; ROM privada solo en Mac.
 
