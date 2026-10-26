@@ -69,6 +69,7 @@ node --test \
 bash -n scripts/r3-native-irq-verify.sh
 python3 -m unittest discover -s tests -p 'test_r3_prepare_native_mame_hook.py' -v
 python3 -m unittest discover -s tests -p 'test_r35_t4_source_preflight.py' -v
+python3 -m unittest discover -s tests -p 'test_r35_t4_build_contract.py' -v
 python3 -m unittest discover -s tests -p 'test_r3_bank_inventory.py' -v
 python3 -m unittest discover -s tests -p 'test_r3_bank_provenance.py' -v
 python3 -m unittest discover -s tests -p 'test_mame_visual_oracle.py' -v
