@@ -268,3 +268,76 @@ de la partida (no una reproducción precalculada). Verificar
 `V3_B2C_BUS_START1`, `V3_B2C_BUS_P1_RIGHT`, etc.
 El render sigue alimentándose únicamente de snapshots vivos
 del runtime MC6809; no se publica contenido de ROM.
+
+## Checkpoint visual — HTML del navegador no ejecutaba JavaScript (26/10/2026)
+
+El operador compartió una captura con el canvas totalmente negro y
+el texto inicial `Esperando lecturas de controles por la CPU real…`.
+El log paralelo acreditaba:
+```text
+V3_B2C_AOT_BUNDLE=B2B
+V3_B2C_SESSION_FRAMES=6000
+V3_B2C_FIRST_FRAME=PASS_REAL_AOT_RENDER frame=311
+V3_B2C_ENGINE=HALT_UNCOMPILED
+V3_B2C_HALT_FRAME=1038
+V3_B2C_HALT_COIN_READS=0
+V3_B2C_HALT_START_READS=0
+V3_B2C_MISSING_PC=27277
+```
+
+### Raíz del bug y corrección
+
+Se comprobó el HTML **ya evaluado** a partir del template
+`const html=`...`` en `scripts/v3_b2c_live.mjs`.
+El source parseaba, pero el script servido tenía `SyntaxError`:
+dos secuencias de nueva línea `\\n` dentro de literales JS
+habían sido interpretadas por el template exterior como
+**saltos de línea reales**. Eso abortaba la ejecución completa
+del JS del navegador. Por tanto, `FIRST_FRAME` únicamente
+acreditaba framebuffer calculado por el worker, no un canvas
+actualizado por el navegador.
+
+Ahora las nuevas líneas están doblemente escapadas; el test
+`tests/test_v3_b2c_browser_html.mjs` recompone el HTML
+**como lo envía el servidor** y valida su script, DOM y rutas.
+
+El endpoint `GET /pixels` ya no exige un frame ID obtenido
+mediante `GET /state`; devuelve el último framebuffer real,
+su ID y la sesión en la misma respuesta HTTP, eliminando
+`409 FRAME_ADVANCED` por carreras con el worker. El cliente
+no pinta un buffer de una sesión anterior y muestra errores
+de JavaScript/transporte en lugar de esconderlos.
+
+`src/v3_b2c_pixel_probe.mjs` mide colores RGB, píxeles
+no negros y opacidad de los bytes reales del compositor
+(ni cambia ni inventa un píxel). El servidor muestra
+`V3_B2C_FIRST_RGBA_NONBLACK`,
+`V3_B2C_FIRST_RGBA_COLORS` y
+`V3_B2C_FIRST_RGBA_NONOPAQUE`; el navegador informa de
+`frames mostrados`.
+
+Si la imagen sigue negra con JS corregido, ejecutar
+```bash
+node scripts/v3_b2c_probe.mjs --probe
+```
+con el servidor abierto. `V3_B2C_DIAG_PIXELS=PASS_NONBLACK_OPAQUE_RGBA`
+certifica que llegaron bytes con píxeles reales no negros;
+`REAL_ENGINE_OUTPUT_IS_BLACK` indica que el origen del
+negro está en la salida auténtica del motor/renderizador y
+habrá que comparar contra MAME; no pintar frames falsos.
+
+### Pendiente funcional
+
+`0x6A8D` (27277 decimal), en ROM fija, es una ruta ausente
+de la ejecución **sin Coin/Start** en el frame 1038.
+El paquete B2-B de 663 bloques está certificado únicamente
+para sus perfiles hasta 1000 frames. Ampliar esa ruta será
+trabajo de un **paquete AOT privado nuevo** y no deberá
+sobrescribir el `B2B/frozen` certificado.
+El resultado negro del navegador se corrige **antes** de
+ampliar el AOT, para conseguir visualización auténtica pronto.
+
+**Validación local pendiente:** detener el proceso anterior,
+`git pull --ff-only`, pasar `scripts/v3_b2c_gate.sh`,
+arrancar `scripts/v3_b2c_live.mjs --serve`, refrescar la
+página, comprobar RGBA y controlar Coin/Start en vivo.
