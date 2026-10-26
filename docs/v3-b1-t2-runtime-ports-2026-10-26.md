@@ -124,3 +124,16 @@ No generar nuevas capturas MAME en T2; no recompilar rutas nuevas
 con inputs hasta T3; solo *detectar* la primera desviación y fallar
 cerrado donde falte código; no publicar ROM, snapshots ni AOT;
 no prometer primera partida hasta T4/T5.
+
+## Implementación B2-A (26/10/2026)
+
+Se publicaron el bus CPU AOT con offset, el proveedor de puertos
+opcional y los tests ROM-free. Hay dos artefactos nuevos,
+ambos independientes de MAME/ZIP en ejecución:
+`scripts/v3_b2a_build.mjs` para reconstrucción AOT privada
+y `scripts/v3_b2a_coin_smoke.mjs` para no-input parity + Coin1 real.
+El marcador de aceptación requiere que el operador ejecute la
+regresión y el smoke con la imagen V2 privada.
+
+[Comandos, aceptación y límites](audit/v3-b2a-input-to-game-checkpoint-2026-10-26.md).
+**T2 código preparado; gate real todavía pendiente.**
