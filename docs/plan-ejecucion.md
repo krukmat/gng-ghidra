@@ -12,7 +12,11 @@ No se modificó `main`; no se demuestra primer frame ni juego autónomo.
 
 **Dirección actual:** resolver la cobertura/efectos pendientes de A0.6.4 y
 causalidad IRQ/SYNC/VBlank/estado inicial antes de la ejecución JS/TS continua
-hasta un primer frame. No repetir el mini-oráculo ni expandir rutinas aisladas
+hasta un primer frame. El seguimiento RO identifica una muestra `LEA_INDEXED`
+y 2.477 stores de RAM principal; compara 7.432 checkpoints de registros sin
+divergencias y endurece el parser IRQ/SYNC con tests sintéticos.
+[Resultados y tareas ejecutables siguientes](audit/a063-post-d6-critical-gaps.md).
+No repetir el mini-oráculo ni expandir rutinas aisladas
 sin relación con ese checkpoint. El historial siguiente conserva la evolución.
 
 ## Checkpoint ROM-free T5 — cerrado en MacBook M5 (25/10/2026)

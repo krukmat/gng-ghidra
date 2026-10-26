@@ -9,6 +9,11 @@ cobertura/efectos pendientes de A0.6.4 y causalidad IRQ/SYNC/estado inicial
 antes de demostrar un primer frame autónomo JS/TS. No repetir mini-oráculo
 ni crear capturas por inercia.
 
+Seguimiento posterior: [diagnóstico RO y tareas siguientes](a063-post-d6-critical-gaps.md)
+identifica `LEA_INDEXED` y 2.477 stores de RAM principal, añade comparación
+de sus registros y endurece el parser IRQ/SYNC. No cambia los resultados
+originales de esta corrida ni certifica bus/primer frame.
+
 Tareas y aceptación: [handoff D6](a063-m5-d6-full-native-handoff.md).
 Diagnóstico y corrección: [corrida full acotada](a063-m5-d6-bounded-full-run.md).
 Historial del primer intento: [D6 v1](a063-m5-d6-t2-native-checkpoint.md).

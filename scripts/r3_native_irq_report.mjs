@@ -72,34 +72,45 @@ export function decodeNativeLog(log){
 }
 export function classifyNativeSyncLog(log){
   const events=decodeNativeLog(log);
-  let resetIndex=-1,waiting=null;
+  let resetIndex=-1,waiting=null,lastCycles=null;
   const wakes=[];
-  let seenLineEvents=0,irqEntries=0,vectors=0,resets=0,enters=0;
+  let seenLineEvents=0,irqEntries=0,vectors=0,resets=0,enters=0,exits=0;
+  let resetInterruptedWaits=0;
   for(const event of events){
     if(event.kind==='CPU_RESET'){
       resets++;resetIndex++;
+      if(waiting)resetInterruptedWaits++;
       waiting=null;
+      // total_cycles() belongs to this reset epoch. A new reset may restart
+      // that counter; it never carries a pending SYNC or asserted line over.
+      lastCycles=event.cycles;
       continue;
     }
-    if(event.kind==='SYNC_ENTER'&&event.pc===0x6016){
+    if(resetIndex<0)throw Error('R35_NATIVE_EVENT_BEFORE_CPU_RESET');
+    if(event.cycles<lastCycles)
+      throw Error('R35_NATIVE_CPU_CYCLES_DECREASED_WITHIN_RESET_EPOCH');
+    lastCycles=event.cycles;
+    // The hook emits every SYNC, not only the boot site. Pair all of them
+    // before considering the address-specific masked-wake correlation.
+    if(event.kind==='SYNC_ENTER'){
+      if(waiting)throw Error('R35_NATIVE_NESTED_SYNC_ENTER');
       enters++;
-      waiting={epoch:resetIndex,cc:event.cc,cycles:event.cycles,
-        assertedLines:[],startPc:event.pc};
+      waiting={epoch:resetIndex,cc:event.cc,
+        deliveredLines:new Map(),startPc:event.pc};
     }else if(event.kind==='LINE_DELIVERED'){
       seenLineEvents++;
-      if(waiting && event.asserted)
-        waiting.assertedLines.push(event.line);
-    }else if(event.kind==='SYNC_EXIT'&&waiting){
-      if(event.pc!==0x6017)
+      if(waiting)waiting.deliveredLines.set(event.line,event.asserted);
+    }else if(event.kind==='SYNC_EXIT'){
+      if(!waiting)throw Error('R35_NATIVE_SYNC_EXIT_WITHOUT_ENTRY');
+      if(event.pc!==((waiting.startPc+1)&0xffff))
         throw Error('R35_NATIVE_SYNC_EXIT_WRONG_PC');
-      if(event.cycles<waiting.cycles)
-        throw Error('R35_NATIVE_CPU_CYCLES_DECREASED_DURING_WAIT');
-      const lines=[...new Set(waiting.assertedLines)]
-        .filter(name=>event.lines[name]);
-      const masked=lines.length>0&&lines.every(line=>
+      exits++;
+      const activeLines=Object.keys(event.lines).filter(name=>event.lines[name]);
+      const lines=activeLines.filter(name=>waiting.deliveredLines.get(name)===true);
+      const masked=lines.length>0&&activeLines.every(line=>
         line==='IRQ'?(waiting.cc&0x10)!==0:
         line==='FIRQ'?(waiting.cc&0x40)!==0:false);
-      wakes.push({
+      if(waiting.startPc===0x6016)wakes.push({
         epoch:waiting.epoch,
         entered_sync_pc:'0x6016',
         resume_pc:'0x6017',
@@ -111,11 +122,14 @@ export function classifyNativeSyncLog(log){
       });
       waiting=null;
     }else if(event.kind==='IRQ_ENTRY'){
+      if(waiting)throw Error('R35_NATIVE_INTERRUPT_EVENT_DURING_SYNC_WAIT');
       irqEntries++;
     }else if(event.kind==='VECTOR_FETCH'){
+      if(waiting)throw Error('R35_NATIVE_INTERRUPT_EVENT_DURING_SYNC_WAIT');
       vectors++;
     }
   }
+  if(waiting)throw Error('R35_NATIVE_SYNC_ENTRY_WITHOUT_EXIT_OR_RESET');
   const maskedWakes=wakes.filter(x=>x.masked_wake_observed).length;
   return {
     schema:'gng.r3.native-sync-irq-core-log.v1',
@@ -124,7 +138,9 @@ export function classifyNativeSyncLog(log){
     total_native_events:events.length,
     cpu_reset_events:resets,
     sync_entry_events:enters,
-    sync_exit_events:wakes.length,
+    sync_exit_events:exits,
+    reset_interrupted_sync_waits:resetInterruptedWaits,
+    target_sync_exit_events:wakes.length,
     irq_line_delivery_events:seenLineEvents,
     irq_handler_entry_events:irqEntries,
     vector_fetch_events:vectors,

@@ -7,6 +7,12 @@ cobertura/efectos A0.6.4 e IRQ/SYNC/VBlank/estado inicial → ejecución continu
 JS/TS → primer frame autónomo. [Cierre, evidencia y límites](audit/a063-m5-d6-native-closure.md).
 No modificar `main` ni repetir la captura por inercia.
 
+**Seguimiento RO:** 7.432 checkpoints bancarios de registros coincidentes,
+cero divergencias; quedan una muestra `LEA_INDEXED`, prueba nativa de 2.477
+stores en RAM principal e IRQ/SYNC/VBlank/estado inicial. Parser IRQ/SYNC
+endurecido y diagnóstico agregado validados con tests ROM-free.
+[Tareas siguientes y límites](audit/a063-post-d6-critical-gaps.md).
+
 ## Historial ROM-free — T5 PASS en MacBook M5 (25/10/2026)
 
 **T5.1–T5.5 CERRADAS** para regresión ROM-free. En `gng-ghidra/main`, el operador ejecutó `node --test tests/test_r42g_incremental_timeline.mjs` (**12/12 PASS**) y `python3 scripts/r42_validation_closure.py` (`PASS_ROM_FREE_ONLY`, `T1=PASS`, `T2=PASS`, `T3=ROM_FREE_CLOSED`), después de incorporar el fix `37ce986`. El bloqueo de checkout señalado en el registro anterior fue **resuelto por ejecución desde MacBook M5**, no en la terminal aislada. [Checkpoint vigente](r42-t5-closure-checkpoint.md).

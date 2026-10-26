@@ -32,6 +32,9 @@ node --check scripts/r3_indexed_store_gate.mjs
 node --check scripts/r3_native_video_write_gate.mjs
 node --check scripts/r3_banked_static_gate.mjs
 node --check scripts/r3_banked_report_integrity.mjs
+node --check scripts/r3_banked_effect_profile.mjs
+node --check scripts/r3_d6_followup_diagnostic.mjs
+node --check scripts/r3_native_irq_report.mjs
 node --test \
   tests/test_gngb_video_registers.mjs \
   tests/test_gngb_video_mmio_board.mjs \
@@ -56,6 +59,9 @@ node --test \
   tests/test_r3_indexed_store_gate.mjs \
   tests/test_r3_banked_static_gate.mjs \
   tests/test_r3_banked_report_integrity.mjs \
+  tests/test_r3_banked_effect_profile.mjs \
+  tests/test_r3_d6_followup_diagnostic.mjs \
+  tests/test_r3_native_irq_report.mjs \
   tests/test_r3_native_video_write_gate.mjs \
   tests/test_video_memory.mjs \
   tests/test_sprite_memory.mjs
