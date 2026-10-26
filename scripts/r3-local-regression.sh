@@ -75,7 +75,11 @@ node --test \
   tests/test_v2_b1_gate_lib.mjs \
   tests/test_v2_b1_event_compare.mjs \
   tests/test_v2_b1_coverage.mjs \
-  tests/test_v2_b1_coverage_policy.mjs
+  tests/test_v2_b1_coverage_policy.mjs \
+  tests/test_v3_b1_input_contract.mjs
+node --check src/gngb_input_contract.mjs
+node --check tests/test_v3_b1_input_contract.mjs
+bash -n scripts/v3_b1_t1_gate.sh
 node --check src/gngb_block_key.mjs
 node --check src/v2_b1_frozen.mjs
 node --check src/v2_b1_observable.mjs

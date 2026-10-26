@@ -25,6 +25,7 @@ export const INPUT_CONTROLS=Object.freeze(
     [name,Object.freeze({port,bit,activeLow:true})]))
 );
 const deny=reason=>{throw Error('V3_B1_INPUT_'+reason);};
+const VALID_SCHEDULES=new WeakSet();
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&
   (Object.getPrototypeOf(x)===Object.prototype||Object.getPrototypeOf(x)===null);
 const cycleOk=x=>Number.isSafeInteger(x)&&x>=0;
@@ -105,18 +106,18 @@ export function defineInputSchedule(events=[],options={}){
     steps.push(Object.freeze({cycle,bytes:portsFrom(pressed,dips)}));
     start=end;
   }
-  return Object.freeze({
+  const schedule=Object.freeze({
     schema:INPUT_SCHEMA,
     dips:Object.freeze([...dips]),
     events:Object.freeze(canonical),
     steps:Object.freeze(steps)
   });
+  VALID_SCHEDULES.add(schedule);
+  return schedule;
 }
 /** Deterministic random-access read. T2 will wire it to CPU port reads. */
 export function readScheduledPort(schedule,address,cycle){
-  if(schedule?.schema!==INPUT_SCHEMA||
-     !Array.isArray(schedule.steps)||!Array.isArray(schedule.dips))
-    deny('CONTRACT_INVALID');
+  if(!VALID_SCHEDULES.has(schedule))deny('CONTRACT_INVALID');
   if(!cycleOk(cycle))deny('READ_CYCLE_INVALID');
   if(!Number.isInteger(address)||address<0x3000||address>0x3004)
     deny('PORT_INVALID');

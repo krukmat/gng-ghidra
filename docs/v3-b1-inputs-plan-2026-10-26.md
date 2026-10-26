@@ -31,6 +31,17 @@ DIPs y secuencias válidas. T1.2 Tests ROM-free de
 coin/start/left/right/button/release y casos ilegales.
 **PASS:** mapa y casos adversariales comprobados sin alterar V2.
 
+### T1.1–T1.5 — Implementación ROM-free (26/10/2026)
+
+Se ha añadido `src/gngb_input_contract.mjs`, fixtures
+`tests/test_v3_b1_input_contract.mjs` y
+`scripts/v3_b1_t1_gate.sh`. El gate de aceptación es
+`V3_B1_T1_INPUT_CONTRACT_PASS`; **no se considera validado
+en Mac antes de observar su salida real**.
+[Decisiones y alcance de T1](audit/v3-b1-t1-input-contract-2026-10-26.md).
+La fuente MAME para gngb está documentada en T1.1.
+T2 no se inicia hasta cerrar T1 con regresión PASS.
+
 **V3.B1.T2 — Entradas CPU en runtime (depende de T1).**
 T2.1 Sustituir constantes de SYSTEM/P1/P2 por fuente
 determinista consultada en la lectura de CPU, no inyección
