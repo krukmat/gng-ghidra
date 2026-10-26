@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync,writeFileSync,mkdirSync,lstatSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {rendererUnknownCount} from './v2_b1_observable.mjs';
 
 export const FORMAT='gng.v2.b1.frozen-aot.v1';
 export const MODULES=['mc6809_aot_lib.mjs','gngb_runtime.mjs','gngb_block_key.mjs'];
@@ -109,7 +110,7 @@ export function loadFrozen(dir){
   return {manifest,code};
 }
 
-export async function runFrozen(dir,{frames}={}){
+export async function runFrozen(dir,{frames,onFrame}={}){
   const {manifest,code}=loadFrozen(dir);
   const n=frames??manifest.frames;
   if(!Number.isInteger(n)||n<1||n>manifest.frames)deny('FRAME_REQUEST_INVALID');
@@ -117,21 +118,24 @@ export async function runFrozen(dir,{frames}={}){
   const {blocks}=await import(pathToFileURL(join(dir,'program.mjs')).href);
   const {createBoard}=await import(pathToFileURL(join(dir,'gngb_runtime.mjs')).href);
   if(!(blocks instanceof Map)||blocks.size!==manifest.blocks)deny('BLOCK_COUNT_MISMATCH');
-  const hashes=[],unknowns=[],meta=[];
+  const hashes=[],unknowns=[],visibleUnknowns=[];
   const board=createBoard(code,blocks,{frames:n,onFrame:r=>{
     const h=createHash('sha256');
     h.update(r.record);h.update(r.known);
     h.update(JSON.stringify([r.scroll,r.bank,r.latch,r.sprite_buffer_valid,r.writes]));
     hashes.push(h.digest('hex'));
     unknowns.push(r.known.reduce((count,k)=>count+(k!==255),0));
-    meta.push({frame:r.index,unknown:unknowns[unknowns.length-1]});
+    visibleUnknowns.push(rendererUnknownCount(r));
+    if(onFrame)onFrame(r);
   }});
   const result=board.run();
   if(result.status!=='FRAMES_DONE'||hashes.length!==n)
     deny('INCOMPLETE_OR_UNCOMPILED_'+result.status);
   return {schema:'gng.v2.b1.frozen-run.v1',status:'FRAMES_DONE',
-    frames:n,unknowns,frame_hashes:hashes,
+    frames:n,unknowns,visible_unknowns:visibleUnknowns,frame_hashes:hashes,
     sequence_sha256:sha256(hashes.join('\n')+'\n'),
     first_fully_known:unknowns.findIndex(x=>x===0)+1||null,
+    first_renderer_known:visibleUnknowns.findIndex(x=>x===0)+1||null,
+    events:board.state.events,
     blocks:blocks.size};
 }

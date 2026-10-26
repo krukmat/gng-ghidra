@@ -22,7 +22,9 @@ export class GngbRuntimeError extends Error{
   constructor(code,detail){super(code);this.code=code;this.detail=detail;}
 }
 
-export function createBoard(code,blocks,{frames,onFrame}={}){
+export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PER_FRAME}={}){
+  if(!Number.isInteger(cyclesPerFrame)||cyclesPerFrame<1)
+    throw Error('V2_B1_INVALID_IRQ_PERIOD');
   const mem=new Uint8Array(0x3000),km=new Uint8Array(0x3000);
   const palExt=new Uint8Array(0x100),pal=new Uint8Array(0x100);
   // machine_reset: palette RAM filled with 00/55/aa/ff, scroll zeroed.
@@ -30,7 +32,7 @@ export function createBoard(code,blocks,{frames,onFrame}={}){
   const $={
     a:0,b:0,dp:0,x:0,y:0,u:0,s:0,cc:CC_I|CC_F,PC:0,
     ka:0,kb:0,kdp:255,kx:0,ky:0,ku:0,ks:0,kcc:CC_I|CC_F,
-    C:0,T:CYCLES_PER_FRAME-1,st:null,ipc:0,lk:0,
+    C:0,T:cyclesPerFrame-1,st:null,ipc:0,lk:0,
     irq:false,sync:false,bank:null,
     scroll:[0,0,0,0],latch:new Array(8).fill(null),soundlatch:null,
     dma:null,dmaMask:null,snapped:false,
@@ -116,7 +118,7 @@ export function createBoard(code,blocks,{frames,onFrame}={}){
     $.irq=true;
     ev('LINE_DELIVERED','IRQ',1,at);
     $.frame++;
-    $.T=($.frame+1)*CYCLES_PER_FRAME-1;
+    $.T=($.frame+1)*cyclesPerFrame-1;
     $.snapped=false;
   };
   const push=(v,k,prev)=>{

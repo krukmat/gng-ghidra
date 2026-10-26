@@ -39,6 +39,7 @@ test('frozen bundle runs without zip, ROM loader or AOT compiler',async()=>{
   assert.equal(run.frames,2);
   assert.equal(run.frame_hashes.length,2);
   assert.equal(run.first_fully_known,null);
+  assert.equal(run.first_renderer_known,null);
   assert.deepEqual(run.frame_hashes,(await runFrozen(dir)).frame_hashes);
 });
 
@@ -51,7 +52,7 @@ test('bundle integrity fails closed on binary tampering',async()=>{
 });
 
 test('frozen runtime refuses uncompiled jump without discovering new seed',async()=>{
-  const {dir}=await synthetic([0x7e,0x61,0x23]); // JMP $6123
+  const {dir}=await synthetic([0x8e,0x61,0x23,0x6e,0x84]); // LDX #$6123; JMP ,X (dynamic)
   await assert.rejects(()=>runFrozen(dir),/V2_B1_INCOMPLETE_OR_UNCOMPILED_UNCOMPILED/);
 });
 test('build parser refuses generated source without exact library import',()=>{
