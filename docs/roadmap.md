@@ -1,3 +1,7 @@
+> **Checkpoint vigente (26/10/2026):** [V2.B1 + T6 merge a main](v2-b1-gate-feature-merge.md).
+> Una vez certificado V2 y validado el merge, V3 comenzará desde main.
+> La información siguiente es histórica.
+>
 > **PLAN OPERATIVO VIGENTE (20/10/2026):** [Plan R0–R6 con tareas, subtareas, plazos y criterios STOP/GO](plan-ejecucion.md) · [Backlog en GitHub Issues](https://github.com/krukmat/gng-ghidra/issues). Este archivo conserva la evolución técnica y visual de V0–V1.3 como **historial**, no como orden de ejecución vigente. R0 debe verificarse primero en el Mac con ROM privada.
 
 ---

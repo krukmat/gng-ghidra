@@ -1,5 +1,15 @@
 # Plan operativo v2 — del fotograma real al juego recompilado
 
+## Plan vigente — V2.B1 y cierre de feature (26/10/2026)
+
+La ruta crítica actual certifica autonomía AOT y primer frame observable
+en B1.T1–T5. **B1.T6 cierra la rama
+`feature/a063-r1-forensics-contract` y realiza el merge a `main`
+solo después del gate `V2_AUTONOMOUS_FRAME_CERTIFIED` y su revisión.**
+Validar de nuevo en `main`; V3 empieza allí, no en la feature antigua.
+[Tasks y criterios de aceptación](v2-b1-gate-feature-merge.md).
+
+
 ## Checkpoint nativo D6 — bancos por instrucción verificados (26/10/2026)
 
 En `feature/a063-r1-forensics-contract`, D6.T0–T3 ejecutadas: captura completa

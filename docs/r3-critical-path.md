@@ -1,5 +1,12 @@
 ## Estado nativo vigente — D6 full bank provenance PASS (26/10/2026)
 
+**Ruta siguiente: V2.B1 → B1.T6.** Cerrar V2 mediante T1–T5 y
+posteriormente fusionar `feature/a063-r1-forensics-contract` a
+`main` con gates pre/post-merge. V3 se inicia desde el HEAD
+de `main`. No efectuar merge todavía.
+[Checkpoint de cierre](v2-b1-gate-feature-merge.md).
+
+
 **R3.5.B2.T4 (26/10/2026):** T4.1 PASS reportado por operador en Mac,
 fuente MAME 0.289 protegida recuperable en Colima. T4.2 preparado como
 copia aislada del checkout y compilación ARM64 explícita, sin tocar
