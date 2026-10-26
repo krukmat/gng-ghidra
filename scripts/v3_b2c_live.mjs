@@ -24,7 +24,11 @@ function b2bReady(){
     const r=JSON.parse(readFileSync(B2B_REPORT,'utf8'));
     return r.status==='DISCOVERY_COMPLETE'&&
       r.no_input==='PASS_600_FRAMES_IDENTICAL_V2'&&
-      r.frozen_determinism==='PASS_TWO_FROZEN_1000_FRAME_RUNS';
+      r.frozen_determinism==='PASS_TWO_FROZEN_1000_FRAME_RUNS'&&
+      Number.isInteger(r.first_start_effect_frame)&&
+      r.first_start_effect_frame>=530&&
+      r.comparison_read_counts?.controls?.coin>0&&
+      r.comparison_read_counts?.controls?.start>0;
   }catch{return false;}
 }
 const BUNDLE=b2bReady()?B2B:B2A;
