@@ -14,6 +14,10 @@ node --test tests/test_v3_b2c_port_witness.mjs
 node --check tests/test_v3_b2c_session_policy.mjs
 node --test tests/test_v3_b2c_session_policy.mjs
 node --check tests/test_v3_b2c_live_controls.mjs
+node --check src/v3_b2c_pixel_probe.mjs
+node --check tests/test_v3_b2c_pixel_probe.mjs
+node --check scripts/v3_b2c_probe.mjs
+node --test tests/test_v3_b2c_pixel_probe.mjs
 node --test tests/test_v3_b2c_live_controls.mjs
 bash scripts/r3-local-regression.sh
 echo V3_B2C_WIRING=PASS_ROM_FREE
