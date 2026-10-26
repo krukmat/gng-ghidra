@@ -34,6 +34,7 @@ node --check src/v3_b3_selection.mjs
 node --check src/v3_b3_tapes.mjs
 node --check src/v3_b3_ondemand.mjs
 node --check src/v3_b3_bundle.mjs
+node --check scripts/v3_b3_live_bot.mjs
 node --test tests/test_v3_b3_selection.mjs tests/test_v3_b3_tapes.mjs
 bash scripts/r3-local-regression.sh
 echo V3_B2C_WIRING=PASS_ROM_FREE

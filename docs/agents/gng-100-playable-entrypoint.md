@@ -28,7 +28,7 @@
 | B2-D | 1.654 bloques, perfiles `lateCoin`, `lateStart`, `lateControls` 1.500 frames cada uno, doble replay, regresiones ROM-free PASS | No demuestra partida humana controlable |
 | Controles | Pausa VBlank real en frame 311. Sesión humana: **22 lecturas Coin1** y, en segunda sesión, **17 Start1** | No hay crédito visible ni transición al juego acreditados |
 | ~~Bloqueo crítico~~ **RESUELTO (V3.B3)** | `HALT_UNCOMPILED` frame 496, bank 3, `0x519D`, reproducido con Coin de 22 frames desde 311 y superado. [Informe V3.B3](../v3-b3-playable-2026-10-26.md) | — |
-| **V3.B3 (2.266 bloques)** | Coin → «PRESS START» → Start → intro → Arthur en la fase 1, controlable (andar, scroll, lanza, salto, agacharse, perder armadura, morir/respawn); 3 bots de 5 min sin `UNCOMPILED`; runner en vivo con B3 | MAME 0.288: 7 cintas idénticas byte a byte (hasta 18.000 frames). Falta la sesión humana de 5 min |
+| **V3.B3 g2 (2.302 bloques)** | Coin → «PRESS START» → Start → intro → Arthur en la fase 1, controlable; juego sostenido por bot de ~6,4 min (continue y partidas nuevas) offline; MAME 0.288 idéntico byte a byte en 9 cintas | **En vivo, HALT `0xFEFA` en el frame 1.974**: la cobertura por cintas no generaliza al timing real. Siguiente: G1.4 (grabador de puertos, fuzzing con jitter, saltos indirectos) |
 | Idle/attract | Superado: perfil `idle` de 6.000 frames en B3 (antes HALT en 1038, `0x6A9D`) | B2-E queda obsoleto |
 | Audio | El runtime principal expone un `soundlatch` | Cadena real de sonido y síntesis sin certificar |
 | Runtime largo | Sesión en vivo de 36.000 frames (~10 min); el worker libera los snapshots entregados | Cadencia/latencia y sesiones de horas (P7) |
@@ -68,7 +68,7 @@ El modelo sucesor debe **revisar críticamente** este orden en vez de asumir que
 
 ## 5. Primer bloque de ejecución (COMPLETADO 26/10/2026 → V3.B3)
 
-> Estado: P0 y P1 GO; P2.T1 GO en el motor AOT local; MAME y la sesión humana de 5 min, pendientes.
+> Estado: P0 y P1 GO; P2.T1 GO, idéntico a MAME. P2.T3 (5 min en vivo) BLOCKED por la cobertura de saltos indirectos; ver §8 del informe V3.B3.
 > **Método vigente:** descubrimiento AOT de una pasada desde cintas (`scripts/v3_b3_discover.mjs`). Para cubrir una ruta nueva hay que añadir una cinta en `src/v3_b3_tapes.mjs` y reconstruir B3 en otro directorio. No se debe volver a iterar semilla a semilla.
 
 ### Texto original del bloque

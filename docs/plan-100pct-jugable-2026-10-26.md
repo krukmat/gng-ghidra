@@ -139,7 +139,7 @@ flowchart TD
 | --- | --- | --- |
 | **H0: motor real** | AOT + render + puertos | PASS (B2-C/B2-D, parcial vídeo) |
 | **H1: crédito + Start** | Créditos y cambio visual de pantalla, comparados con MAME | **GO (V3.B3)**: idéntico byte a byte a MAME 0.288 |
-| **H2: primer prototipo jugable** | Arthur controlable + 5 min + no `UNCOMPILED` | **PARCIAL**: Arthur controlable; bots de 5 min sin HALT; falta la sesión humana |
+| **H2: primer prototipo jugable** | Arthur controlable + 5 min + no `UNCOMPILED` | **PARCIAL**: Arthur controlable; 6,4 min de juego por bot idénticos a MAME offline; en vivo, HALT `0xFEFA` en el frame 1.974 (timing) → G1.4 |
 | **H3: primer nivel completo** | G3 GO + derrota/respawn | PENDIENTE |
 | **H4: contenido completo** | G4 GO, ambas vueltas, final verdadero | PENDIENTE |
 | **H5: paridad audiovisual** | G5 y G6 GO | PENDIENTE |
@@ -157,7 +157,7 @@ No asignar progreso global por número de bloques: el porcentaje solo puede deri
 
 ## 6. Siguiente bloque seleccionado y tareas concretas
 
-> **Actualización 26/10/2026:** G0.1/G0.2/G1 cerrados por V3.B3 ([informe](v3-b3-playable-2026-10-26.md)). Siguiente: G0.3 (oráculo MAME con cintas B3), G2.3 (sesión humana de 5 min) y G3 (bots dirigidos a completar la fase 1).
+> **Actualización 26/10/2026:** G0.1/G0.2/G1 cerrados por V3.B3 ([informe](v3-b3-playable-2026-10-26.md)). G0.3 (MAME) GO. **Nuevo bloqueo:** en vivo, el timing real abre rutas indirectas no compiladas (`0xFEFA`). Siguiente: **G1.4, cobertura robusta** (grabador de puertos en vivo, fuzzing con jitter, recuperación estática de saltos indirectos) antes de la sesión humana (G2.3) y de G3.
 
 **Bloque inmediato G0+G1 — No crear otro visor ni ampliar attract a ciegas.**
 
