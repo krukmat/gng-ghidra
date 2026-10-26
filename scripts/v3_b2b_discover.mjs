@@ -8,7 +8,7 @@
  */
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {readFileSync,writeFileSync,mkdirSync,existsSync,mkdtempSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,existsSync,mkdtempSync,renameSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {compileProgram} from '../src/mc6809_aot.mjs';
@@ -18,6 +18,7 @@ import {loadFrozen,freezeBundle,runFrozen,MODULES} from '../src/v2_b1_frozen.mjs
 import {verifySlot} from '../src/v2_b1_gate_lib.mjs';
 import {createV3Tape,PROFILE_FRAMES} from '../src/v3_b2b_tape.mjs';
 import {attestFoundationSeeds} from '../src/v3_b2b_foundation.mjs';
+import {validateResumeCheckpoint,checkpointOverlays} from '../src/v3_b2b_resume.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const OUT=join(ROOT,'out/v3/b2b');
@@ -80,15 +81,39 @@ function diff(a,b,after){
     if(a[i]!==b[i])return i+1;
   return null;
 }
-function recordReport(out){
-  if(existsSync(join(OUT,'discovery-report.json')))fail('REPORT_ALREADY_EXISTS');
-  writeFileSync(join(OUT,'discovery-report.json'),
-    JSON.stringify(out,null,2)+'\n',{flag:'wx',mode:0o600});
+/**
+ * Preserve every prior local report before promotion. History never gets
+ * overwritten, and no generated program or private ROM is pushed to git.
+ */
+function recordReport(out,resuming=false,previousIterations=null){
+  const target=join(OUT,'discovery-report.json');
+  const value=JSON.stringify(out,null,2)+'\n';
+  if(!resuming){
+    if(existsSync(target))fail('REPORT_ALREADY_EXISTS');
+    writeFileSync(target,value,{flag:'wx',mode:0o600});return;
+  }
+  if(!existsSync(target)||!Number.isSafeInteger(previousIterations))
+    fail('RESUME_PRIOR_REPORT_MISSING');
+  const history=join(OUT,'history');
+  mkdirSync(history,{recursive:true,mode:0o700});
+  const archived=join(history,'discovery-iteration-'+previousIterations+'.json');
+  const previous=readFileSync(target);
+  if(existsSync(archived)){
+    if(!readFileSync(archived).equals(previous))
+      fail('RESUME_ARCHIVE_CONFLICT');
+  }else writeFileSync(archived,previous,{flag:'wx',mode:0o600});
+  const temp=join(OUT,'discovery-report-next-'+process.pid+'.json');
+  writeFileSync(temp,value,{flag:'wx',mode:0o600});
+  renameSync(temp,target);
 }
 async function main(){
-  if(process.argv.slice(2).join(' ')!=='--discover')fail('ARGS_INVALID');
+  const args=process.argv.slice(2).join(' ');
+  if(args!=='--discover'&&args!=='--resume')fail('ARGS_INVALID');
+  const resuming=args==='--resume';
+  const reportPath=join(OUT,'discovery-report.json');
   if(existsSync(FROZEN))fail('BUNDLE_ALREADY_EXISTS');
-  if(existsSync(join(OUT,'discovery-report.json')))fail('REPORT_ALREADY_EXISTS');
+  if(resuming&&!existsSync(reportPath))fail('RESUME_REPORT_MISSING');
+  if(!resuming&&existsSync(reportPath))fail('REPORT_ALREADY_EXISTS');
   const v2=verifySlot(join(ROOT,'out/v2/b1'),'one').report;
   const {manifest:parent,code}=loadFrozen(SOURCE);
   if(parent.frames!==600||parent.blocks!==354||parent.blocks!==v2.blocks)
@@ -121,10 +146,29 @@ async function main(){
   const attestation=attestFoundationSeeds({
     raw,code,manifest:parent,compileProgram,libUrl
   });
-  const seeds=attestation.seeds;
+  let seeds=attestation.seeds;
   console.log('V3_B2B_FOUNDATION=PASS_EXACT_FROZEN_AOT');
   console.log('V3_B2B_FOUNDATION_BLOCKS='+attestation.count);
   console.log('V3_B2B_FOUNDATION_SEEDS='+attestation.seedCount);
+  const tape=createV3Tape('controls');
+  // Frozen B2A RAM overlays are immutable. Any subsequently discovered
+  // overlays belong to a *private* checkpoint and must be restored exactly.
+  const originalOverlayCount=code.ramOverlays.length;
+  let previousIterations=0,previousFrames=0;
+  if(resuming){
+    const report=JSON.parse(readFileSync(reportPath,'utf8'));
+    const resumed=validateResumeCheckpoint({
+      report,foundation:seeds,b2aMissing:b2a.missing_block,
+      code,tapeSha:tape.sha256,seedOK,seedKey,compileProgram,libUrl
+    });
+    seeds=resumed.seeds;
+    previousIterations=resumed.iterations;
+    previousFrames=resumed.frames;
+    console.log('V3_B2B_RESUME=PASS_ATTESTED_CHECKPOINT');
+    console.log('V3_B2B_RESUME_FROM_ITERATION='+previousIterations);
+    console.log('V3_B2B_RESUME_FROM_FRAMES='+previousFrames);
+    console.log('V3_B2B_RESUME_SEEDS='+seeds.length);
+  }
   const known=new Set(seeds.map(seedKey));
   const addSeed=s=>{
     if(!seedOK(s,code))fail('DISCOVERED_SEED_INVALID');
@@ -132,22 +176,26 @@ async function main(){
     if(known.has(k))fail('DISCOVERY_NOT_PROGRESSING');
     known.add(k);seeds.push(s);
   };
-  // Directly incorporate the known missing block from the successful B2A run.
-  addSeed({bank:b2a.missing_block.bank,pc:b2a.missing_block.pc,
-    overlay:b2a.missing_block.overlay??null});
+  if(!resuming){
+    // Incorporate initial Coin1 route from the authentic B2A run.
+    addSeed({bank:b2a.missing_block.bank,pc:b2a.missing_block.pc,
+      overlay:b2a.missing_block.overlay??null});
+  }
 
   mkdirSync(OUT,{recursive:true,mode:0o700});
   const work=mkdtempSync(join(OUT,'work-'));
-  const tape=createV3Tape('controls');
   let built,runner,completed=false,reason='ITERATION_LIMIT',iterations=0;
-  const MAX=48;
-  for(let iter=1;iter<=MAX;iter++){
+  const MAX_ADDITIONAL=64;
+  for(let attempt=1;attempt<=MAX_ADDITIONAL;attempt++){
+    const iter=previousIterations+attempt;
     iterations=iter;
     built=compileProgram(code,seeds,{libUrl});
     const path=join(work,'program-'+iter+'.mjs');
     writeFileSync(path,built.source,{flag:'wx',mode:0o600});
     const {blocks}=await import(pathToFileURL(path).href);
     runner=runTape(code,blocks,tape);
+    if(resuming&&attempt===1&&runner.hashes.length<previousFrames)
+      fail('RESUME_FRAME_REGRESSION');
     console.log('V3_B2B_DISCOVERY_ITERATION='+iter);
     console.log('V3_B2B_DISCOVERY_BLOCKS='+built.blockCount);
     console.log('V3_B2B_DISCOVERY_FRAMES='+runner.hashes.length);
@@ -176,7 +224,9 @@ async function main(){
     status:completed?'FULL_TAPE_COMPILED':'BLOCKED_'+reason,
     frames:runner?.hashes.length??0,iterations,
     blocks:built?.blockCount??0,seed_count:seeds.length,
-    overlay_count:code.ramOverlays.length,profile:tape.profile,
+    overlay_count:code.ramOverlays.length,
+    extra_overlays:checkpointOverlays(code,originalOverlayCount),
+    profile:tape.profile,
     tape_sha256:tape.sha256,
     source_git_head:execFileSync('git',['rev-parse','HEAD'],{cwd:ROOT,encoding:'utf8'}).trim(),
     first_diff_vs_v2:runner?diff(runner.hashes,v2.frame_hashes,1):null,
@@ -184,7 +234,7 @@ async function main(){
     last_result:runner?.result??null,seeds
   };
   if(!completed){
-    recordReport(preliminary);
+    recordReport(preliminary,resuming,previousIterations);
     console.log('V3_B2B_DISCOVERY=BLOCKED_'+reason);
     console.log('V3_B2B_DISCOVERY_LAST_FRAME='+preliminary.frames);
     process.exitCode=2;return;
@@ -255,7 +305,7 @@ async function main(){
     frozen_determinism:'PASS_TWO_FROZEN_1000_FRAME_RUNS',
     no_input:'PASS_600_FRAMES_IDENTICAL_V2',
   };
-  recordReport(report);
+  recordReport(report,resuming,previousIterations);
   console.log('V3_B2B_DISCOVERY=PASS_1000_FRAMES_AOT_OFFLINE');
   console.log('V3_B2B_BLOCKS='+built.blockCount);
   console.log('V3_B2B_NEW_SEEDS='+(seeds.length-raw.length-2));
