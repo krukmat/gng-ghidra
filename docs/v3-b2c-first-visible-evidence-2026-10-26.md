@@ -1,125 +1,138 @@
-# V3.B2-C — First Visible Evidence (Fast Visual Lane)
+# V3.B2-C — Live GnG Engine: ejecución real, no visor de capturas
 
-Fecha: 2026-10-26. Rama: `main`.
-**Evaluación y plan, no gate ejecutado.**
-Objetivo: mostrar fotogramas auténticos de *Ghosts 'n Goblins*
-renderizados desde ejecución MC6809 AOT **tan pronto como sea posible**,
-sin esperar la cobertura de todos los caminos de partida.
+Fecha: 2026-10-26. Rama: `main`. El primer runner real está
+implementado, pendiente de validación en Mac.
 
-## Decisión de ruta crítica
+## Decisión
 
-El gate B2-A cerrado aporta 600 frames `no-input` idénticos a V2,
-354 bloques AOT, 183 lecturas SYSTEM, dos de Coin1 activo, primera
-divergencia de estado en frame 421 y una ruta AOT no compilada tras
-el frame 492. El nuevo bloque B2-B de 1000 frames está implementado
-pero pendiente de ejecutar en el Mac. **No bloquear B2-C por B2-B.**
+**Se descarta el plan anterior** de `idle.html`,
+`compare.html`, reproducción de capturas o timeline pregrabada.
+Aunque provinieran del AOT, no aportarían una ejecución viva del
+juego. Una escena sintética o sprites dibujados por la UI NO
+constituyen un avance de GnG.
 
-Reutilizar, sin inventar escenas:
-- `out/v2/b1/one-frames.bin`, `one-known.bin`,
-  `one-meta.jsonl`, y `verifySlot` como idle verificado.
-- `out/v3/b2a/frozen/` como runtime GnG con inputs y código
-  AOT ya validado en el Mac; `coin-smoke.json` para delimitar.
-- `src/gngb_frame_renderer.mjs` (`256x224`) y
-  `rendererInputs` / `gngbGraphics` de
-  `scripts/r35_t5_render_check.mjs` para producir RGBA verdadero.
-- `rendererUnknownCount` para no renderizar como certeza
-  memoria de vídeo sin conocer o sprite DMA aún inválido.
-- ROM `roms/gng.zip` exclusivamente **local** para decodificar
-  gráficos; no distribuir vídeo, imágenes, ROM ni AOT.
+La única fuente de la pantalla debe ser:
 
-## Tasks (un máximo de dos niveles)
+```text
+ROM local privada → AOT MC6809 compilado fuera de runtime
+                 → createBoard(...): CPU + IRQ + memoria + DMA
+                 → snapshot VBlank generado EN VIVO
+                 → renderGngbRgba(snapshot, gráficos ROM privados)
+                 → framebuffer 256x224 en navegador local
+       teclado ─→ bits active-low SYSTEM/P1 ─→ lectura CPU AOT
+```
 
-### B2-C.T1 — Primera imagen GnG auténtica (paralela a B2-B)
+No se usa MAME ni un intérprete MC6809 para ejecutar el juego.
+No hay frames prefabricados, animaciones CSS, scripts que
+manipulen sprites, estados fingidos ni frames de referencia
+inyectados. El renderer existente se conserva.
 
-- T1.1 Leer y autenticar slot idle de V2; seleccionar fotogramas
-  posteriores al primer DMA (311–600) con todos los bytes
-  del renderer conocidos.
-- T1.2 Renderizar al menos un fotograma con el **compositor existente**
-  y los gráficos privados; crear `out/v3/visual/idle.html`
-  independiente del navegador/servidor, sin mock, synthetic fixture
-  ni capturas MAME como fuente del resultado.
-- **GO:** `V3_VISUAL_IDLE=PASS_REAL_AOT_RENDER`, imagen visualizable
-  `256×224` y hashes asociados al snapshot V2 certificado.
-  **STOP:** composición dibujada, bytes desconocidos forzados a cero
-  o captura MAME mostrada como si fuera resultado JS.
+## Primera implementación: runner real en `main`
 
-### B2-C.T2 — Antes/después de Coin1, comparativa A/B
+- `scripts/v3_b2c_live.mjs`: servidor HTTP *loopback*
+  `127.0.0.1:18609` y teclado. Los inputs active-low se
+  entregan al worker con memoria compartida, no alteran snapshots
+  ni escriben estados de juego directamente.
+- `scripts/v3_b2c_engine_worker.mjs`: carga el paquete AOT
+  congelado privado, decodifica las ROM gráficas una sola vez
+  desde `roms/gng.zip`, ejecuta `createBoard.run()` en
+  un worker y obtiene frames del callback auténtico `onFrame`.
+  La UI recibe exclusivamente los píxeles producidos al renderizar
+  ese estado; la CPU espera confirmación de frame para mantener
+  sincronización con la pantalla.
+- `src/v3_b2c_live_controls.mjs`: adaptador real de teclas
+  con exclusión direccional 4-way y bits active-low. No contiene
+  lógica de juego ni animación.
+- `tests/test_v3_b2c_live_controls.mjs`: casos ROM-free.
 
-- T2.1 Reejecutar **solo en el Mac** el paquete congelado B2-A
-  con una secuencia de Coin1 idéntica a la ya probada
-  (pulsar frame 420, soltar frame 422), y sin inputs en otra
-  corrida. Mantener snapshots de ambas en `out/v3/visual/`.
-  **Detener en 491**, antes de la ruta no compilada de 492.
-- T2.2 Comparar bytes/known/state y, únicamente para frames
-  con renderer completamente conocido en ambas corridas,
-  RGBA pixel a pixel. Priorizar el barrido 421–491; almacenar
-  sólo fotogramas seleccionados para mantener HTML compacto.
-- **GO diagnóstico:** `V3_VISUAL_COIN_COMPARE=PASS_REPLAY_A_B`
-  cuando ambos runs están alineados por frame y comparados.
-- **GO visual condicional:** `V3_VISUAL_COIN_PIXELS=PASS_VISIBLE_DELTA`
-  solo si cambia al menos un píxel por efecto de Coin1.
-  En caso contrario emitir `NO_VISIBLE_DELTA_WITH_CPU_EFFECT`:
-  un cambio en hashes de RAM/estado **no** es un cambio de imagen.
+El runner prefiere `out/v3/b2b/frozen` **solo si** su
+`discovery-report.json` demuestra 1000 frames, replay y
+compatibilidad idle V2; si no, usa
+`out/v3/b2a/frozen` con su prueba privada `coin-smoke.json`.
 
-### B2-C.T3 — Visor offline con valor visual
+## Tareas del bloque actual
 
-- T3.1 Producir `out/v3/visual/compare.html` usando canvas,
-  frame index, perfiles idle/coin, scroll de timeline y contador
-  de píxeles distintos. El HTML debe visualizar exactamente
-  los RGBA renderizados, no animación ni elementos gameplay
-  hardcoded. Puede reutilizar el patrón `fixtureHtml` de
-  `scripts/r42_visual_fixture.mjs`, reemplazando íntegramente
-  fixtures sintéticos por estados GnG reales.
-- T3.2 Incluir etiquetas claras: fuente AOT, frame, límites
-  de conocimiento, estado `UNCOMPILED`, evidencia de CPU
-  y si el resultado es/no es equivalente a MAME para inputs.
-- **GO:** `V3_VISUAL_VIEWER=PASS_OFFLINE_REAL_FRAMES`,
-  se abre directamente en navegador local (sin app/proyecto nuevo).
-  Un viewer con frames idénticos puede pasar T3 y dejar T2 visual
-  condicional claramente pendiente.
+**T1 — Arranque del GnG AOT real**
+- T1.1 Verificar bundle privado de la rama V3 y que corresponde
+  a B2-A o B2-B certificado; no compilar sobre la marcha.
+- T1.2 Worker de CPU único y entrada por puertos, sin usar
+  snapshots históricos como fuente de vídeo.
+- **PASS:** `V3_B2C_REAL_ENGINE=STARTED` más CPU ejecutando
+  bloques MC6809 reales. Este marcador **solo** demuestra arranque.
 
-### B2-C.T4 — Inicio de partida, incorporación gradual de B2-B
+**T2 — Presentación de estado de vídeo auténtico**
+- T2.1 Renderizar únicamente frames VBlank cuyo buffer DMA
+  y RAM de vídeo sean conocidos, con sprites/tilemaps,
+  paleta y scroll reales.
+- T2.2 Mostrar en canvas local los RGBA desde ese renderer
+  y rechazar cualquier sustitución por MAME/fotos/mock.
+- **PASS:** `V3_B2C_FIRST_FRAME=PASS_REAL_AOT_RENDER`,
+  más comprobación visual del operador en el Mac.
+  No implica primera partida.
 
-- T4.1 Cuando B2-B entregue paquete frozen Coin/Start válido,
-  reutilizar el mismo renderer para fotogramas `start` y
-  compararlos con `coin`. No exigir completar 1000 frames
-  si ya hay una ventana AOT válida y renderizable; registrar
-  explícitamente el primer bloque que impide avanzar.
-- T4.2 Solo cuando Arthur cambie de posición **por efectos
-  de código recompilado**, crear secuencia visual del movimiento
-  o salto; después cotejar timing/píxeles con nueva referencia
-  MAME de la misma secuencia.
-- **GO:** `V3_FIRST_PLAYABLE_VISUAL_CANDIDATE` condicionado
-  a START procesado y cambio visible atribuible a movimiento/
-  salto. **No certificar partida ni jugabilidad** por una
-  simple diferencia visual del menú/attract.
+**T3 — Teclado real → hardware → CPU**
+- T3.1 `5` Coin1; `1` Start1; flechas, `Z` botón1,
+  `X` botón2, usando puertos activos en bajo en tiempo
+  real. Suprimir repeticiones y rechazar joystick inválido.
+- T3.2 Reportar cuándo la CPU realmente consulta
+  `0x3000` con Coin1 activo. El juego —no el frontend—
+  determina los cambios posteriores.
+- **PASS:** `V3_B2C_COIN=PASS_REAL_CPU_READ`,
+  respaldado por una lectura efectiva del AOT.
 
-## Priorización y viabilidad
+**T4 — Bloqueo honesto y desbloqueo de partida**
+- T4.1 Si los inputs llegan a una ruta aún `UNCOMPILED`,
+  **detener** la CPU, mostrar el estado `UNCOMPILED`
+  y conservar el último frame real verificado, sin
+  fingir progreso de partida.
+- T4.2 Alimentar B2-B con el banco/PC de esa ruta;
+  recompilar exclusivamente fuera del runtime, desde
+  reset. Cambiar al bundle B2-B cuando su gate real pase.
+- **PASS:** Coin → Start → movimiento/salto observado
+  directamente en el motor, no solo en una comparación
+  de hashes; equivalencia MAME con esa secuencia pendiente
+  para la certificación funcional V3.
 
-| Entrega | Viabilidad | Dependencia real |
-|---|---|---|
-| Primer frame idle de GnG | Alta | V2 y ROM gráfica privada ya disponibles |
-| Viewer offline de frames reales | Alta | T1, compositor JS validado |
-| Diferencia visual de Coin1 | Incierta | T2 puede mostrar cambios solo de RAM |
-| Primera pantalla tras Start | Condicionada | B2-B debe alcanzar y compilar esa ruta |
-| Arthur moviéndose o saltando | Condicionada | Start funcional, ruta AOT completa, sprites, inputs |
+**T5 — Gate local e inspección**
+- T5.1 Regresión ROM-free previa, check de scripts y
+  adapter 4-way. No tocar los bundles V2 o V3 congelados.
+- T5.2 Arranque en Mac, mostrar pantalla real,
+  presionar Coin y devolver únicamente marcadores
+  de runtime; vídeo/capturas permanecen privadas.
+- **PASS de infraestructura:** `V3_B2C_WIRING=PASS_ROM_FREE`.
+  **PASS de demostración:** primera imagen real + lectura
+  real del control, sin `fake fallback`. Si aparece
+  `UNCOMPILED`, queda bloqueada la jugabilidad, no el
+  mérito de haber renderizado GnG real.
 
-**Orden:** T1 → T2 → T3 en paralelo con B2-B →
-T4 solo cuando la ruta Coin/Start esté disponible.
+## Ejecución prevista en el Mac
 
-## Límites, seguridad y aceptación
+```bash
+git switch main
+git pull --ff-only
+bash scripts/v3_b2c_gate.sh
+node scripts/v3_b2c_live.mjs --serve
+```
 
-No alterar runtime, compilador AOT, renderer, scripts del gate V2
-ni hashes de los artefactos congelados. Generar exclusivamente
-en `out/v3/visual/`, ignorado por git. El visor no depende
-de MAME en ejecución; carga gráficos del archivo privado
-para renderizar, sin descargar recursos externos ni usar
-datos sintéticos. El test visual de input NO hereda por ello
-la equivalencia de píxeles de V2 frente a MAME:
-se necesita nuevo oráculo sincronizado en fase posterior.
+Abrir `http://127.0.0.1:18609/`. El proceso usa solo
+localhost y nunca publica bytes de ROM, scripts AOT o
+fotogramas en GitHub. Salida esperada inicial:
+`V3_B2C_AOT_BUNDLE=B2A|B2B`,
+`V3_B2C_REAL_ENGINE=STARTED`,
+`V3_B2C_FIRST_FRAME=PASS_REAL_AOT_RENDER`.
+Al pulsar 5 **cuando GnG sondee el puerto**,
+`V3_B2C_COIN=PASS_REAL_CPU_READ`.
+La disponibilidad de una partida real depende de que el
+descubrimiento AOT B2-B complete sus rutas.
 
-**Primer entregable preferente:** `idle.html` de GnG real,
-más `compare.html` con el A/B Coin1 y diagnóstico honesto
-de diferencias visibles/no visibles. No esperar al gate
-`V3_B2B_DISCOVERY=PASS_1000_FRAMES_AOT_OFFLINE`
-para entregar estas imágenes.
+## Límites estrictos
+
+- Todavía no hay certificación de partida jugable, ni audio,
+  ni entradas MAME diferenciales para START/movimiento.
+- Los primeros frames no se muestran como conocidos:
+  `rendererUnknownCount` gobierna la disponibilidad.
+- El navegador no crea frames. Solo blittea RGBA reales.
+- Motor AOT ejecutado hasta su primer bloque ausente, error
+  real o límite de frames del paquete; se muestra detención.
+- MAME se usa únicamente para gates de comparación externos
+  posteriores; **nunca** como engine detrás del navegador.

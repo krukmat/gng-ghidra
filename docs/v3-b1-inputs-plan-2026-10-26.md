@@ -96,11 +96,11 @@ en frame 421, nueva ruta `UNCOMPILED` en frame 492.
 automatiza descubrimiento de nuevas rutas AOT y replays
 Coin → Start → controles; no hay todavía certificación de partida.
 
-## Nueva ruta prioritaria — Resultado visible temprano (26/10/2026)
+## Prioridad corregida — Motor de GnG en vivo (26/10/2026)
 
-**[B2-C First Visible Evidence](v3-b2c-first-visible-evidence-2026-10-26.md)**
-se ejecutará en paralelo con el descubrimiento B2-B: primero
-fotos reales desde el AOT idle validado, luego viewer A/B de Coin1
-antes del frame 492 y después Start/Arthur a medida que las nuevas
-rutas compilen. No confundir divergencia de estado CPU con píxeles.
-El visor y todas las imágenes permanecen privados en `out/`.
+[**B2-C: Live GnG AOT Engine**](v3-b2c-first-visible-evidence-2026-10-26.md)
+reemplaza el enfoque de capturas/visores offline por **CPU AOT real
+ejecutándose en un worker**, render de snapshots producidos en vivo
+y teclado conectado a sus puertos hardware. No hay mocks, vídeos,
+escenas artificiales ni partida hardcoded. B2-B sigue completando
+rutas para desbloquear Start, Arthur, movimiento y salto.
