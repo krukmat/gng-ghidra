@@ -23,13 +23,13 @@ Una versión **100% jugable** significa que el usuario puede arrancar la placa o
 | Interacción | Coin1 22 lecturas activas y Start1 17, pausa de CPU en VBlank real y reanudación correcta | Todavía no hay crédito/pantalla de juego acreditados |
 | Bloqueo que manda sobre todo lo demás | Con Coin temprano tras pausa en frame 311, HALT frame 496, **bank=3, PC=0x519D** | Ramas de B2-D no cubren esta cronología |
 | Camino secundario idle | En B2-D, HALT frame 1038, fixed PC 0x6A9D; B2-E preparado | **No está en la ruta crítica de primera jugabilidad** |
-| Audio | Runtime principal registra \`soundlatch\` y driver MAME especifica CPU Z80 + 2 YM2203 | No se ha implementado/certificado el subsistema sonoro |
+| Audio | Runtime principal registra `soundlatch` y driver MAME especifica CPU Z80 + 2 YM2203 | No se ha implementado/certificado el subsistema sonoro |
 
-Fuente de hardware: \`https://github.com/mamedev/mame/blob/master/src/mame/capcom/gng.cpp\`. La implementación debe fijar la revisión de ROM realmente empleada (**gngb** frente a **gng**) y el MAME de referencia antes de acreditar equivalencia.
+Fuente de hardware: `https://github.com/mamedev/mame/blob/master/src/mame/capcom/gng.cpp`. La implementación debe fijar la revisión de ROM realmente empleada (**gngb** frente a **gng**) y el MAME de referencia antes de acreditar equivalencia.
 
 ## 2. Dependencias obligatorias, no orden cronológico arbitrario
 
-\`\`\`mermaid
+```mermaid
 flowchart TD
     G0["G0: Identidad ROM + referencia MAME y captura de entradas reales"]
     G1["G1: Completar AOT banco 3:0x519D con Coin temprano"]
@@ -48,7 +48,7 @@ flowchart TD
     G5 --> DONE
     G6 --> DONE
     G7 --> DONE
-\`\`\`
+```
 
 **Ruta crítica inmediata:** G0 → G1 → G2 → G3. El modo attract extendido B2-E y cualquier nuevo visor quedan fuera de ella salvo que bloqueen una prueba necesaria. **Ruta al 100%:** todas las ramas G4/G5/G6/G7 deben cerrar.
 
@@ -58,9 +58,9 @@ flowchart TD
 
 **Depende de:** B2-D ya certificado y runner B2-C con pausa VBlank (PASS de infraestructura).
 
-- **G0.1:** registrar en el motor activo las transiciones HUMANAS Coin/Start/P1/P2 con ciclo CPU absoluto y frame de aplicación, sin registrar ROM/RAM privadas en Git. Incluir tiempo de pausa/reanudación; confirmar las lecturas verdaderas de bus \`0x3000/0x3001\`.
+- **G0.1:** registrar en el motor activo las transiciones HUMANAS Coin/Start/P1/P2 con ciclo CPU absoluto y frame de aplicación, sin registrar ROM/RAM privadas en Git. Incluir tiempo de pausa/reanudación; confirmar las lecturas verdaderas de bus `0x3000/0x3001`.
 - **G0.2:** generar una *input tape* reproducible de la secuencia que falló: Coin desde frame 311, Start observado cerca de frame 481, HALT banco 3/0x519D en 496. Distinguir tiempo de evento externo de lectura de CPU; no inventar la duración de una tecla a partir del contador de lecturas.
-- **G0.3:** ejecutar referencia MAME de la misma revisión/inputs y capturar testigos de crédito, Start, RAM relevante, render, PC/banco. Reutilizar \`scripts/r0-blackbox-*\` y capturadores nativos **solo si** pueden producir la misma cronología; de lo contrario crear harness de control mínimo compatible.
+- **G0.3:** ejecutar referencia MAME de la misma revisión/inputs y capturar testigos de crédito, Start, RAM relevante, render, PC/banco. Reutilizar `scripts/r0-blackbox-*` y capturadores nativos **solo si** pueden producir la misma cronología; de lo contrario crear harness de control mínimo compatible.
 
 **GO G0:** tape privado versionado + hash; replay reproduce HALT (bank 3, PC 0x519D) o equivalente previo exacto. **STOP:** una cronología distinta o falta de evidencia de entrada.
 
@@ -68,9 +68,9 @@ flowchart TD
 
 **Depende de:** G0.
 
-- **G1.1:** crear nuevo paquete privado descendiente de B2-D (no modificar B2-D/B2-E). Sembrar banco 3, PC 0x519D y posteriores \`UNCOMPILED\` mediante compilación offline incremental, con checkpoint/reanudación y límite por tanda; jamás durante render o juego vivo.
+- **G1.1:** crear nuevo paquete privado descendiente de B2-D (no modificar B2-D/B2-E). Sembrar banco 3, PC 0x519D y posteriores `UNCOMPILED` mediante compilación offline incremental, con checkpoint/reanudación y límite por tanda; jamás durante render o juego vivo.
 - **G1.2:** repetir desde reset la tape real G0 después de cada expansión hasta cubrir crédito y Start; verificar que los perfiles B2-D previos no cambian (estado, hashes de frame, lecturas CPU).
-- **G1.3:** congelar/promocionar el paquete solo tras contrato de integridad, replay determinista y un efecto funcional **visible/corroborado**, no simplemente \`FRAMES_DONE\`. Mantener el bundle previo seleccionable ante error.
+- **G1.3:** congelar/promocionar el paquete solo tras contrato de integridad, replay determinista y un efecto funcional **visible/corroborado**, no simplemente `FRAMES_DONE`. Mantener el bundle previo seleccionable ante error.
 
 **GO G1:** se recorre la ruta de input temprano más allá de 496, sin rutas ausentes durante el inicio de juego. **STOP:** mismatch nativo, salto a dirección ROM/RAM inexplicable, datos privados faltantes o divergencia de baseline.
 
@@ -91,14 +91,14 @@ flowchart TD
 - **G3.1:** completar cobertura CPU/bancos/RAM overlay en el recorrido de la primera fase (bot real nativo o sesiones humanas registradas), incluyendo enemigos, spawn, colisiones, armadura, vida, muerte/respawn, disparos, objetos y scroll.
 - **G3.2:** certificar progreso, derrota y transición de la fase mediante eventos reales, referencia MAME y frames de puntos clave; matriz de caminos ganadores/perdedores, no un único run feliz.
 
-**GO G3:** primera fase completada y una derrota/respawn observados sin pérdida de control, falsos pixels ni \`UNCOMPILED\`.
+**GO G3:** primera fase completada y una derrota/respawn observados sin pérdida de control, falsos pixels ni `UNCOMPILED`.
 
 ### G4 — Cobertura funcional íntegra del juego (P1)
 
 **Depende de:** G3. Progreso incremental por fase, no expansión ciega de attract.
 
 - **G4.1:** una matriz por fase y jefe; completar transiciones, enemigos, armas, puntuación, vidas, game over y nuevos créditos. Para rutas raras, capturar input tape nueva y ampliar AOT a partir del error observado.
-- **G4.2:** recorrer **primera y segunda vuelta** requeridas por el arcade y llegar al final auténtico, sin cambiar reglas ni usar \`stage select\` como demostración de final. Usar automatización nativa con trazas veraces y aprobación visual en checkpoints.
+- **G4.2:** recorrer **primera y segunda vuelta** requeridas por el arcade y llegar al final auténtico, sin cambiar reglas ni usar `stage select` como demostración de final. Usar automatización nativa con trazas veraces y aprobación visual en checkpoints.
 - **G4.3:** probar ruta alternativa de muerte/no victoria, reinicio/reintento y continuidad, además de partidas sin errores de compilación.
 
 **GO G4:** juego completo y final alcanzables desde reset con controles reales; no basta un bot mostrando un solo nivel.
@@ -125,7 +125,7 @@ flowchart TD
 
 **Depende de:** G2 para medir sesiones auténticas; cierre final después de G4–G6.
 
-- **G7.1:** reemplazar límite de sesión demo \`6000\` y retención indefinida de \`state.records\` con salida de frames por streaming/buffer acotado y control de backpressure. No tocar semántica CPU. Sincronizar a cadencia nativa (hardware ~59,64 Hz) y medir CPU, RAM, latencia input/vídeo/audio, reinicio y foco del navegador.
+- **G7.1:** reemplazar límite de sesión demo `6000` y retención indefinida de `state.records` con salida de frames por streaming/buffer acotado y control de backpressure. No tocar semántica CPU. Sincronizar a cadencia nativa (hardware ~59,64 Hz) y medir CPU, RAM, latencia input/vídeo/audio, reinicio y foco del navegador.
 - **G7.2:** empaquetar una build reproducible con carga **local y validada** de ROM privada; errores claros por ROM/revisión faltante; sin descargas encubiertas, MAME embebido ni datos derivados de ROM en repositorio.
 - **G7.3:** ejecutar suite ROM-free + gates privados + sesiones largas, dos recorridos, regresiones de sonido/vídeo y revisión manual. Mantener hashes/artefactos de evidencia privados con reporte público solo de marcadores no sensibles.
 
@@ -137,7 +137,7 @@ flowchart TD
 | --- | --- | --- |
 | **H0: motor real** | AOT + render + puertos | PASS (B2-C/B2-D, parcial vídeo) |
 | **H1: crédito + Start** | Créditos y cambio visual de pantalla, comparados con MAME | **BLOCKED bank 3:0x519D, frame 496** |
-| **H2: primer prototipo jugable** | Arthur controlable + 5 min + no \`UNCOMPILED\` | PENDIENTE |
+| **H2: primer prototipo jugable** | Arthur controlable + 5 min + no `UNCOMPILED` | PENDIENTE |
 | **H3: primer nivel completo** | G3 GO + derrota/respawn | PENDIENTE |
 | **H4: contenido completo** | G4 GO, ambas vueltas, final verdadero | PENDIENTE |
 | **H5: paridad audiovisual** | G5 y G6 GO | PENDIENTE |
@@ -148,9 +148,9 @@ No asignar progreso global por número de bloques: el porcentaje solo puede deri
 ## 5. Política de ejecución y reducción de iteraciones
 
 1. **Una sola ruta crítica en curso:** G0→G1→G2 hasta H2; G3 después. G5, G6 y G7 se abren en paralelo solo cuando tengan inputs reales. **No iniciar B2-E extendido como prerrequisito de H1**.
-2. **Automatizar descubrimiento de ramas desde tapes humanas o bot nativo** con reporte \`profile,bank,pc,overlay,frame,cycle,sha256\`, compilación offline, restart reproducible, checkpoint; no esperar a 96 iteraciones si ya hay un efecto visual temprano verificable.
-3. **Evitar falso progreso:** \`BUS_COIN1\`, \`BUS_START1\` y \`FIRST_CONTROLS_EFFECT\` son señales diagnósticas. Los gates H1–H6 requieren semántica de juego y evidencia visual.
-4. **Local Mac solo cuando haga falta ROM/MAME real**; implementación, review de fuentes, tests sintéticos y documentación en \`main\` por GitHub. Usar exactamente los outputs locales como fuente de confianza; nunca afirmar que pruebas privadas corrieron en la nube.
+2. **Automatizar descubrimiento de ramas desde tapes humanas o bot nativo** con reporte `profile,bank,pc,overlay,frame,cycle,sha256`, compilación offline, restart reproducible, checkpoint; no esperar a 96 iteraciones si ya hay un efecto visual temprano verificable.
+3. **Evitar falso progreso:** `BUS_COIN1`, `BUS_START1` y `FIRST_CONTROLS_EFFECT` son señales diagnósticas. Los gates H1–H6 requieren semántica de juego y evidencia visual.
+4. **Local Mac solo cuando haga falta ROM/MAME real**; implementación, review de fuentes, tests sintéticos y documentación en `main` por GitHub. Usar exactamente los outputs locales como fuente de confianza; nunca afirmar que pruebas privadas corrieron en la nube.
 5. **STOP/rollback:** cualquier incompatibilidad retrocede al último paquete congelado PASS sin editarlo; reporte del bloqueo concreto, siguiente target y comandos mínimos.
 
 ## 6. Siguiente bloque seleccionado y tareas concretas
@@ -159,10 +159,10 @@ No asignar progreso global por número de bloques: el porcentaje solo puede deri
 
 | Task | Dependencia | Resultado exigido |
 | --- | --- | --- |
-| G0.1 Capturar los eventos humanos (Coin desde VBlank 311 y Start) en ciclos CPU | B2-C | \`input-tape.json\` privado y reproducible |
+| G0.1 Capturar los eventos humanos (Coin desde VBlank 311 y Start) en ciclos CPU | B2-C | `input-tape.json` privado y reproducible |
 | G0.2 Construir runner de paridad y referencia MAME con esa misma tape | G0.1 | crédito/Start contrastables |
 | G1.1 Sembrar **bank=3, PC=0x519D** sobre nuevo hijo de B2-D | G0.1 | próxima ruta AOT compilada offline |
-| G1.2 Expandir estrictamente rutas de esta tape hasta salir del frame 496 | G1.1 | evidencia de progreso y sin \`UNCOMPILED\` en esta ventana |
+| G1.2 Expandir estrictamente rutas de esta tape hasta salir del frame 496 | G1.1 | evidencia de progreso y sin `UNCOMPILED` en esta ventana |
 | G1.3 Verificar B2-D anterior y publicar bundle privado solo tras parity | G1.2 | regresiones previas PASS; candidato íntegro |
 | G2.1 Validar crédito/Start/Arthur con el motor navegador | G0.2, G1.3 | **H1 GO**, base de primera jugabilidad |
 
