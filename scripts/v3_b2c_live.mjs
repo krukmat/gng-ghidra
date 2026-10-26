@@ -143,6 +143,8 @@ async function tick(){
  if(fetching)return;fetching=true;
  try{
    const s=await (await fetch('/state',{cache:'no-store'})).json();
+   document.getElementById('coin').disabled=Boolean(s.halt);
+   document.getElementById('start').disabled=Boolean(s.halt);
    if(sessionId!==s.sessionId){
      sessionId=s.sessionId;last=-1;paintedCount=0;
      ctx.clearRect(0,0,256,224);
@@ -348,6 +350,12 @@ async function main(){
           if(value.length>1024){respond(res,413,JSON.stringify({ok:false}));return}
         }
         let data;try{data=JSON.parse(value)}catch{data=null}
+        // A stopped CPU can no longer sample SYSTEM/P1. Do not report
+        // keyboard presses as accepted after an UNCOMPILED halt.
+        if(halt){
+          respond(res,409,JSON.stringify({ok:false,reason:'CPU_HALTED_RESTART'}));
+          return;
+        }
         if(!data||Object.keys(data).length!==2||
            !applyControl(data.control,data.pressed)){
           respond(res,422,JSON.stringify({ok:false}));return;
