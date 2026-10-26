@@ -73,6 +73,8 @@ class T43CaptureContract(unittest.TestCase):
         taps = re.findall(r"install_write_tap\(", code)
         self.assertEqual(len(taps), 4)
         self.assertEqual(code.count("return data"), 4)
+        self.assertIn("screen:frame_number()", code)
+        self.assertNotIn("screen.frame_number", code)
         for tag in [":spriteram", ":fgvideoram", ":bgvideoram",
                     ":palette_ext", ":palette"]:
             self.assertIn(f'"{tag}"', code)
@@ -84,7 +86,10 @@ class T43CaptureContract(unittest.TestCase):
                                   capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)
         for args in (["--bogus"], ["--frames", "1"], ["--frames", "3601"],
-                     ["--frames", "06"], ["--check", "--run"], ["--frames"]):
+                     ["--frames", "06"], ["--check", "--run"], ["--frames"],
+                     ["--volume", "gng-r35-t4-evidence-arm64-v2"],
+                     ["--volume", "gng-r35-t43-capture-arm64-v0"],
+                     ["--volume"]):
             with self.subTest(args=args):
                 proc = subprocess.run(["bash", str(HOST), *args],
                                       capture_output=True, text=True)
@@ -112,7 +117,10 @@ local function share(size)
   return {size=size, read_u8=function(self, i) return i & 0xff end}
 end
 local function stamp() return {seconds=0, attoseconds=16768000000000000} end
-local screen = {frame_number=0, snapshot=function(self, path)
+-- frame_number is a bound method in luaengine.cpp, not a property.
+local current = 0
+local screen = {frame_number=function(self) return current end,
+  snapshot=function(self, path)
   local f = assert(io.open(path, "wb")); f:write("png"); f:close() end}
 manager = {machine={
   system={name="gngb"}, screens={[":screen"]=screen},
@@ -130,7 +138,7 @@ emu = {add_machine_frame_notifier=function(cb) notifier = cb; return {} end}
 dofile(arg[1])
 assert(taps["gng-t43-dma"](0x3c00, 1, 0xff) == 1)
 assert(taps["gng-t43-bank"](0x3e00, 3, 0xff) == 3)
-for frame = 0, 2 do screen.frame_number = frame; notifier() end
+for frame = 0, 2 do current = frame; notifier() end
 assert(exited, "no exit")
 """
         import os

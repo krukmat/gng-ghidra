@@ -112,7 +112,9 @@ local function record(frame)
 end
 
 gng_t43_frame_subscription = emu.add_machine_frame_notifier(function()
-    local frame = screen.frame_number
+    -- luaengine.cpp binds frame_number as a method, although the 0.289 docs
+    -- call it a property; capture attempt 1 failed on the property form.
+    local frame = screen:frame_number()
     if recorded >= last then return end
     -- Consecutive frames from the first notifier; a gap is a failed capture.
     if recorded == 0 then first_frame = frame end

@@ -15,6 +15,7 @@ IMAGE=sha256:a3bd689f9d867b51cd4a25f01b3dfd8ed0218b53f09347a714271e6cd964c255
 fail(){ printf 'R35_T43_CAPTURE=BLOCKED_%s\n' "$1" >&2; exit 2; }
 MODE_SEEN=0
 FRAMES_SEEN=0
+VOLUME_SEEN=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --check|--run)
@@ -23,9 +24,14 @@ while [[ $# -gt 0 ]]; do
     --frames)
       [[ "$FRAMES_SEEN" == 0 && $# -ge 2 ]] || fail INVALID_FRAMES_ARGUMENT
       FRAMES="$2"; FRAMES_SEEN=1; shift 2 ;;
+    --volume)
+      [[ "$VOLUME_SEEN" == 0 && $# -ge 2 ]] || fail INVALID_VOLUME_ARGUMENT
+      CAPTURE_VOLUME="$2"; VOLUME_SEEN=1; shift 2 ;;
     *) fail INVALID_ARGUMENTS ;;
   esac
 done
+# A failed attempt's volume is preserved evidence: retry under a new name.
+[[ "$CAPTURE_VOLUME" =~ ^gng-r35-t43-capture-arm64-v[1-9][0-9]*$ ]] || fail CAPTURE_VOLUME_NAME_INVALID
 [[ "$FRAMES" =~ ^[1-9][0-9]{0,3}$ ]] && (( FRAMES >= 2 && FRAMES <= 3600 )) || fail FRAMES_MUST_BE_2_TO_3600
 task_docker(){ docker --context colima "$@"; }
 for binary in docker git python3; do
