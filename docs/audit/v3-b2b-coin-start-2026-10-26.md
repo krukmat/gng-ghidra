@@ -86,3 +86,32 @@ MAME para `Coin → Start`. Si quedan bloques `UNCOMPILED`,
 completar su descubrimiento en build antes de intentar un control
 visual de Arthur. Descartar optimizaciones visuales irrelevantes
 hasta poder demostrar movimiento/salto causado por CPU.
+
+## B2-B.Foundation — Compatibilidad de semillas históricas (26/10/2026)
+
+El Mac reportó:
+`V3_B2B_DISCOVERY=BLOCKED_FOUNDATION_SEEDS_INVALID`.
+El bloqueo ocurre **antes** de entrar en el bucle de expansión AOT.
+
+El origen es una divergencia contractual: el builder original
+`scripts/v3_b2a_build.mjs` acepta semillas con `pc` entero
+y `bank`/`overlay` válidos, incluso si un bloque es inerte
+o metadatos históricos no afectan el PC. El nuevo B2-B aplicaba
+`seedOK` para **nuevos targets** al conjunto histórico entero.
+
+Corrección: `src/v3_b2b_foundation.mjs` reproduce el validador
+de entrada original, sin alterar el fichero de semillas. Recompila
+el grafo B2A con los mismos bytes privados, reset vectors y
+compilador; compara tanto el número de bloques como el SHA-256
+**exacto** de `program.mjs` después de su import rewrite contra
+el manifiesto del paquete privado verificado.
+Cualquier deriva real debe fallar con
+`V3_B2B_FOUNDATION_AOT_MISMATCH`, nunca silenciarse.
+La validación estricta de **nuevas** direcciones sigue intacta
+en `seedOK`.
+
+El gate esperado es
+`V3_B2B_FOUNDATION=PASS_EXACT_FROZEN_AOT`, antes de empezar
+`V3_B2B_DISCOVERY_ITERATION`. Se incluyen seis fixtures ROM-free
+de semillas históricas, metadatos inertes, drift y falsificaciones.
+**No se ha ejecutado todavía la regresión Mac ni el build privado.**

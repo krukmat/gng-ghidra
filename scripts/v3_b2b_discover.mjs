@@ -17,6 +17,7 @@ import {locateRamCode,romBytes} from './r35_t5_run.mjs';
 import {loadFrozen,freezeBundle,runFrozen,MODULES} from '../src/v2_b1_frozen.mjs';
 import {verifySlot} from '../src/v2_b1_gate_lib.mjs';
 import {createV3Tape,PROFILE_FRAMES} from '../src/v3_b2b_tape.mjs';
+import {attestFoundationSeeds} from '../src/v3_b2b_foundation.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const OUT=join(ROOT,'out/v3/b2b');
@@ -113,11 +114,17 @@ async function main(){
      !b2a.missing_block)fail('B2A_EVIDENCE_INVALID');
 
   const raw=JSON.parse(readFileSync(join(ROOT,'out/r35/t5/seeds.json'),'utf8'));
-  if(!Array.isArray(raw)||raw.length>3000||raw.some(x=>!seedOK(x,code)))
-    fail('FOUNDATION_SEEDS_INVALID');
-  const fixed=addr=>code.fixed[addr]<<8|code.fixed[addr+1];
-  const seeds=[{bank:null,pc:fixed(0xfffe)},{bank:null,pc:fixed(0xfff8)},
-    ...raw];
+  // The historical V2/B2A builder accepted a broader seed shape than
+  // *new execution targets* require. Do not reinterpret or discard old
+  // tuples: prove they regenerate the exact signed frozen B2A AOT source.
+  const libUrl=pathToFileURL(join(ROOT,'src/mc6809_aot_lib.mjs')).href;
+  const attestation=attestFoundationSeeds({
+    raw,code,manifest:parent,compileProgram,libUrl
+  });
+  const seeds=attestation.seeds;
+  console.log('V3_B2B_FOUNDATION=PASS_EXACT_FROZEN_AOT');
+  console.log('V3_B2B_FOUNDATION_BLOCKS='+attestation.count);
+  console.log('V3_B2B_FOUNDATION_SEEDS='+attestation.seedCount);
   const known=new Set(seeds.map(seedKey));
   const addSeed=s=>{
     if(!seedOK(s,code))fail('DISCOVERED_SEED_INVALID');
@@ -132,7 +139,6 @@ async function main(){
   mkdirSync(OUT,{recursive:true,mode:0o700});
   const work=mkdtempSync(join(OUT,'work-'));
   const tape=createV3Tape('controls');
-  const libUrl=pathToFileURL(join(ROOT,'src/mc6809_aot_lib.mjs')).href;
   let built,runner,completed=false,reason='ITERATION_LIMIT',iterations=0;
   const MAX=48;
   for(let iter=1;iter<=MAX;iter++){
