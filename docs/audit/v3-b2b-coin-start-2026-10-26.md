@@ -162,3 +162,20 @@ inventar o sobrescribir ROM.
 `V3_B2B_DISCOVERY_ITERATION=49`. Luego alcanzar
 `FRAMES_DONE`, pasar verificación frozen y gates
 Coin/Start, o conservar otro checkpoint para la próxima tanda.
+
+## Cierre de seguridad adicional: bundles verdaderamente ejecutables
+
+Al completar los 1000 frames del tape `controls`, el proceso
+también ejecuta por separado las rutas de `coin` y `start`
+sobre el mismo AOT. Si alguna encuentra `UNCOMPILED` o
+`RAM_CODE_UNMAPPED`, incorpora su destino a la siguiente
+ronda de **compilación offline**; no promueve el paquete ni
+simula la partida.
+
+La salida publica `V3_B2B_DISCOVERY_MISSING_PROFILE` y
+`V3_B2B_DISCOVERY_PROFILE_FRAMES` cuando corresponda.
+El paquete `frozen` se construye provisionalmente bajo
+`out/v3/b2b/work-*/candidate-frozen/` y solo se mueve
+a `out/v3/b2b/frozen/` tras comprobar no-input parity V2,
+replay determinista de 1000 frames y rutas independientes
+Coin/Start. Todos estos resultados usan CPU MC6809 AOT real.
