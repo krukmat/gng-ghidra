@@ -1,0 +1,79 @@
+"""ROM-free tests for safe, read-only T4.2 build-failure classification."""
+from __future__ import annotations
+import importlib.util
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+PY = ROOT / "scripts/r35_t4_build_diagnose.py"
+SH = ROOT / "scripts/r35-t4-build-diagnose.sh"
+SPEC = importlib.util.spec_from_file_location("r35diag", PY)
+M = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(M)
+
+
+class T4BuildDiagnosisTests(unittest.TestCase):
+    def classify(self, log=None, prepare=True, lock=True):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp) / "private-runner"
+            base.mkdir()
+            if prepare:
+                (base / "t4-prepare.ok").write_text("synthetic")
+            if lock:
+                (base / "t4-build.lock").mkdir()
+            if log is not None:
+                (base / "t4-build.log").write_text(log)
+            return M.classify(Path(temp))
+
+    def test_missing_log_and_existing_lock(self):
+        r = self.classify()
+        self.assertEqual(r["R35_T4_DIAG_CAUSE"],
+                         "PREBUILD_CONTRACT_OR_CONTAINER_FAILURE")
+        self.assertEqual(r["R35_T4_DIAG_BUILD_LOCK_PRESENT"], "YES")
+        self.assertEqual(r["R35_T4_DIAG_LOG_PRESENT"], "NO")
+
+    def test_known_fail_closed_marker(self):
+        r = self.classify("R35_T4_INNER=BLOCKED_MODIFIED_BUILD_SOURCE\n")
+        self.assertEqual(r["R35_T4_DIAG_CAUSE"],
+                         "INNER_MODIFIED_BUILD_SOURCE")
+
+    def test_compiler_error_redacted(self):
+        r = self.classify("PRIVATE_PATH:999: error: private-symbol-not-found\n"
+                          "make: *** [target] Error 2\n")
+        self.assertEqual(r["R35_T4_DIAG_CAUSE"],
+                         "COMPILER_OR_GENERATOR_ERROR")
+        self.assertNotIn("private", " ".join(r.values()).lower())
+
+    def test_disk_memory_and_link(self):
+        for msg, expected in [
+            ("No space left on device", "DISK_EXHAUSTED"),
+            ("c++: fatal error: Killed signal terminated program cc1plus",
+             "RESOURCE_EXHAUSTION_SUSPECTED"),
+            ("undefined reference to private", "LINK_FAILURE"),
+            ("make: *** [target] Error 2", "MAKE_FAILURE_UNCLASSIFIED"),
+        ]:
+            with self.subTest(expected=expected):
+                self.assertEqual(self.classify(msg)["R35_T4_DIAG_CAUSE"],
+                                 expected)
+
+    @unittest.skipUnless(shutil.which("bash"), "bash unavailable")
+    def test_wrapper_readonly_no_rebuild(self):
+        source = SH.read_text()
+        self.assertIn("dst=/evidence,readonly", source)
+        self.assertIn("dst=/workspace/scripts,readonly", source)
+        self.assertIn("--network none", source)
+        self.assertIn("--read-only", source)
+        for forbidden in ["make -j", "volume create", "docker build",
+                          "r2-mame-probe.sh", "docker exec", "rm -rf"]:
+            self.assertNotIn(forbidden, source)
+        self.assertEqual(subprocess.run(["bash", "-n", str(SH)],
+                                        capture_output=True).returncode, 0)
+        self.assertEqual(subprocess.run(["bash", str(SH), "--build"],
+                                        capture_output=True).returncode, 2)
+
+
+if __name__ == "__main__":
+    unittest.main()
