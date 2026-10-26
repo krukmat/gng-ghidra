@@ -7,6 +7,9 @@ cd "$ROOT"
 node --check scripts/v3_b2c_engine_worker.mjs
 node --check scripts/v3_b2c_live.mjs
 node --check src/v3_b2c_live_controls.mjs
+node --check src/v3_b2c_session_policy.mjs
+node --check tests/test_v3_b2c_session_policy.mjs
+node --test tests/test_v3_b2c_session_policy.mjs
 node --check tests/test_v3_b2c_live_controls.mjs
 node --test tests/test_v3_b2c_live_controls.mjs
 bash scripts/r3-local-regression.sh

@@ -9,6 +9,7 @@ import {resolve,join} from 'node:path';
 import {existsSync,readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createLiveControls} from '../src/v3_b2c_live_controls.mjs';
+import {LIVE_FRAMES} from '../src/v3_b2c_session_policy.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 // Use the offline-discovered gameplay bundle when available. Otherwise
@@ -35,7 +36,7 @@ const {inputs,apply:applyControl,release:releaseAll,snapshot:heldControls}=live;
 // A bounded 6000-frame (~100 s at 60 fps) session avoids unbounded
 // storage in the frozen board's per-frame record history. Reset is a
 // genuine cold restart of that engine, never a playback or state injection.
-const SESSION_FRAMES=6000;
+const SESSION_FRAMES=LIVE_FRAMES;
 let advance=null,worker=null,generation=0;
 let frame=null,latest=0,known=false,cycle=0,unknownBytes=null,source=null;
 let lastGood=0,blocks=0,halt=null;

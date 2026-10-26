@@ -9,6 +9,7 @@ import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {rendererUnknownCount} from '../src/v2_b1_observable.mjs';
+import {validateLiveFrames} from '../src/v3_b2c_session_policy.mjs';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
 import {gngbGraphics,rendererInputs} from './r35_t5_render_check.mjs';
 
@@ -21,15 +22,9 @@ let cpu;
 try{
   const dir=resolve(workerData.bundle);
   const {manifest,code}=loadFrozen(dir);
-  if(!Number.isInteger(manifest.frames)||manifest.frames<600||
-     manifest.blocks<1||manifest.blocks>30000)
-    throw Error('V3_B2C_UNVERIFIED_BUNDLE');
-  // The manifest proves the original *certification run* length, not the
-  // duration of an interactive session. This only changes the number of
-  // runtime VBlank snapshots requested; immutable AOT bytes stay identical.
-  const requestedFrames=workerData.sessionFrames;
-  if(!Number.isSafeInteger(requestedFrames)||requestedFrames<600||
-     requestedFrames>12000)throw Error('V3_B2C_SESSION_FRAMES_INVALID');
+  // Manifest length is a proof horizon, not a live-session cap.
+  // The AOT program remains immutable while the board runs longer.
+  const requestedFrames=validateLiveFrames(manifest,workerData.sessionFrames);
   // Private graphics are decoded once from the operator's own local ROM;
   // MAME and the AOT compiler are never imported/executed here.
   const zip=resolve(workerData.zip);
