@@ -34,8 +34,8 @@ export function createPortReadWitness(){
   const snapshot=()=>({
     busReads:total,systemReads:system,p1Reads:p1,
     activeSamples:{...counts},
-    firstActive:Object.fromEntries(WITNESS_NAMES.map(k=>[k,first[k]])),
-    lastActive:last
+    firstActive:Object.fromEntries(WITNESS_NAMES.map(k=>[k,first[k]?{...first[k]}:null])),
+    lastActive:last?{...last}:null
   });
   return {observe,snapshot};
 }
