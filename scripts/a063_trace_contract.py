@@ -51,6 +51,8 @@ SOURCE_FILES=(
     "scripts/prepare_mame_rom.py",
     "scripts/r3-banked-critical-path.sh",
     "scripts/r3_banked_static_gate.mjs",
+    "scripts/r3_native_main_ram_write_gate.mjs",
+    "scripts/a063-main-ram-native-capture.sh",
     "scripts/r3_banked_report_integrity.mjs",
     "scripts/r3_compare_sprite_writes.mjs",
     "scripts/r3_static_trace_probe.mjs",
