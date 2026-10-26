@@ -104,6 +104,26 @@ if a04_video_enabled then
 end
 local reset_requested = false
 local controlled_reset = os.getenv("GNG_R2_PROBE_SOFT_RESET") == "1"
+-- A063 MAIN_RAM evidence, opt-in only. This is a bus write observation;
+-- callback PC and global write ordinal do NOT identify the issuing instruction.
+-- Source-level bounds are exact; no dropped events may certify a full run.
+local main_ram_enabled = os.getenv("GNG_A063_MAIN_RAM_TAP") == "1"
+local main_ram_count, main_ram_limit = 0, 65536
+if main_ram_enabled then
+    assert(full_oracle and controlled_reset and space.data_width == 8,
+           "A063 RAM tap requires full oracle, soft reset and 8-bit program bus")
+    record("A063_MAIN_RAM_TAP_ENABLED", "1")
+    gng_a063_main_ram_tap = assert(space:install_write_tap(
+        0x0000, 0x1dff, "a063-main-ram-write-tap",
+        function(addr, data, mask)
+            main_ram_count = main_ram_count + 1
+            if main_ram_count <= main_ram_limit then
+                record("A063_MAIN_RAM_WRITE", resetCount, main_ram_count,
+                       addr, data & 0xff, mask & 0xff)
+            end
+            return data
+        end), "A063 main RAM tap registration failed")
+end
 -- Opt-in R3.6.B2: observe exact CPU program-bus read from the ROM-attested
 -- LDA extended operand address. PC inside tap is advisory and NOT an
 -- instruction-correlated bus/fetch boundary. Never overwrite native data.
@@ -196,6 +216,11 @@ local function finish(reason)
     record("OBSERVED_BANK_CONTROL_WRITE_COUNT", bankControlWrites)
     record("OBSERVED_SPRITE_RAM_WRITE_COUNT", sprite_write_count)
     record("A04_VIDEO_WRITE_COUNT", a04_video_count)
+    if main_ram_enabled then
+        record("A063_MAIN_RAM_WRITE_COUNT", main_ram_count)
+        record("A063_MAIN_RAM_WRITE_TRUNCATED",
+               main_ram_count > main_ram_limit and "1" or "0")
+    end
     record("PROBE_END", reason)
     assert(file:close())
     file_closed = true
