@@ -138,7 +138,7 @@ flowchart TD
 | Checkpoint | Condición mínima | Estado actual |
 | --- | --- | --- |
 | **H0: motor real** | AOT + render + puertos | PASS (B2-C/B2-D, parcial vídeo) |
-| **H1: crédito + Start** | Créditos y cambio visual de pantalla, comparados con MAME | **GO en AOT local (V3.B3)**; falta el contraste MAME |
+| **H1: crédito + Start** | Créditos y cambio visual de pantalla, comparados con MAME | **GO (V3.B3)**: idéntico byte a byte a MAME 0.288 |
 | **H2: primer prototipo jugable** | Arthur controlable + 5 min + no `UNCOMPILED` | **PARCIAL**: Arthur controlable; bots de 5 min sin HALT; falta la sesión humana |
 | **H3: primer nivel completo** | G3 GO + derrota/respawn | PENDIENTE |
 | **H4: contenido completo** | G4 GO, ambas vueltas, final verdadero | PENDIENTE |
