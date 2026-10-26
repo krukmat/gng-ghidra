@@ -68,8 +68,11 @@ try{
       // releases it; this is not a replay of a prerecorded screenshot.
       const seq=Atomics.load(advance,0);
       send(packet,transfer);
-      if(Atomics.wait(advance,0,seq,30000)==='timed-out')
-        throw Error('V3_B2C_FRAME_ACK_TIMEOUT');
+      // The operator may pause indefinitely at a TRUE VBlank while
+      // deciding to insert Coin. Node's worker blocks, not the HTTP/UI
+      // thread; reset terminates this worker and cold-starts the next.
+      // No frames or CPU cycles are fabricated during this wait.
+      Atomics.wait(advance,0,seq);
     }
   });
   const result=cpu.run();
