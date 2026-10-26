@@ -85,7 +85,9 @@ node --test \
   tests/test_v3_b2c_session_policy.mjs \
   tests/test_v3_b2c_port_witness.mjs \
   tests/test_v3_b2c_pixel_probe.mjs \
-  tests/test_v3_b2c_browser_html.mjs
+  tests/test_v3_b2c_browser_html.mjs \
+  tests/test_v3_b2d_tapes.mjs \
+  tests/test_v3_b2d_selection.mjs
 node --check src/gngb_input_contract.mjs
 node --check tests/test_v3_b2a_cpu_ports.mjs
 node --check scripts/v3_b2a_build.mjs
@@ -106,6 +108,12 @@ node --check src/v3_b2c_pixel_probe.mjs
 node --check tests/test_v3_b2c_pixel_probe.mjs
 node --check scripts/v3_b2c_probe.mjs
 node --check tests/test_v3_b2c_browser_html.mjs
+node --check src/v3_b2d_tapes.mjs
+node --check src/v3_b2d_selection.mjs
+node --check scripts/v3_b2d_discover.mjs
+node --check tests/test_v3_b2d_tapes.mjs
+node --check tests/test_v3_b2d_selection.mjs
+bash -n scripts/v3_b2d_local.sh
 node --check tests/test_v3_b2c_port_witness.mjs
 node --check tests/test_v3_b2c_session_policy.mjs
 node --check tests/test_v3_b2c_live_controls.mjs
