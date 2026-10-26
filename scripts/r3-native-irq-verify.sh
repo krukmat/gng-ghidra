@@ -13,12 +13,20 @@ LC_ALL=C grep -aFq 'GNG_R35_NATIVE_V1' "$GNG_R3_MAME_BIN" || {
   echo "GNG_R35_NATIVE=BLOCKED binary_lacks_native_hook_marker" >&2
   exit 2
 }
-mkdir -p out/r3
-if [[ -d out/r2/mame-probe ]]; then
-  PRESERVED="$(mktemp -d "$ROOT/out/r3/probe-before-native-irq.XXXXXXXX")"
-  cp -R out/r2/mame-probe/. "$PRESERVED/"
-  echo "GNG_R35_PREVIOUS_EVIDENCE_BACKUP=$PRESERVED"
-fi
+# B2.T4 requires a separate, explicit approval. A marker in the binary
+# is a preflight check, NOT provenance of its instrumented build.
+[[ "${GNG_R35_NATIVE_T4_APPROVED:-}" == EXPLICIT_OPERATOR_B2_T4 ]] || {
+  echo "GNG_R35_NATIVE=BLOCKED t4_operator_authorization_required" >&2
+  exit 2
+}
+# The legacy R2 probe creates out/r2/mame-probe and removes named files.
+# Fail closed if prior evidence exists: no backup-and-overwrite, no retries.
+for evidence in out/r2/mame-probe out/r3/native-irq-report; do
+  if [[ -e "$evidence" || -L "$evidence" ]]; then
+    echo "GNG_R35_NATIVE=BLOCKED existing_evidence_use_isolated_checkout" >&2
+    exit 2
+  fi
+done
 # Source-compiled native 6809 marker lines are routed to mame.log by -oslog.
 GNG_R3_MAME_NATIVE_EVENTS=1 GNG_R2_PROBE_SOFT_RESET=1 \
   GNG_R2_PROBE_SPRITE_RAM=1 bash scripts/r2-mame-probe.sh

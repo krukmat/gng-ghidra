@@ -1,5 +1,14 @@
 ## Estado nativo vigente — D6 full bank provenance PASS (26/10/2026)
 
+**R3.5.B2 checkpoint ROM-free (26/10/2026):** B2.T1 auditó el hook MC6809
+`r3_prepare_native_mame_hook.py`, el parser `r3_native_irq_report.mjs` y
+el runner heredado. B2.T2 endurece el runner para no sobrescribir `out/r2`
+y exige autorización nueva para T4. B2.T3 deja la suite local ROM-free
+pendiente de confirmación en Mac; no existe todavía binario MAME
+instrumentado ni prueba real de wake IRQ/VBlank. Véase
+[checkpoint B2](audit/a063-r35-b2-t1-t3-readiness-2026-10-26.md).
+
+
 D6.T0–T3 ejecutadas en la rama feature: `A063_FULL_NATIVE_BANK_PROVENANCE_PASS`
 para los 17.135 preestados de la corrida D6 v2 y codegen
 `BANKED_CODEGEN_WITH_NATIVE_CHECKPOINT_PREFIX_ONLY`. Siguiente camino crítico:

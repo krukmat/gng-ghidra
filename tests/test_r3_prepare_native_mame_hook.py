@@ -159,7 +159,9 @@ class NativeMameOverlayTests(unittest.TestCase):
         wrapper = (ROOT / "scripts/r3-native-irq-verify.sh").read_text()
         self.assertIn('missing_explicit_instrumented_mame_binary', wrapper)
         self.assertIn('binary_lacks_native_hook_marker', wrapper)
-        self.assertIn('probe-before-native-irq.', wrapper)
+        self.assertIn('t4_operator_authorization_required', wrapper)
+        self.assertIn('existing_evidence_use_isolated_checkout', wrapper)
+        self.assertNotIn('cp -R out/r2/mame-probe', wrapper)
         self.assertIn('scripts/r3_native_irq_report.mjs', wrapper)
         if shutil.which("bash"):
             for file in ("scripts/r2-mame-probe.sh",
@@ -167,6 +169,35 @@ class NativeMameOverlayTests(unittest.TestCase):
                 proc = subprocess.run(["bash", "-n", str(ROOT / file)],
                     capture_output=True, text=True)
                 self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_native_wrapper_fail_closed_before_any_capture(self):
+        # Isolated synthetic checkout; never touches a real ROM or MAME.
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            (root / "scripts").mkdir()
+            (root / "scripts/r3-native-irq-verify.sh").write_text(
+                (ROOT / "scripts/r3-native-irq-verify.sh").read_text())
+            fake = root / "fake-instrumented-mame"
+            fake.write_text("GNG_R35_NATIVE_V1\\n")
+            fake.chmod(0o755)
+            env = dict(__import__("os").environ,
+                       GNG_R3_MAME_BIN=str(fake))
+            command = ["bash", str(root / "scripts/r3-native-irq-verify.sh")]
+            unauth = subprocess.run(command, env=env, capture_output=True,
+                                    text=True)
+            self.assertEqual(unauth.returncode, 2)
+            self.assertIn("t4_operator_authorization_required", unauth.stderr)
+            env["GNG_R35_NATIVE_T4_APPROVED"] = "EXPLICIT_OPERATOR_B2_T4"
+            (root / "out/r2/mame-probe").mkdir(parents=True)
+            (root / "out/r2/mame-probe/original.txt").write_text("preserve")
+            collision = subprocess.run(command, env=env, capture_output=True,
+                                       text=True)
+            self.assertEqual(collision.returncode, 2)
+            self.assertIn("existing_evidence_use_isolated_checkout",
+                          collision.stderr)
+            self.assertEqual((root / "out/r2/mame-probe/original.txt").read_text(),
+                             "preserve")
+            self.assertFalse((root / "out/r3/native-irq-report").exists())
 
 
 if __name__ == "__main__":
