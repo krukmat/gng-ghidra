@@ -136,7 +136,7 @@ test('T1.4: reject malformed, duplicate and impossible transitions',()=>{
 
 test('T1.4: invalid read addresses/cycles and forged schedules fail closed',()=>{
   const t=defineInputSchedule();
-  for(const address of [-1,0x2fff,0x3005,0x4000,0x3000.5,'SYSTEM'])
+  for(const address of [-1,0x2fff,0x3005,0x4000,0x3000+0.5,'SYSTEM'])
     err(()=>read(t,address,4),/V3_B1_INPUT_PORT_INVALID/);
   for(const cycle of [-1,NaN,1.5,Infinity,Number.MAX_SAFE_INTEGER+1])
     err(()=>read(t,0x3000,cycle),/V3_B1_INPUT_READ_CYCLE_INVALID/);
