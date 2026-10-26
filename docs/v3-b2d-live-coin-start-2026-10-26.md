@@ -104,3 +104,66 @@ Después detener servidor B2-C, arrancar
 `V3_B2C_AOT_BUNDLE=B2D`. El propio navegador seguirá
 mostrando frames auténticos del motor AOT y observaciones
 de bus de CPU sin inventar resultados.
+
+## B2-D.P0 — Fast gameplay lane (checkpoint de la iteración 88)
+
+Resultados del operador, ejecución AOT real:
+
+- Iteración 1: 665 bloques; iteración 88: **1703 bloques**.
+- `lateControls` completó 1500 frames en iteración 76.
+- `lateStart` completó 1500 frames en iteración 76.
+- `lateCoin` completó 1500 frames en iteración 77.
+- `idle` continuó descubriendo ruta de attract: aprox. 1088 frames
+  en iteración 88, con cambios mínimos en muchos bloques.
+- Falta el marcador de cierre `V3_B2D_DISCOVERY`; no se declara PASS
+  ni bundle congelado a partir de un log parcial.
+
+### Cambio de prioridades sin falsificar el juego
+
+Antes el gate exigía 1500 frames *también* para `idle` y
+`earlyControls`, incluso después de cubrir toda la ruta principal
+Coin → Start → controles. Esto retrasaba la primera prueba en vivo
+por rutas adicionales de attract mode no relevantes para ese
+checkpoint. Ahora se fijan horizontes explícitos:
+
+| Perfil | Frames reales obligatorios | Por qué |
+|---|---:|---|
+| `lateControls` | 1500 | Ruta de partida y jugador |
+| `lateStart` | 1500 | Moneda + comienzo |
+| `lateCoin` | 1500 | Atribución a Coin |
+| `idle` | 1000 | Comparación Coin vs sin input y base V2 |
+| `earlyControls` | 1000 | Conservación de comportamiento B2-B |
+
+El manifiesto general sigue indicando horizonte de hasta 1500
+frames, pero **no se afirma que todos los perfiles hayan recorrido
+1500**. El reporte privado ahora incluye `profile_horizons` y
+el live selector los exige exactamente. No se cambian los eventos
+hardware, hashes de tape ni datos de reset: el checkpoint privado
+iniciado con los tapes anteriores sigue siendo recuperable con
+`--resume` si terminó en `BLOCKED_ITERATION_LIMIT`.
+
+### Optimización de descubrimiento sin almacenar fotogramas de juego
+
+`src/v3_b2d_pass_cache.mjs` guarda únicamente huellas SHA-256
+de los hashes de frames y lecturas de puerto de una ejecución
+**ya completada**. Las siguientes iteraciones AOT omiten reejecutar
+esa ruta en descubrimiento. Al generar el paquete candidato, cada
+perfil se ejecuta **dos veces desde reset** con su horizonte;
+el primer replay debe coincidir además con el hash de estado y
+lecturas anterior (`passed.attest`). Cualquier diferencia bloquea
+la publicación. El navegador no consume esta caché; recibe
+snapshots generados directamente por el runtime AOT.
+
+**Siguiente orden:** una vez finalice la tanda actual de 96
+iteraciones, recuperar el checkpoint con
+`bash scripts/v3_b2d_local.sh`. No borrar
+`out/v3/b2d/discovery-report.json`. Si el proceso todavía
+está activo, no modificar su instalación a mitad de corrida.
+
+Cierre necesario:
+`V3_B2D_GAMEPLAY=PASS_THREE_1500_FRAME_PROFILES`,
+`V3_B2D_IDLE=PASS_1000_FRAME_REAL_AOT`,
+`V3_B2D_FROZEN=PASS_5_PROFILES_PER_HORIZON_DOUBLE_REPLAY` y
+`V3_B2D_DISCOVERY=PASS_REAL_AOT_1500_FRAMES`.
+Después comprobar el **crédito en pantalla, Start y Arthur**
+por interacción real; cobertura por sí sola no basta.

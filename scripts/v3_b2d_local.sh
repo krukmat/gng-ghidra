@@ -11,8 +11,9 @@ cd "$ROOT"
 echo V3_B2D_LOCAL_STAGE=ROM_FREE_GATE
 node --check src/v3_b2d_tapes.mjs
 node --check src/v3_b2d_selection.mjs
+node --check src/v3_b2d_pass_cache.mjs
 node --check scripts/v3_b2d_discover.mjs
-node --test tests/test_v3_b2d_tapes.mjs tests/test_v3_b2d_selection.mjs
+node --test tests/test_v3_b2d_tapes.mjs tests/test_v3_b2d_selection.mjs tests/test_v3_b2d_pass_cache.mjs
 bash scripts/r3-local-regression.sh
 echo V3_B2D_LOCAL_STAGE=REAL_OFFLINE_AOT_COVERAGE
 if [[ -f out/v3/b2d/discovery-report.json ]]; then
