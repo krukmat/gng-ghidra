@@ -43,6 +43,25 @@ test('frozen bundle runs without zip, ROM loader or AOT compiler',async()=>{
   assert.deepEqual(run.frame_hashes,(await runFrozen(dir)).frame_hashes);
 });
 
+test('runtime AOT dependency guard rejects real imports, not comments',async()=>{
+  const {dir}=await synthetic();
+  const {readFileSync:read,writeFileSync:write,rmSync}=await import('node:fs');
+  const {join}=await import('node:path');
+  // Freeze is single-shot and never overwrites an existing private package.
+  const copy=join(dir,'..','second');
+  const original=read(new URL('../src/gngb_block_key.mjs',import.meta.url),'utf8');
+  const code={fixed:new Uint8Array(0x10000),banks:new Uint8Array(0xa000)};
+  assert.throws(()=>freezeBundle(copy,{generated:'not-generated',code,
+    overlays:[],modules:{...modules,'gngb_block_key.mjs':original}}),
+    /V2_B1_GENERATED_SOURCE_REQUIRED/);
+  // The same guard must refuse a real dependency on the AOT compiler.
+  const generated=compileProgram(code,[{bank:null,pc:0x6000}],{libUrl:origin});
+  assert.throws(()=>freezeBundle(copy,{generated:generated.source,code,
+    overlays:[],modules:{...modules,
+      'gngb_block_key.mjs':original+"\\nimport './mc6809_aot.mjs';\\n"},
+    provenance:{frames:1,blocks:1}}),/V2_B1_RUNTIME_IMPORTS_COMPILER/);
+});
+
 test('bundle integrity fails closed on binary tampering',async()=>{
   const {dir}=await synthetic();
   const {writeFileSync}=await import('node:fs');

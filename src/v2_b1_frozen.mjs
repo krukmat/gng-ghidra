@@ -33,8 +33,17 @@ export function freezeBundle(dir,{generated,code,overlays=[],modules,provenance=
   if(!Array.isArray(overlays)||!modules||MODULES.some(n=>typeof modules[n]!=='string'))
     deny('MODULES_OR_OVERLAYS_MISSING');
   const program=rewriteProgram(generated);
-  if(modules['gngb_runtime.mjs'].includes("from './mc6809_aot.mjs'")||
-     modules['gngb_block_key.mjs'].includes('import '))deny('RUNTIME_IMPORTS_COMPILER');
+  // Match actual import declarations, not prose like "must not import".
+  // The frozen board may depend only on the shared ALU and block identity.
+  const imports=src=>[...src.matchAll(/^\s*import\s+(?:[^\n]*?\s+from\s+)?['"]([^'"\n]+)['"]\s*;?/gm)]
+    .map(m=>m[1]);
+  const runtimeImports=imports(modules['gngb_runtime.mjs']);
+  if(runtimeImports.length!==2||
+     !['./mc6809_aot_lib.mjs','./gngb_block_key.mjs'].every(x=>runtimeImports.includes(x))||
+     imports(modules['gngb_block_key.mjs']).length!==0||
+     /^\s*import\s*\(/m.test(modules['gngb_runtime.mjs'])||
+     /^\s*import\s*\(/m.test(modules['gngb_block_key.mjs']))
+    deny('RUNTIME_IMPORTS_COMPILER');
   const descriptors=[];
   const parts=[];
   let offset=0;

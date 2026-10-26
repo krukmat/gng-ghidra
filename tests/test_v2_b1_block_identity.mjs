@@ -16,6 +16,7 @@ test('runtime dependency graph never statically imports compiler',()=>{
   const src=readFileSync(new URL('../src/gngb_runtime.mjs',import.meta.url),'utf8');
   const key=readFileSync(new URL('../src/gngb_block_key.mjs',import.meta.url),'utf8');
   assert.doesNotMatch(src,/from\s+['"]\.\/mc6809_aot\.mjs['"]/);
-  assert.doesNotMatch(key,/\bimport\s/);
+  // A prose comment containing "import" must never be interpreted as a declaration.
+  assert.doesNotMatch(key,/^\s*import\b/m);
   assert.match(src,/from '\.\/gngb_block_key\.mjs'/);
 });
