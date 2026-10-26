@@ -12,7 +12,7 @@
  * per-bit known masks; any other use of an unknown value throws.
  */
 import {CC_E,CC_I,CC_F} from './mc6809_aot_lib.mjs';
-import {blockKey} from './mc6809_aot.mjs';
+import {blockKey} from './gngb_block_key.mjs';
 
 export const CYCLES_PER_FRAME=25152;          // 384x262 @ 6 MHz, CPU 1.5 MHz
 export const PORT_DEFAULTS=[0xff,0xff,0xff,0xdf,0xfb]; // SYSTEM,P1,P2,DSW1,DSW2

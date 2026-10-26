@@ -14,16 +14,8 @@
  * Fail closed: undocumented or 6309-only opcodes, illegal index modes,
  * unknown registers/flags/memory and code outside ROM throw at run time.
  */
-export const FIXED_START=0x6000,BANK_START=0x4000;
-
-/** RAM-resident code is compiled from the ROM bytes the game copies there. */
-export const RAM_KEY=0x100000;
-export function blockKey(bank,pc,overlay=null){
-  if(overlay!==null)return RAM_KEY+overlay*0x10000+pc;
-  if(pc>=FIXED_START)return pc;
-  if(pc>=BANK_START&&bank!==null&&bank>=0)return (bank+1)*0x10000+pc;
-  return -1;
-}
+import {FIXED_START,BANK_START,blockKey} from './gngb_block_key.mjs';
+export {FIXED_START,BANK_START,RAM_KEY,blockKey} from './gngb_block_key.mjs';
 const h=n=>'0x'+n.toString(16);
 const REG16=new Set(['x','y','u','s']);
 
