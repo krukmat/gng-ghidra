@@ -1,6 +1,8 @@
 # Tarea preparada — prueba nativa de escrituras en RAM principal
 
-Estado: preparada el 2026-10-26 y **no ejecutada**. Ninguna captura puede
+**Checkpoint T0 (26/10/2026):** implementación ROM-free y 9/9 tests Node dirigidos PASS; inspección estática 19/19 PASS. **Suite integral BLOCKED_ENV_MISSING_CHECKOUT**, no T0_FULL_PASS. Sin ROM/MAME/Docker/captura, T1/T2/T3 no iniciadas. Ver [reporte T0](../audit/a063-main-ram-native-tap-t0.md).
+
+Estado original: tarea preparada el 2026-10-26. Ninguna captura puede
 empezar sin autorización explícita del operador para ese bloque.
 
 Contexto: tras [`LEA_INDEXED`](../audit/a064-lea-indexed-codegen.md), D6 v2
