@@ -8,40 +8,25 @@ import {Worker} from 'node:worker_threads';
 import {resolve,join} from 'node:path';
 import {existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {INPUT_CONTROLS,INPUT_DEFAULTS} from '../src/gngb_input_contract.mjs';
+import {createLiveControls} from '../src/v3_b2c_live_controls.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
-const BUNDLE=join(ROOT,'out/v3/b2a/frozen');
+// Use the offline-discovered gameplay bundle when available. Otherwise
+// run the verified B2A Coin1 build; missing AOT blocks stop the CPU.
+const B2B=join(ROOT,'out/v3/b2b/frozen');
+const BUNDLE=existsSync(B2B)?B2B:join(ROOT,'out/v3/b2a/frozen');
 const ZIP=join(ROOT,'roms/gng.zip');
 const PORT=18609;
-const BITS=['SYSTEM','P1','P2'];
-const USER_CONTROLS=new Set(['coin1','start1','p1.up','p1.down',
-  'p1.left','p1.right','p1.button1','p1.button2']);
-const inputs=new Int32Array(new SharedArrayBuffer(3*4));
+const live=createLiveControls();
+const {inputs,apply:applyControl,release:releaseAll,snapshot:heldControls}=live;
 const advance=new Int32Array(new SharedArrayBuffer(4));
-for(let i=0;i<3;i++)Atomics.store(inputs,i,INPUT_DEFAULTS[i]);
-const held=new Set();
 let frame=null,latest=0,known=false,cycle=0,unknownBytes=null,source=null;
 let lastGood=0,blocks=0,halt=null;
 let reads={all:0,coin:0,start:0,p1:0};
 let pendingTick=false;
 const state=()=>({schema:'gng.v3.live-engine.v1',mode:'REAL_AOT',
   frame:latest,lastRenderedFrame:lastGood,frameKnown:known,
-  unknownBytes,cycle,blocks,reads,source,halt,controls:[...held]});
-const publish=(code,body)=>({code,body});
-function applyControl(name,pressed){
-  if(!USER_CONTROLS.has(name)||typeof pressed!=='boolean')return false;
-  if(held.has(name)===pressed)return true; // browser key repeat
-  if(pressed&&/^p1\.(?:up|down|left|right)$/.test(name))
-    for(const old of held)if(/^p1\.(?:up|down|left|right)$/.test(old))
-      return false; // four-way contract; client must release old direction
-  const {port,bit}=INPUT_CONTROLS[name];
-  const index=BITS.indexOf(port);
-  if(index<0)return false;
-  if(pressed){held.add(name);Atomics.and(inputs,index,~bit);}
-  else{held.delete(name);Atomics.or(inputs,index,bit);}
-  return true;
-}
+  unknownBytes,cycle,blocks,reads,source,halt,controls:heldControls()});
 const html=`<!doctype html><html lang="es"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Ghosts 'n Goblins — Motor MC6809 AOT real</title>
@@ -119,6 +104,7 @@ async function main(){
     throw Error('V3_B2C_USAGE_SERVE_ONLY');
   if(!existsSync(BUNDLE)||!existsSync(ZIP))
     throw Error('V3_B2C_PRIVATE_BUNDLE_OR_ROM_MISSING');
+  console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B2B?'B2B':'B2A'));
   const worker=new Worker(new URL('./v3_b2c_engine_worker.mjs',import.meta.url),
     {workerData:{bundle:BUNDLE,zip:ZIP,inputs:inputs.buffer,
       advance:advance.buffer}});
@@ -161,7 +147,7 @@ async function main(){
       }
       if(req.method==='POST'&&(u.pathname==='/input'||u.pathname==='/release')){
         if(u.pathname==='/release'){
-          for(const k of [...held])applyControl(k,false);
+          releaseAll();
           respond(res,200,JSON.stringify({ok:true}));return;
         }
         let value='';
