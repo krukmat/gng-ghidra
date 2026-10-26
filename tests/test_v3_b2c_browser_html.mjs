@@ -30,3 +30,13 @@ test('frame endpoint carries consistent ID without 409 race',()=>{
   assert.match(source,/'X-GnG-Session':String\(generation\)/);
   assert.doesNotMatch(source,/FRAME_ADVANCED/);
 });
+
+test('live HTML exposes real operator Coin and Start hardware buttons',()=>{
+  const html=new Function('return '+fixture[1])();
+  assert.match(html,/id="coin"/);
+  assert.match(html,/id="start"/);
+  const js=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  assert.match(js,/pulse\('coin1'\)/);
+  assert.match(js,/pulse\('start1'\)/);
+  assert.match(source,/CPU_HALTED_RESTART/);
+});

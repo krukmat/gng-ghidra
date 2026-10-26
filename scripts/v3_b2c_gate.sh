@@ -20,6 +20,9 @@ node --check scripts/v3_b2c_probe.mjs
 node --check tests/test_v3_b2c_browser_html.mjs
 node --check src/v3_b2d_selection.mjs
 node --check tests/test_v3_b2d_selection.mjs
+node --check src/v3_b2e_selection.mjs
+node --check tests/test_v3_b2e_selection.mjs
+node --test tests/test_v3_b2e_selection.mjs
 node --test tests/test_v3_b2d_selection.mjs
 node --test tests/test_v3_b2c_browser_html.mjs
 node --test tests/test_v3_b2c_pixel_probe.mjs
