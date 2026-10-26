@@ -48,3 +48,12 @@ test('idle 1500 is not incorrectly claimed and profile horizons are obligatory',
   delete report.profile_horizons;
   assert.equal(b2dCertified(report,manifest),false);
 });
+
+test('existing stronger all-1500-frame certified bundles remain selectable',()=>{
+  const {report,manifest}=setup();
+  report.frozen_determinism='PASS_2_RUNS_EACH_1500_FRAME_PROFILE';
+  delete report.profile_horizons;
+  assert.equal(b2dCertified(report,manifest),true);
+  report.profile_horizons={idle:1000};
+  assert.equal(b2dCertified(report,manifest),false);
+});
