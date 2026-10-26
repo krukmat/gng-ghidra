@@ -16,7 +16,7 @@ import {loadFrozen,freezeBundle,runFrozen,rewriteProgram,sha256,MODULES}
 import {compileProgram} from '../src/mc6809_aot.mjs';
 import {createBoard,GngbRuntimeError} from '../src/gngb_runtime.mjs';
 import {locateRamCode,romBytes} from './r35_t5_run.mjs';
-import {B2D_FRAMES,B2D_PROFILES,b2dTape} from '../src/v3_b2d_tapes.mjs';
+import {B2D_FRAMES,B2D_PROFILES,B2D_COVERAGE_FRAMES,b2dCoverageFrames,b2dTape} from '../src/v3_b2d_tapes.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const B2B=join(ROOT,'out/v3/b2b/frozen');
@@ -51,7 +51,7 @@ const diff=(a,b,from)=>{
 function replay(code,blocks,profile){
   const tape=b2dTape(profile),hashes=[],reads={coin:0,start:0,
     right:0,left:0,attack:0,jump:0};
-  const board=createBoard(code,blocks,{frames:B2D_FRAMES,
+  const board=createBoard(code,blocks,{frames:b2dCoverageFrames(profile),
     portRead:(addr,cycle)=>tape.read(addr,cycle),
     onPortRead:r=>{
       if(r.addr===0x3000){
@@ -279,7 +279,7 @@ async function main(){
   for(const profile of B2D_PROFILES){
     const a=replay(packaged.code,blocks,profile),b=replay(packaged.code,blocks,profile);
     if(a.result.status!=='FRAMES_DONE'||b.result.status!=='FRAMES_DONE'||
-       a.hashes.length!==B2D_FRAMES||
+       a.hashes.length!==b2dCoverageFrames(profile)||
        JSON.stringify(a.hashes)!==JSON.stringify(b.hashes)||
        JSON.stringify(a.reads)!==JSON.stringify(b.reads))
       fail('FROZEN_PROFILE_NOT_DETERMINISTIC_'+profile);
@@ -308,12 +308,15 @@ async function main(){
   renameSync(candidate,FROZEN);
   const summary={...basic,status:'DISCOVERY_COMPLETE',
     no_input:'PASS_600_FRAMES_IDENTICAL_B2B_V2',
-    frozen_determinism:'PASS_2_RUNS_EACH_1500_FRAME_PROFILE',
-    profiles:B2D_PROFILES,effects,active,
+    frozen_determinism:'PASS_2_RUNS_PER_PROFILE_HORIZON',
+    profiles:B2D_PROFILES,profile_horizons:B2D_COVERAGE_FRAMES,effects,active,
     frozen_program_sha256:packaged.manifest.files['program.mjs']};
   persist(summary,resuming?previousIterations:null);
   console.log('V3_B2D_NO_INPUT=PASS_600_FRAMES_EQUAL_B2B_V2');
-  console.log('V3_B2D_FROZEN=PASS_5_PROFILES_1500_FRAMES_DOUBLE_REPLAY');
+  console.log('V3_B2D_FROZEN=PASS_5_PROFILES_PER_HORIZON_DOUBLE_REPLAY');
+  console.log('V3_B2D_GAMEPLAY=PASS_THREE_1500_FRAME_PROFILES');
+  console.log('V3_B2D_IDLE=PASS_1000_FRAME_REAL_AOT');
+  console.log('V3_B2D_EARLY=PASS_1000_FRAME_REAL_AOT');
   console.log('V3_B2D_EFFECT_COIN_FRAME='+effects.coin);
   console.log('V3_B2D_EFFECT_START_FRAME='+effects.start);
   console.log('V3_B2D_EFFECT_CONTROLS_FRAME='+effects.controls);

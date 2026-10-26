@@ -39,3 +39,18 @@ export function b2dTape(profile){
   return Object.freeze({...metadata,sha256,
     read:(addr,cycle)=>readScheduledPort(schedule,addr,cycle)});
 }
+
+/** B2-D fast visible lane. All gameplay input profiles exercise 1500
+ * authentic frames. Attract idle and the previously certified early
+ * sequence require 1000 frames here; later idle coverage is separate.
+ * Changing these limits does NOT alter tape input schedules or hashes.
+ */
+export const B2D_COVERAGE_FRAMES=Object.freeze({
+  lateControls:1500,lateStart:1500,lateCoin:1500,
+  idle:1000,earlyControls:1000
+});
+export function b2dCoverageFrames(profile){
+  if(!Object.hasOwn(B2D_COVERAGE_FRAMES,profile))
+    throw Error('V3_B2D_COVERAGE_PROFILE_INVALID');
+  return B2D_COVERAGE_FRAMES[profile];
+}

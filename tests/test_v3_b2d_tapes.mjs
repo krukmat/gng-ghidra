@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {B2D_FRAMES,B2D_PROFILES,b2dTape} from '../src/v3_b2d_tapes.mjs';
+import {B2D_FRAMES,B2D_PROFILES,B2D_COVERAGE_FRAMES,b2dCoverageFrames,b2dTape} from '../src/v3_b2d_tapes.mjs';
 import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
 test('profiles are stable, independent, bounded and versioned',()=>{
   assert.equal(B2D_FRAMES,1500);
@@ -42,4 +42,19 @@ test('early Coin and Start retain original B2B behavior',()=>{
 test('arbitrary profiles are rejected',()=>{
   assert.throws(()=>b2dTape('__proto__'),/V3_B2D_PROFILE_INVALID/);
   assert.throws(()=>b2dTape('unknown'),/V3_B2D_PROFILE_INVALID/);
+});
+
+test('B2D separates extended attract mode from 1500-frame gameplay coverage',()=>{
+  assert.equal(b2dCoverageFrames('idle'),1000);
+  assert.equal(b2dCoverageFrames('earlyControls'),1000);
+  for(const p of ['lateCoin','lateStart','lateControls'])
+    assert.equal(b2dCoverageFrames(p),1500);
+  assert.equal(Object.isFrozen(B2D_COVERAGE_FRAMES),true);
+  assert.throws(()=>b2dCoverageFrames('__proto__'),/COVERAGE_PROFILE_INVALID/);
+});
+test('coverage targets never rewrite historical input tape hashes',()=>{
+  const before=B2D_PROFILES.map(p=>b2dTape(p).sha256);
+  B2D_PROFILES.forEach(p=>b2dCoverageFrames(p));
+  assert.deepEqual(B2D_PROFILES.map(p=>b2dTape(p).sha256),before);
+  assert.equal(b2dTape('idle').frames,1500);
 });
