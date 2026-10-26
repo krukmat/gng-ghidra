@@ -62,5 +62,10 @@ automática ni demostración de fuente VBlank. El gate hacia el primer frame
 requiere conectar la reanudación a un runtime JS/TS continuo, sin reinyectar
 preestados desde MAME en cada instrucción.
 
-**Estado actual:** T4.1 implementación del preflight y tests sintéticos;
-resultado RO en Mac aún pendiente. T4.2/T4.3/T4.4 no ejecutadas.
+**Estado validado por operador (26/10/2026):**
+`R35_T4_SOURCE=PASS_CACHED_MAME0289_PATCHED_RO`,
+`R35_T4_INSTRUMENTED_BINARY=NOT_BUILT` y
+`R35_T4_NATIVE_EVIDENCE=NOT_CAPTURED`.
+T4.1 PASS. T4.2 tiene scripts y pruebas de preparación/build aislado
+publicados ([checkpoint](r35-b2-t4-build-2026-10-26.md)), pero todavía
+no se han ejecutado en el Mac. T4.3/T4.4 siguen pendientes.

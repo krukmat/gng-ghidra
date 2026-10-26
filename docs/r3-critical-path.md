@@ -1,5 +1,13 @@
 ## Estado nativo vigente — D6 full bank provenance PASS (26/10/2026)
 
+**R3.5.B2.T4 (26/10/2026):** T4.1 PASS reportado por operador en Mac,
+fuente MAME 0.289 protegida recuperable en Colima. T4.2 preparado como
+copia aislada del checkout y compilación ARM64 explícita, sin tocar
+MAME original ni capturas. Código publicado en
+[checkpoint de build](audit/r35-b2-t4-build-2026-10-26.md); **aún
+no se ha ejecutado T4.2**. No existe evidencia nativa IRQ/SYNC/VBlank.
+
+
 **R3.5.B2 checkpoint ROM-free (26/10/2026):** B2.T1 auditó el hook MC6809
 `r3_prepare_native_mame_hook.py`, el parser `r3_native_irq_report.mjs` y
 el runner heredado. B2.T2 endurece el runner para no sobrescribir `out/r2`
