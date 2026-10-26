@@ -54,3 +54,23 @@ runs, tests ROM-free y el gate nativo ya registrado, contrastando
 **T6 no se declara cerrado hasta obtener
 `V2_FEATURE_MERGED_MAIN=PASS_POSTMERGE`.**
 No borrar feature ni archivos locales privados antes del postflight.
+
+## Resultado remoto B1.T6.2 — 26/10/2026
+
+`main` recibió **fast-forward** de
+`f96acf868c61c89d758beb06e66ec46ff33444aa` a
+`417c6d14ea0e61b37a21eacbf76b6050bf3bd5fa`, usando lease
+`expected_sha` y verificación de la nueva referencia.
+
+Chequeos remotos: `main` era ancestro directo de feature;
+comparación `behind_by=0`, sin rutas ROM/`out/`, trazas,
+imágenes PNG ni binarios privados detectados en los 145 archivos
+cambiados; núcleo AOT/runtime/gfx idéntico al checkpoint de freeze
+`0c3ba3494b984785b5dd6183998c07494a8ee6d6`.
+
+La rama feature queda preservada. El chequeo de árbol local/estado
+de los volúmenes privados no está disponible para el conector y
+**T6.3 post-merge continúa pendiente** hasta ejecutar en Mac
+`bash scripts/v2_b1_postmerge.sh` sobre `main`.
+
+No emitir `V2_FEATURE_MERGED_MAIN` antes del postflight.
