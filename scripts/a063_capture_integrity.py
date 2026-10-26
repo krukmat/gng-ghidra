@@ -32,8 +32,8 @@ def capture_scope(root: Path, out: Path, preflight: Path, planned: dict) -> tupl
     if (type(oracle) is not bool or scope not in (None, "full") or
             (full and (not oracle or
                        planned.get("capture_output_relative") != contract.FULL_ORACLE_OUTPUT or
-                       out != (root / contract.FULL_ORACLE_OUTPUT).resolve() or
-                       preflight != (root / contract.FULL_ORACLE_PREFLIGHT).resolve())) or
+                       out != root / contract.FULL_ORACLE_OUTPUT or
+                       preflight != root / contract.FULL_ORACLE_PREFLIGHT)) or
             (oracle and not full and out != oracle_smoke)):
         raise contract.ContractError("A063_POSTFLIGHT_ORACLE_MODE_INVALID")
     if out == oracle_smoke and not oracle:

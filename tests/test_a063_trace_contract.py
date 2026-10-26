@@ -88,6 +88,19 @@ class TraceContractTests(unittest.TestCase):
                     root/"out/r3/arbitrary/private-preflight.json",
                     root=root,oracle=True,full_oracle=True)
 
+    def test_full_preflight_rejects_symlinked_parent_directory(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td).resolve()
+            directory=root/"out/r3/banked-provenance"
+            directory.parent.mkdir(parents=True)
+            redirected=root/"redirected-preflight"
+            redirected.mkdir()
+            directory.symlink_to(redirected,target_is_directory=True)
+            with self.assertRaisesRegex(contract.ContractError,"EXACT_PREFLIGHT_REQUIRED"):
+                contract.create_preflight("4000","5000","unused",
+                    root/contract.FULL_ORACLE_PREFLIGHT,
+                    root=root,oracle=True,full_oracle=True)
+
     def test_full_action_has_exactly_twelve_atomic_unmasked_expressions(self):
         action=contract.build_action("4000","5000",oracle=True)
         args=action.split('\",',1)[1].rstrip('}').split(',')

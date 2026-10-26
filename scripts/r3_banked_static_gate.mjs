@@ -55,7 +55,7 @@ export function validateFullOracleEvidence({report,oracle,rows,witness}){
   }
   return true;
 }
-export function validateFullOraclePaths(locations,manifest){
+export function validateFullOraclePaths(locations,manifest,target='out/r3/banked-codegen'){
   const canonical={flat:'out/gngb-flat.bin',banks:'out/r3/banked-rom/private-banked-rom.bin',
     trace:'out/r2/mame-probe/pre-instruction.jsonl',rawtrace:'out/r2/mame-probe/cpu.trace',
     observations:'out/r2/mame-probe/observations.tsv',
@@ -65,7 +65,8 @@ export function validateFullOraclePaths(locations,manifest){
     postflight:'out/r2/mame-probe/private-a063-postflight.json',
     full_oracle:'out/r2/mame-probe/private-a063-full-oracle-check.json',
     bank_report:'out/r3/banked-provenance/report.json'};
-  if(resolve(manifest)!==resolve('out/r3/banked-provenance/private-source-manifest.json')||
+  if(resolve(target)!==resolve('out/r3/banked-codegen')||
+      resolve(manifest)!==resolve('out/r3/banked-provenance/private-source-manifest.json')||
       Object.keys(locations).length!==Object.keys(canonical).length||
       Object.entries(canonical).some(([key,path])=>
         typeof locations[key]!=='string'||resolve(locations[key])!==resolve(path)))
@@ -243,7 +244,9 @@ async function main(){
   };
   const manifestPath=arg('--manifest',
     'out/r3/banked-provenance/private-source-manifest.json');
-  validateFullOraclePaths(locations,manifestPath);
+  validateFullOraclePaths(locations,manifestPath,target);
+  if(!(await lstat(manifestPath)).isFile())
+    throw Error('A064_PRIVATE_REGULAR_FILE_REQUIRED');
   const manifest=JSON.parse(await readFile(manifestPath,'utf8'));
   if(manifest.schema!=='gng.a06.private-bank-evidence-manifest.v1'||
       manifest.full_oracle_same_run_postflight_verified!==true)
@@ -253,6 +256,7 @@ async function main(){
     const expected=manifest.sha256?.[key];
     if(typeof expected!=='string'||!HASH_REGEX.test(expected))
       throw Error('A064_PRIVATE_SOURCE_HASH_MISSING');
+    if(!(await lstat(path)).isFile())throw Error('A064_PRIVATE_REGULAR_FILE_REQUIRED');
     const bytes=await readFile(path);
     if(createHash('sha256').update(bytes).digest('hex')!==expected)
       throw Error('A064_STALE_OR_REPLACED_NATIVE_EVIDENCE_'+key);

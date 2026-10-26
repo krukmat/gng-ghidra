@@ -32,7 +32,8 @@ Tareas ejecutables: [handoff T0–T3](a063-m5-d6-full-native-handoff.md),
    abortan antes de preparar una captura. `--capture-only` omite provenance
    full y static codegen; mantiene las validaciones originales de captura.
 2. Integridad: opt-in full restringido a `out/r2/mame-probe` y al preflight
-   canónico, creado una sola vez. Acción, binario explícito, todos los
+   canónico, creado una sola vez; redirecciones por symlink se rechazan.
+   Acción, binario explícito, todos los
    artefactos y fuentes se verifican de nuevo. El freeze incluye los wrappers,
    gates y dependencias locales que autentican ROM y gráficos. La integridad
    por hashes sigue sin constituir atestación independiente del emulador.
@@ -63,15 +64,16 @@ MAME 0.289; esto no sustituye la futura prueba nativa del delimitador.
 Estado: **D6.T0 PASS; D6.T1 PASS_ROM_FREE_ONLY**. La suite completa
 `TMPDIR=/private/tmp bash scripts/a063-r2b-romfree.sh` terminó con exit 0 y
 `A063_R2B=ROMFREE_CHECKS_PASS_NOT_NATIVE_NOT_A063_CERTIFIED`:
-149 tests Node PASS, 158 ejecuciones de tests Python PASS (incluyen suites
+149 tests Node PASS, 162 ejecuciones de tests Python PASS (incluyen suites
 históricas repetidas), replay sintético 17/17 y `git diff --check` PASS.
 Los tests full nuevos incluyen 14 casos de oracle y 5 del launcher; el static
-gate ejecuta 8 casos, y trace/integridad 32.
+gate ejecuta 8 casos, y trace/integridad 36, incluidos cuatro rechazos de
+directorios redirigidos por symlink.
 
 Los tests sintéticos no usan ROM ni ejecutan una captura MAME. La suite se
 ejecutó sobre una copia de fuentes públicas en
 `/private/tmp/gng-d6-romfree-gy5opw3u`, sin montar ROMs ni reutilizar `out/`
-del host. Log local ROM-free: `/private/tmp/gng-d6-romfree-suite.log`.
+del host. Log final local ROM-free: `/private/tmp/gng-d6-romfree-suite-final.log`.
 Se fijó el PATH del entorno aislado a Python 3.15.0 y Node 26.11.1 instalados;
 el primer intento seleccionó Python 3.9 y falló por `hashlib.file_digest`
 usado ya por el extractor. La selección de runtime resolvió ese fallo.
@@ -110,6 +112,11 @@ La comprobación sin captura es:
 bash scripts/a063-full-native-capture.sh --check
 ```
 
+Ejecutada tras el commit de implementación `60cb4cf`:
+`D6_CAPTURE_LAUNCHER=CHECK_PASS_CONFIGURATION_ONLY_NOT_CAPTURED`.
+No creó volúmenes, preflight ni captura. El código está versionado localmente;
+no se ejecutó push.
+
 ## T3 — preparado, pendiente de T2
 
 Dentro de otro contenedor local con el MISMO checkout congelado, MAME RO y
@@ -140,3 +147,25 @@ del contrato permanecen `INCONCLUSIVE`/bloqueados.
 
 Próximo checkpoint: revisión de T1 y autorización expresa de una captura T2
 en volumen nuevo; no se ha creado ningún preflight nativo D6.
+
+## Archivos de este bloque
+
+- `scripts/a063-full-native-capture.sh`
+- `scripts/a063-full-native-inner.sh`
+- `scripts/a063-r2b-romfree.sh`
+- `scripts/a063_bank_oracle_gate.py`
+- `scripts/a063_capture_integrity.py`
+- `scripts/a063_trace_contract.py`
+- `scripts/r2-mame-probe.lua`
+- `scripts/r2-mame-probe.sh`
+- `scripts/r3-bank-provenance-capture.sh`
+- `scripts/r3-banked-critical-path.sh`
+- `scripts/r3_bank_provenance.py`
+- `scripts/r3_banked_static_gate.mjs`
+- `tests/test_a063_capture_integrity.py`
+- `tests/test_a063_full_native_launcher.py`
+- `tests/test_a063_full_oracle.py`
+- `tests/test_a063_trace_contract.py`
+- `tests/test_r3_banked_static_gate.mjs`
+- `docs/audit/a063-m5-d6-full-native-handoff.md`
+- `docs/audit/a063-m5-d6-full-native-romfree.md`

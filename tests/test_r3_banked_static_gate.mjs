@@ -169,6 +169,7 @@ test('full native paths reject custom traces even with a self-consistent alterna
   for(const key of Object.keys(locations))
     assert.throws(()=>validateFullOraclePaths({...locations,[key]:'out/r3/alternate'},manifest),/EXACT_SAME_RUN/);
   assert.throws(()=>validateFullOraclePaths(locations,'out/r3/alternate-manifest.json'),/EXACT_SAME_RUN/);
+  assert.throws(()=>validateFullOraclePaths(locations,manifest,'out/r3/alternate-output'),/EXACT_SAME_RUN/);
 });
 test('static checkpoint comparison never crosses a native reset epoch',async()=>{
   await compiledFixture(x=>{

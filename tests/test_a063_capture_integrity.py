@@ -159,6 +159,34 @@ class IntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(contract.ContractError, "ORACLE_MODE_INVALID"):
             self.finalize()
 
+    def test_full_oracle_rejects_symlinked_output_inside_private_tree(self):
+        self.oracle_fixture(full=True)
+        redirected = self.output.with_name("redirected-full-capture")
+        self.output.rename(redirected)
+        self.output.symlink_to(redirected, target_is_directory=True)
+        with self.assertRaisesRegex(contract.ContractError, "ORACLE_MODE_INVALID"):
+            self.finalize()
+
+    def test_full_oracle_rejects_symlinked_preflight_directory_at_postflight(self):
+        self.oracle_fixture(full=True)
+        directory = self.preflight.parent
+        redirected = directory.with_name("redirected-provenance")
+        directory.rename(redirected)
+        directory.symlink_to(redirected, target_is_directory=True)
+        with self.assertRaisesRegex(contract.ContractError, "ORACLE_MODE_INVALID"):
+            self.finalize()
+
+    def test_full_oracle_rejects_symlinked_preflight_directory_at_verification(self):
+        self.oracle_fixture(full=True)
+        self.finalize()
+        directory = self.preflight.parent
+        redirected = directory.with_name("redirected-provenance")
+        directory.rename(redirected)
+        directory.symlink_to(redirected, target_is_directory=True)
+        with self.assertRaisesRegex(contract.ContractError, "ORACLE_MODE_INVALID"):
+            integrity.verify_postflight(self.root, self.output, self.preflight,
+                                       mame_bin=str(self.mame))
+
     def test_full_oracle_missing_sprite_tap_never_complete(self):
         self.oracle_fixture(full=True)
         path = self.output / "observations.tsv"

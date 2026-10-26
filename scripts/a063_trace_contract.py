@@ -116,7 +116,9 @@ def create_preflight(first: str,second: str,mame_bin: str,output: Path,*,
     destination=output.resolve()
     if full_oracle and not oracle:
         raise ContractError("A063_FULL_ORACLE_REQUIRES_ORACLE_OPT_IN")
-    if full_oracle and destination!=(resolved_root/FULL_ORACLE_PREFLIGHT).resolve():
+    # The expected suffix is deliberately lexical. Resolving both sides would
+    # let an out/ symlink redefine the supposedly exact private destination.
+    if full_oracle and destination!=resolved_root/FULL_ORACLE_PREFLIGHT:
         raise ContractError("A063_FULL_ORACLE_EXACT_PREFLIGHT_REQUIRED")
     if full_oracle and (destination.exists() or output.is_symlink()):
         raise ContractError("A063_FULL_ORACLE_PREFLIGHT_EXISTS_PRESERVE_EVIDENCE")
