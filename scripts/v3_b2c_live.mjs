@@ -43,11 +43,13 @@ const {inputs,apply:applyControl,release:releaseAll,snapshot:heldControls}=live;
 const SESSION_FRAMES=LIVE_FRAMES;
 let advance=null,worker=null,generation=0;
 let frame=null,latest=0,known=false,cycle=0,unknownBytes=null,source=null;
+let pixelProbe=null,displayedServerFrame=0;
 let lastGood=0,blocks=0,halt=null;
 let reads={all:0,coin:0,start:0,p1:0},busWitness=null;
 const state=()=>({schema:'gng.v3.live-engine.v1',mode:'REAL_AOT',
   frame:latest,lastRenderedFrame:lastGood,frameKnown:known,
-  unknownBytes,cycle,blocks,reads,busWitness,source,halt,controls:heldControls(),
+  unknownBytes,cycle,blocks,reads,busWitness,pixelProbe,
+  deliveredFrame:displayedServerFrame,source,halt,controls:heldControls(),
   sessionFrames:SESSION_FRAMES,sessionId:generation});
 const html=`<!doctype html><html lang="es"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -64,6 +66,7 @@ kbd{background:#333e51;padding:2px 5px;border-radius:3px}
 <h1>Ghosts 'n Goblins — Motor MC6809 recompilado a JavaScript</h1>
 <p id="status">Conectando con el motor real…</p>
 <p id="cpu-input">Esperando lecturas de controles por la CPU real…</p>
+<p id="video-health">Esperando framebuffer RGBA del motor…</p>
 <canvas id="screen" width="256" height="224"></canvas>
 <p><kbd>5</kbd> Coin · <kbd>1</kbd> Start ·
 <kbd>←↑↓→</kbd> Dirección · <kbd>Z</kbd> Ataque ·
@@ -78,10 +81,11 @@ el último frame verificado. No hay imágenes pregrabadas ni MAME en ejecución.
 const map={Digit5:'coin1',Digit1:'start1',
 ArrowLeft:'p1.left',ArrowRight:'p1.right',
 ArrowUp:'p1.up',ArrowDown:'p1.down',KeyZ:'p1.button1',KeyX:'p1.button2'};
-let last=-1,fetching=false,sessionId=null;
+let last=-1,fetching=false,sessionId=null,paintedCount=0;
 const canvas=document.getElementById('screen'),ctx=canvas.getContext('2d');
 const status=document.getElementById('status'),detail=document.getElementById('detail'),
-  cpuInput=document.getElementById('cpu-input');
+  cpuInput=document.getElementById('cpu-input'),
+  videoHealth=document.getElementById('video-health');
 function send(control,pressed){fetch('/input',{method:'POST',
 headers:{'Content-Type':'application/json'},body:JSON.stringify({control,pressed})}).catch(()=>{});}
 document.addEventListener('keydown',e=>{
@@ -105,7 +109,8 @@ async function tick(){
  try{
    const s=await (await fetch('/state',{cache:'no-store'})).json();
    if(sessionId!==s.sessionId){
-     sessionId=s.sessionId;last=-1;ctx.clearRect(0,0,256,224);
+     sessionId=s.sessionId;last=-1;paintedCount=0;
+     ctx.clearRect(0,0,256,224);
    }
    status.textContent=s.halt?'Motor detenido: '+s.halt.status:
      s.frameKnown?'Ejecutando GnG real — frame '+s.frame:
@@ -127,17 +132,33 @@ async function tick(){
      'Lecturas Coin: '+s.reads.coin+' · Start: '+s.reads.start+
      ' · P1: '+s.reads.p1+
      (s.halt?'\nDetención: '+JSON.stringify(s.halt):'');
+   const p=s.pixelProbe;
+   videoHealth.textContent=p?
+     'RGBA real · frame '+s.lastRenderedFrame+
+     ' · píxeles no negros '+p.nonBlackPixels+
+     ' / 57344 · colores RGB '+p.rgbColors+
+     ' · opacidad incorrecta '+p.nonOpaquePixels+
+     ' · frames mostrados '+paintedCount:
+     'Esperando memoria de vídeo completamente conocida';
    if(s.lastRenderedFrame>0&&s.lastRenderedFrame!==last){
-     const r=await fetch('/pixels?frame='+s.lastRenderedFrame,{cache:'no-store'});
-     if(r.ok){
+     // Request the most recently PUBLISHED RGBA and its frame identity
+     // atomically, not a frame ID observed by a separate /state call.
+     const r=await fetch('/pixels',{cache:'no-store'});
+     if(r.status===200){
+       const renderedFrame=Number(r.headers.get('X-GnG-Frame'));
+       const renderSession=Number(r.headers.get('X-GnG-Session'));
        const bytes=new Uint8ClampedArray(await r.arrayBuffer());
-       if(bytes.length===256*224*4){
+       if(bytes.length!==256*224*4)throw Error('RGAB_LENGTH_INVALID_'+bytes.length);
+       if(renderSession===sessionId&&Number.isSafeInteger(renderedFrame)&&
+          renderedFrame>last){
          ctx.putImageData(new ImageData(bytes,256,224),0,0);
-         last=s.lastRenderedFrame;
+         last=renderedFrame;paintedCount++;
        }
+     }else if(r.status!==204){
+       throw Error('FRAME_HTTP_'+r.status);
      }
    }
- }catch(e){status.textContent='No hay conexión con el runtime real';}
+ }catch(e){status.textContent='Error de vídeo/runtime: '+String(e.message??e);}
  finally{fetching=false;}
 }
 setInterval(tick,40);tick();
@@ -164,6 +185,7 @@ async function main(){
     const id=++generation;
     releaseAll();
     frame=null;latest=0;known=false;cycle=0;unknownBytes=null;
+    pixelProbe=null;displayedServerFrame=0;
     source=null;lastGood=0;blocks=0;halt=null;
     reads={all:0,coin:0,start:0,p1:0};busWitness=null;
     advance=new Int32Array(new SharedArrayBuffer(4));
@@ -196,9 +218,14 @@ async function main(){
         }
         if(m.rgba){
           frame=Buffer.from(m.rgba);
+          pixelProbe=m.pixelProbe;
+          displayedServerFrame=m.index;
           if(!firstRealFrame){
             firstRealFrame=true;
             console.log('V3_B2C_FIRST_FRAME=PASS_REAL_AOT_RENDER frame='+m.index);
+            console.log('V3_B2C_FIRST_RGBA_NONBLACK='+m.pixelProbe.nonBlackPixels);
+            console.log('V3_B2C_FIRST_RGBA_COLORS='+m.pixelProbe.rgbColors);
+            console.log('V3_B2C_FIRST_RGBA_NONOPAQUE='+m.pixelProbe.nonOpaquePixels);
           }
         }
         if(m.coinReads>0&&firstControlsPrinted.has('coin1')&&
@@ -259,11 +286,17 @@ async function main(){
         respond(res,200,JSON.stringify(state()));return;
       }
       if(req.method==='GET'&&u.pathname==='/pixels'){
-        if(!frame){respond(res,204,'');return}
-        if(String(lastGood)!==u.searchParams.get('frame')){
-          respond(res,409,JSON.stringify({status:'FRAME_ADVANCED'}));return;
-        }
-        respond(res,200,frame,'application/octet-stream');return;
+        if(!frame){respond(res,204,'');return;}
+        // Single event-loop snapshot: frame bytes and ID refer to SAME RGBA.
+        // No 409 race against a separately requested /state frame.
+        res.writeHead(200,{
+          'Content-Type':'application/octet-stream',
+          'Content-Length':frame.length,
+          'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+          'X-GnG-Frame':String(displayedServerFrame),
+          'X-GnG-Session':String(generation)
+        });
+        res.end(frame);return;
       }
       if(req.method==='POST'&&u.pathname==='/reset'){
         coldRestart();
