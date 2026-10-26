@@ -13,6 +13,7 @@ import {LIVE_FRAMES} from '../src/v3_b2c_session_policy.mjs';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {b2dCertified} from '../src/v3_b2d_selection.mjs';
 import {b2eCertified} from '../src/v3_b2e_selection.mjs';
+import {createVisibleFrameGate} from '../src/v3_b2c_visible_gate.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 // Use the offline-discovered gameplay bundle when available. Otherwise
@@ -65,7 +66,7 @@ const {inputs,apply:applyControl,release:releaseAll,snapshot:heldControls}=live;
 // storage in the frozen board's per-frame record history. Reset is a
 // genuine cold restart of that engine, never a playback or state injection.
 const SESSION_FRAMES=LIVE_FRAMES;
-let advance=null,worker=null,generation=0;
+let advance=null,worker=null,generation=0,operatorGate=null;
 let frame=null,latest=0,known=false,cycle=0,unknownBytes=null,source=null;
 let pixelProbe=null,displayedServerFrame=0;
 let lastGood=0,blocks=0,halt=null;
@@ -74,7 +75,8 @@ const state=()=>({schema:'gng.v3.live-engine.v1',mode:'REAL_AOT',
   frame:latest,lastRenderedFrame:lastGood,frameKnown:known,
   unknownBytes,cycle,blocks,reads,busWitness,pixelProbe,
   deliveredFrame:displayedServerFrame,source,halt,controls:heldControls(),
-  sessionFrames:SESSION_FRAMES,sessionId:generation});
+  sessionFrames:SESSION_FRAMES,sessionId:generation,
+  operatorPause:operatorGate?.snapshot().paused??false});
 const html=`<!doctype html><html lang="es"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Ghosts 'n Goblins — Motor MC6809 AOT real</title>
@@ -96,7 +98,9 @@ kbd{background:#333e51;padding:2px 5px;border-radius:3px}
 <kbd>←↑↓→</kbd> Dirección · <kbd>Z</kbd> Ataque ·
 <kbd>X</kbd> Salto</p>
 <p><button id="coin" type="button">Insertar moneda (puerto SYSTEM)</button>
-<button id="start" type="button">Start 1P (puerto SYSTEM)</button></p>
+<button id="start" type="button">Start 1P (puerto SYSTEM)</button>
+<button id="continue" type="button">Continuar demostración sin moneda</button></p>
+<p id="interaction-window">Al aparecer el primer fotograma, el motor espera la moneda (CPU pausada en VBlank real).</p>
 <p><button id="restart" type="button">Reiniciar GnG desde reset</button></p>
 <pre id="detail"></pre>
 <footer>Los píxeles provienen exclusivamente del compositor aplicado
@@ -130,6 +134,10 @@ function pulse(control){
 }
 document.getElementById('coin').addEventListener('click',()=>pulse('coin1'));
 document.getElementById('start').addEventListener('click',()=>pulse('start1'));
+document.getElementById('continue').addEventListener('click',async()=>{
+  const response=await fetch('/continue',{method:'POST'});
+  if(!response.ok)status.textContent='No se pudo continuar la ejecución';
+});
 window.addEventListener('blur',()=>fetch('/release',{method:'POST'}).catch(()=>{}));
 document.getElementById('restart').addEventListener('click',async()=>{
  try{
@@ -145,11 +153,16 @@ async function tick(){
    const s=await (await fetch('/state',{cache:'no-store'})).json();
    document.getElementById('coin').disabled=Boolean(s.halt);
    document.getElementById('start').disabled=Boolean(s.halt);
+   document.getElementById('continue').disabled=Boolean(s.halt)||!s.operatorPause;
+   document.getElementById('interaction-window').textContent=s.operatorPause?
+     'CPU pausada en VBlank real: inserta moneda o continúa la demostración.':
+     'CPU ejecutándose: Coin y Start se transmiten al bus MC6809.';
    if(sessionId!==s.sessionId){
      sessionId=s.sessionId;last=-1;paintedCount=0;
      ctx.clearRect(0,0,256,224);
    }
    status.textContent=s.halt?'Motor detenido: '+s.halt.status:
+     s.operatorPause?'GnG real — pausado para insertar moneda en frame '+s.frame:
      s.frameKnown?'Ejecutando GnG real — frame '+s.frame:
      'CPU real en ejecución — esperando vídeo completamente conocido';
    const w=s.busWitness;
@@ -227,6 +240,8 @@ async function main(){
     reads={all:0,coin:0,start:0,p1:0};busWitness=null;
     advance=new Int32Array(new SharedArrayBuffer(4));
     const ack=advance;
+    const gate=createVisibleFrameGate();
+    operatorGate=gate;
     const fresh=new Worker(new URL('./v3_b2c_engine_worker.mjs',import.meta.url),
       {workerData:{bundle:BUNDLE,zip:ZIP,inputs:inputs.buffer,
         advance:ack.buffer,sessionFrames:SESSION_FRAMES}});
@@ -270,12 +285,19 @@ async function main(){
           firstControlsPrinted.add('legacy_coin_marker');
           console.log('V3_B2C_COIN=PASS_REAL_CPU_READ frame='+m.index);
         }
-        const wait=Math.max(0,17-(Date.now()-lastTickTime));
-        setTimeout(()=>{
-          if(id!==generation)return;
-          lastTickTime=Date.now();
-          Atomics.add(ack,0,1);Atomics.notify(ack,0);
-        },wait);
+        if(gate.shouldAdvance({index:m.index,known:m.known,
+          coinHeld:heldControls().includes('coin1')})){
+          const wait=Math.max(0,17-(Date.now()-lastTickTime));
+          setTimeout(()=>{
+            if(id!==generation)return;
+            lastTickTime=Date.now();
+            Atomics.add(ack,0,1);Atomics.notify(ack,0);
+          },wait);
+        }else{
+          // Exactly one authentic VBlank is held, without advancing CPU
+          // clocks or replacing video. Coin pressed by operator releases it.
+          console.log('V3_B2C_OPERATOR_PAUSE=REAL_VBLANK_FRAME_'+m.index);
+        }
       }
       if(m.type==='halt'||m.type==='error'){
         halt=m;
@@ -313,6 +335,12 @@ async function main(){
     console.log('V3_B2C_RESET=PASS_NEW_COLD_AOT_SESSION id='+generation);
   };
   launch();
+  const resumeOperator=()=>{
+    if(!operatorGate?.release())return false;
+    if(advance){Atomics.add(advance,0,1);Atomics.notify(advance,0);}
+    console.log('V3_B2C_OPERATOR_RESUME=REAL_MC6809_CONTINUES');
+    return true;
+  };
   const server=createServer(async(req,res)=>{
     try{
       const u=new URL(req.url,'http://127.0.0.1:'+PORT);
@@ -334,6 +362,13 @@ async function main(){
           'X-GnG-Session':String(generation)
         });
         res.end(frame);return;
+      }
+      if(req.method==='POST'&&u.pathname==='/continue'){
+        if(halt||!resumeOperator()){
+          respond(res,409,JSON.stringify({ok:false,reason:'NOT_PAUSED'}));
+          return;
+        }
+        respond(res,200,JSON.stringify({ok:true}));return;
       }
       if(req.method==='POST'&&u.pathname==='/reset'){
         coldRestart();
@@ -360,6 +395,9 @@ async function main(){
            !applyControl(data.control,data.pressed)){
           respond(res,422,JSON.stringify({ok:false}));return;
         }
+        // The user pressed an actual hardware input, not a scripted
+        // Coin fixture. Release the paused VBlank with its bit held low.
+        if(data.control==='coin1'&&data.pressed)resumeOperator();
         respond(res,200,JSON.stringify({ok:true}));return;
       }
       respond(res,404,JSON.stringify({error:'NOT_FOUND'}));
