@@ -31,14 +31,19 @@ const ZIP=join(ROOT,'roms/gng.zip');
 const PORT=18609;
 const live=createLiveControls();
 const {inputs,apply:applyControl,release:releaseAll,snapshot:heldControls}=live;
-const advance=new Int32Array(new SharedArrayBuffer(4));
+// 600 frames is the B2A *certification* horizon, not a live session.
+// A bounded 6000-frame (~100 s at 60 fps) session avoids unbounded
+// storage in the frozen board's per-frame record history. Reset is a
+// genuine cold restart of that engine, never a playback or state injection.
+const SESSION_FRAMES=6000;
+let advance=null,worker=null,generation=0;
 let frame=null,latest=0,known=false,cycle=0,unknownBytes=null,source=null;
 let lastGood=0,blocks=0,halt=null;
 let reads={all:0,coin:0,start:0,p1:0};
-let pendingTick=false;
 const state=()=>({schema:'gng.v3.live-engine.v1',mode:'REAL_AOT',
   frame:latest,lastRenderedFrame:lastGood,frameKnown:known,
-  unknownBytes,cycle,blocks,reads,source,halt,controls:heldControls()});
+  unknownBytes,cycle,blocks,reads,source,halt,controls:heldControls(),
+  sessionFrames:SESSION_FRAMES,sessionId:generation});
 const html=`<!doctype html><html lang="es"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Ghosts 'n Goblins — Motor MC6809 AOT real</title>
@@ -57,6 +62,7 @@ kbd{background:#333e51;padding:2px 5px;border-radius:3px}
 <p><kbd>5</kbd> Coin · <kbd>1</kbd> Start ·
 <kbd>←↑↓→</kbd> Dirección · <kbd>Z</kbd> Ataque ·
 <kbd>X</kbd> Salto</p>
+<p><button id="restart" type="button">Reiniciar GnG desde reset</button></p>
 <pre id="detail"></pre>
 <footer>Los píxeles provienen exclusivamente del compositor aplicado
 al estado de vídeo producido por la CPU AOT real.
@@ -66,7 +72,7 @@ el último frame verificado. No hay imágenes pregrabadas ni MAME en ejecución.
 const map={Digit5:'coin1',Digit1:'start1',
 ArrowLeft:'p1.left',ArrowRight:'p1.right',
 ArrowUp:'p1.up',ArrowDown:'p1.down',KeyZ:'p1.button1',KeyX:'p1.button2'};
-let last=-1,fetching=false,halted=false;
+let last=-1,fetching=false,sessionId=null;
 const canvas=document.getElementById('screen'),ctx=canvas.getContext('2d');
 const status=document.getElementById('status'),detail=document.getElementById('detail');
 function send(control,pressed){fetch('/input',{method:'POST',
@@ -79,14 +85,26 @@ document.addEventListener('keyup',e=>{
  const control=map[e.code];if(!control)return;e.preventDefault();send(control,false);
 });
 window.addEventListener('blur',()=>fetch('/release',{method:'POST'}).catch(()=>{}));
+document.getElementById('restart').addEventListener('click',async()=>{
+ try{
+   const response=await fetch('/reset',{method:'POST'});
+   if(!response.ok)throw Error('RESET_REJECTED');
+   ctx.clearRect(0,0,256,224);
+   last=-1;status.textContent='Reiniciando CPU MC6809 desde reset…';
+ }catch{status.textContent='No se pudo reiniciar el motor';}
+});
 async function tick(){
  if(fetching)return;fetching=true;
  try{
    const s=await (await fetch('/state',{cache:'no-store'})).json();
+   if(sessionId!==s.sessionId){
+     sessionId=s.sessionId;last=-1;ctx.clearRect(0,0,256,224);
+   }
    status.textContent=s.halt?'Motor detenido: '+s.halt.status:
      s.frameKnown?'Ejecutando GnG real — frame '+s.frame:
      'CPU real en ejecución — esperando vídeo completamente conocido';
-   detail.textContent='Frames: '+s.frame+' · Último render válido: '+
+   detail.textContent='Sesión: '+s.sessionId+' · Límite: '+s.sessionFrames+' frames\\n'+
+     'Frames: '+s.frame+' · Último render válido: '+
      s.lastRenderedFrame+' · Bloques AOT: '+s.blocks+'\n'+
      'Lecturas Coin: '+s.reads.coin+' · Start: '+s.reads.start+
      ' · P1: '+s.reads.p1+
@@ -124,41 +142,74 @@ async function main(){
      proof.status!=='INPUT_STATE_CHANGED')
     throw Error('V3_B2C_B2A_NOT_PROVEN');
   console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B2B?'B2B':'B2A'));
-  const worker=new Worker(new URL('./v3_b2c_engine_worker.mjs',import.meta.url),
-    {workerData:{bundle:BUNDLE,zip:ZIP,inputs:inputs.buffer,
-      advance:advance.buffer}});
-  let lastTickTime=Date.now();
-  let firstRealFrame=false,firstCoinRead=false;
-  worker.on('message',m=>{
-    if(m.type==='boot'){source=m.source;blocks=m.blocks;}
-    if(m.type==='frame'){
-      latest=m.index;cycle=m.cycle;known=m.known;unknownBytes=m.unknownBytes;
-      lastGood=m.lastGoodFrame;
-      reads={all:m.reads,coin:m.coinReads,start:m.startReads,p1:m.p1Reads};
-      if(m.rgba){
-        frame=Buffer.from(m.rgba);
-        if(!firstRealFrame){
-          firstRealFrame=true;
-          console.log('V3_B2C_FIRST_FRAME=PASS_REAL_AOT_RENDER frame='+m.index);
+  const launch=()=>{
+    const id=++generation;
+    releaseAll();
+    frame=null;latest=0;known=false;cycle=0;unknownBytes=null;
+    source=null;lastGood=0;blocks=0;halt=null;
+    reads={all:0,coin:0,start:0,p1:0};
+    advance=new Int32Array(new SharedArrayBuffer(4));
+    const ack=advance;
+    const fresh=new Worker(new URL('./v3_b2c_engine_worker.mjs',import.meta.url),
+      {workerData:{bundle:BUNDLE,zip:ZIP,inputs:inputs.buffer,
+        advance:ack.buffer,sessionFrames:SESSION_FRAMES}});
+    worker=fresh;
+    let lastTickTime=Date.now();
+    let firstRealFrame=false,firstCoinRead=false;
+    fresh.on('message',m=>{
+      if(id!==generation)return; // discard messages from a terminated CPU
+      if(m.type==='boot'){
+        source=m.source;blocks=m.blocks;
+        console.log('V3_B2C_SESSION=STARTED_'+id);
+        console.log('V3_B2C_SESSION_FRAMES='+m.sessionFrames);
+      }
+      if(m.type==='frame'){
+        latest=m.index;cycle=m.cycle;known=m.known;unknownBytes=m.unknownBytes;
+        lastGood=m.lastGoodFrame;
+        reads={all:m.reads,coin:m.coinReads,start:m.startReads,p1:m.p1Reads};
+        if(m.rgba){
+          frame=Buffer.from(m.rgba);
+          if(!firstRealFrame){
+            firstRealFrame=true;
+            console.log('V3_B2C_FIRST_FRAME=PASS_REAL_AOT_RENDER frame='+m.index);
+          }
         }
+        if(m.coinReads>0&&!firstCoinRead){
+          firstCoinRead=true;
+          console.log('V3_B2C_COIN=PASS_REAL_CPU_READ frame='+m.index);
+        }
+        const wait=Math.max(0,17-(Date.now()-lastTickTime));
+        setTimeout(()=>{
+          if(id!==generation)return;
+          lastTickTime=Date.now();
+          Atomics.add(ack,0,1);Atomics.notify(ack,0);
+        },wait);
       }
-      if(m.coinReads>0&&!firstCoinRead){
-        firstCoinRead=true;
-        console.log('V3_B2C_COIN=PASS_REAL_CPU_READ frame='+m.index);
+      if(m.type==='halt'||m.type==='error'){
+        halt=m;
+        console.error('V3_B2C_ENGINE='+m.type.toUpperCase()+'_'+
+          (m.status??m.code));
       }
-      // CPU executes one genuine frame per timer tick, never simulates video.
-      const wait=Math.max(0,17-(Date.now()-lastTickTime));
-      setTimeout(()=>{
-        lastTickTime=Date.now();
-        Atomics.add(advance,0,1);Atomics.notify(advance,0);
-      },wait);
+    });
+    fresh.on('error',err=>{
+      if(id===generation)halt={status:'WORKER_ERROR',code:err.message};
+    });
+    fresh.on('exit',code=>{
+      if(id===generation&&!halt)halt={status:'WORKER_EXIT',code};
+    });
+  };
+  const coldRestart=()=>{
+    const previous=worker,oldAdvance=advance;
+    if(previous){
+      // Release the old worker's VBlank wait before termination. Neither
+      // worker can mutate the other session's CPU state or output.
+      if(oldAdvance){Atomics.add(oldAdvance,0,1);Atomics.notify(oldAdvance,0);}
+      void previous.terminate().catch(()=>{});
     }
-    if(m.type==='halt'||m.type==='error'){halt=m;console.error(
-      'V3_B2C_ENGINE='+m.type.toUpperCase()+'_'+(m.status??m.code));
-    }
-  });
-  worker.on('error',err=>{halt={status:'WORKER_ERROR',code:err.message};});
-  worker.on('exit',code=>{if(!halt)halt={status:'WORKER_EXIT',code};});
+    launch();
+    console.log('V3_B2C_RESET=PASS_NEW_COLD_AOT_SESSION id='+generation);
+  };
+  launch();
   const server=createServer(async(req,res)=>{
     try{
       const u=new URL(req.url,'http://127.0.0.1:'+PORT);
@@ -174,6 +225,10 @@ async function main(){
           respond(res,409,JSON.stringify({status:'FRAME_ADVANCED'}));return;
         }
         respond(res,200,frame,'application/octet-stream');return;
+      }
+      if(req.method==='POST'&&u.pathname==='/reset'){
+        coldRestart();
+        respond(res,200,JSON.stringify({ok:true,sessionId:generation}));return;
       }
       if(req.method==='POST'&&(u.pathname==='/input'||u.pathname==='/release')){
         if(u.pathname==='/release'){
