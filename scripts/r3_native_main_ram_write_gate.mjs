@@ -15,16 +15,22 @@ const same=(a,b)=>a.address===b.address&&a.data===b.data&&a.mask===b.mask;
 export function parseMainRamWrites(tsv){
   if(typeof tsv!=='string')reject('OBSERVATIONS_REQUIRED');
   let enabled=0,count=null,truncated=null,resets=0,seen=0,ended=0;
+  let phase='capture';
   const epochs=[[],[]];
   for(const line of tsv.trimEnd().split('\n')){
     if(!line)continue;
     const [tag,...v]=line.split('\t');
+    if(phase==='closed'&&tag!=='A063_MAIN_RAM_TAP_ENABLED')
+      reject('MARKERS_AFTER_PROBE_END');
     if(tag==='A063_MAIN_RAM_TAP_ENABLED'){
-      if(v.length!==1||v[0]!=='1'||enabled++)reject('TAP_NOT_EXCLUSIVELY_ENABLED');
+      if(phase!=='capture'||v.length!==1||v[0]!=='1'||
+          enabled++||seen!==0||resets!==0)
+        reject('TAP_NOT_EXCLUSIVELY_ENABLED');
     }else if(tag==='RESET_NOTIFICATION'){
-      resets++;
-      if(resets>1)reject('EPOCH_COUNT_INVALID');
+      if(phase!=='capture'||enabled!==1||v.length!==2||++resets!==1)
+        reject('RESET_MARKER_ORDER_INVALID');
     }else if(tag==='A063_MAIN_RAM_WRITE'){
+      if(phase!=='capture'||enabled!==1)reject('WRITE_OUTSIDE_CAPTURE_PHASE');
       if(v.length!==5)reject('WRITE_SHAPE_INVALID');
       const [epoch,ordinal,address,data,mask]=v.map(decimal);
       if(!integer(epoch,0,1)||epoch!==resets||
@@ -33,16 +39,26 @@ export function parseMainRamWrites(tsv){
           !integer(mask,0,255))reject('WRITE_SEQUENCE_OR_RANGE_INVALID');
       epochs[epoch].push({address,data,mask});
     }else if(tag==='A063_MAIN_RAM_WRITE_COUNT'){
-      if(v.length!==1||count!==null)reject('COUNT_DUPLICATE_OR_INVALID');
+      if(phase!=='capture'||enabled!==1||v.length!==1||count!==null)
+        reject('COUNT_DUPLICATE_OR_INVALID');
       count=decimal(v[0]);
+      phase='counted';
     }else if(tag==='A063_MAIN_RAM_WRITE_TRUNCATED'){
-      if(v.length!==1||truncated!==null||!['0','1'].includes(v[0]))
-        reject('TRUNCATION_MARKER_INVALID');
+      if(phase!=='counted'||v.length!==1||truncated!==null||
+          !['0','1'].includes(v[0]))reject('TRUNCATION_MARKER_INVALID');
       truncated=v[0]==='1';
-    }else if(tag==='PROBE_END')ended++;
+      phase='truncation-recorded';
+    }else if(tag==='PROBE_END'){
+      if(phase!=='truncation-recorded'||v.length!==1||
+          v[0]!=='frame-limit')reject('PROBE_END_ORDER_OR_REASON_INVALID');
+      ended++;
+      phase='closed';
+    }else if(phase!=='capture'){
+      reject('UNEXPECTED_MARKER_DURING_SUMMARY');
+    }
   }
-  if(enabled!==1||resets!==1||ended!==1||count===null||
-      !integer(count,0,LIMIT)||count!==seen||truncated!==false)
+  if(enabled!==1||resets!==1||ended!==1||phase!=='closed'||
+      count===null||!integer(count,0,LIMIT)||count!==seen||truncated!==false)
     reject('INCOMPLETE_TRUNCATED_OR_UNVERIFIED');
   return {epochs,total:count};
 }

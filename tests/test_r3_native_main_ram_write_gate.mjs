@@ -57,3 +57,35 @@ test('same-run envelope fail-closed and rejects mixed runs',()=>{
  assert.equal(requireSameRunEnvelope(good),true);
  assert.throws(()=>requireSameRunEnvelope({...good,rolesVerified:10}),/SAME_RUN/);
 });
+
+test('capture footer is strictly ordered and final',()=>{
+  const raw=tsv();
+  assert.throws(()=>parseMainRamWrites(raw+'\nFRAME_SAMPLE\t6\t0\t1'),
+    /MARKERS_AFTER_PROBE_END/);
+  assert.throws(()=>parseMainRamWrites(raw.replace(
+    'A063_MAIN_RAM_WRITE_COUNT\t2\nA063_MAIN_RAM_WRITE_TRUNCATED\t0',
+    'A063_MAIN_RAM_WRITE_TRUNCATED\t0\nA063_MAIN_RAM_WRITE_COUNT\t2')),
+    /TRUNCATION_MARKER_INVALID/);
+  assert.throws(()=>parseMainRamWrites(raw.replace('PROBE_END\tframe-limit',
+    'PROBE_END\tmachine-stop')),/PROBE_END_ORDER_OR_REASON_INVALID/);
+});
+test('writes and unrelated markers after summary are rejected',()=>{
+  const raw=tsv();
+  assert.throws(()=>parseMainRamWrites(raw.replace(
+    'A063_MAIN_RAM_WRITE_COUNT\t2',
+    'A063_MAIN_RAM_WRITE_COUNT\t2\nA063_MAIN_RAM_WRITE\t1\t3\t5\t70\t255')),
+    /WRITE_OUTSIDE_CAPTURE_PHASE/);
+  assert.throws(()=>parseMainRamWrites(raw.replace(
+    'A063_MAIN_RAM_WRITE_TRUNCATED\t0',
+    'A063_MAIN_RAM_WRITE_TRUNCATED\t0\nFRAME_SAMPLE\t6\t0\t1')),
+    /UNEXPECTED_MARKER_DURING_SUMMARY/);
+});
+test('main RAM tap requires valid reset marker and prior opt-in',()=>{
+  const raw=tsv();
+  assert.throws(()=>parseMainRamWrites(raw.replace(
+    'RESET_NOTIFICATION\t1\t0','RESET_NOTIFICATION\t1')),
+    /RESET_MARKER_ORDER_INVALID/);
+  assert.throws(()=>parseMainRamWrites(raw.replace(
+    'A063_MAIN_RAM_TAP_ENABLED\t1\n','')),
+    /WRITE_OUTSIDE_CAPTURE_PHASE|RESET_MARKER_ORDER_INVALID/);
+});

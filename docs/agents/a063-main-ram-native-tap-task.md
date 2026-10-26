@@ -1,6 +1,8 @@
 # Tarea preparada — prueba nativa de escrituras en RAM principal
 
-**Checkpoint T1.1–T1.4 (26/10/2026):** el operador confirmó suite ROM-free integral PASS mediante los marcadores `GNG_LOCAL_REGRESSION=PASS_ROM_FREE_A0_2_TO_A0_6_3`, `GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42H` y `A063_R2B=ROMFREE_CHECKS_PASS_NOT_NATIVE_NOT_A063_CERTIFIED`. Auditoría de fuentes completada y `watchpoint+tracelog` evaluado sin afirmar causalidad. **`--check` del launcher aún pendiente en Mac; no existe autorización T2.** [Revisión T1](../audit/a063-main-ram-native-tap-t1-review.md).
+**Checkpoint T1.1–T1.4 (26/10/2026):** el operador confirmó suite ROM-free integral PASS mediante los marcadores `GNG_LOCAL_REGRESSION=PASS_ROM_FREE_A0_2_TO_A0_6_3`, `GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42H` y `A063_R2B=ROMFREE_CHECKS_PASS_NOT_NATIVE_NOT_A063_CERTIFIED`. Auditoría de fuentes completada y `watchpoint+tracelog` evaluado sin afirmar causalidad. **El operador reportó `--check` PASS (`D6_CAPTURE_LAUNCHER=CHECK_PASS_CONFIGURATION_ONLY_NOT_CAPTURED`); aún no existe autorización T2.** [Revisión T1](../audit/a063-main-ram-native-tap-t1-review.md).
+
+**Endurecimiento T1.6 (26/10/2026):** el parser ROM-free exige orden de cierre y rechaza escrituras o eventos posteriores al resumen; 3 tests adversariales nuevos. Debe repetirse la suite integral tras este commit. Sin autorización T2. [Revisión T1](../audit/a063-main-ram-native-tap-t1-review.md).
 
 **Checkpoint T0 (26/10/2026):** implementación ROM-free y 9/9 tests Node dirigidos PASS; inspección estática 19/19 PASS. **Suite integral BLOCKED_ENV_MISSING_CHECKOUT**, no T0_FULL_PASS. Sin ROM/MAME/Docker/captura, T1/T2/T3 no iniciadas. Ver [reporte T0](../audit/a063-main-ram-native-tap-t0.md).
 

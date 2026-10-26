@@ -40,7 +40,7 @@ Verificadas las APIs públicas de `tag mame0289` y el parche local `patches/mame
 
 Fuentes: https://github.com/mamedev/mame/blob/mame0289/src/frontend/mame/luaengine_mem.cpp ; https://github.com/mamedev/mame/blob/mame0289/src/frontend/mame/luaengine_debug.cpp ; https://github.com/mamedev/mame/blob/mame0289/src/emu/debug/points.cpp ; https://github.com/mamedev/mame/blob/mame0289/src/emu/debug/debugcpu.cpp ; https://github.com/mamedev/mame/blob/mame0289/src/emu/debug/debugcmd.cpp
 
-## T1.4 — Preparación Mac; aún no certificada
+## T1.4 — Preparación Mac; preflight confirmado por el operador
 
 - Comando seguro **sin ejecución nativa ni creación de volumen**:
   `bash scripts/a063-main-ram-native-capture.sh --check --frames 4 --volume gng-a063-private-capture-arm64-ram-tap-v1`
@@ -49,8 +49,22 @@ Fuentes: https://github.com/mamedev/mame/blob/mame0289/src/frontend/mame/luaengi
 - El evento `A063_FULL_NATIVE_BANK_PROVENANCE_PASS` de T2/T3 requiere nuevo postflight/11 roles, más B4/VRAM/sprite; el nuevo gate MAIN_RAM solo puede aportar `ORDERED_EXACT_MATCH_ONLY_NOT_INSTRUCTION_CAUSAL` o INCONCLUSIVE/BLOCKED, no certificación causal.
 - Volumen nuevo propuesto: `gng-a063-private-capture-arm64-ram-tap-v1`. D5, D6 v1 y D6 v2 preservados, no montados por este launcher.
 
-**Estado T1.4:** `PREFLIGHT_COMMAND_PREPARED_PENDING_MAC_CHECK`.
+**Estado T1.4:** `PASS_OPERATOR_REPORTED_CHECK_ONLY`. El operador comunicó `D6_CAPTURE_LAUNCHER=CHECK_PASS_CONFIGURATION_ONLY_NOT_CAPTURED` tras `git pull --ff-only`; no es una captura y el cloud no inspeccionó Docker/Colima local.
 
 ## T1.5 — Punto de parada
 
-**NO SE AUTORIZA T2** con el PASS de la suite. Hace falta `--check` PASS del Mac y autorización explícita **posterior y separada** del operador. Prohibido ejecutar `--run`, crear volúmenes o afirmar causalidad. Si se pretende certificar el objetivo original 1:1 instrucción↔write, decidir antes si se introduce un experimento `watchpoint+tracelog` con prueba de no perturbación; el tap actual es solo una sonda diagnóstica.
+**NO SE AUTORIZA T2** con el PASS de la suite ni con el `--check` reportado. El preflight está confirmado por la salida del operador; hace falta autorización explícita **posterior y separada** para ejecutar `--run`. Prohibido ejecutar `--run`, crear volúmenes o afirmar causalidad. Si se pretende certificar el objetivo original 1:1 instrucción↔write, decidir antes si se introduce un experimento `watchpoint+tracelog` con prueba de no perturbación; el tap actual es solo una sonda diagnóstica.
+
+## T1.6 — Endurecimiento de integridad antes de T2 (ROM-free)
+
+El parser MAIN_RAM ahora exige opt-in previo, secuencia ordenada de reset, cierre
+`WRITE_COUNT → WRITE_TRUNCATED → PROBE_END(frame-limit)` y ausencia de eventos
+posteriores. Rechaza parada prematura, marcador de reset malformado y escrituras
+después del resumen. Se añaden tres tests adversariales al gate sin cambiar Lua,
+launcher, ROM, MAME, B4, VRAM ni sprite. El gate continúa saliendo con código
+2 en caso de coincidencia ordenada: la causalidad por instrucción no está probada.
+
+Validación ejecutada en el entorno de edición: parser puro y casos adversariales
+en V8 aislado, sin dependencias Node. Suite `a063-r2b-romfree.sh` **pendiente
+de volver a ejecutarse en el checkout completo** tras este cambio. El PASS
+anterior del operador corresponde al commit anterior.
