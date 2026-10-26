@@ -33,7 +33,9 @@ function main(){
   mkdirSync(out,{recursive:true,mode:0o700});
   const manifest=freezeBundle(bundle,{generated,code,overlays,modules,
     provenance:{frames:600,blocks:report.blocks,
-      source_report_sha256:sha256(reportData)}});
+      source_report_sha256:sha256(reportData),
+      source_git_head:execFileSync('git',['rev-parse','HEAD'],
+        {cwd:ROOT,encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim()}});
   console.log('V2_B1_T2_FREEZE=PASS_PRIVATE_BUNDLE_NO_ORACLE');
   console.log('V2_B1_T2_BLOCKS='+manifest.blocks);
   console.log('V2_B1_T2_FRAMES='+manifest.frames);

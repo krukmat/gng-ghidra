@@ -10,6 +10,7 @@ import {parseNativeEvents,compareEvents,compareRecord} from './r35_t5_run.mjs';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
 import {gngbGraphics,rendererInputs,decodePng,diffRgba} from './r35_t5_render_check.mjs';
 import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
+import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const dir=join(ROOT,'out/v2/b1'),ref=join(ROOT,'out/r35/t43-ref');
@@ -18,6 +19,9 @@ function main(){
   if(process.argv.slice(2).join(' ')!=='--gate')fail('USAGE_GATE_ONLY');
   const output=join(dir,'certification.json');
   if(existsSync(output))fail('CERTIFICATION_ALREADY_EXISTS');
+  const source=loadFrozen(join(dir,'frozen')).manifest.source_git_head;
+  if(typeof source!=='string'||!/^[a-f0-9]{40}$/.test(source))
+    fail('SOURCE_COMMIT_NOT_ATTESTED');
   const one=verifySlot(dir,'one'),two=verifySlot(dir,'two');
   compareSlots(one,two);
   const {report,frames,known,rows}=one;
@@ -74,7 +78,7 @@ function main(){
     first_renderer_known:firstRenderable,first_fully_known:firstFullyKnown,
     first_six_not_auto_certified:true,
     events_compared:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,v.compared])),
-    aot_run_digest:report.sequence_sha256,
+    aot_run_digest:report.sequence_sha256,source_git_head:source,
     observed};
   writeFileSync(output,JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});
   console.log('V2_AUTONOMOUS_FRAME_CERTIFIED');

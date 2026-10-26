@@ -10,14 +10,19 @@ set -euo pipefail
  { echo V2_B1_T6=BLOCKED_V2_CERT_MISSING; exit 2; }
 node - <<'NODE' || { echo V2_B1_T6=BLOCKED_V2_CERT_INVALID; exit 2; }
 const {readFileSync}=require('node:fs');
+const {execFileSync}=require('node:child_process');
 const r=JSON.parse(readFileSync('out/v2/b1/certification.json','utf8'));
 if(r.schema!=='gng.v2.b1-certification.v1'||
    r.status!=='V2_AUTONOMOUS_FRAME_CERTIFIED'||
-   r.frames!==600||r.state_exact_frames<594||r.pixel_exact_frames<594)
+   r.frames!==600||r.state_exact_frames<594||r.pixel_exact_frames<594||
+   r.source_git_head!==execFileSync('git',['rev-parse','HEAD'],
+     {encoding:'utf8'}).trim())
   process.exit(2);
 NODE
 git show-ref --verify --quiet refs/heads/main ||
  { echo V2_B1_T6=BLOCKED_LOCAL_MAIN_MISSING; exit 2; }
+git merge-base --is-ancestor main HEAD ||
+ { echo V2_B1_T6=BLOCKED_MAIN_NOT_ANCESTOR; exit 2; }
 # Never trust the local main revision until freshly fetched by the operator.
 python3 - <<'PY' || { echo V2_B1_T6=BLOCKED_PRIVATE_FILE_IN_MERGE; exit 2; }
 import subprocess,re

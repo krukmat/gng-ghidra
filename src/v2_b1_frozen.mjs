@@ -63,6 +63,7 @@ export function freezeBundle(dir,{generated,code,overlays=[],modules,provenance=
   const manifest={
     schema:FORMAT,frames:provenance.frames,blocks:provenance.blocks,
     source_report_sha256:provenance.source_report_sha256??null,
+    source_git_head:provenance.source_git_head??null,
     overlays:descriptors,files:hashes
   };
   writeFileSync(join(dir,'manifest.json'),JSON.stringify(manifest,null,2)+'\n',
