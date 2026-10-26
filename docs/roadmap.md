@@ -1,3 +1,10 @@
+> **Plan vigente hacia 100% jugable (26/10/2026):**
+> [Ruta crítica G0–G7 y gates H0–H6](plan-100pct-jugable-2026-10-26.md).
+> Prioridad absoluta: capturar Coin temprano y resolver bank=3 PC=0x519D
+> hasta crédito/Start/Arthur real. B2-E/idle extendido NO bloquea H1.
+> Este documento conserva el historial técnico; los gates funcionales
+> de G0–G7 prevalecen sobre planes anteriores de simple cobertura AOT.
+
 > **Checkpoint vigente (26/10/2026):** [V2.B1 + T6 merge a main](v2-b1-gate-feature-merge.md).
 > Una vez certificado V2 y validado el merge, V3 comenzará desde main.
 > La información siguiente es histórica.
