@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Invoked only by the D6 new-volume Docker launcher. No native offline gates.
+# Invoked only by the D6 new-volume Docker launcher. Original capture checks
+# still run; full bank provenance and static codegen are deferred to T3.
 set -euo pipefail
 umask 077
 exec 3>&1
 fail(){ printf 'D6_CAPTURE=BLOCKED reason=%s\n' "$1" >&3; exit 2; }
 trap 'task_rc=$?; printf "D6_CAPTURE_INNER_EXIT=%d\n" "$task_rc" >&3' EXIT
+[[ "${GNG_A063_FULL_FRAMES:-}" =~ ^([2-9]|[12][0-9]|30)$ ]] || fail frames_must_be_2_to_30
 [[ "$PWD" == /workspace && -d /workspace/.git ]] || fail readonly_checkout_required
 [[ "${GNG_A063_EXPECTED_HEAD:-}" =~ ^[0-9a-f]{40}$ ]] || fail expected_head_required
 [[ "${GNG_R3_MAME_BIN:-}" == /mame/mame0289/gnga063 ]] || fail exact_mame_path_required
@@ -39,7 +41,7 @@ with binary.open('rb') as stream:
 PY
 }
 verify_binary || fail existing_mame_sha_mismatch
-export GNG_R2_PROBE_FRAMES=30 GNG_R2_PROBE_SOFT_RESET=1
+export GNG_R2_PROBE_FRAMES="$GNG_A063_FULL_FRAMES" GNG_R2_PROBE_SOFT_RESET=1
 export GNG_R2_PROBE_SPRITE_RAM=1 GNG_A04_VIDEO_WRITE_TAP=1
 export GNG_R36_CAPTURE_UNMAP_POLICY=1 GNG_R2_TRACE_MODE=printf
 set +e

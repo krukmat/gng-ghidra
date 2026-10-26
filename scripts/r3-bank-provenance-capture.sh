@@ -32,9 +32,12 @@ python3 scripts/a063_trace_contract.py preflight --oracle --full-oracle \
   --first "$BANKSIG0" --second "$BANKSIG1" \
   --mame-bin "${GNG_R3_MAME_BIN:-mame}" \
   --output "$ROOT/out/r3/banked-provenance/private-a063-preflight.json" >/dev/null
-# Preserve all previous R2 trace/TSV/ROM evidence via existing wrapper.
+# The original boot/B4 contract requires exactly two boot sprite sequences.
+# D6 native diagnostics found all required taps by four frames; later frames
+# include unrelated sprite writes. Capture the complete bounded run, never
+# trim an existing trace or weaken the exact boot gate.
 GNG_A063_PREFLIGHT="$ROOT/out/r3/banked-provenance/private-a063-preflight.json" \
-GNG_A063_FULL_ORACLE=1 GNG_R2_PROBE_FRAMES="${GNG_R2_PROBE_FRAMES:-30}" \
+GNG_A063_FULL_ORACLE=1 GNG_R2_PROBE_FRAMES="${GNG_R2_PROBE_FRAMES:-4}" \
 GNG_A06_BANKSIG_HEX0="$BANKSIG0" GNG_A06_BANKSIG_HEX1="$BANKSIG1" \
 GNG_R2_TRACE_MODE=printf \
 GNG_R36_CAPTURE_UNMAP_POLICY=1 GNG_A04_VIDEO_WRITE_TAP=1 \

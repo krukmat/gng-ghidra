@@ -5,15 +5,32 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 MODE=--check
 CAPTURE_VOLUME=gng-a063-private-capture-arm64-full-d6-v1
+# Four complete frames retain boot/VRAM/selector evidence before later sprite
+# activity; every offline gate still validates the complete resulting capture.
+CAPTURE_FRAMES=4
 IMAGE_ID=sha256:a3bd689f9d867b51cd4a25f01b3dfd8ed0218b53f09347a714271e6cd964c255
 MAME_VOLUME=gng-a063-mame0289-arm64-v1
 fail(){ printf 'D6_CAPTURE_LAUNCHER=BLOCKED reason=%s\n' "$1" >&2; exit 2; }
-if [[ $# -gt 0 ]]; then MODE="$1"; shift; fi
-case "$MODE" in --check|--run) ;; *) fail expected_check_or_run ;; esac
-if [[ $# -gt 0 ]]; then
-  [[ $# -eq 2 && "$1" == --volume ]] || fail invalid_arguments
-  CAPTURE_VOLUME="$2"
-fi
+MODE_SEEN=0
+VOLUME_SEEN=0
+FRAMES_SEEN=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --check|--run)
+      [[ "$MODE_SEEN" == 0 ]] || fail duplicate_mode_argument
+      MODE="$1"; MODE_SEEN=1; shift ;;
+    --volume)
+      [[ "$VOLUME_SEEN" == 0 ]] || fail duplicate_volume_argument
+      [[ $# -ge 2 ]] || fail volume_argument_missing
+      CAPTURE_VOLUME="$2"; VOLUME_SEEN=1; shift 2 ;;
+    --frames)
+      [[ "$FRAMES_SEEN" == 0 ]] || fail duplicate_frames_argument
+      [[ $# -ge 2 ]] || fail frames_argument_missing
+      CAPTURE_FRAMES="$2"; FRAMES_SEEN=1; shift 2 ;;
+    *) fail invalid_arguments ;;
+  esac
+done
+[[ "$CAPTURE_FRAMES" =~ ^([2-9]|[12][0-9]|30)$ ]] || fail frames_must_be_2_to_30
 [[ "$CAPTURE_VOLUME" =~ ^gng-a063-private-capture-arm64-full-d6-v[1-9][0-9]*$ ]] ||
   fail full_d6_new_volume_name_required
 for binary in docker git python3; do
@@ -75,6 +92,7 @@ task_docker run --rm -i --pull never --network none \
   --mount "type=volume,src=$CAPTURE_VOLUME,dst=/workspace/out,volume-nocopy" \
   --mount "type=volume,src=$MAME_VOLUME,dst=/mame,readonly" \
   --env "GNG_A063_EXPECTED_HEAD=$EXPECTED_HEAD" \
+  --env "GNG_A063_FULL_FRAMES=$CAPTURE_FRAMES" \
   --env GNG_R3_MAME_BIN=/mame/mame0289/gnga063 \
   --env SDL_AUDIODRIVER=dummy \
   --env GIT_CONFIG_COUNT=1 --env GIT_CONFIG_KEY_0=safe.directory \
