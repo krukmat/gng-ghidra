@@ -128,10 +128,10 @@ async function tick(){
      ' PC 0x'+lastRead.pc?.toString(16):'NINGUNA')+'\\n'+
      'Sesión: '+s.sessionId+' · Límite: '+s.sessionFrames+' frames\\n'+
      'Frames: '+s.frame+' · Último render válido: '+
-     s.lastRenderedFrame+' · Bloques AOT: '+s.blocks+'\n'+
+     s.lastRenderedFrame+' · Bloques AOT: '+s.blocks+'\\n'+
      'Lecturas Coin: '+s.reads.coin+' · Start: '+s.reads.start+
      ' · P1: '+s.reads.p1+
-     (s.halt?'\nDetención: '+JSON.stringify(s.halt):'');
+     (s.halt?'\\nDetención: '+JSON.stringify(s.halt):'');
    const p=s.pixelProbe;
    videoHealth.textContent=p?
      'RGBA real · frame '+s.lastRenderedFrame+
