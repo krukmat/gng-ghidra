@@ -16,7 +16,8 @@ export const GNG_FRAME_HEIGHT=224;
 export const GNG_VISIBLE_Y_START=16;
 
 export function renderGngbRgba({
-  videoAddressSpace,bufferedSprites,chars,tiles,sprites,palette,scroll
+  videoAddressSpace,bufferedSprites,chars,tiles,sprites,palette,scroll,
+  flipScreen=false
 }){
   if(!(videoAddressSpace instanceof Uint8Array)||
      videoAddressSpace.length!==65536||
@@ -26,7 +27,8 @@ export function renderGngbRgba({
      !(sprites instanceof Uint8Array)||sprites.length!==0x20000||
      !(palette instanceof Uint8Array)||palette.length!==0x400||
      !scroll||!Number.isInteger(scroll.x)||!Number.isInteger(scroll.y)||
-     scroll.x<0||scroll.x>65535||scroll.y<0||scroll.y>65535)
+     scroll.x<0||scroll.x>65535||scroll.y<0||scroll.y>65535||
+     typeof flipScreen!=='boolean')
     throw Error('R42_INVALID_RENDERER_INPUTS');
   const W=GNG_FRAME_WIDTH,H=GNG_FRAME_HEIGHT;
   const rgba=new Uint8ClampedArray(W*H*4);
@@ -62,6 +64,12 @@ export function renderGngbRgba({
     const t=screenTile(videoAddressSpace,'fg',x,y+GNG_VISIBLE_Y_START);
     const pen=readTilePen('fg',chars,t.graphic,t.x,t.y);
     if(pen!==3)paint(x,y,0x80+t.palette*4+pen);
+  }
+  // LS259 q0 (inverted) flips tilemaps and sprites together: the visible
+  // raster turns 180 degrees. Pixel-checked against MAME only at scroll 0.
+  if(flipScreen){
+    const u32=new Uint32Array(rgba.buffer);
+    u32.reverse();
   }
   return {width:W,height:H,rgba,
     native_pixel_equivalence_verified:false,
