@@ -10,10 +10,14 @@ import {existsSync,readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createLiveControls} from '../src/v3_b2c_live_controls.mjs';
 import {LIVE_FRAMES} from '../src/v3_b2c_session_policy.mjs';
+import {loadFrozen} from '../src/v2_b1_frozen.mjs';
+import {b2dCertified} from '../src/v3_b2d_selection.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 // Use the offline-discovered gameplay bundle when available. Otherwise
 // run the verified B2A Coin1 build; missing AOT blocks stop the CPU.
+const B2D=join(ROOT,'out/v3/b2d/frozen');
+const B2D_REPORT=join(ROOT,'out/v3/b2d/discovery-report.json');
 const B2B=join(ROOT,'out/v3/b2b/frozen');
 const B2A=join(ROOT,'out/v3/b2a/frozen');
 const B2A_PROOF=join(ROOT,'out/v3/b2a/coin-smoke.json');
@@ -31,7 +35,15 @@ function b2bReady(){
       r.comparison_read_counts?.controls?.start>0;
   }catch{return false;}
 }
-const BUNDLE=b2bReady()?B2B:B2A;
+function b2dReady(){
+  if(!existsSync(B2D)||!existsSync(B2D_REPORT))return false;
+  try{
+    const report=JSON.parse(readFileSync(B2D_REPORT,'utf8'));
+    const {manifest}=loadFrozen(B2D); // validates EVERY AOT asset SHA-256
+    return b2dCertified(report,manifest);
+  }catch{return false}
+}
+const BUNDLE=b2dReady()?B2D:b2bReady()?B2B:B2A;
 const ZIP=join(ROOT,'roms/gng.zip');
 const PORT=18609;
 const live=createLiveControls();
@@ -180,7 +192,7 @@ async function main(){
   if(proof.status!=='INPUT_ROUTE_UNCOMPILED'&&
      proof.status!=='INPUT_STATE_CHANGED')
     throw Error('V3_B2C_B2A_NOT_PROVEN');
-  console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B2B?'B2B':'B2A'));
+  console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B2D?'B2D':BUNDLE===B2B?'B2B':'B2A'));
   const launch=()=>{
     const id=++generation;
     releaseAll();
