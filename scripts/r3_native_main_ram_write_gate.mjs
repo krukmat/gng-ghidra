@@ -240,8 +240,9 @@ if(process.argv[1]?.endsWith('/r3_native_main_ram_write_gate.mjs')){
   }else{
     runOfflineMainRamGate({mameBin:a[1]}).then(report=>{
       console.log(JSON.stringify(report));
-      if(report.status!=='ORDERED_EXACT_MATCH_ONLY_NOT_INSTRUCTION_CAUSAL')
-        process.exitCode=2;
+      // Even a unique complete ordered match lacks a causal instruction ID.
+      // Until T1 supplies independently verified linkage, exit non-zero.
+      process.exitCode=2;
     }).catch(()=>{
       console.error('A063_MAIN_RAM=BLOCKED evidence_or_contract_invalid');
       process.exitCode=2;
