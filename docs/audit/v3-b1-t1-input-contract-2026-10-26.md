@@ -79,3 +79,18 @@ compilador, renderer, ROM, estados ni gates V2. El próximo
 bloque T2 será quien conecte `readScheduledPort` a
 las lecturas del bus CPU, y todavía requerirá nueva
 comparación nativa con entradas para certificar V3.
+
+## Checkpoint definitivo T1 — PASS reportado por operador (26/10/2026)
+
+En el Mac se ejecutó `bash scripts/v3_b1_t1_gate.sh` después de
+`git pull --ff-only`. Resultado textual:
+
+```text
+GNG_LOCAL_REGRESSION=PASS_ROM_FREE_A0_2_TO_A0_6_3
+GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42H
+V3_B1_T1_INPUT_CONTRACT_PASS
+```
+
+**V3.B1.T1.1–T1.5 = PASS, bloque cerrado.** El gate es ROM-free y
+no afirma equivalencia nativa para entradas nuevas ni primera
+jugabilidad. La siguiente tarea es [V3.B1.T2](../v3-b1-t2-runtime-ports-2026-10-26.md).

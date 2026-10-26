@@ -1,5 +1,15 @@
 # Plan operativo v2 — del fotograma real al juego recompilado
 
+## V3.B1 — T1 PASS; T2 siguiente (26/10/2026)
+
+`V3_B1_T1_INPUT_CONTRACT_PASS` confirmado en Mac junto con las
+regresiones ROM-free. El modelo active-low, timing por ciclo y políticas
+de transición de entradas están cerrados sin alterar la CPU V2.
+[Siguiente bloque operativo T2](v3-b1-t2-runtime-ports-2026-10-26.md):
+auditoría de ciclos del bus → provider → tests → gate.
+T2–T5 pendientes; no se afirma jugabilidad.
+
+
 ## Checkpoint vigente — V2 cerrado / V3.B1 activo (26/10/2026)
 
 **`V2_FEATURE_MERGED_MAIN=PASS_POSTMERGE` reportado en Mac.**

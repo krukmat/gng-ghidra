@@ -33,14 +33,16 @@ coin/start/left/right/button/release y casos ilegales.
 
 ### T1.1–T1.5 — Implementación ROM-free (26/10/2026)
 
-Se ha añadido `src/gngb_input_contract.mjs`, fixtures
-`tests/test_v3_b1_input_contract.mjs` y
-`scripts/v3_b1_t1_gate.sh`. El gate de aceptación es
-`V3_B1_T1_INPUT_CONTRACT_PASS`; **no se considera validado
-en Mac antes de observar su salida real**.
-[Decisiones y alcance de T1](audit/v3-b1-t1-input-contract-2026-10-26.md).
-La fuente MAME para gngb está documentada en T1.1.
-T2 no se inicia hasta cerrar T1 con regresión PASS.
+Se añadió `src/gngb_input_contract.mjs`, la suite
+`tests/test_v3_b1_input_contract.mjs` y el gate
+`scripts/v3_b1_t1_gate.sh`. **T1 PASS** según los marcadores
+ejecutados en Mac: `GNG_LOCAL_REGRESSION=PASS_ROM_FREE_A0_2_TO_A0_6_3`,
+`GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42H` y
+`V3_B1_T1_INPUT_CONTRACT_PASS`.
+[Checkpoint de T1](audit/v3-b1-t1-input-contract-2026-10-26.md).
+
+**Siguiente bloque:** [V3.B1.T2 — puertos dinámicos en runtime](v3-b1-t2-runtime-ports-2026-10-26.md).
+T2 está planificado y pendiente de implementación y gates.
 
 **V3.B1.T2 — Entradas CPU en runtime (depende de T1).**
 T2.1 Sustituir constantes de SYSTEM/P1/P2 por fuente
