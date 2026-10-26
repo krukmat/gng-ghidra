@@ -12,10 +12,13 @@ import {createLiveControls} from '../src/v3_b2c_live_controls.mjs';
 import {LIVE_FRAMES} from '../src/v3_b2c_session_policy.mjs';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {b2dCertified} from '../src/v3_b2d_selection.mjs';
+import {b2eCertified} from '../src/v3_b2e_selection.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 // Use the offline-discovered gameplay bundle when available. Otherwise
 // run the verified B2A Coin1 build; missing AOT blocks stop the CPU.
+const B2E=join(ROOT,'out/v3/b2e/frozen');
+const B2E_REPORT=join(ROOT,'out/v3/b2e/discovery-report.json');
 const B2D=join(ROOT,'out/v3/b2d/frozen');
 const B2D_REPORT=join(ROOT,'out/v3/b2d/discovery-report.json');
 const B2B=join(ROOT,'out/v3/b2b/frozen');
@@ -43,7 +46,16 @@ function b2dReady(){
     return b2dCertified(report,manifest);
   }catch{return false}
 }
-const BUNDLE=b2dReady()?B2D:b2bReady()?B2B:B2A;
+function b2eReady(){
+  if(!existsSync(B2E)||!existsSync(B2E_REPORT)||!b2dReady())return false;
+  try{
+    const report=JSON.parse(readFileSync(B2E_REPORT,'utf8'));
+    const {manifest}=loadFrozen(B2E);
+    const {manifest:parent}=loadFrozen(B2D);
+    return b2eCertified(report,manifest,parent);
+  }catch{return false;}
+}
+const BUNDLE=b2eReady()?B2E:b2dReady()?B2D:b2bReady()?B2B:B2A;
 const ZIP=join(ROOT,'roms/gng.zip');
 const PORT=18609;
 const live=createLiveControls();
@@ -83,6 +95,8 @@ kbd{background:#333e51;padding:2px 5px;border-radius:3px}
 <p><kbd>5</kbd> Coin · <kbd>1</kbd> Start ·
 <kbd>←↑↓→</kbd> Dirección · <kbd>Z</kbd> Ataque ·
 <kbd>X</kbd> Salto</p>
+<p><button id="coin" type="button">Insertar moneda (puerto SYSTEM)</button>
+<button id="start" type="button">Start 1P (puerto SYSTEM)</button></p>
 <p><button id="restart" type="button">Reiniciar GnG desde reset</button></p>
 <pre id="detail"></pre>
 <footer>Los píxeles provienen exclusivamente del compositor aplicado
@@ -107,6 +121,15 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('keyup',e=>{
  const control=map[e.code];if(!control)return;e.preventDefault();send(control,false);
 });
+// Direct human-initiated button presses, not scripted gameplay.
+ // The browser holds the active-low hardware bit briefly, then releases it.
+ // Only a real MC6809 bus read can generate a PASS marker.
+function pulse(control){
+  send(control,true);
+  setTimeout(()=>send(control,false),400);
+}
+document.getElementById('coin').addEventListener('click',()=>pulse('coin1'));
+document.getElementById('start').addEventListener('click',()=>pulse('start1'));
 window.addEventListener('blur',()=>fetch('/release',{method:'POST'}).catch(()=>{}));
 document.getElementById('restart').addEventListener('click',async()=>{
  try{
@@ -192,7 +215,7 @@ async function main(){
   if(proof.status!=='INPUT_ROUTE_UNCOMPILED'&&
      proof.status!=='INPUT_STATE_CHANGED')
     throw Error('V3_B2C_B2A_NOT_PROVEN');
-  console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B2D?'B2D':BUNDLE===B2B?'B2B':'B2A'));
+  console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B2E?'B2E':BUNDLE===B2D?'B2D':BUNDLE===B2B?'B2B':'B2A'));
   const launch=()=>{
     const id=++generation;
     releaseAll();
