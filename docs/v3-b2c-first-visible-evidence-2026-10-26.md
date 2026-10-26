@@ -217,3 +217,54 @@ runner B2-C seleccionará ese artefacto **solo tras sus gates
 reales**. Se añaden marcadores B2-C de frame/banco/PC/lecturas
 para que cualquier ruta restante sea accionable, sin publicar
 ROM ni dumps de memoria.
+
+## Checkpoint B2-B completado: port AOT real con Coin, Start y controles
+
+Validación Mac posterior a la reanudación:
+
+```text
+V3_B2B_RESUME=PASS_ATTESTED_CHECKPOINT
+V3_B2B_RESUME_FROM_ITERATION=48
+V3_B2B_DISCOVERY_ITERATION=59
+V3_B2B_DISCOVERY_BLOCKS=663
+V3_B2B_DISCOVERY_FRAMES=1000
+V3_B2B_NO_INPUT=PASS_600_FRAMES_IDENTICAL_V2
+V3_B2B_REPLAY=PASS_TWO_FROZEN_1000_FRAME_RUNS
+V3_B2B_DISCOVERY=PASS_1000_FRAMES_AOT_OFFLINE
+V3_B2B_COIN_ACTIVE_READS=2
+V3_B2B_START_ACTIVE_READS=2
+V3_B2B_FIRST_START_EFFECT=531
+V3_B2B_FIRST_CONTROLS_EFFECT=651
+V3_B2B_COIN_START=PASS_CAUSAL_INPUT_EFFECT_NOT_NATIVE_CERTIFIED
+V3_B2B_LOCAL=PASS
+```
+
+B2-B queda cerrado para sus **tres tapes** de 1.000 frames.
+El motor interactivo B2-C seleccionará automáticamente la nueva
+imagen `out/v3/b2b/frozen` (663 bloques) en la próxima ejecución,
+tras verificar el reporte. No implica que cualquier secuencia
+arbitraria en vivo esté ya compilada, ni que Arthur sea controlable
+visualmente: comparar hashes de estado tampoco certifica movimiento.
+
+### B2-C.T6 — Prueba directa de entrada desde el teclado hasta la CPU
+
+Se incorporó `src/v3_b2c_port_witness.mjs` al worker AOT
+y se expone `busWitness` en `GET /state`. El testigo consume
+**solo lecturas observadas del puerto** en los ciclos MC6809
+originales (0x3000/0x3001), sin generar entradas de prueba,
+mutar RAM o inferir el estado del avatar.
+
+Las muestras activas separan moneda, Start, derecha, izquierda,
+arriba, abajo, ataque y salto, con el primer ciclo/PC de CPU.
+Contar una muestra de botón activo **no implica** que el motor
+haya aplicado desplazamiento, colisión, disparo o salto;
+eso queda para la correlación visual y validación diferencial
+contra la ROM original/MAME.
+
+Objetivo siguiente del operador: arrancar B2-C con paquete B2B,
+pulsar 5 y 1 y probar izquierda/derecha/Z/X durante la ventana
+de la partida (no una reproducción precalculada). Verificar
+`V3_B2C_AOT_BUNDLE=B2B`, `V3_B2C_BUS_COIN1`,
+`V3_B2C_BUS_START1`, `V3_B2C_BUS_P1_RIGHT`, etc.
+El render sigue alimentándose únicamente de snapshots vivos
+del runtime MC6809; no se publica contenido de ROM.

@@ -82,7 +82,8 @@ node --test \
   tests/test_v3_b2b_foundation.mjs \
   tests/test_v3_b2b_resume.mjs \
   tests/test_v3_b2c_live_controls.mjs \
-  tests/test_v3_b2c_session_policy.mjs
+  tests/test_v3_b2c_session_policy.mjs \
+  tests/test_v3_b2c_port_witness.mjs
 node --check src/gngb_input_contract.mjs
 node --check tests/test_v3_b2a_cpu_ports.mjs
 node --check scripts/v3_b2a_build.mjs
@@ -98,6 +99,8 @@ node --check tests/test_v3_b2b_foundation.mjs
 node --check src/v3_b2b_resume.mjs
 node --check tests/test_v3_b2b_resume.mjs
 node --check src/v3_b2c_session_policy.mjs
+node --check src/v3_b2c_port_witness.mjs
+node --check tests/test_v3_b2c_port_witness.mjs
 node --check tests/test_v3_b2c_session_policy.mjs
 node --check tests/test_v3_b2c_live_controls.mjs
 bash -n scripts/v3_b2c_gate.sh
