@@ -7,8 +7,11 @@ MAME original ni capturas. [Checkpoint de build](audit/r35-b2-t4-build-2026-10-2
 Intento 1 bloqueado por `-Werror=misleading-indentation` en el overlay
 (causa reproducida sin ROM, corregida). **Intento 2 PASS:**
 `R35_T4_BUILD=PASS_INSTRUMENTED_BINARY_BUILT_NOT_CAPTURED`, con los seis
-eventos en el binario. Aún no existe evidencia nativa IRQ/SYNC/VBlank:
-T4.3 requiere autorización explícita.
+eventos en el binario. **T4.3 PASS** (captura única desde arranque en frío,
+600 frames de referencia) y **T4.4 decidido**: VBlank IRQ por frame,
+`HOLD_LINE` hasta reconocimiento y SYNC enmascarado que continúa
+([captura y decisión](audit/r35-b2-t43-capture-2026-10-26.md)). Siguiente:
+runtime JS/TS continuo desde reset hasta un frame de referencia.
 
 
 **R3.5.B2 checkpoint ROM-free (26/10/2026):** B2.T1 auditó el hook MC6809
