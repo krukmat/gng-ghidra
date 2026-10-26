@@ -186,3 +186,34 @@ descubrimiento AOT B2-B complete sus rutas.
   real o límite de frames del paquete; se muestra detención.
 - MAME se usa únicamente para gates de comparación externos
   posteriores; **nunca** como engine detrás del navegador.
+
+## Checkpoint B2-C ampliado: ejecución hasta ruta ausente (26/10/2026)
+
+El operador validó nuevamente en el Mac:
+
+```text
+GNG_LOCAL_REGRESSION=PASS_ROM_FREE_A0_2_TO_A0_6_3
+GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42H
+V3_B2C_WIRING=PASS_ROM_FREE
+V3_B2C_AOT_BUNDLE=B2A
+V3_B2C_REAL_ENGINE=STARTED http://127.0.0.1:18609
+V3_B2C_SESSION=STARTED_1
+V3_B2C_SESSION_FRAMES=6000
+V3_B2C_FIRST_FRAME=PASS_REAL_AOT_RENDER frame=311
+V3_B2C_ENGINE=HALT_UNCOMPILED
+```
+
+La sesión **solicitó** 6000 frames, pero alcanzó un bloque AOT
+no compilado y se detuvo antes de completar el recorrido.
+No conocemos el frame final ni el banco/PC porque la salida
+adjunta no contiene `/state.halt`; tampoco se ha acreditado
+una lectura Coin1 activa. No convertir este resultado en
+`V3_B2C_COIN=PASS_REAL_CPU_READ`.
+
+**Acción prioritaria:** ejecutar el descubrimiento offline
+`bash scripts/v3_b2b_local.sh` para completar Coin → Start,
+compilar bloques nuevos durante build, y congelar B2B. El
+runner B2-C seleccionará ese artefacto **solo tras sus gates
+reales**. Se añaden marcadores B2-C de frame/banco/PC/lecturas
+para que cualquier ruta restante sea accionable, sin publicar
+ROM ni dumps de memoria.

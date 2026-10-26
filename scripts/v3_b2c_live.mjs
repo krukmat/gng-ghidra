@@ -190,6 +190,16 @@ async function main(){
         halt=m;
         console.error('V3_B2C_ENGINE='+m.type.toUpperCase()+'_'+
           (m.status??m.code));
+        if(m.type==='halt'){
+          console.log('V3_B2C_HALT_FRAME='+m.frame);
+          console.log('V3_B2C_HALT_COIN_READS='+m.coinReads);
+          console.log('V3_B2C_HALT_START_READS='+m.startReads);
+          if(m.status==='UNCOMPILED'){
+            console.log('V3_B2C_MISSING_BANK='+String(m.missing?.bank??'FIXED_OR_RAM'));
+            console.log('V3_B2C_MISSING_PC='+String(m.missing?.pc??'UNKNOWN'));
+            console.log('V3_B2C_NEXT_ACTION=RUN_B2B_OFFLINE_DISCOVERY');
+          }
+        }
       }
     });
     fresh.on('error',err=>{
