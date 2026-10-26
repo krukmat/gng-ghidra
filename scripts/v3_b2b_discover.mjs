@@ -92,6 +92,19 @@ async function main(){
   const {manifest:parent,code}=loadFrozen(SOURCE);
   if(parent.frames!==600||parent.blocks!==354||parent.blocks!==v2.blocks)
     fail('INPUT_PARENT_NOT_B2A_CERTIFIED');
+  // Input-aware expansion must retain the exact proven B2A runtime/ALU/
+  // dispatcher. Merely matching state snapshots is not source integrity.
+  for(const file of MODULES)
+    if(readFileSync(join(ROOT,'src',file),'utf8')!==
+       readFileSync(join(SOURCE,file),'utf8'))
+      fail('PARENT_RUNTIME_MODULE_DRIFT');
+  if(typeof parent.source_git_head!=='string'||
+     !/^[0-9a-f]{40}$/.test(parent.source_git_head))
+    fail('PARENT_SOURCE_COMMIT_INVALID');
+  try{
+    execFileSync('git',['diff','--exit-code',parent.source_git_head,'HEAD',
+      '--','src/mc6809_aot.mjs'],{cwd:ROOT,stdio:'ignore'});
+  }catch{fail('PARENT_AOT_COMPILER_DRIFT')}
   const b2a=JSON.parse(readFileSync(join(ROOT,
     'out/v3/b2a/coin-smoke.json'),'utf8'));
   if(b2a.status!=='INPUT_ROUTE_UNCOMPILED'||
