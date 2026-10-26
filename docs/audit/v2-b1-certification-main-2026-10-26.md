@@ -74,3 +74,24 @@ de los volúmenes privados no está disponible para el conector y
 `bash scripts/v2_b1_postmerge.sh` sobre `main`.
 
 No emitir `V2_FEATURE_MERGED_MAIN` antes del postflight.
+
+## B1.T6.3 — Resultado final de post-merge (26/10/2026)
+
+El operador confirmó los siguientes marcadores desde Mac sobre `main`:
+
+```text
+GNG_LOCAL_REGRESSION=PASS_ROM_FREE_A0_2_TO_A0_6_3
+GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42H
+V2_B1_T4_DETERMINISM=PASS_TWO_INDEPENDENT_RUNS
+V2_B1_T4_FRAMES=600
+V2_B1_T6_POSTMERGE_NATIVE_GATE=PASS_RECOMPUTED_READ_ONLY
+V2_B1_T6_STATE_EXACT=594
+V2_B1_T6_PIXEL_EXACT=290
+V2_FEATURE_MERGED_MAIN=PASS_POSTMERGE
+```
+
+**V2.B1.T1–T6 cerradas.** Esta certificación valida el port
+AOT autónomo para las rutas observadas; 290 frames consecutivos
+(311–600) tienen píxeles exactos, y los primeros 310 siguen
+sin equivalencia visual certificada. Entradas, audio y nuevas
+rutas de juego quedan para V3/V4.
