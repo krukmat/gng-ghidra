@@ -4,9 +4,11 @@
 **Repositorio:** `krukmat/gng-ghidra` (privado)  
 **Rama exclusiva:** `feature/a063-r1-forensics-contract`; `main` no se modifica.  
 **Checkpoint de entrada:** `D5_NATIVE_MINIPROBE_PASS_NOT_FULL_A063` (**declarado por el operador y confirmado por su salida de terminal**).  
-**Estado actual (2026-10-26):** D6.T0 PASS + D6.T1 `PASS_ROM_FREE_ONLY`;
-implementación y validación en [checkpoint ROM-free](a063-m5-d6-full-native-romfree.md).
-D6.T2/T3 preparados y **no ejecutados**; **A0.6.3/A0.6.4 NOT_CERTIFIED**.
+**Estado actual (2026-10-26):** D6.T0 PASS + D6.T1 `PASS_ROM_FREE_ONLY`.
+D6.T2 ejecutada una vez: MAME exit 0, 179.924 preestados y postflight íntegro;
+launcher exit 2 por contrato offline de boot/B4. Captura conservada, sin retry.
+[Checkpoint T2 y causa verificada](a063-m5-d6-t2-native-checkpoint.md).
+D6.T3 **no ejecutada**; **A0.6.3/A0.6.4 NOT_CERTIFIED**.
 **Coste incremental:** 0 EUR; únicamente Mac M5 Pro + Colima/Docker local ARM64.
 
 ## 1. Evidencia de entrada — NO repetir trabajo superado
@@ -16,11 +18,15 @@ D6.T2/T3 preparados y **no ejecutados**; **A0.6.3/A0.6.4 NOT_CERTIFIED**.
 - D5 primer intento (`gng-a063-private-capture-arm64-v1`): 41.426 preestados, parser inicial rechazó `A063_ORACLE_BANK_OUT_OF_RANGE` por concatenación de `E` y PC. **Conservarlo como evidencia histórica inválida.**
 - Fix ROM-free incorporado en commit `98bcb80efc6111fa3cbb0f29ed8896ddf8b9876c`: espacio delimitador en `scripts/a063_trace_contract.py`. Tests sintéticos 9/9 y gate ROM-free reportados PASS.
 - D5 repetido en volumen **`gng-a063-private-capture-arm64-delimited-v2`**: MAME exit=0, 41.426 preestados, postflight íntegro, `A063_ORACLE=A063_ORACLE_MINIPROBE_NATIVE_MATCHED_NOT_FULL_A063` y `A063_ORACLE_MINIPROBE=PASS_SAMPLED_INSTRUCTIONS_ONLY_NOT_FULL_A063`.
-- **No hay evidencia de que D6 se haya ejecutado.** El mini-oráculo no acredita reset/IRQ/bus completo ni ejecutable recompilado equivalente.
+- D6.T2 ya produjo una captura completa con reset y postflight íntegro, conservada en `gng-a063-private-capture-arm64-full-d6-v1`. Su wrapper quedó bloqueado en el gate offline B4; no hay PASS full-oracle ni A0.6.4. El mini-oráculo D5 tampoco acredita reset/IRQ/bus completo ni ejecutable recompilado equivalente.
 
 Referencia: `docs/audit/a063-m5-d5-delimiter-diagnosis.md` y `docs/a063-m5-docker-plan.md`.
 
-## 2. Diagnóstico de la integración actual (revisión de fuente en GitHub)
+## 2. Diagnóstico histórico previo a T1 (revisión de fuente en GitHub)
+
+Las brechas de esta tabla motivaron T1 y ya están abordadas en el
+[checkpoint ROM-free](a063-m5-d6-full-native-romfree.md). El estado operativo
+vigente es el [checkpoint T2](a063-m5-d6-t2-native-checkpoint.md).
 
 | Fuente | Estado observado / brecha a resolver |
 |---|---|
@@ -43,7 +49,7 @@ Referencia: `docs/audit/a063-m5-d5-delimiter-diagnosis.md` y `docs/a063-m5-docke
 - **T0.2** Registrar contrato de inmutabilidad: v1 y v2 **nunca se montan RW** ni se eliminan; D6 usa volumen **nuevo**, sin reutilizar `out/` del host.
 - **Aceptación:** entrada D5 PASS documentada y hash del binario coincidente; evidencia protegida.
 
-### D6.T1 — Runner full-oracle y contratos ROM-free (**bloque de implementación siguiente**)
+### D6.T1 — Runner full-oracle y contratos ROM-free (completado ROM-free)
 
 - **T1.1 Captura:** extender el runner completo existente con modo explícito `--oracle` en el preflight; preservar `GNG_R2_TRACE_MODE=printf`, firmas `b@`, prestate nativo y **`gng_a063_bank` en la misma acción/línea de debugger**; asegurar sprite tap, video tap, política MMIO y **un soft reset observado**. No cambiar `main` ni el debugger C++.
 - **T1.2 Integridad:** permitir exclusivamente el nuevo destino full `out/r2/mame-probe` en modo oracle mediante opt-in inequívoco; vincular binario, action, fuentes congeladas, postflight y manifest. Rechazar fuentes modificadas, omisiones/duplicados de E, PC/registros no alineados, E >4 y trazas huérfanas.
@@ -79,7 +85,7 @@ Referencia: `docs/audit/a063-m5-d5-delimiter-diagnosis.md` y `docs/a063-m5-docke
 
 Usar siempre una barra de progreso, con **D6.T0 → T1 → T2 → T3**. Trabajar tareas y subtareas con máximo dos niveles.
 
-Al acabar el siguiente turno de agente se espera **D6.T0 PASS + D6.T1 IMPLEMENTED/ROMFREE_PASS**, con: lista exacta de commits/archivos, tests y resultados, decisiones de cambios y **un único comando Docker seguro listo para T2**. No ejecutar T2/T3 prematuramente por presión de cerrar.
+El checkpoint inicial solicitado fue **D6.T0 PASS + D6.T1 IMPLEMENTED/ROMFREE_PASS**, con lista exacta de commits/archivos, tests y resultados, decisiones de cambios y **un único comando Docker seguro listo para T2**. Ya está entregado en el checkpoint ROM-free. T2 se autorizó y ejecutó posteriormente; su bloqueo y próximo paso figuran en el checkpoint T2. No ejecutar T3 prematuramente por presión de cerrar.
 
 **Solicitud para handoff:** ver `docs/agents/a063-m5-d6-full-native-prompt.md`.
 

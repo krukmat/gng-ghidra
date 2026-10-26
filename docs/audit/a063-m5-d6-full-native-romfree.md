@@ -2,7 +2,13 @@
 
 Fecha: 2026-10-26. Rama exclusiva: `feature/a063-r1-forensics-contract`.
 
-Dirección actual: completar D6.T0–T1 antes de cualquier preflight/captura D6.
+Actualización posterior: T2 se ejecutó una vez con MAME exit 0 y postflight
+íntegro, pero wrapper exit 2 por contrato de boot/B4. Ver
+[checkpoint T2](a063-m5-d6-t2-native-checkpoint.md). Este documento conserva
+el checkpoint histórico T0/T1 anterior a esa captura.
+
+Dirección de este checkpoint histórico: completar D6.T0–T1 antes de cualquier
+preflight/captura D6.
 T2 requiere una instrucción expresa del operador después de revisar este
 checkpoint. T3 depende de T2 y consume exclusivamente esa misma captura.
 Tareas ejecutables: [handoff T0–T3](a063-m5-d6-full-native-handoff.md),
