@@ -18,9 +18,11 @@ const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const dir=join(ROOT,'out/v2/b1'),ref=join(ROOT,'out/r35/t43-ref');
 const fail=code=>{throw Error('V2_B1_'+code);};
 function main(){
-  if(process.argv.slice(2).join(' ')!=='--gate')fail('USAGE_GATE_ONLY');
+  const mode=process.argv.slice(2).join(' ');
+  if(mode!=='--gate'&&mode!=='--verify')fail('USAGE_GATE_OR_VERIFY_ONLY');
   const output=join(dir,'certification.json');
-  if(existsSync(output))fail('CERTIFICATION_ALREADY_EXISTS');
+  if(mode==='--gate'&&existsSync(output))fail('CERTIFICATION_ALREADY_EXISTS');
+  if(mode==='--verify'&&!existsSync(output))fail('CERTIFICATION_MISSING');
   const source=loadFrozen(join(dir,'frozen')).manifest.source_git_head;
   if(typeof source!=='string'||!/^[a-f0-9]{40}$/.test(source))
     fail('SOURCE_COMMIT_NOT_ATTESTED');
@@ -80,6 +82,17 @@ function main(){
     events_compared:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,v.compared])),
     aot_run_digest:report.sequence_sha256,source_git_head:source,
     observed};
+  if(mode==='--verify'){
+    // Recompute every native event, known state and 290+ pixel frames,
+    // and compare to the immutable checkpoint from the feature branch.
+    const stored=JSON.parse(readFileSync(output,'utf8'));
+    if(JSON.stringify(stored)!==JSON.stringify(result))
+      fail('CERTIFICATION_CHANGED_SINCE_FEATURE');
+    console.log('V2_B1_T6_POSTMERGE_NATIVE_GATE=PASS_RECOMPUTED_READ_ONLY');
+    console.log('V2_B1_T6_STATE_EXACT='+coverage.state_exact_frames);
+    console.log('V2_B1_T6_PIXEL_EXACT='+coverage.pixel_exact_frames);
+    return;
+  }
   writeFileSync(output,JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});
   console.log('V2_AUTONOMOUS_FRAME_CERTIFIED');
   console.log('V2_B1_FRAMES='+result.frames);

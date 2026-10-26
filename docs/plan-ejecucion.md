@@ -1,5 +1,18 @@
 # Plan operativo v2 — del fotograma real al juego recompilado
 
+## Checkpoint V2.B1 — AOT autónomo certificado en Mac (26/10/2026)
+
+El operador reporta `V2_AUTONOMOUS_FRAME_CERTIFIED`: 600 frames
+autónomos, 594 estados completos y 290 píxeles/frames exactos en el
+intervalo **311–600**, con 6 imágenes distintas y 310 frames previos
+sin certificar visualmente. No son 600 imágenes exactas.
+[Certificación y transición a main](audit/v2-b1-certification-main-2026-10-26.md).
+
+B1.T6 integra `feature/a063-r1-forensics-contract` por fast-forward
+solo después de inspeccionar el diff; el postflight local en `main`
+queda como gate final. No iniciar inputs/audio hasta él.
+
+
 ## Plan vigente — V2.B1 y cierre de feature (26/10/2026)
 
 La ruta crítica actual certifica autonomía AOT y primer frame observable

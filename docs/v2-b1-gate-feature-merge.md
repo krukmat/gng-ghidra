@@ -84,3 +84,14 @@ runs offline de 600 frames, comparador posterior frente a MAME y
 preflight de merge. [Comandos, evidencias y límites](v2-b1-operational-gate-2026-10-26.md).
 **No afirmar PASS B1.T2–T6** hasta observar resultados locales.
 No tocar `main` todavía.
+
+## Estado B1.T5 — certificado por operador (26/10/2026)
+
+Recibidos marcadores `V2_AUTONOMOUS_FRAME_CERTIFIED`,
+600 frames, 594 estados exactos, 290 frames de píxeles exactos
+(311–600), 6 imágenes distintas. Los 310 frames anteriores **no**
+tienen certificación de píxeles. [Detalle](audit/v2-b1-certification-main-2026-10-26.md).
+
+B1.T6: integración solo por fast-forward desde `main`, sin archivos
+privados, y validación posterior obligatoria en Mac mediante
+`bash scripts/v2_b1_postmerge.sh`.

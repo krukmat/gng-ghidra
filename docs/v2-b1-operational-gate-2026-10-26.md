@@ -100,3 +100,11 @@ git pull --ff-only
 node --test tests/test_v2_b1_coverage_policy.mjs
 node scripts/v2_b1_native_gate.mjs --gate
 ```
+
+## T5 PASS — T6 pendiente de validación en main
+
+Marcadores finales confirmados por operador para V2: 600/600 ejecución
+AOT, 594 estados exactos, píxeles exactos 311–600 (290 frames),
+310 frames anteriores sin equivalencia visual certificada, 6 imágenes
+distintas. Una vez integrado el feature, ejecutar el runner
+`scripts/v2_b1_postmerge.sh` en `main` (ver checkpoint de cierre).
