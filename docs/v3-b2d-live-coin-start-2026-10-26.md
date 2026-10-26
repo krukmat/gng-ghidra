@@ -167,3 +167,47 @@ Cierre necesario:
 `V3_B2D_DISCOVERY=PASS_REAL_AOT_1500_FRAMES`.
 Después comprobar el **crédito en pantalla, Start y Arthur**
 por interacción real; cobertura por sí sola no basta.
+
+## B2-D — Certificación privada del motor original (26/10/2026)
+
+El operador ejecutó la fase de descubrimiento sobre la ROM privada del Mac,
+y obtuvo cierre **PASS**. No se han publicado ROM, imágenes ni snapshots.
+
+```text
+V3_B2D_PARENT=PASS_663_BLOCKS_ATTESTED
+V3_B2D_ITERATION=77
+V3_B2D_BLOCKS=1654
+V3_B2D_PROFILE_LATECONTROLS=1500_PASS_REUSE_PROOF
+V3_B2D_PROFILE_LATESTART=1500_PASS_REUSE_PROOF
+V3_B2D_PROFILE_LATECOIN=1500_FRAMES_DONE
+V3_B2D_PROFILE_IDLE=1000_FRAMES_DONE
+V3_B2D_PROFILE_EARLYCONTROLS=1000_FRAMES_DONE
+V3_B2D_NO_INPUT=PASS_600_FRAMES_EQUAL_B2B_V2
+V3_B2D_FROZEN=PASS_5_PROFILES_PER_HORIZON_DOUBLE_REPLAY
+V3_B2D_GAMEPLAY=PASS_THREE_1500_FRAME_PROFILES
+V3_B2D_IDLE=PASS_1000_FRAME_REAL_AOT
+V3_B2D_EARLY=PASS_1000_FRAME_REAL_AOT
+V3_B2D_EFFECT_COIN_FRAME=813
+V3_B2D_EFFECT_START_FRAME=851
+V3_B2D_EFFECT_CONTROLS_FRAME=901
+V3_B2D_DISCOVERY=PASS_REAL_AOT_1500_FRAMES
+V3_B2D_LOCAL=PASS
+```
+
+Se confirma cobertura AOT de las secuencias programadas con cambios de estado
+causados por entradas en SYSTEM/P1. **No se confirma todavía** que los créditos,
+la transición de partida o la posición de Arthur cambien visualmente. La
+certificación diferencial con MAME para esos inputs sigue pendiente.
+
+### Gate P0 inmediato: motor interactivo real
+
+1. Detener servidor existente, `git switch main && git pull --ff-only`.
+2. Arrancar `node scripts/v3_b2c_live.mjs --serve` y exigir
+   `V3_B2C_AOT_BUNDLE=B2D`, frame auténtico y contador RGBA no negro.
+3. En `http://127.0.0.1:18609/`, pulsar `5` (Coin), luego `1` (Start),
+   flechas y `Z`/`X`, verificando lecturas reales de bus.
+4. Observar el crédito, la transición de pantalla, los movimientos y el salto;
+   si falla, recuperar el código exacto de HALT, el frame y el PC y continuar
+   AOT *offline*. No manipular el estado de juego en frontend.
+
+Resultado esperado: **jugabilidad observada**, no solo `FRAMES_DONE` ni hashes.
