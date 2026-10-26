@@ -33,6 +33,6 @@ test('fully transparent data is reported separately from visual brightness',()=>
 });
 test('malformed geometry and types fail rather than invent pixels',()=>{
   assert.throws(()=>inspectRealFrame(null),/INVALID_FRAME_TYPE/);
-  assert.throws(()=>inspectRealFrame(Buffer.alloc(10)),/INVALID_FRAME_LENGTH/);
+  assert.throws(()=>inspectRealFrame(new Uint8Array(10)),/INVALID_FRAME_LENGTH/);
   assert.throws(()=>inspectRealFrame(new Array(FRAME_BYTES)),/INVALID_FRAME_TYPE/);
 });
