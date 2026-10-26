@@ -200,7 +200,22 @@ async function main(){
     console.log('V3_B2B_DISCOVERY_BLOCKS='+built.blockCount);
     console.log('V3_B2B_DISCOVERY_FRAMES='+runner.hashes.length);
     if(runner.result.status==='FRAMES_DONE'){
-      completed=true;reason='FRAMES_DONE';break;
+      // Every listed profile must cover 1000 frames BEFORE the candidate
+      // bundle is frozen. Otherwise later comparison could discover new
+      // code after freeze, leaving an unusable and unresumable artifact.
+      let pending=null;
+      for(const profile of ['coin','start']){
+        const probe=runTape(code,blocks,createV3Tape(profile));
+        if(probe.result.status!=='FRAMES_DONE'){
+          pending={profile,run:probe};break;
+        }
+      }
+      if(!pending){
+        completed=true;reason='FRAMES_DONE';break;
+      }
+      runner=pending.run;
+      console.log('V3_B2B_DISCOVERY_MISSING_PROFILE='+pending.profile);
+      console.log('V3_B2B_DISCOVERY_PROFILE_FRAMES='+runner.hashes.length);
     }
     if(runner.result.status==='UNCOMPILED'){
       addSeed({bank:runner.result.bank,pc:runner.result.pc,
@@ -242,18 +257,21 @@ async function main(){
 
   const modules=Object.fromEntries(MODULES.map(n=>
     [n,readFileSync(join(ROOT,'src',n),'utf8')]));
-  const mf=freezeBundle(FROZEN,{generated:built.source,code,
+  // Assemble & verify in the ignored private work area. A comparison
+  // failure must never leave a half-published final frozen bundle.
+  const candidate=join(work,'candidate-frozen');
+  const mf=freezeBundle(candidate,{generated:built.source,code,
     overlays:code.ramOverlays,modules,
     provenance:{frames:PROFILE_FRAMES,blocks:built.blockCount,
       source_report_sha256:parent.source_report_sha256,
       source_git_head:preliminary.source_git_head}});
   // The final package is loaded from disk, not the build's imported source.
-  const loaded=loadFrozen(FROZEN);
-  const {blocks}=await import(pathToFileURL(join(FROZEN,'program.mjs')).href);
+  const loaded=loadFrozen(candidate);
+  const {blocks}=await import(pathToFileURL(join(candidate,'program.mjs')).href);
   const {createBoard:boardFromFrozen}=await import(pathToFileURL(
-    join(FROZEN,'gngb_runtime.mjs')).href);
+    join(candidate,'gngb_runtime.mjs')).href);
   // runFrozen and the frozen board share the identical no-input V2 semantics.
-  const idle=await runFrozen(FROZEN,{frames:600});
+  const idle=await runFrozen(candidate,{frames:600});
   if(idle.sequence_sha256!==v2.sequence_sha256||
      JSON.stringify(idle.frame_hashes)!==JSON.stringify(v2.frame_hashes)||
      JSON.stringify(idle.events)!==JSON.stringify(v2.events))
@@ -305,6 +323,9 @@ async function main(){
     frozen_determinism:'PASS_TWO_FROZEN_1000_FRAME_RUNS',
     no_input:'PASS_600_FRAMES_IDENTICAL_V2',
   };
+  // All three profiles, immutable idle parity and deterministic replay
+  // have been checked on candidate before publishing the AOT bundle.
+  renameSync(candidate,FROZEN);
   recordReport(report,resuming,previousIterations);
   console.log('V3_B2B_DISCOVERY=PASS_1000_FRAMES_AOT_OFFLINE');
   console.log('V3_B2B_BLOCKS='+built.blockCount);
