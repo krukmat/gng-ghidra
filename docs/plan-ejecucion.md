@@ -1,5 +1,20 @@
 # Plan operativo v2 — del fotograma real al juego recompilado
 
+## Checkpoint vigente — V2 cerrado / V3.B1 activo (26/10/2026)
+
+**`V2_FEATURE_MERGED_MAIN=PASS_POSTMERGE` reportado en Mac.**
+V2.B1.T1–T6 cerradas. Ejecución AOT: 600 frames; 594 estados
+completos y 290 frames con píxeles idénticos (311–600).
+Los primeros 310 no están certificados visualmente.
+[Acta de cierre V2](audit/v2-b1-certification-main-2026-10-26.md).
+
+Siguiente bloque:
+[V3.B1 — Input ports, replay y primera interacción](v3-b1-inputs-plan-2026-10-26.md).
+Trabajar en `main`; T1 contratos y tests, T2 runtime,
+T3 replay/AOT, T4 diferencial MAME, T5 interacción visible.
+Las secciones posteriores son historial previo al cierre V2.
+
+
 ## Checkpoint V2.B1 — AOT autónomo certificado en Mac (26/10/2026)
 
 El operador reporta `V2_AUTONOMOUS_FRAME_CERTIFIED`: 600 frames
