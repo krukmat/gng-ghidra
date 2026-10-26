@@ -18,7 +18,7 @@ const original=()=>({
 const historical=()=>({
   schema:'gng.v3.b2b-discovery.v1',status:'BLOCKED_ITERATION_LIMIT',
   profile:'controls',tape_sha256:'a'.repeat(64),iterations:2,
-  frames:892,blocks:4,seed_count:4,overlay_count:0,
+  frames:892,blocks:3,seed_count:4,overlay_count:0,
   last_result:{status:'UNCOMPILED',bank:null,pc:0x6800,overlay:null},
   seeds:[{bank:null,pc:0x6000},{bank:null,pc:0x6400,overlay:null},
     {bank:null,pc:0x6500,overlay:null},
@@ -54,7 +54,7 @@ test('rejects corrupt last result, count and tape fingerprint',()=>{
   assert.throws(()=>validateResumeCheckpoint({...opts,report}),/LAST_SEED_MISMATCH/);
   report.last_result.pc=0x6800;report.blocks=77;
   assert.throws(()=>validateResumeCheckpoint({...opts,report}),/CHECKPOINT_BLOCK_COUNT_MISMATCH/);
-  report.blocks=4;report.tape_sha256='b'.repeat(64);
+  report.blocks=3;report.tape_sha256='b'.repeat(64);
   assert.throws(()=>validateResumeCheckpoint({...opts,report}),/HEADER_INVALID/);
 });
 test('legacy checkpoint with inaccessible RAM overlay data blocks safely',()=>{
