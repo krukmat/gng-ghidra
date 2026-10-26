@@ -12,5 +12,11 @@ cd "$ROOT"
 echo V3_B2B_LOCAL_STAGE=ROM_FREE_REGRESSION
 bash scripts/r3-local-regression.sh
 echo V3_B2B_LOCAL_STAGE=PRIVATE_AOT_DISCOVERY
-node scripts/v3_b2b_discover.mjs --discover
+if [[ -f out/v3/b2b/discovery-report.json ]]; then
+  echo V3_B2B_LOCAL_MODE=RESUME_EXISTING_CHECKPOINT
+  node scripts/v3_b2b_discover.mjs --resume
+else
+  echo V3_B2B_LOCAL_MODE=FRESH_DISCOVERY
+  node scripts/v3_b2b_discover.mjs --discover
+fi
 echo V3_B2B_LOCAL=PASS
