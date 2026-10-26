@@ -163,7 +163,9 @@ async function main(){
         fail('RESUME_SEEDS_INVALID');
       known.add(key(seed));
     }
-    if(state.seeds.length-prefixLength!==state.iterations)
+    // Two operator-observed targets (0x6364 and 0x6a8d) are always
+    // queued before the first build; each failed iteration adds one more.
+    if(state.seeds.length-prefixLength!==state.iterations+2)
       fail('RESUME_ITERATION_COUNT_INVALID');
     const last=state.last_result;
     const expected=state.seeds.at(-1);
