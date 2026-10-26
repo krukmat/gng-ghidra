@@ -77,11 +77,16 @@ node --test \
   tests/test_v2_b1_coverage.mjs \
   tests/test_v2_b1_coverage_policy.mjs \
   tests/test_v3_b1_input_contract.mjs \
-  tests/test_v3_b2a_cpu_ports.mjs
+  tests/test_v3_b2a_cpu_ports.mjs \
+  tests/test_v3_b2b_tape.mjs
 node --check src/gngb_input_contract.mjs
 node --check tests/test_v3_b2a_cpu_ports.mjs
 node --check scripts/v3_b2a_build.mjs
 node --check scripts/v3_b2a_coin_smoke.mjs
+node --check src/v3_b2b_tape.mjs
+node --check tests/test_v3_b2b_tape.mjs
+node --check scripts/v3_b2b_discover.mjs
+bash -n scripts/v3_b2b_local.sh
 bash -n scripts/v3_b2a_gate.sh
 bash -n scripts/v3_b2a_local.sh
 node --check tests/test_v3_b1_input_contract.mjs

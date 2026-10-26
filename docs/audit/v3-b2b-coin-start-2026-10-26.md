@@ -1,0 +1,88 @@
+# V3.B2-B — De Coin1 a Start por AOT, sin intérprete
+
+Fecha: 2026-10-26 · rama `main`.
+
+## Resultado previo B2-A — PASS (operador Mac)
+
+```text
+GNG_LOCAL_REGRESSION=PASS_ROM_FREE_A0_2_TO_A0_6_3
+GNG_LOCAL_REGRESSION=PASS_ROM_FREE_R3_R42H
+V3_B2A_WIRING=PASS_ROM_FREE_AOT_CYCLE_ACCURATE
+V3_B2A_BUILD=PASS_PRIVATE_AOT_NO_ORACLE
+V3_B2A_BLOCKS=354
+V3_B2A_NO_INPUT=PASS_600_FRAMES_EQUAL_V2
+V3_B2A_COIN_STATUS=INPUT_ROUTE_UNCOMPILED
+V3_B2A_COIN_SYSTEM_READS=183
+V3_B2A_COIN_ACTIVE_READS=2
+V3_B2A_COIN_FIRST_CHANGED_FRAME=421
+V3_B2A_COIN_FRAMES=492
+V3_B2A_INPUT_CPU_PATH=PASS_REAL_COMPILED_GNG_REACTION
+V3_B2A_LOCAL=PASS
+```
+
+El programa original **observa Coin1**, cambia estado desde frame
+421 y alcanza una ruta nueva `UNCOMPILED` alrededor de frame 492.
+No implica crédito registrado, partida iniciada ni Arthur controlable;
+demuestra causalidad de entrada y necesidad de ampliar AOT.
+
+## Alcance del bloque B2-B
+
+**B2-B.T1 — Tape de interacción.** `src/v3_b2b_tape.mjs`
+versiona y hashea secuencias absolutas de 1000 frames:
+`coin` (420–422), `start` (530–532) y
+`controls` (además derecha, botón1, izquierda, botón2 entre 650–752).
+`tests/test_v3_b2b_tape.mjs` es ROM-free.
+Los botones representan tentativamente ataque/salto, según driver
+gngb; su efecto de gameplay se certificará aparte.
+
+**B2-B.T2 — Descubrimiento *offline*.**
+`scripts/v3_b2b_discover.mjs` arranca desde la imagen privada y
+los 354 bloques certificados en `out/v3/b2a/frozen`.
+Incorpora el banco/PC faltante desde `coin-smoke.json`, compila
+sólo durante **build**, reinicia en frío y expande hasta
+`FRAMES_DONE` o 48 iteraciones. Si encuentra RAM ejecutable
+adicional, busca su origen único en el código ROM verificado;
+si no es único, bloquea la operación.
+
+**B2-B.T3 — Congelar + regresión V2.** Solo tras completar
+el tape: bundle privado independiente `out/v3/b2b/frozen/`.
+Debe reproducir exactamente los primeros 600 frames y eventos
+de V2 sin entradas, mantener congruencia del nuevo programa
+AOT y repetir 1000 frames dos veces en frío con resultado igual.
+
+**B2-B.T4 — Comprobar valor de producto.** Contrastar
+`coin`, `start` y `controls` bajo el mismo artefacto:
+primera diferencia `coin → start`, primera diferencia
+`start → controles` y lecturas activas SYSTEM/P1.
+Una lectura activa sin cambio de estado no se declara
+jugabilidad. Ni siquiera diferencia entre tapes implica
+equivalencia con MAME: esa prueba pertenece a V3.B1.T4.
+
+**B2-B.T5 — Gate local.**
+```bash
+git switch main
+git pull --ff-only
+bash scripts/v3_b2b_local.sh
+```
+
+Marcadores de éxito esperados si GnG realmente cubre todas
+las rutas y responde a Start:
+- `V3_B2B_NO_INPUT=PASS_600_FRAMES_IDENTICAL_V2`
+- `V3_B2B_REPLAY=PASS_TWO_FROZEN_1000_FRAME_RUNS`
+- `V3_B2B_DISCOVERY=PASS_1000_FRAMES_AOT_OFFLINE`
+- `V3_B2B_COIN_START=PASS_CAUSAL_INPUT_EFFECT_NOT_NATIVE_CERTIFIED`
+- `V3_B2B_LOCAL=PASS`
+
+Si se detiene, **conservar `out/v3/b2b/`**:
+`discovery-report.json` guarda causas/bancos/PC/semillas
+privadas, y la salida de consola solo muestra estado/cobertura.
+No borrar automáticamente ni repetir el build sobre el mismo
+`frozen/`; no subir esos datos a GitHub.
+
+## Dependencias de siguiente bloque
+
+Si Start ya modifica la partida, abordar primero el diferencial
+MAME para `Coin → Start`. Si quedan bloques `UNCOMPILED`,
+completar su descubrimiento en build antes de intentar un control
+visual de Arthur. Descartar optimizaciones visuales irrelevantes
+hasta poder demostrar movimiento/salto causado por CPU.

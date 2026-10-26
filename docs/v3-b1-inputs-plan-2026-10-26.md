@@ -86,3 +86,12 @@ T1 Contrato y fixtures → T2 Puertos → T3 Replay y AOT
 Prohibido alterar el gate V2 para adaptar la entrada.
 V4 Z80/YM2203 queda fuera de este bloque. No generar,
 publicar ni incorporar bytes de ROM o evidencias privadas.
+
+## Checkpoint B2-A → B2-B (26/10/2026)
+
+El operador verificó B2-A: 354 bloques, 600 frames de no-input
+idénticos a V2, dos lecturas de Coin1 activo, primera diferencia
+en frame 421, nueva ruta `UNCOMPILED` en frame 492.
+**B2-A cerrado.** La siguiente fase [B2-B](audit/v3-b2b-coin-start-2026-10-26.md)
+automatiza descubrimiento de nuevas rutas AOT y replays
+Coin → Start → controles; no hay todavía certificación de partida.
