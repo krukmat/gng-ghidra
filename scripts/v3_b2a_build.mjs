@@ -3,7 +3,7 @@
  * Output is a SEPARATE immutable package under ignored out/v3/.
  */
 import {execFileSync} from 'node:child_process';
-import {readFileSync,existsSync} from 'node:fs';
+import {readFileSync,existsSync,mkdirSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {loadFrozen,freezeBundle,MODULES} from '../src/v2_b1_frozen.mjs';
@@ -35,6 +35,7 @@ function main(){
     readFileSync(join(ROOT,'src',n),'utf8')]));
   const sourceHead=execFileSync('git',['rev-parse','HEAD'],
     {cwd:ROOT,encoding:'utf8'}).trim();
+  mkdirSync(join(ROOT,'out/v3/b2a'),{recursive:true,mode:0o700});
   freezeBundle(output,{generated:generated.source,code,
     overlays:code.ramOverlays,modules,
     provenance:{frames:600,blocks:generated.blockCount,
