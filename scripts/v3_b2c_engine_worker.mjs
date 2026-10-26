@@ -24,6 +24,12 @@ try{
   if(!Number.isInteger(manifest.frames)||manifest.frames<600||
      manifest.blocks<1||manifest.blocks>30000)
     throw Error('V3_B2C_UNVERIFIED_BUNDLE');
+  // The manifest proves the original *certification run* length, not the
+  // duration of an interactive session. This only changes the number of
+  // runtime VBlank snapshots requested; immutable AOT bytes stay identical.
+  const requestedFrames=workerData.sessionFrames;
+  if(!Number.isSafeInteger(requestedFrames)||requestedFrames<600||
+     requestedFrames>12000)throw Error('V3_B2C_SESSION_FRAMES_INVALID');
   // Private graphics are decoded once from the operator's own local ROM;
   // MAME and the AOT compiler are never imported/executed here.
   const zip=resolve(workerData.zip);
@@ -34,9 +40,10 @@ try{
   if(!(blocks instanceof Map)||blocks.size!==manifest.blocks)
     throw Error('V3_B2C_BLOCKS_MISMATCH');
   send({type:'boot',source:'private-frozen-AOT',blocks:blocks.size,
-    bundleCommit:manifest.source_git_head});
+    bundleCommit:manifest.source_git_head,
+    certifiedFrames:manifest.frames,sessionFrames:requestedFrames});
 
-  cpu=createBoard(code,blocks,{frames:manifest.frames,
+  cpu=createBoard(code,blocks,{frames:requestedFrames,
     portRead:(addr,cycle)=>Atomics.load(inputs,addr-0x3000),
     onPortRead:read=>{
       totalReads++;
@@ -73,7 +80,7 @@ try{
   });
   const result=cpu.run();
   send({type:'halt',status:result.status,
-    frame:cpu.state.records.length,
+    frame:cpu.state.records.length,sessionFrames:requestedFrames,
     missing:result.status==='UNCOMPILED'?{
       bank:result.bank,pc:result.pc,overlay:result.overlay}:null,
     reads:totalReads,coinReads:seenCoin,startReads:seenStart,
