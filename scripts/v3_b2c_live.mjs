@@ -13,11 +13,14 @@ import {LIVE_FRAMES} from '../src/v3_b2c_session_policy.mjs';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {b2dCertified} from '../src/v3_b2d_selection.mjs';
 import {b2eCertified} from '../src/v3_b2e_selection.mjs';
+import {b3Certified} from '../src/v3_b3_selection.mjs';
 import {createVisibleFrameGate} from '../src/v3_b2c_visible_gate.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 // Use the offline-discovered gameplay bundle when available. Otherwise
 // run the verified B2A Coin1 build; missing AOT blocks stop the CPU.
+const B3=join(ROOT,'out/v3/b3/frozen');
+const B3_REPORT=join(ROOT,'out/v3/b3/discovery-report.json');
 const B2E=join(ROOT,'out/v3/b2e/frozen');
 const B2E_REPORT=join(ROOT,'out/v3/b2e/discovery-report.json');
 const B2D=join(ROOT,'out/v3/b2d/frozen');
@@ -56,14 +59,24 @@ function b2eReady(){
     return b2eCertified(report,manifest,parent);
   }catch{return false;}
 }
-const BUNDLE=b2eReady()?B2E:b2dReady()?B2D:b2bReady()?B2B:B2A;
+function b3Ready(){
+  if(!existsSync(B3)||!existsSync(B3_REPORT)||!b2dReady())return false;
+  try{
+    const report=JSON.parse(readFileSync(B3_REPORT,'utf8'));
+    const {manifest}=loadFrozen(B3);
+    const {manifest:parent}=loadFrozen(B2D);
+    return b3Certified(report,manifest,parent);
+  }catch{return false;}
+}
+// B3 (first playable Coin/Start/Arthur route) outranks idle-only B2E.
+const BUNDLE=b3Ready()?B3:b2eReady()?B2E:b2dReady()?B2D:b2bReady()?B2B:B2A;
 const ZIP=join(ROOT,'roms/gng.zip');
 const PORT=18609;
 const live=createLiveControls();
 const {inputs,apply:applyControl,release:releaseAll,snapshot:heldControls}=live;
 // 600 frames is the B2A *certification* horizon, not a live session.
-// A bounded 6000-frame (~100 s at 60 fps) session avoids unbounded
-// storage in the frozen board's per-frame record history. Reset is a
+// A bounded LIVE_FRAMES session (~10 min); the worker drops each frame
+// snapshot after delivery, so record history no longer grows in RAM. Reset is a
 // genuine cold restart of that engine, never a playback or state injection.
 const SESSION_FRAMES=LIVE_FRAMES;
 let advance=null,worker=null,generation=0,operatorGate=null;
@@ -230,7 +243,7 @@ async function main(){
   if(proof.status!=='INPUT_ROUTE_UNCOMPILED'&&
      proof.status!=='INPUT_STATE_CHANGED')
     throw Error('V3_B2C_B2A_NOT_PROVEN');
-  console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B2E?'B2E':BUNDLE===B2D?'B2D':BUNDLE===B2B?'B2B':'B2A'));
+  console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B3?'B3':BUNDLE===B2E?'B2E':BUNDLE===B2D?'B2D':BUNDLE===B2B?'B2B':'B2A'));
   const launch=()=>{
     const id=++generation;
     releaseAll();

@@ -27,10 +27,11 @@
 | CPU / vídeo | AOT MC6809 ejecuta código original desde reset, primer frame auténtico 311. V2 tiene 290 frames pixel-exact (311–600) | Paridad durante escenas de juego no certificada |
 | B2-D | 1.654 bloques, perfiles `lateCoin`, `lateStart`, `lateControls` 1.500 frames cada uno, doble replay, regresiones ROM-free PASS | No demuestra partida humana controlable |
 | Controles | Pausa VBlank real en frame 311. Sesión humana: **22 lecturas Coin1** y, en segunda sesión, **17 Start1** | No hay crédito visible ni transición al juego acreditados |
-| **Bloqueo crítico** | En ambas sesiones humanas: `HALT_UNCOMPILED`, frame **496**, **bank=3**, **PC=20893 = 0x519D** | Falta rama AOT específica del Coin/Start temprano |
-| Idle/attract | HALT en frame 1038, PC `0x6A9D`, con B2-D. B2-E está preparado | **Secundario** para la primera jugabilidad |
+| ~~Bloqueo crítico~~ **RESUELTO (V3.B3)** | `HALT_UNCOMPILED` frame 496, bank 3, `0x519D`, reproducido con Coin de 22 frames desde 311 y superado. [Informe V3.B3](../v3-b3-playable-2026-10-26.md) | — |
+| **V3.B3 (2.266 bloques)** | Coin → «PRESS START» → Start → intro → Arthur en la fase 1, controlable (andar, scroll, lanza, salto, agacharse, perder armadura, morir/respawn); 3 bots de 5 min sin `UNCOMPILED`; runner en vivo con B3 | Falta contraste MAME y sesión humana de 5 min |
+| Idle/attract | Superado: perfil `idle` de 6.000 frames en B3 (antes HALT en 1038, `0x6A9D`) | B2-E queda obsoleto |
 | Audio | El runtime principal expone un `soundlatch` | Cadena real de sonido y síntesis sin certificar |
-| Runtime largo | Sesión demo acotada a 6.000 frames; los snapshots se retienen en `records` | No soporta aún una partida larga como producto |
+| Runtime largo | Sesión en vivo de 36.000 frames (~10 min); el worker libera los snapshots entregados | Cadencia/latencia y sesiones de horas (P7) |
 
 **No inventar porcentaje general de progreso ni fechas.** Lo confirmado es motor/render/lecturas reales, todavía no el primer crédito ni Arthur controlable.
 
@@ -65,7 +66,12 @@ El modelo sucesor debe **revisar críticamente** este orden en vez de asumir que
 
 **Antiobjetivos:** incrementar el número de bloques como fin; aumentar horizontes idle solo por completar números; confundir BUS_READ con GAMEPLAY; inyectar RAM/VRAM para mostrar créditos o Arthur; reescribir un bundle certificado; declarar paridad nativa con tests ROM-free; prometer ejecución asíncrona.
 
-## 5. Primer bloque de ejecución que proponemos
+## 5. Primer bloque de ejecución (COMPLETADO 26/10/2026 → V3.B3)
+
+> Estado: P0 y P1 GO; P2.T1 GO en el motor AOT local; MAME y la sesión humana de 5 min, pendientes.
+> **Método vigente:** descubrimiento AOT de una pasada desde cintas (`scripts/v3_b3_discover.mjs`). Para cubrir una ruta nueva hay que añadir una cinta en `src/v3_b3_tapes.mjs` y reconstruir B3 en otro directorio. No se debe volver a iterar semilla a semilla.
+
+### Texto original del bloque
 
 **P0+P1: `EARLY_COIN_START_BANK3`** — máxima prioridad hasta tener crédito/Start real.
 

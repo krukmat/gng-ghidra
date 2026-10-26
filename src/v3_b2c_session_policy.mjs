@@ -1,9 +1,10 @@
 /** Live run length is independent of the frozen AOT certificate horizon.
- * Immutable private program/runtime remain unchanged. The existing CPU
- * records frames in RAM, hence live sessions stay bounded and restartable.
+ * Immutable private program/runtime remain unchanged. The live worker
+ * drops each frame snapshot once delivered (V3.B3), so a session is no
+ * longer memory-bound; it stays finite (~10 min) and restartable.
  */
-export const LIVE_FRAMES=6000;
-export const MAX_LIVE_FRAMES=12000;
+export const LIVE_FRAMES=36000;
+export const MAX_LIVE_FRAMES=216000;
 export function validateLiveFrames(manifest,requested=LIVE_FRAMES){
   if(!manifest||!Number.isSafeInteger(manifest.frames)||
      manifest.frames<600||manifest.frames>MAX_LIVE_FRAMES||

@@ -64,6 +64,8 @@ try{
         packet.rgba=pixels.buffer;transfer=[pixels.buffer];
         packet.lastGoodFrame=lastGood=frame.index;
       }
+      // Delivered: drop the snapshot (records.length still counts frames).
+      cpu.state.records[frame.index-1]=null;
       // Keep worker at the actual video boundary until the display
       // releases it; this is not a replay of a prerecorded screenshot.
       const seq=Atomics.load(advance,0);

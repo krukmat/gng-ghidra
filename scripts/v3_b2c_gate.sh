@@ -30,5 +30,9 @@ node --test tests/test_v3_b2d_selection.mjs
 node --test tests/test_v3_b2c_browser_html.mjs
 node --test tests/test_v3_b2c_pixel_probe.mjs
 node --test tests/test_v3_b2c_live_controls.mjs
+node --check src/v3_b3_selection.mjs
+node --check src/v3_b3_tapes.mjs
+node --check src/v3_b3_ondemand.mjs
+node --test tests/test_v3_b3_selection.mjs tests/test_v3_b3_tapes.mjs
 bash scripts/r3-local-regression.sh
 echo V3_B2C_WIRING=PASS_ROM_FREE
