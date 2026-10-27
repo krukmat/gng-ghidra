@@ -208,3 +208,51 @@ test('reconstruction is disabled by default and cannot survive a session change'
   sample(on,1);sample(on,2);sample(on,3);
   assert.equal(sample(on,1,covered,'new').terrain.island,null);
 });
+
+// 2849..2870 regression: after an edge-anchored estimate under Arthur, only
+// interior green between his legs stays visible for the rest of the ride.
+const held=(options={})=>{
+  const t=createWaterObservationTracker({bodyBottomToFeetPx:3,
+    inferOccludedIsland:true,...options});
+  sample(t,1);sample(t,2);sample(t,3);
+  const r=sample(t,4,{x:205,bottom:193,islandFragments:[[180,184]]});
+  assert.equal(r.terrain.island.extentSource,'CURRENT_FRAGMENTS_AND_PREVIOUS_WIDTH');
+  return t;
+};
+const interior={x:205,bottom:193,islandFragments:[[199,202]]};
+
+test('both edges hidden keeps the edge-anchored extent with current interior green',()=>{
+  const t=held();
+  let r=sample(t,5,interior);
+  assert.deepEqual([r.terrain.island.left,r.terrain.island.right],[180,211]);
+  assert.equal(r.terrain.island.extentSource,'HELD_BODY_RELATIVE_UNDER_OCCLUSION');
+  assert.equal(r.terrain.island.edgeEvidenceFrame,4);
+  assert.equal(r.terrain.island.calibrated,false);
+  r=sample(t,6,interior);
+  assert.equal(r.terrain.island.occludedFrames,2);
+  assert.equal(r.support,'ISLAND');
+  assert.equal(r.grounded,true);
+});
+
+test('held extent is dropped on vertical motion, vanished green or time limit',()=>{
+  // Falling through: head and feet move down while green stays visible.
+  let t=held(),r=sample(t,5,{...interior,top:175,bottom:199});
+  assert.equal(r.terrain.island,null);
+  assert.equal(r.support,null);
+  // Water under the body: no current green; it does not come back by itself.
+  t=held();sample(t,5,interior);
+  r=sample(t,6,{x:205,bottom:193,islandFragments:[]});
+  assert.equal(r.terrain.island,null);
+  r=sample(t,7,interior);
+  assert.equal(r.terrain.island,null);
+  assert.equal(r.support,null);
+  // Green outside the held extent contradicts it.
+  t=held();r=sample(t,5,{x:205,bottom:193,islandFragments:[[199,202],[212,218]]});
+  assert.equal(r.terrain.island?.extentSource===
+    'HELD_BODY_RELATIVE_UNDER_OCCLUSION',false);
+  // Explicit temporal bound since the last edge evidence.
+  t=held({maxOcclusionHoldFrames:2});
+  assert.ok(sample(t,5,interior).terrain.island);
+  assert.ok(sample(t,6,interior).terrain.island);
+  assert.equal(sample(t,7,interior).terrain.island,null);
+});

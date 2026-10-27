@@ -18,7 +18,8 @@ export function createWaterObservationTracker({bodyBottomToFeetPx=null,
   maxGapFrames=12,historySamples=3,roiLeft=0,roiRight=255,
   bodyScanTop=96,bodyScanBottom=215,terrainOptions={},inferOccludedIsland=false,
   minIslandWidthSamples=2,islandWidthTolerancePx=2,occlusionBodyPaddingPx=8,
-  occlusionPositionTolerancePx=5,maxIslandSpeedPxPerFrame=4}={}){
+  occlusionPositionTolerancePx=5,maxIslandSpeedPxPerFrame=4,
+  maxOcclusionHoldFrames=240}={}){
   if((bodyBottomToFeetPx!==null&&(!finite(bodyBottomToFeetPx)||
       Math.abs(bodyBottomToFeetPx)>32))||
     !finite(supportHeightTolerancePx)||supportHeightTolerancePx<0||
@@ -35,12 +36,13 @@ export function createWaterObservationTracker({bodyBottomToFeetPx=null,
     islandWidthTolerancePx<0||!finite(occlusionBodyPaddingPx)||
     occlusionBodyPaddingPx<0||!finite(occlusionPositionTolerancePx)||
     occlusionPositionTolerancePx<0||!finite(maxIslandSpeedPxPerFrame)||
-    maxIslandSpeedPxPerFrame<=0)throw Error('BOT_WATER_OBSERVATION_OPTIONS');
+    maxIslandSpeedPxPerFrame<=0||!integer(maxOcclusionHoldFrames,1))
+    throw Error('BOT_WATER_OBSERVATION_OPTIONS');
   const velocity=createIslandVelocityTracker({maxGapFrames});
   let identity=null,lastFrame=null,history=[],supportHistory=[];
-  let islandWidth=null,widthSamples=0,islandTrack=null;
+  let islandWidth=null,widthSamples=0,islandTrack=null,pose=null;
   function clearBody(){history=[];supportHistory=[];}
-  function clearIsland(){islandWidth=null;widthSamples=0;islandTrack=null;}
+  function clearIsland(){islandWidth=null;widthSamples=0;islandTrack=null;pose=null;}
   function reset(){identity=null;lastFrame=null;clearBody();clearIsland();velocity.reset();}
   const unknown=(frame,session,reason)=>({kind:'UNKNOWN',frame,session,reason,
     arthur:null,support:null,grounded:null,terrain:null,motion:null,
@@ -56,6 +58,43 @@ export function createWaterObservationTracker({bodyBottomToFeetPx=null,
       velocity:speed!==null&&Math.abs(speed)<=maxIslandSpeedPxPerFrame?speed:null};
   }
 
+  // Body-relative extent from the latest frame whose island had edge evidence.
+  function rememberPose(island,body,frame){
+    pose=body.kind==='ARTHUR_SKIN_CANDIDATE'&&body.right>=island.left&&
+      body.left<=island.right&&body.top<=island.topY&&
+      body.bottom+occlusionBodyPaddingPx>=island.topY?
+      {frame,seen:frame,offset:island.left-body.x,width:island.right-island.left+1,
+        topY:island.topY,bodyTop:body.top}:null;
+  }
+
+  // Arthur plus a sprite drawn under him can hide BOTH outer edges for a
+  // whole ride. Hold the last edge-anchored body-relative extent only while
+  // current green pixels stay inside it and under the body, the head keeps
+  // its height, and the time limit holds. Never a support claim by itself.
+  function holdUnderOcclusion(terrain,body,frame){
+    const missing={...terrain,island:null,hasWaterGap:false},held=pose;
+    pose=null;
+    if(!held||body.kind!=='ARTHUR_SKIN_CANDIDATE'||!finite(terrain.leftBank?.right)||
+      frame-held.seen<1||frame-held.seen>maxGapFrames||
+      frame-held.frame>maxOcclusionHoldFrames||
+      Math.abs(body.top-held.bodyTop)>maxBodyBottomSpreadPx)return missing;
+    const left=Math.round(body.x+held.offset),right=left+held.width-1;
+    const tolerance=islandWidthTolerancePx;
+    const fragments=(terrain.islandFragments??[]).filter(f=>f.pixelEvidence>0&&
+      f.right>=left-tolerance&&f.left<=right+tolerance);
+    if(!fragments.length||
+      fragments.some(f=>f.left<left-tolerance||f.right>right+tolerance)||
+      !fragments.some(f=>f.right>=body.left&&f.left<=body.right))return missing;
+    pose={...held,seen:frame};
+    const island={left,right,topY:held.topY,
+      pixelEvidence:fragments.reduce((n,f)=>n+f.pixelEvidence,0),
+      extentEstimated:true,extentSource:'HELD_BODY_RELATIVE_UNDER_OCCLUSION',
+      observedWidthPx:held.width,widthSamples,visibleFragments:fragments,
+      edgeEvidenceFrame:held.frame,occludedFrames:frame-held.frame,calibrated:false};
+    const result={...terrain,island,hasWaterGap:true};
+    trackIsland(result,frame);return result;
+  }
+
   function withOccludedIsland(terrain,body,frame){
     if(!inferOccludedIsland)return terrain;
     const observed=terrain.island;
@@ -66,26 +105,26 @@ export function createWaterObservationTracker({bodyBottomToFeetPx=null,
       }else widthSamples++;
       if(widthSamples<minIslandWidthSamples||
         Math.abs(width-islandWidth)<=islandWidthTolerancePx){
-        trackIsland(terrain,frame);return terrain;
+        trackIsland(terrain,frame);rememberPose(observed,body,frame);return terrain;
       }
       // A shortened >=14px component may itself be an occluded island.
       // Keep the previously established full width rather than relearning it.
     }
-    const missing={...terrain,island:null,hasWaterGap:false};
+    const missing=()=>holdUnderOcclusion(terrain,body,frame);
     const bank=terrain.leftBank?.right,dt=islandTrack?frame-islandTrack.frame:0;
     if(widthSamples<minIslandWidthSamples||!islandTrack||!finite(bank)||
-      dt<1||dt>maxGapFrames||body.kind!=='ARTHUR_SKIN_CANDIDATE')return missing;
+      dt<1||dt>maxGapFrames||body.kind!=='ARTHUR_SKIN_CANDIDATE')return missing();
     const topY=terrain.islandFragments?.[0]?.topY??196;
     const pad=occlusionBodyPaddingPx;
-    if(body.top>topY||body.bottom+pad<topY)return missing;
+    if(body.top>topY||body.bottom+pad<topY)return missing();
     const predictedLeft=bank+islandTrack.relativeLeft+(islandTrack.velocity??0)*dt;
     const predictedRight=predictedLeft+islandWidth-1;
     const tolerance=occlusionPositionTolerancePx+maxIslandSpeedPxPerFrame*dt;
-    if(body.right+pad<predictedLeft||body.left-pad>predictedRight)return missing;
+    if(body.right+pad<predictedLeft||body.left-pad>predictedRight)return missing();
     const fragments=(terrain.islandFragments??[]).filter(f=>
       f.left>=predictedLeft-tolerance&&f.right<=predictedRight+tolerance&&
       f.pixelEvidence>0).sort((a,b)=>a.left-b.left);
-    if(!fragments.length)return missing;
+    if(!fragments.length)return missing();
     const leftEdge=fragments[0],rightEdge=fragments.at(-1),candidates=[];
     // A visible outer edge anchors position NOW; only the opposite, body-
     // covered edge is inferred from the old width. Never extrapolate without
@@ -103,12 +142,12 @@ export function createWaterObservationTracker({bodyBottomToFeetPx=null,
     const estimate=candidates.find(c=>Math.abs(c.left-predictedLeft)<=tolerance&&
       fragments.every(f=>f.left>=c.left-islandWidthTolerancePx&&
         f.right<=c.right+islandWidthTolerancePx));
-    if(!estimate)return missing;
+    if(!estimate)return missing();
     const island={...estimate,topY,pixelEvidence:fragments.reduce((n,f)=>n+f.pixelEvidence,0),
       extentEstimated:true,extentSource:'CURRENT_FRAGMENTS_AND_PREVIOUS_WIDTH',
       observedWidthPx:islandWidth,widthSamples,visibleFragments:fragments,calibrated:false};
     const result={...terrain,island,hasWaterGap:true};
-    trackIsland(result,frame);return result;
+    trackIsland(result,frame);rememberPose(island,body,frame);return result;
   }
 
   function observe({frame,session,rgba,width=256,height=224}={}){

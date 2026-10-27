@@ -52,13 +52,30 @@ const landedFrame=result.decisions.find(d=>d.phase==='LANDED')?.frame??null;
 const postLandingFrames=landedFrame===null?0:endFrame-landedFrame;
 const survived=result.metrics.status==='FRAMES_DONE'&&result.metrics.known&&
   result.metrics.livesLost===0;
-const firstPlatformObserved=landedFrame!==null&&postLandingFrames>=120&&survived&&
-  result.decisions.at(-1)?.phase==='LANDED';
+// M1 window: the 120 frames from LANDED, all still LANDED in the controller.
+// A later STOP is published, not hidden; independent checks stay separate.
+const windowRows=landedFrame===null?[]:observations.filter(o=>
+  o.frame>=landedFrame&&o.frame<landedFrame+120);
+let unsupportedRun=0,maxUnsupportedRun=0;
+for(const o of windowRows){
+  unsupportedRun=o.support==='ISLAND'&&o.grounded===true?0:unsupportedRun+1;
+  maxUnsupportedRun=Math.max(maxUnsupportedRun,unsupportedRun);
+}
+const boardingWindow=landedFrame===null?null:{fromFrame:landedFrame,
+  toFrame:landedFrame+119,frames:windowRows.length,
+  landedFrames:windowRows.filter(o=>o.phase==='LANDED').length,
+  supportFrames:windowRows.filter(o=>o.support==='ISLAND'&&o.grounded===true).length,
+  maxUnsupportedRun};
+const firstPlatformObserved=survived&&boardingWindow?.frames===120&&
+  boardingWindow.landedFrames===120;
+const firstStop=result.decisions.find(d=>d.phase==='STOP');
 const report={source,sourceTapeHash:sourceTape.sha256,bundleHash:result.bundleHash,
   configuration,startFrame,endFrame,metrics:result.metrics,tapeHash,
   outcome:firstPlatformObserved?'FIRST_PLATFORM_OBSERVED_AND_SURVIVED':'NOT_CONFIRMED',
-  landedFrame,postLandingFrames,stageClear:'UNVERIFIED',bossDefeated:'UNKNOWN',
-  firstPlatformObserved,transitions,observations};
+  landedFrame,postLandingFrames,boardingWindow,
+  stop:firstStop?{frame:firstStop.frame,reason:firstStop.reason}:null,
+  stageClear:'UNVERIFIED',bossDefeated:'UNKNOWN',
+  firstPlatformObserved,independentlyVerified:false,transitions,observations};
 writeFileSync(join(out,'report.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});
 for(const image of images)spawnSync('ffmpeg',['-hide_banner','-loglevel','error','-y',
   '-f','rawvideo','-pixel_format','rgba','-video_size','256x224','-i','pipe:0',
@@ -67,5 +84,5 @@ for(const image of images)spawnSync('ffmpeg',['-hide_banner','-loglevel','error'
 const {checkpoints,...metrics}=result.metrics;
 console.log('BOT_WATER_REPORT='+join(out,'report.json'));
 console.log('BOT_WATER_RESULT='+JSON.stringify({outcome:report.outcome,landedFrame,
-  postLandingFrames,metrics,transitions}));
+  postLandingFrames,boardingWindow,stop:report.stop,metrics,transitions}));
 if(result.metrics.status!=='FRAMES_DONE')process.exitCode=2;
