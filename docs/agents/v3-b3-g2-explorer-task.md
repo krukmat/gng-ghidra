@@ -1,8 +1,27 @@
 # Explorador con búsqueda (V3.B3 G2.1)
 
 Estado: E0 GO; E1 PARTIAL (posición y vidas validadas, fase provisional); E2 GO hasta
-`x=1606`, siguiente iteración STOP por estancamiento; E3 no necesario para
-esta cinta; E4 GO hasta el frame 2730. Checkpoint 27/10/2026.
+`x=1606`, siguiente iteración STOP por estancamiento y pérdida de vida; E3 no
+necesario para esta cinta; E4 GO hasta el frame 2730. Checkpoint 27/10/2026.
+
+**Dirección actual:** el objetivo es terminar el juego completo, incluidos los
+recorridos y niveles posteriores ([plan general](../plan-100pct-jugable-2026-10-26.md)).
+El operador indicó detener el bot si ya no progresa. La búsqueda está detenida
+en este STOP; no se ha superado el jefe ni completado la primera fase.
+
+### Revisión del atasco (27/10/2026)
+
+- Si se deja la mejor cinta sin más controles después del frame 2730,
+  `world_x=1606` queda fijo, las vidas bajan de 3 a 2 antes del 2900 y Arthur
+  reaparece al inicio hacia el 3200; `0x0052` sigue en 1. Por tanto,
+  `x=1606` es un máximo alcanzado, no una posición segura ni una victoria.
+- Desde el frame 2600, diez acciones sostenidas hasta el 3100 (quieto,
+  derecha, izquierda, disparo, salto y combinaciones) dieron la misma traza
+  de posición y vidas. Cambiar los controles tan tarde no resuelve la caída.
+- Desde el frame 2400, las mismas familias de acciones alteran la posición,
+  pero todas pierden una vida antes del 3100, sin transición de fase.
+  Los intentos terminaron; la próxima búsqueda deberá empezar antes del 2400
+  y exigir supervivencia posterior, además de avance, para aceptar una rama.
 
 ## Checkpoint ejecutado (g4, 27/10/2026)
 
