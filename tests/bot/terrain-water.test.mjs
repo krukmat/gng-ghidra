@@ -63,3 +63,18 @@ test('right bank must be at right edge and separated from island',()=>{
   assert.ok(result.rightBank.left>result.island.right+12);
   assert.equal(result.rightBank.verified,false);
 });
+
+test('far bank stays detectable after the departure bank scrolls out',()=>{
+  const sample=frame(-1,90);
+  for(let x=150;x<256;x++)for(let y=192;y<=206;y++)
+    sample.rgba.set([85,119,0,255],(y*256+x)*4);
+  const r=detectWaterTerrain(sample);
+  assert.equal(r.leftBank,null);
+  assert.deepEqual([r.rightBank.left,r.rightBank.right],[150,255]);
+  assert.equal(r.rightBank.verified,false);
+  // Land at the screen's left edge is never a far bank.
+  const edge=frame(-1,90);
+  for(let x=0;x<60;x++)for(let y=192;y<=206;y++)
+    edge.rgba.set([85,119,0,255],(y*256+x)*4);
+  assert.equal(detectWaterTerrain(edge).rightBank,null);
+});

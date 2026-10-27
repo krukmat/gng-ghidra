@@ -58,21 +58,18 @@ export function detectWaterTerrain({rgba,width=256,height=224,
   // lower it without confusing a disappearing water gap with a lost sprite.
   const island=shore===null?null:
     islands.find(v=>v.left>shore+minIslandSeparationPx)??null;
-  // Optional far bank requires physical edge connectivity AND clear water
-  // separation from the moving island. Still an unverified candidate.
-  const hasRight=banks.slice(-24).filter(n=>n>0).length>=12;
-  let rightBank=null;
-  if(hasRight&&island&&shore!==null){
-    for(let x=width-20;x>=12;x--){
-      if(banks.slice(x-12,x).filter(n=>n>1).length<2){
-        if(x>island.right+12)
-          rightBank={left:x,topY:bankTop,verified:false};
-        break;
-      }
-    }
-  }
+  // Land runs share the bank palette. The far bank must stay detectable after
+  // the departure bank scrolls out, so it no longer needs leftBank or island;
+  // it must start clear of the screen edge, the shore and any island.
+  const landSegments=runs(banks.map((n,x)=>n>1?x:null).filter(x=>x!==null))
+    .filter(([left,right])=>right-left+1>=24)
+    .map(([left,right])=>({left,right,topY:bankTop}));
+  const far=landSegments.find(s=>s.left>=12&&(shore===null||s.left>shore+12)&&
+    (!island||s.left>island.right+12));
+  const rightBank=far?{...far,verified:false}:null;
   return {kind:'TERRAIN_CANDIDATE',
     leftBank:shore===null?null:{right:shore},island,islandFragments,rightBank,
+    landSegments,
     hasWaterGap:!!(island&&shore!==null),verified:false};
 }
 export function createIslandVelocityTracker({maxGapFrames=20,

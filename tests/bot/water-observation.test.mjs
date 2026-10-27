@@ -5,13 +5,14 @@ import {createWaterObservationTracker} from '../../bot/perception/water-observat
 // Synthetic pixels encode terrain separation and the real corpus's 187..191
 // ground-height body-bottom variation, without shipping protected graphics.
 function pixels({x=80,top=169,bottom=189,shore=140,island=180,islandWidth=32,visible=true,
-  secondBody=false,islandFragments=null}={}){
+  secondBody=false,islandFragments=null,far=null}={}){
   const rgba=new Uint8Array(256*224*4);
   const paint=(left,right,y0,y1,color)=>{
     for(let y=y0;y<=y1;y++)for(let at=left;at<=right;at++)
       rgba.set([...color,255],(y*256+at)*4);
   };
-  paint(0,shore,192,206,[85,119,0]);
+  if(shore!==null)paint(0,shore,192,206,[85,119,0]);
+  if(far)paint(far[0],far[1],192,206,[85,119,0]);
   for(const [left,right] of islandFragments??[[island,island+islandWidth-1]])
     paint(left,right,196,200,[0,119,0]);
   if(visible)paint(x-8,x+8,top,bottom,[170,136,102]);
@@ -255,4 +256,36 @@ test('held extent is dropped on vertical motion, vanished green or time limit',(
   assert.ok(sample(t,5,interior).terrain.island);
   assert.ok(sample(t,6,interior).terrain.island);
   assert.equal(sample(t,7,interior).terrain.island,null);
+});
+
+// M2: by ~3020 the departure bank has scrolled out while Arthur rides the
+// platform; the far bank is the next land at the same surface height.
+test('held island survives the departure bank scrolling out',()=>{
+  const t=held();sample(t,5,interior);
+  let r=sample(t,6,{...interior,shore:null});
+  assert.equal(r.terrain.leftBank,null);
+  assert.equal(r.terrain.island.extentSource,'HELD_BODY_RELATIVE_UNDER_OCCLUSION');
+  r=sample(t,7,{...interior,shore:null});
+  assert.equal(r.support,'ISLAND');
+  assert.equal(r.grounded,true);
+});
+
+test('a fall after the departure bank scrolls out keeps no false support',()=>{
+  const t=held();sample(t,5,interior);
+  const r=sample(t,6,{...interior,shore:null,top:175,bottom:199});
+  assert.equal(r.terrain.island,null);
+  assert.equal(r.support,null);
+});
+
+test('far land supports RIGHT_BANK only under the feet and never over water',()=>{
+  const t=configured();let r;
+  for(let frame=1;frame<=3;frame++)r=sample(t,frame,{x:150,shore:null,far:[100,255]});
+  assert.equal(r.support,'RIGHT_BANK');
+  assert.equal(r.grounded,true);
+  assert.deepEqual([r.supportSurface.left,r.supportSurface.right],[100,255]);
+  assert.equal(r.terrain.rightBank.left,100);
+  const water=configured();
+  for(let frame=1;frame<=3;frame++)r=sample(water,frame,{x:60,shore:null,far:[100,255]});
+  assert.equal(r.support,null);
+  assert.equal(r.supportSurface,null);
 });

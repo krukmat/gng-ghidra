@@ -56,3 +56,67 @@ test('unknown support does not authorize a launch, and session changes stop',()=
   assert.equal(stopped.phase,'STOP');
   assert.equal(stopped.action,'neutral');
 });
+
+// M2: second hop after LANDED, from the held island to the far bank.
+const landedSkill=(options={})=>{
+  const p=createWaterSkill({flightFrames:38,runSpeedPxPerFrame:1.085,
+    takeoffBufferPx:9,...options});
+  for(let f=0;f<=6;f++)p.step(observation(f,{islandLeft:196-.8*(f+1)}));
+  for(let f=7;f<44;f++)p.step(observation(f,{support:null,grounded:false}));
+  p.step(observation(44,{islandLeft:120,support:'ISLAND'}));
+  p.step(observation(45,{islandLeft:120,support:'ISLAND'}));
+  assert.equal(p.step(observation(46,{islandLeft:110,support:'ISLAND',
+    arthur:{x:133}})).phase,'LANDED');
+  return p;
+};
+const ride=(frame,{distance=60,support='ISLAND',grounded=true,land=[0,255]}={})=>({
+  frame,session:'s',arthur:{x:128},support,grounded,
+  terrain:{leftBank:null,island:{left:110,right:140},
+    rightBank:distance===null?null:{left:128+distance},
+    landSegments:land?[{left:land[0],right:land[1]}]:[]}});
+
+test('hop is opt-in; LANDED survives the departure bank scrolling out',()=>{
+  const p=landedSkill();
+  for(let f=47;f<80;f++){
+    const r=p.step(ride(f,{distance:10}));
+    assert.equal(r.phase,'LANDED');
+    assert.equal(r.action,'neutral');
+  }
+});
+
+test('second hop waits for range, runs up, jumps and needs two RIGHT_BANK samples',()=>{
+  const p=landedSkill({hopMaxDistancePx:28});
+  assert.equal(p.step(ride(47,{distance:40})).action,'neutral');
+  assert.equal(p.step(ride(48,{distance:-2})).action,'neutral');
+  let r=p.step(ride(49,{distance:28}));
+  assert.deepEqual([r.phase,r.action],['HOP_RUNUP','right']);
+  for(let f=50;f<53;f++)assert.equal(p.step(ride(f)).action,'right');
+  r=p.step(ride(53));
+  assert.deepEqual([r.phase,r.action],['HOP_AIRBORNE','right_jump']);
+  for(let f=54;f<58;f++)assert.equal(p.step(ride(f,{support:null,grounded:false})).action,
+    'right_jump');
+  assert.equal(p.step(ride(58,{support:null,grounded:false})).action,'right');
+  // Contact before the calibrated flight time is not a landing.
+  assert.equal(p.step(ride(70,{support:'RIGHT_BANK'})).phase,'HOP_AIRBORNE');
+  assert.equal(p.step(ride(71,{support:'RIGHT_BANK'})).phase,'HOP_AIRBORNE');
+  for(let f=72;f<86;f++)p.step(ride(f,{support:null,grounded:null}));
+  assert.equal(p.step(ride(86,{support:'RIGHT_BANK'})).phase,'HOP_AIRBORNE');
+  r=p.step(ride(87,{support:'RIGHT_BANK'}));
+  assert.deepEqual([r.phase,r.action],['ASHORE','right']);
+  // The same land relabeled BANK at the screen edge still supports.
+  for(let f=88;f<110;f++)assert.equal(p.step(ride(f,{support:f%2?'BANK':'RIGHT_BANK'})).action,
+    'right');
+  r=p.step(ride(110,{support:'RIGHT_BANK',land:[0,135]}));
+  assert.deepEqual([r.action,r.reason],['neutral','HOLD_BEFORE_LAND_EDGE']);
+  for(let f=111;f<=123;f++)r=p.step(ride(f,{support:null,grounded:null}));
+  assert.deepEqual([r.phase,r.action,r.reason],['STOP','neutral','RIGHT_BANK_SUPPORT_LOST']);
+});
+
+test('an unobserved far-bank landing stops with buttons released',()=>{
+  const p=landedSkill({hopMaxDistancePx:28});
+  p.step(ride(47,{distance:20}));
+  let r;
+  for(let f=48;f<=105&&r?.phase!=='STOP';f++)r=p.step(ride(f,{support:null,grounded:false}));
+  assert.deepEqual([r.phase,r.action,r.reason],
+    ['STOP','neutral','RIGHT_BANK_LANDING_NOT_OBSERVED']);
+});

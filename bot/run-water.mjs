@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Bounded pixel-only first-platform episode, normal P1 inputs from reset.
+/** Bounded pixel-only water crossing episode, normal P1 inputs from reset.
  * The prefix is replayed normally; no snapshots, RAM decisions or continues.
  * Private reports/tapes/images stay under out/bot/.
  */
@@ -25,7 +25,9 @@ const sourceTape=resolveB3LabTape(resolve(root,source));
 const out=join(root,'out/bot','water-skill-'+new Date().toISOString().replace(/[:.]/g,'-'));
 mkdirSync(out,{recursive:true,mode:0o700});
 const configuration={flightFrames:38,runSpeedPxPerFrame:1.085,
-  takeoffBufferPx:16,runLeadFrames:4};
+  takeoffBufferPx:16,runLeadFrames:4,
+  // M2.1: far bank edge ~x1784; takeoff x>=1745 lands. 28px keeps >=11px margin.
+  hopMaxDistancePx:28};
 const tracker=createWaterObservationTracker({bodyBottomToFeetPx:3,
   supportHeightTolerancePx:5,terrainOptions:{minIslandSeparationPx:0},
   inferOccludedIsland:true,roiLeft:96,roiRight:235});
@@ -38,6 +40,7 @@ const result=await runVisualEpisode({root,events:sourceTape.events,startFrame,en
       reason:decision.reason,support:observation.support,grounded:observation.grounded,
       x:observation.arthur?.x??null,bodyBottom:observation.arthur?.bodyBottom??null,
       bank:observation.terrain?.leftBank?.right??null,
+      rightBank:observation.terrain?.rightBank?.left??null,
       island:observation.terrain?.island??null};
     observations.push(row);
     if(lastPhase!==decision.phase){transitions.push(row);lastPhase=decision.phase;
@@ -68,14 +71,27 @@ const boardingWindow=landedFrame===null?null:{fromFrame:landedFrame,
   maxUnsupportedRun};
 const firstPlatformObserved=survived&&boardingWindow?.frames===120&&
   boardingWindow.landedFrames===120;
+// M2 window: the 120 frames from ASHORE, all ASHORE, advancing while on land.
+const ashoreFrame=result.decisions.find(d=>d.phase==='ASHORE')?.frame??null;
+const shoreRows=ashoreFrame===null?[]:observations.filter(o=>
+  o.frame>=ashoreFrame&&o.frame<ashoreFrame+120);
+const shoreWindow=ashoreFrame===null?null:{fromFrame:ashoreFrame,
+  toFrame:ashoreFrame+119,frames:shoreRows.length,
+  ashoreFrames:shoreRows.filter(o=>o.phase==='ASHORE').length,
+  supportFrames:shoreRows.filter(o=>['RIGHT_BANK','BANK'].includes(o.support)&&
+    o.grounded===true).length,
+  advanceFrames:shoreRows.filter(o=>o.action==='right').length};
+const crossingObserved=survived&&shoreWindow?.frames===120&&
+  shoreWindow.ashoreFrames===120&&shoreWindow.advanceFrames>0;
 const firstStop=result.decisions.find(d=>d.phase==='STOP');
 const report={source,sourceTapeHash:sourceTape.sha256,bundleHash:result.bundleHash,
   configuration,startFrame,endFrame,metrics:result.metrics,tapeHash,
-  outcome:firstPlatformObserved?'FIRST_PLATFORM_OBSERVED_AND_SURVIVED':'NOT_CONFIRMED',
-  landedFrame,postLandingFrames,boardingWindow,
+  outcome:crossingObserved?'CROSSING_OBSERVED_AND_SURVIVED':
+    firstPlatformObserved?'FIRST_PLATFORM_OBSERVED_AND_SURVIVED':'NOT_CONFIRMED',
+  landedFrame,postLandingFrames,boardingWindow,ashoreFrame,shoreWindow,
   stop:firstStop?{frame:firstStop.frame,reason:firstStop.reason}:null,
   stageClear:'UNVERIFIED',bossDefeated:'UNKNOWN',
-  firstPlatformObserved,independentlyVerified:false,transitions,observations};
+  firstPlatformObserved,crossingObserved,independentlyVerified:false,transitions,observations};
 writeFileSync(join(out,'report.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});
 for(const image of images)spawnSync('ffmpeg',['-hide_banner','-loglevel','error','-y',
   '-f','rawvideo','-pixel_format','rgba','-video_size','256x224','-i','pipe:0',
@@ -84,5 +100,6 @@ for(const image of images)spawnSync('ffmpeg',['-hide_banner','-loglevel','error'
 const {checkpoints,...metrics}=result.metrics;
 console.log('BOT_WATER_REPORT='+join(out,'report.json'));
 console.log('BOT_WATER_RESULT='+JSON.stringify({outcome:report.outcome,landedFrame,
-  postLandingFrames,boardingWindow,stop:report.stop,metrics,transitions}));
+  postLandingFrames,boardingWindow,ashoreFrame,shoreWindow,stop:report.stop,metrics,
+  transitions}));
 if(result.metrics.status!=='FRAMES_DONE')process.exitCode=2;

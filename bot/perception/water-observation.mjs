@@ -74,7 +74,8 @@ export function createWaterObservationTracker({bodyBottomToFeetPx=null,
   function holdUnderOcclusion(terrain,body,frame){
     const missing={...terrain,island:null,hasWaterGap:false},held=pose;
     pose=null;
-    if(!held||body.kind!=='ARTHUR_SKIN_CANDIDATE'||!finite(terrain.leftBank?.right)||
+    // Body-relative, so it survives the departure bank scrolling out.
+    if(!held||body.kind!=='ARTHUR_SKIN_CANDIDATE'||
       frame-held.seen<1||frame-held.seen>maxGapFrames||
       frame-held.frame>maxOcclusionHoldFrames||
       Math.abs(body.top-held.bodyTop)>maxBodyBottomSpreadPx)return missing;
@@ -200,13 +201,22 @@ export function createWaterObservationTracker({bodyBottomToFeetPx=null,
     const upward=coherentDirection(-1),downward=coherentDirection(1);
     history.push({top:body.top,bottom:body.bottom});
     if(history.length>=historySamples)history.shift();
-    let supportCandidate=null,supportPointX=null;
+    let supportCandidate=null,supportPointX=null,supportSurface=null;
     if(arthur.feetYEstimate!==null){
       const near=y=>Math.abs(arthur.feetYEstimate-y)<=supportHeightTolerancePx;
       const bankFoot=arthur.feetXEstimates.find(x=>
         terrain.leftBank&&x<=terrain.leftBank.right-supportInsetPx);
       if(bankFoot!==undefined&&near(bankSurfaceY)){
         supportCandidate='BANK';supportPointX=bankFoot;
+      }
+      // Land beyond the departure bank, or any land once it has scrolled out.
+      for(const segment of terrain.landSegments??[]){
+        if(terrain.leftBank&&segment.left<=terrain.leftBank.right)continue;
+        const landFoot=arthur.feetXEstimates.find(x=>
+          x>=segment.left+supportInsetPx&&x<=segment.right-supportInsetPx);
+        if(landFoot===undefined||!near(bankSurfaceY))continue;
+        supportCandidate=supportCandidate===null?'RIGHT_BANK':'AMBIGUOUS';
+        supportPointX=landFoot;supportSurface=segment;break;
       }
       const island=terrain.island;
       const islandFoot=arthur.feetXEstimates.find(x=>island&&
@@ -233,6 +243,7 @@ export function createWaterObservationTracker({bodyBottomToFeetPx=null,
     const support=grounded===true?supportCandidate:null;
     return {...result,kind:'WATER_OBSERVATION_CANDIDATE',arthur,support,grounded,
       supportPointX:support===null?null:supportPointX,
+      supportSurface:support==='RIGHT_BANK'?supportSurface:null,
       reason:airborne?'COHERENT_VERTICAL_MOTION':stable?'TEMPORAL_SUPPORT_CANDIDATE':
         bodyBottomToFeetPx===null?'FOOT_OFFSET_UNCALIBRATED':
         supportCandidate===null?'NO_SUPPORT_CANDIDATE':'SUPPORT_NOT_YET_STABLE',
