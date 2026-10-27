@@ -107,6 +107,10 @@ flowchart TD
 
 ### G5 — Audio del hardware original (P1, paralelo a G3/G4)
 
+> **27/10/2026 — B-AUDIO-1 activado en paralelo:** contrato `gngb` Z80/2×YM2203, preflight de `gg2.bin`, observador opcional de `soundlatch` y reset, capturador MAME y comparador de comandos. **Sin ROM validada, MAME ejecutado ni audio sintetizado en este checkpoint.** [Tasks, evidencia y pasos Mac](audio-b1-foundation-2026-10-27.md).
+
+
+
 **Depende de:** G2 para tener eventos de juego útiles; investigación de driver ya disponible.
 
 - **G5.1:** contrato MainCPU→soundlatch→CPU Z80 (ROM privada de audio), sincronización, IRQ/reset y dos registros de **YM2203**. Elegir explícitamente núcleo exacto de Z80/síntesis o recompilación de audio; no reproducir MP3 ni pistas tomadas de MAME como banda sonora del producto.
