@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PRIVATE = ROOT / "out" / "audio"
 EXPECTED_RATE = 62500
-MAX_EVENTS = 250000
+MAX_EVENTS = 1000000
 MAX_CAPTURE_BYTES = 64 * 1024 * 1024
 EXPECTED_ROM_SHA1 = "7ef9ec5c2072e21c787a6bbf700033f50c759c1d"
 SAMPLE_LIMIT = 30000
