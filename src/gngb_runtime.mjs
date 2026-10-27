@@ -23,13 +23,15 @@ export class GngbRuntimeError extends Error{
 }
 
 export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PER_FRAME,
-  portRead=null,onPortRead=null}={}){
+  portRead=null,onPortRead=null,onAudioEvent=null}={}){
   if(!Number.isInteger(cyclesPerFrame)||cyclesPerFrame<1)
     throw Error('V2_B1_INVALID_IRQ_PERIOD');
   if(portRead!==null&&typeof portRead!=='function')
     throw Error('V3_B2A_INVALID_PORT_READER');
   if(onPortRead!==null&&typeof onPortRead!=='function')
     throw Error('V3_B2A_INVALID_PORT_OBSERVER');
+  if(onAudioEvent!==null&&typeof onAudioEvent!=='function')
+    throw Error('AUDIO_EVENT_HANDLER_INVALID');
   const mem=new Uint8Array(0x3000),km=new Uint8Array(0x3000);
   const palExt=new Uint8Array(0x100),pal=new Uint8Array(0x100);
   // machine_reset: palette RAM filled with 00/55/aa/ff, scroll zeroed.
@@ -48,6 +50,15 @@ export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PE
   $.unknown=(what,bits)=>fail('R35_T5_UNKNOWN_VALUE',{what,bits});
   $.bad=why=>fail('R35_T5_UNSUPPORTED',{why});
   const ev=(kind,...f)=>$.events.push([kind,...f]);
+  // Observation-only sound bus tap. Never executes or synthesizes sound.
+  const audioEvent=(kind,value,prev)=>{
+    if(onAudioEvent===null)return;
+    const cycle=$.C+prev;
+    if(!Number.isSafeInteger(prev)||prev<0||!Number.isSafeInteger(cycle)||cycle<0)
+      fail('AUDIO_EVENT_CYCLE_INVALID',{kind,prev});
+    onAudioEvent(Object.freeze({kind,value,cycle,
+      frame:Math.floor(cycle/cyclesPerFrame),pc:$.ipc}));
+  };
 
   const romByte=a=>{
     if(a>=0x6000)return code.fixed[a];
@@ -105,17 +116,22 @@ export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PE
     $.snapped=true;
     if(onFrame)onFrame($.records[$.records.length-1]);
   };
-  const apply=(a,v,mask)=>{
+  const apply=(a,v,mask,prev)=>{
     if(a<0x3000){mem[a]=v;km[a]=mask;return;}
     if(mask!==255)fail('R35_T5_UNKNOWN_IO_WRITE',{addr:a});
     if(a>=0x3800&&a<0x3900)palExt[a-0x3800]=v;
     else if(a>=0x3900&&a<0x3a00)pal[a-0x3900]=v;
-    else if(a===0x3a00)$.soundlatch=v;
+    else if(a===0x3a00){$.soundlatch=v;audioEvent('SOUNDLATCH_WRITE',v,prev);}
     else if(a>=0x3b08&&a<=0x3b0b){$.scroll[a-0x3b08]=v;$.writes.scroll++;}
     else if(a===0x3c00){
       $.dma=mem.slice(0x1e00,0x2000);$.dmaMask=km.slice(0x1e00,0x2000);
       $.writes.dma++;
-    }else if(a>=0x3d00&&a<=0x3d07){$.latch[a-0x3d00]=v&1;$.writes.latch++;}
+    }else if(a>=0x3d00&&a<=0x3d07){
+      const line=a-0x3d00, bit=v&1, previous=$.latch[line];
+      $.latch[line]=bit;$.writes.latch++;
+      // LS259 Q1: 0 asserts Z80 RESET and resets both YM2203s; 1 releases.
+      if(line===1&&previous!==bit)audioEvent('AUDIO_RESET_LINE',bit,prev);
+    }
     else if(a===0x3e00){$.bank=v===4?4:v&3;$.writes.bank++;}
     // ROM and unmapped writes are ignored, as on the board.
   };
@@ -123,7 +139,7 @@ export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PE
   // take the snapshot first (prev = last stop offset before this write).
   $.wk=(a,v,mask,prev)=>{
     if(!$.snapped&&$.C+prev>=$.T)snapshot();
-    apply(a,v,mask);
+    apply(a,v,mask,prev);
   };
   $.w=(a,v,prev)=>$.wk(a,v,255,prev);
   $.syncEnter=pc=>{ev('SYNC_ENTER',pc,$.cc,$.C);$.sync=true;};
