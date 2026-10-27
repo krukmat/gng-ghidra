@@ -98,9 +98,14 @@ test('B4 classification refines the 22 generic OTHER frontiers safely',()=>{
   for(const [opcode,family] of samples)assert.equal(classifyZ80Family(opcode),family);
 });
 
-test('B4 HALT is still a blocked frontier, not a disguised LD (HL),(HL)',()=>{
-  const rom=new Uint8Array(0x8000);rom[0]=0x76;
+test('B4 HALT has a dedicated compiled terminal step, not disguised LD (HL),(HL)',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0x76,0xcb,0x00],0);
   const r=compileZ80Prefix(rom);
-  assert.equal(r.compiled,0);
-  assert.equal(r.blockers[0].family,'HALT');
+  assert.equal(r.compiled,1);
+  assert.equal(r.blockers[0].family,'CB_BIT_ROTATE_PREFIX');
+  const generated=await import('data:text/javascript,'+encodeURIComponent(r.source));
+  const s={pc:0,t:0,halted:false,f:0x93,hl:0xc100};
+  generated.z80AotBlocks.get(0)(s,{});
+  assert.deepEqual([s.pc,s.t,s.halted,s.f,s.hl],[1,4,true,0x93,0xc100]);
 });
