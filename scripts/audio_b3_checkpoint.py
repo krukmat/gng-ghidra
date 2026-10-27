@@ -252,7 +252,9 @@ def read_tap_health(tape):
               "sound_latch_callbacks", "reset_callbacks",
               "disabled_side_effect_callbacks")
     extras = ("written_events", "format_errors", "write_errors", "flush_errors")
+    detailed = ("clock_errors", "value_errors", "clock_fallbacks")
     present = [k in obj for k in extras] if isinstance(obj, dict) else []
+    extra_present = [k in obj for k in detailed] if isinstance(obj, dict) else []
     if (not isinstance(obj, dict) or
         obj.get("kind") != "GNG_AUDIO_MAME_TAP_HEALTH_V1" or
         obj.get("tap_armed") is not True or
@@ -260,14 +262,18 @@ def read_tap_health(tape):
         any(type(obj.get(k)) is not int or obj.get(k) < 0 for k in fields)
         or (any(present) and not all(present))
         or (all(present) and any(type(obj.get(k)) is not int or
-            obj.get(k) < 0 for k in extras))):
+            obj.get(k) < 0 for k in extras))
+        or (any(extra_present) and not all(extra_present))
+        or (all(extra_present) and any(type(obj.get(k)) is not int or
+            obj.get(k) < 0 for k in detailed))):
         return {"status": "INVALID_TAP_HEALTH"}
     return {"status": "ARMED_CAPTURE_CLOSED" if obj["capture_closed"]
             else "ARMED_CAPTURE_NOT_CLOSED",
             "tap_armed": True,
             "capture_closed": obj["capture_closed"],
             **{k: obj[k] for k in fields},
-            **({k: obj[k] for k in extras} if all(present) else {})}
+            **({k: obj[k] for k in extras} if all(present) else {}),
+            **({k: obj[k] for k in detailed} if all(extra_present) else {})}
 
 
 def summarize_capture(tape):
@@ -277,7 +283,11 @@ def summarize_capture(tape):
     callbacks = sum(tap_health.get(k, 0) for k in (
         "ym_callbacks", "main_latch_callbacks",
         "sound_latch_callbacks", "reset_callbacks"))
-    if report["events"] == 0 and tap_health.get("format_errors", 0) > 0:
+    if report["events"] == 0 and tap_health.get("clock_errors", 0) > 0:
+        hint = "LUA_CLOCK_ACCESS_FAILURES"
+    elif report["events"] == 0 and tap_health.get("value_errors", 0) > 0:
+        hint = "LUA_NUMERIC_CONVERSION_FAILURES"
+    elif report["events"] == 0 and tap_health.get("format_errors", 0) > 0:
         hint = "LUA_EVENT_SERIALIZATION_FAILURES"
     elif report["events"] == 0 and (
             tap_health.get("write_errors", 0) > 0 or
@@ -373,6 +383,15 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None,
     # Regression / privacy guard is independent of partial Z80 reachability.
     verify_rom_identity()
     integrity = inspect_tape(tape)
+    health = read_tap_health(tape)
+    if health.get("status") == "ARMED_CAPTURE_CLOSED" and "written_events" in health:
+        if (health["written_events"] != integrity["events"]
+            or any(health.get(k, 0) != 0 for k in (
+                "format_errors", "write_errors", "flush_errors",
+                "clock_errors", "value_errors"))):
+            # A render from a truncated/missing row stream is not evidence
+            # for native replay. Preserve all inputs for local diagnosis.
+            raise B3Stop("NATIVE_TAPE_INCOMPLETE_OR_LOSSY")
     source = Path(ymfm_source).expanduser().resolve()
     if not source.is_dir():
         raise B3Stop("YMFM_SOURCE_MISSING")
@@ -435,6 +454,7 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None,
         "ym_waveform_parity_verified": False,
         "gameplay_audio_verified": False,
         "lab_pcm_generated": True,
+        "native_capture_health": health,
         "private_outputs_only": True,
         "rom_bytes_exported": False,
     }
