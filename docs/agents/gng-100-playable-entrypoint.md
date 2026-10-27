@@ -2,6 +2,7 @@
 
 **Propósito:** handoff operativo y puerta de entrada para un modelo sucesor de mayor capacidad.
 **Repositorio:** `krukmat/gng-ghidra` · **Rama:** `main` · **Checkpoint:** 26/10/2026.
+**Plan dedicado del bot (engine congelado):** [BT-0→BT-6 — rendimiento en gameplay](gng-bot-gameplay-plan-2026-10-27.md).
 **Plan de dependencias y aceptación:** [G0–G7 / H0–H6](../plan-100pct-jugable-2026-10-26.md).
 
 > **MANDATO INVARIABLE: lograr el 100% de jugabilidad auténtica de Ghosts ’n Goblins.**
