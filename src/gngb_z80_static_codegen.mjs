@@ -169,6 +169,20 @@ export function compileZ80Prefix(rom, {entry=0, limit=512}={}) {
         const dest=next(2+sign8(read8(pc,1)));length=2;
         lines=['$.pc='+dest+';','$.t+=12;'];targets=[dest];break;
       }
+      case 0x10: {
+        // DJNZ e: decrement B (high byte of BC) modulo 256, leave flags intact.
+        // Not taken: 8 T-states; taken: 13 T-states. Explore BOTH static edges.
+        const fallthrough=next(2),dest=next(2+sign8(read8(pc,1)));
+        length=2;
+        lines=[
+          'const b=((($.bc>>>8)-1)&255);',
+          '$.bc=((b<<8)|($.bc&255));',
+          '$.pc=(b!==0?'+dest+':'+fallthrough+');',
+          '$.t+=(b!==0?13:8);'
+        ];
+        targets=[fallthrough,dest];
+        break;
+      }
       case 0xcd: {
         const dest=w16(),ret=next(3);length=3;
         lines=['$.sp=($.sp-1)&65535;bus.write8($.sp,'+(ret>>8)+',$.t+11);',
