@@ -22,6 +22,11 @@ EXPECTED_SHA1 = b3.EXPECTED_ROM_SHA1
 RAW_LIMIT = 128 * 1024 * 1024
 MAX_MARKER_RECORDS = 2_500_000
 TRACE_MARKER = re.compile(r"\bAUDIOPC=([0-9A-Fa-f]{4})(?![0-9A-Fa-f])")
+# MAME 0.288 src/emu/debug/debugcpu.cpp tracer::update():
+# util::stream_format(*m_file, "%s: %s\\n", buffer.pc_to_string(pc), instruction)
+# Z80 uses four hexadecimal PC digits. This is an alternate instrument
+# source ONLY for a private audiocpu-selected trace, not an arbitrary hex scan.
+STANDARD_Z80_TRACE_PC = re.compile(r"^[ \\t]*([0-9A-Fa-f]{4}):[ \\t]+\\S")
 ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}\Z")
 HEALTH_KIND = "GNG_AUDIO_Z80_PC_TRACE_HEALTH_V1"
 
@@ -115,29 +120,71 @@ def capture(capture_id, *, mame="mame", rompath="roms",
     return {"mame_version": version, "mame_version_pinned": version == "0.289"}
 
 
-def profile(capture_id):
+def scan_native_trace(capture_id):
+    """Read existing private trace once; only return PC counters and safe stats.
+
+    Never prints disassembly, ROM data, memory, symbols or trace lines.
+    MAME 0.288 naturally emits "PC: disassembly" even without tracelog.
+    """
     files = paths(capture_id)
     heartbeat = checked_health(files["health"])
-    verify_sound_rom()
     trace = b3.ensure_private(files["trace"], must_exist=True)
     if trace.stat().st_size > RAW_LIMIT:
         raise TraceStop("TRACE_TOO_LARGE")
-    occurrences = Counter()
-    records = 0
-    # Iterating strictly line-by-line: never return source text or disassembly.
+    markers, standard = Counter(), Counter()
+    seen = {"raw_trace_bytes": trace.stat().st_size,
+            "lines_scanned": 0, "marker_pc_lines": 0,
+            "standard_disassembly_pc_lines": 0,
+            "unrecognized_lines": 0}
     try:
         with trace.open("r", encoding="utf8", errors="replace") as stream:
             for line in stream:
-                match = TRACE_MARKER.search(line)
-                if match is None:
-                    continue
-                records += 1
-                if records > MAX_MARKER_RECORDS:
+                seen["lines_scanned"] += 1
+                if seen["lines_scanned"] > MAX_MARKER_RECORDS * 2:
                     raise TraceStop("TRACE_RECORD_LIMIT")
-                pc = int(match.group(1), 16)
-                occurrences[pc] += 1
+                marker = TRACE_MARKER.search(line)
+                standard_pc = STANDARD_Z80_TRACE_PC.match(line)
+                if marker:
+                    markers[int(marker.group(1), 16)] += 1
+                    seen["marker_pc_lines"] += 1
+                if standard_pc:
+                    standard[int(standard_pc.group(1), 16)] += 1
+                    seen["standard_disassembly_pc_lines"] += 1
+                if not marker and not standard_pc:
+                    seen["unrecognized_lines"] += 1
+                if max(seen["marker_pc_lines"], seen["standard_disassembly_pc_lines"]) > MAX_MARKER_RECORDS:
+                    raise TraceStop("TRACE_RECORD_LIMIT")
     except OSError:
         raise TraceStop("TRACE_IO_STOP") from None
+    return seen, markers, standard, heartbeat
+
+
+def inspect(capture_id):
+    """For a failed b4trace1, audit RAW trace shape without sharing contents."""
+    seen, markers, standard, heartbeat = scan_native_trace(capture_id)
+    if markers:
+        status = "MARKED_PC_LINES_AVAILABLE"
+    elif standard:
+        status = "MAME_STANDARD_DISASSEMBLY_PC_LINES_RECOVERABLE"
+    else:
+        status = "NO_RECOGNIZED_PC_LINES"
+    return {"kind": "GNG_AUDIO_B4_Z80_PC_TRACE_INSPECT_V1",
+            "status": status,
+            **seen,
+            "trace_health": heartbeat,
+            "source_cpu_independently_verified": False,
+            "native_z80_parity_verified": False,
+            "rom_bytes_exported": False}
+
+
+def profile(capture_id):
+    files = paths(capture_id)
+    seen, markers, standard, heartbeat = scan_native_trace(capture_id)
+    verify_sound_rom()
+    occurrences = markers if markers else standard
+    source_format = ("DEBUGGER_ACTION_MARKERS" if markers
+                     else "STANDARD_MAME_DISASSEMBLY_LINES_NOT_PARITY")
+    records = sum(occurrences.values())
     if not occurrences:
         raise TraceStop("TRACE_MARKER_NOT_SEEN")
     sound_rom = {pc: count for pc, count in occurrences.items() if pc < 0x8000}
@@ -157,7 +204,11 @@ def profile(capture_id):
     return {
         "kind": "GNG_AUDIO_B4_Z80_PC_PROFILE_V1",
         "status": "PRIVATE_NATIVE_TRACE_PROFILE_NOT_CPU_PARITY",
-        "native_trace_pc_markers": records,
+        "native_trace_pc_markers": seen["marker_pc_lines"],
+        "native_trace_standard_pc_lines": seen["standard_disassembly_pc_lines"],
+        "selected_pc_line_records": records,
+        "pc_extraction_format": source_format,
+        "source_cpu_independently_verified": False,
         "unique_pc_addresses": len(occurrences),
         "unique_sound_rom_pcs": len(sound_rom),
         "unique_outside_sound_rom_pcs": len(occurrences) - len(sound_rom),
@@ -178,6 +229,8 @@ def main(argv=None):
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--capture", action="store_true")
     mode.add_argument("--profile", action="store_true")
+    mode.add_argument("--inspect", action="store_true",
+                      help="Classify saved raw trace structure without writing roots")
     parser.add_argument("--id", required=True)
     parser.add_argument("--mame", default="mame")
     parser.add_argument("--rompath", default="roms")
@@ -199,7 +252,7 @@ def main(argv=None):
         else:
             if args.lab_allow_unpinned_mame:
                 raise TraceStop("LAB_MAME_OVERRIDE_REQUIRES_CAPTURE")
-            result = profile(args.id)
+            result = inspect(args.id) if args.inspect else profile(args.id)
         print(json.dumps(result, separators=(",", ":")))
         return 0
     except (TraceStop, b3.B3Stop, OSError, ValueError):
