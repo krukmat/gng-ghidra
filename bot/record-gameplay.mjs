@@ -18,8 +18,10 @@ import {waitForAttractGate} from './live/wait-demo-gate.mjs';
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const BASE='http://127.0.0.1:18609';
 const DEMO=process.argv[2]==='--demo';
-const SECONDS=Number(DEMO?(process.argv[3]??240):(process.argv[2]??240)),FPS=20;
-if(process.argv.length>(DEMO?4:3))throw Error('BOT_RECORD_USAGE');
+const PRACTICE=process.argv[2]==='--practice';
+const SECONDS=Number(DEMO||PRACTICE?(process.argv[3]??240):
+  (process.argv[2]??240)),FPS=20;
+if(process.argv.length>(DEMO||PRACTICE?4:3))throw Error('BOT_RECORD_USAGE');
 if(!Number.isSafeInteger(SECONDS)||SECONDS<20||SECONDS>900)
   throw Error('BOT_RECORD_USAGE_SECONDS_20_TO_900');
 if(spawnSync('ffmpeg',['-version'],{stdio:'ignore'}).status!==0){
@@ -105,7 +107,8 @@ async function run(){
   const ledger=createFrameLedger();
   const notes={startedUtc:new Date().toISOString(),fps:FPS,
     source:'LIVE_REAL_AOT_GET_PIXELS',audio:false,
-    noInputInjected:true,maxSeconds:SECONDS,mode:DEMO?'ATTRACT_DEMO':'HUMAN_PLAY',
+    noInputInjected:true,maxSeconds:SECONDS,
+    mode:DEMO?'ATTRACT_DEMO':PRACTICE?'PRACTICE':'HUMAN_PLAY',
     stoppedBy:'UNKNOWN',halt:null,videoStatus:'UNKNOWN'};
   let tapeSaved=false,codecExit=null,encoderError='',recorded=0;
   const savedSessionTapes=new Set();
@@ -138,11 +141,12 @@ async function run(){
       if(!resume.ok)throw Error('BOT_RECORD_DEMO_RESUME_'+resume.status);
       console.log('BOT_RECORD_DEMO=RUNNING_WITHOUT_P1_INPUT');
     }
-    if(!DEMO&&process.platform==='darwin'){
+    if(!DEMO&&!PRACTICE&&process.platform==='darwin'){
       const opener=spawnSync('open',[BASE],{stdio:'ignore'});
       if(opener.status!==0)console.log('BOT_RECORD_OPEN_BROWSER='+BASE);
-    }else if(!DEMO)console.log('BOT_RECORD_OPEN_BROWSER='+BASE);
+    }else if(!DEMO&&!PRACTICE)console.log('BOT_RECORD_OPEN_BROWSER='+BASE);
     if(DEMO)console.log('BOT_RECORD_READY: observando demo sin controles.');
+    else if(PRACTICE)console.log('BOT_RECORD_READY: siguiendo práctica; admite pausa externa.');
     else{
       console.log('BOT_RECORD_READY: juega en la ventana del navegador.');
       console.log('BOT_RECORD_KEYS: 5=Coin, 1=Start, flechas=mover, Z=ataque, X=salto.');
@@ -204,6 +208,11 @@ async function run(){
             samples:recorded,lastGameFrame:gameFrame,
             seconds:Math.round((Date.now()-begun)/1000)}));
       }catch(error){
+        if(PRACTICE&&(error?.name==='TimeoutError'||
+          error?.name==='AbortError'||
+          String(error).includes('TimeoutError'))){
+          await sleep(200);continue;
+        }
         console.error('BOT_RECORD_FRAME_WARNING='+String(error.message??error));
         notes.stoppedBy='FRAME_ERROR';break;
       }
