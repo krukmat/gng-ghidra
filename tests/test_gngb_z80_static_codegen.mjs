@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {compileZ80Prefix,Z80StaticError} from '../src/gngb_z80_static_codegen.mjs';
+import {compileZ80Prefix,classifyZ80Family,Z80StaticError} from '../src/gngb_z80_static_codegen.mjs';
 
 test('compiled instructions are static JavaScript with private ROM provenance',()=>{
   const rom=new Uint8Array(0x8000);
@@ -24,4 +24,24 @@ test('unsupported opcode is an explicit blocked frontier',()=>{
 test('invalid ROM images or run limits fail closed',()=>{
   assert.throws(()=>compileZ80Prefix(new Uint8Array(10)),Z80StaticError);
   assert.throws(()=>compileZ80Prefix(new Uint8Array(0x8000),{limit:0}),Z80StaticError);
+});
+
+test('ROM-private frontier gives instruction family but never opcode bytes',()=>{
+  const examples=new Map([
+    [0xcb,'CB_BIT_ROTATE_PREFIX'],[0xed,'ED_EXTENDED_PREFIX'],
+    [0xdd,'DD_IX_PREFIX'],[0xfd,'FD_IY_PREFIX'],
+    [0x76,'HALT'],[0xfb,'EI'],[0xd3,'IO_PORT'],
+    [0x41,'LD_R_R'],[0x06,'LD_R_IMMEDIATE'],
+    [0xc5,'PUSH_RR'],[0xe1,'POP_RR'],[0x20,'JR_CONDITIONAL']
+  ]);
+  for(const [opcode,expected] of examples)
+    assert.equal(classifyZ80Family(opcode),expected);
+  const rom=new Uint8Array(0x8000);
+  rom[0]=0xed;
+  const result=compileZ80Prefix(rom);
+  assert.deepEqual(result.blockers,[{pc:0,reason:'UNSUPPORTED_Z80_OPCODE',
+    family:'ED_EXTENDED_PREFIX'}]);
+  assert.doesNotMatch(JSON.stringify(result.blockers),/"opcode"|"bytes"/);
+  assert.throws(()=>classifyZ80Family(-1),Z80StaticError);
+  assert.throws(()=>classifyZ80Family(256),Z80StaticError);
 });
