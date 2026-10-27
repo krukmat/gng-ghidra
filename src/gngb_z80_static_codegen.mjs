@@ -176,6 +176,7 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
     throw new Z80StaticError('AUDIO_Z80_SEEDS_INVALID');
   const entrypoints=[...new Set(roots)];
   const pending=[...entrypoints], visited=new Map(), blockers=[], attempted=new Set();
+  const staticPredecessor=new Map(); // PC-only static edge metadata
   const read8=(pc,i)=>{
     if(pc+i>=rom.length)throw new Z80StaticError('AUDIO_Z80_ROM_BOUNDARY',{pc});
     return rom[pc+i];
@@ -185,7 +186,11 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
     if(attempted.has(pc))continue;
     attempted.add(pc);
     if(pc<0 || pc>=0x8000){
-      blockers.push({pc,reason:'OUTSIDE_SOUND_ROM'});continue;
+      const predecessor=staticPredecessor.get(pc);
+      blockers.push(predecessor===undefined?
+        {pc,reason:'OUTSIDE_SOUND_ROM'}:
+        {pc,reason:'OUTSIDE_SOUND_ROM',source_pc:predecessor});
+      continue;
     }
     const opcode=rom[pc],next=n=>(pc+n)&0xffff;
     let lines=[],targets=[],length=1;
@@ -674,7 +679,10 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
     }
     const source='($,bus)=>{'+lines.join('')+'}';
     visited.set(pc,{pc,length,source});
-    for(const t of targets)if(!visited.has(t)&&!pending.includes(t))pending.push(t);
+    for(const t of targets) {
+      if(!staticPredecessor.has(t))staticPredecessor.set(t,pc);
+      if(!visited.has(t)&&!pending.includes(t))pending.push(t);
+    }
   }
   const status=(blockers.length || pending.length)?'PARTIAL_UNCERTIFIED':'SUPPORTED_PREFIX_ONLY';
   const source='// ROM-derived private Z80 AOT prefix; NOT a full audio engine.\n'+
