@@ -273,6 +273,15 @@ def inspect_chronology_diagnostics(tape):
         "sequence_gaps": 0,
         "sequence_duplicates_or_backwards": 0,
         "tick_regressions": 0,
+        "tick_regressions_cross_cpu_transition": 0,
+        "tick_regressions_same_cpu_transition": 0,
+        "tick_regressions_main_stream": 0,
+        "tick_regressions_audio_stream": 0,
+        "tick_regressions_ym_only": 0,
+        "tick_regression_size_1_tick": 0,
+        "tick_regression_size_2_to_191_ticks": 0,
+        "tick_regression_size_192_to_11999_ticks": 0,
+        "tick_regression_size_12000_or_more_ticks": 0,
         "frame_regressions": 0,
         "negative_clock_or_frame": 0,
         "invalid_chronology_types": 0,
@@ -280,6 +289,8 @@ def inspect_chronology_diagnostics(tape):
     }
     first_bad = None
     last_seq, last_tick, last_frame = 0, -1, -1
+    last_kind = None
+    last_main_tick, last_audio_tick, last_ym_tick = -1, -1, -1
     with tape.open("r", encoding="utf8") as stream:
         for line in stream:
             if not line.strip():
@@ -311,9 +322,37 @@ def inspect_chronology_diagnostics(tape):
                 else:
                     counters["sequence_duplicates_or_backwards"] += 1
                 bad = True
+            is_main = row["kind"] in ("SOUNDLATCH_WRITE", "AUDIO_RESET_WRITE")
+            is_ym = row["kind"] == "YM2203_WRITE"
             if tick < last_tick:
                 counters["tick_regressions"] += 1
+                prev_main = last_kind in ("SOUNDLATCH_WRITE", "AUDIO_RESET_WRITE")
+                switched = last_kind is not None and prev_main != is_main
+                counters["tick_regressions_cross_cpu_transition" if switched
+                         else "tick_regressions_same_cpu_transition"] += 1
+                difference = last_tick - tick
+                if difference == 1:
+                    bucket = "tick_regression_size_1_tick"
+                elif difference < 192:
+                    bucket = "tick_regression_size_2_to_191_ticks"
+                elif difference < 12000:
+                    bucket = "tick_regression_size_192_to_11999_ticks"
+                else:
+                    bucket = "tick_regression_size_12000_or_more_ticks"
+                counters[bucket] += 1
                 bad = True
+            if is_main:
+                if tick < last_main_tick:
+                    counters["tick_regressions_main_stream"] += 1
+                last_main_tick = tick
+            else:
+                if tick < last_audio_tick:
+                    counters["tick_regressions_audio_stream"] += 1
+                last_audio_tick = tick
+            if is_ym:
+                if tick < last_ym_tick:
+                    counters["tick_regressions_ym_only"] += 1
+                last_ym_tick = tick
             if frame < last_frame:
                 counters["frame_regressions"] += 1
                 bad = True
@@ -322,12 +361,25 @@ def inspect_chronology_diagnostics(tape):
                 bad = True
             if bad and first_bad is None:
                 first_bad = index
-            last_seq, last_tick, last_frame = seq, tick, frame
+            last_seq, last_tick, last_frame, last_kind = seq, tick, frame, row["kind"]
     return {
         "kind": "GNG_AUDIO_B3_CHRONOLOGY_DIAG_V1",
         "status": ("CHRONOLOGY_INVALID_NOT_RENDERABLE" if first_bad
                    else "NO_CHRONOLOGY_ERROR_OBSERVED"),
         "first_bad_event_index": first_bad,
+        "strict_lab_projection_possible": bool(first_bad) and (
+            counters["bad_sequence"] == 0 and
+            counters["tick_regressions"] > 0 and
+            counters["tick_regressions"] ==
+                counters["tick_regressions_cross_cpu_transition"] and
+            counters["tick_regressions_main_stream"] == 0 and
+            counters["tick_regressions_audio_stream"] == 0 and
+            counters["tick_regressions_ym_only"] == 0 and
+            counters["frame_regressions"] == 0 and
+            counters["negative_clock_or_frame"] == 0 and
+            counters["invalid_chronology_types"] == 0 and
+            counters["invalid_rows"] == 0
+        ),
         **counters,
         "capture_validated": False,
         "native_parity_verified": False,
