@@ -6,7 +6,7 @@ import {summarizeZ80Frontiers} from '../src/gngb_audio_frontier_report.mjs';
 
 const compileOne=async(bytes)=>{
   const rom=new Uint8Array(0x8000);
-  rom.set([...bytes,0xcb],0);
+  rom.set([...bytes,0xcb,0x40],0);
   const result=compileZ80Prefix(rom);
   assert.equal(result.compiled,1);
   assert.equal(result.blockers[0].pc,bytes.length);
