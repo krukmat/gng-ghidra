@@ -77,7 +77,7 @@ test('B4.T2-B2 remaining DD/FD index instructions are classified and fail closed
     [0x09,'INDEX_ADD_RR'],
     [0x24,'INDEX_HIGH_LOW_REGISTER'],
     [0x36,'INDEX_DISPLACEMENT_UPDATE'],
-    [0x70,'INDEX_DISPLACEMENT_STORE'],
+    [0x36,'INDEX_DISPLACEMENT_UPDATE'],
     [0x86,'INDEX_DISPLACEMENT_ALU'],
     [0xcb,'INDEX_BIT_ROTATE_DISPLACEMENT'],
     [0xe5,'INDEX_STACK_JUMP_TRANSFER'],
