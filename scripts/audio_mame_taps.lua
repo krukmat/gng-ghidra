@@ -39,7 +39,7 @@ local function capture(kind, address, data)
   local good_format, row = pcall(function()
     local tick = machine.time:as_ticks(12000000)
     return string.format(
-      '{"kind":"%s","seq":%d,"frame":%d,"tick12m":%d,"address":%d,"value":%d}\\n',
+      '{"kind":"%s","seq":%d,"frame":%d,"tick12m":%d,"address":%d,"value":%d}\n',
       kind, seq + 1, screen.frame_number, tick, address, data & 0xff)
   end)
   if not good_format or type(row) ~= "string" then
