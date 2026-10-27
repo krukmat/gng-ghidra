@@ -61,11 +61,15 @@ async function main() {
     console.log(JSON.stringify({...summary,rom_sha1_match:true,
       private_artifacts_safe:true}));
     process.exitCode=summary.status==='LAB_ADVANCE_OK'?0:2;
-  } catch {
+  } catch(e) {
+    // Allowlist our own error codes, never native stack/local path or
+    // private generated AOT JS source.
+    const reason=(typeof e?.code==='string'&&
+      /^AUDIO_[A-Z0-9_]{3,80}$/.test(e.code))?
+      e.code:'AUDIO_T3_PROBE_SETUP_STOP';
     console.log(JSON.stringify({
       kind:'GNG_AUDIO_B4_T3_Z80_NATIVE_ROM_LAB_PROBE_V1',
-      status:'STOP_SETUP_OR_COMPILE',
-      reason:'AUDIO_T3_PROBE_SETUP_STOP',
+      status:'STOP_SETUP_OR_COMPILE',reason,
       rom_bytes_exported:false,native_instruction_parity_verified:false,
       private_artifacts_safe:true
     }));
