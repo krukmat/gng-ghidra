@@ -128,6 +128,10 @@ async function run(){
       encoderError=(encoderError+b.toString('utf8')).slice(-1500);
     });
     let encoderClosed=false;
+    encoder.stdin.on('error',error=>{
+      encoderClosed=true;
+      encoderError=(encoderError+String(error)).slice(-1500);
+    });
     encoder.once('error',e=>{encoderClosed=true;encoderError=String(e);});
     encoder.once('close',()=>{encoderClosed=true;});
     const begun=Date.now();
