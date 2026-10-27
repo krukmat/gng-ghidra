@@ -12,6 +12,10 @@
  * Usage: H3_POKE=... node scripts/h3_boss_search.mjs <phase> [start=2200] [step=60] [end=9000]
  * Env: H3_SEED earlier tape to resume from, H3_WX/H3_WY/H3_WS/H3_WU progress weights (x, max y, score, climb = start y - min y),
  * H3_LAST save the last beam head instead of the best, H3_WA armour-loss penalty, H3_XCAP x cap (boss arena), H3_WIDTH beam width.
+ * H3_STEP overrides the positional segment length. H3_BACKTRACK=N enables
+ * backtracking N segments when every live branch dies; H3_BACKTRACK_LIMIT caps
+ * the number of retries (unlimited by default). Without these variables the
+ * original beam-only behaviour is unchanged.
  * Output: out/h3/boss/search-p<phase>-<frame>.json (inputs only, private).
  */
 import {createHash} from 'node:crypto';
@@ -32,10 +36,18 @@ const selected=selectB3Bundle(ROOT);
 if(!selected)throw Error('V3_B3_NO_CERTIFIED_BUNDLE');
 const {manifest,code}=loadFrozen(selected.dir);
 const {blocks}=await import(pathToFileURL(join(selected.dir,'program.mjs')).href);
-const [phase,START,K,END]=[0,2200,60,9000].map((d,i)=>Number(process.argv[2+i]??d));
+const [phase,START,ARG_K,END]=[0,2200,60,9000].map((d,i)=>Number(process.argv[2+i]??d));
+const K=Number(process.env.H3_STEP??ARG_K);
 const WIDTH=Number(process.env.H3_WIDTH??8);
+const BACKTRACK=Number(process.env.H3_BACKTRACK??0);
+const BACKTRACK_LIMIT=process.env.H3_BACKTRACK_LIMIT===undefined?Infinity:Number(process.env.H3_BACKTRACK_LIMIT);
 const WX=Number(process.env.H3_WX??1),WY=Number(process.env.H3_WY??0),WS=Number(process.env.H3_WS??0.02);
 const WU=Number(process.env.H3_WU??0),WA=Number(process.env.H3_WA??2000),XCAP=Number(process.env.H3_XCAP??65535);
+if(!Number.isInteger(K)||K<1)throw Error('H3_STEP_INVALID '+K);
+if(!Number.isInteger(WIDTH)||WIDTH<1)throw Error('H3_WIDTH_INVALID '+WIDTH);
+if(!Number.isInteger(BACKTRACK)||BACKTRACK<0)throw Error('H3_BACKTRACK_INVALID '+BACKTRACK);
+if(!(BACKTRACK_LIMIT===Infinity||Number.isInteger(BACKTRACK_LIMIT)&&BACKTRACK_LIMIT>=0))
+  throw Error('H3_BACKTRACK_LIMIT_INVALID '+BACKTRACK_LIMIT);
 const POKES=parseLabPokes();
 const actions=['right','right_fire','right_jump','right_fire_jump','right_late_jump',
   'fire','jump','duck_fire','left','left_fire','left_jump','up','up_fire','down'];
@@ -78,7 +90,10 @@ const value=(s,maxX,maxY,minY)=>s.phase!==phase?1e9:
   WX*Math.min(maxX,XCAP)+WY*maxY+WU*(s0.y-minY)+WS*s.score-WA*s.armor;
 let branches=0,halts=0;
 let beam=[{snap:board.lab.save(),events:[],s:s0,maxX:s0.x,maxY:s0.y,minY:s0.y,v:0,route:[]}],best=beam[0],done=null;
-for(let frame=START;frame+K<=END&&!done;frame+=K){
+let depth=0,backtracks=0;
+const history=new Map();
+while(START+(depth+1)*K<=END&&!done){
+  const frame=START+depth*K;
   const next=[];
   for(const p of beam)for(const a of actions){
     board.lab.restore(p.snap);dead=false;
@@ -95,15 +110,35 @@ for(let frame=START;frame+K<=END&&!done;frame+=K){
     if(s.phase!==phase){done=c;break;}
   }
   if(done)break;
-  if(!next.length){console.log('H3_BOSS_STOP_NO_LIVE_BRANCH '+frame);break;}
+  if(!next.length){
+    const targetDepth=depth+1-BACKTRACK;
+    const prior=history.get(targetDepth);
+    if(!BACKTRACK||backtracks>=BACKTRACK_LIMIT||targetDepth<1||!prior||prior.cursor>=prior.ranked.length){
+      console.log('H3_BOSS_STOP_NO_LIVE_BRANCH '+frame);break;
+    }
+    beam=prior.ranked.slice(prior.cursor,prior.cursor+WIDTH);
+    prior.cursor+=beam.length;backtracks++;
+    for(const d of history.keys())if(d>targetDepth)history.delete(d);
+    depth=targetDepth;
+    console.log('H3_BOSS_BACKTRACK from='+(frame+K)+' to='+(START+depth*K)+' depth='+BACKTRACK+
+      ' retry='+backtracks+' alternatives='+beam.length+' remaining='+(prior.ranked.length-prior.cursor));
+    continue;
+  }
   next.sort((a,b)=>b.v-a.v);
-  const seen=new Set();beam=[];
+  const seen=new Set(),ranked=[];
   for(const c of next){
     const key=[c.s.x,c.s.y,c.s.armor,c.s.handler,c.s.score,c.snap.hardware.scroll.join(',')].join(':');
-    if(seen.has(key))continue;seen.add(key);beam.push(c);if(beam.length===WIDTH)break;
+    if(seen.has(key))continue;seen.add(key);ranked.push(c);
+    if(!BACKTRACK&&ranked.length===WIDTH)break;
+  }
+  beam=ranked.slice(0,WIDTH);
+  if(BACKTRACK){
+    history.set(depth+1,{ranked,cursor:beam.length});
+    for(const d of history.keys())if(d<depth+1-BACKTRACK)history.delete(d);
   }
   if(beam[0].v>best.v)best=beam[0];
   if(((frame-START)/K)%5===4)console.log('H3_BOSS_PROGRESS f='+(frame+K)+' '+JSON.stringify(beam[0].s)+' maxX='+beam[0].maxX+' maxY='+beam[0].maxY);
+  depth++;
 }
 const win=done??(process.env.H3_LAST?beam[0]:best);
 const frames=(done?win.snap.recordCount:win.snap.recordCount)+300;
@@ -112,7 +147,10 @@ const metadata={schema:B3_TAPE_SCHEMA,profile:'explorer-g4',frames,
 const sha256=createHash('sha256').update(JSON.stringify(metadata)).digest('hex');
 const out=join(ROOT,'out/h3/boss');mkdirSync(out,{recursive:true,mode:0o700});
 const file=join(out,'search-p'+phase+'-'+win.snap.recordCount+'.json');
-writeFileSync(file,JSON.stringify({...metadata,sha256,h3:{poke:process.env.H3_POKE??'',route:win.route}})+'\n',{mode:0o600});
-console.log('H3_BOSS_RESULT '+(done?'PHASE_ADVANCED':'NOT_ADVANCED')+' frame='+win.snap.recordCount+' branches='+branches+' halts='+halts+' '+JSON.stringify(win.s));
+const search=BACKTRACK?{step:K,backtrack:BACKTRACK,
+  backtrackLimit:Number.isFinite(BACKTRACK_LIMIT)?BACKTRACK_LIMIT:'unlimited',backtracks}:{};
+writeFileSync(file,JSON.stringify({...metadata,sha256,h3:{poke:process.env.H3_POKE??'',route:win.route,...search}})+'\n',{mode:0o600});
+const retryResult=BACKTRACK?' backtracks='+backtracks:'';
+console.log('H3_BOSS_RESULT '+(done?'PHASE_ADVANCED':'NOT_ADVANCED')+' frame='+win.snap.recordCount+' branches='+branches+' halts='+halts+retryResult+' '+JSON.stringify(win.s));
 console.log('H3_BOSS_TAPE='+file);
 process.exitCode=done?0:2;
