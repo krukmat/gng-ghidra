@@ -89,7 +89,7 @@ test('ED LD I,A has 9 T-states and preserves flags',async()=>{
 });
 
 test('unimplemented ED retains semantic label, no instruction bytes exported',()=>{
-  const examples=[[0xb0,'ED_BLOCK_TRANSFER'],[0xb1,'ED_BLOCK_COMPARE'],
+  const examples=[[0xb1,'ED_BLOCK_COMPARE'],
                   [0x4d,'ED_RETI'],[0x40,'ED_IN_PORT'],[0x41,'ED_OUT_PORT']];
   for(const [second,expected] of examples){
     assert.equal(classifyZ80EdInstruction(second),expected);
@@ -371,7 +371,7 @@ test('B1 multiple independent roots expose multiple true frontiers, not blind re
   const rom=new Uint8Array(0x8000);
   rom.set([0xcb,0x11],0x0000);
   rom.set([0xdd,0x21],0x0100);
-  rom.set([0xed,0xb0],0x0200);
+  rom.set([0xed,0xb1],0x0200);
   const result=compileZ80Prefix(rom,{entries:[0,0x100,0x200,0x100]});
   assert.equal(result.status,'PARTIAL_UNCERTIFIED');
   assert.equal(result.compiled,0);
@@ -381,7 +381,7 @@ test('B1 multiple independent roots expose multiple true frontiers, not blind re
     {pc:0,reason:'UNSUPPORTED_Z80_OPCODE',family:'CB_BIT_ROTATE_PREFIX'},
     {pc:0x100,reason:'UNSUPPORTED_Z80_OPCODE',family:'DD_IX_PREFIX'},
     {pc:0x200,reason:'UNSUPPORTED_Z80_ED_INSTRUCTION',
-      family:'ED_EXTENDED_PREFIX',ed_instruction:'ED_BLOCK_TRANSFER'}
+      family:'ED_EXTENDED_PREFIX',ed_instruction:'ED_BLOCK_COMPARE'}
   ]);
   assert.deepEqual(result.visitedPcs,[]);
 });
