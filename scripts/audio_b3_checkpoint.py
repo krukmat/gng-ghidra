@@ -106,7 +106,8 @@ def verify_rom_identity():
     return True
 
 
-def capture_tape(mame, rompath, *, allow_unpinned_lab=False, metadata=None):
+def capture_tape(mame, rompath, *, allow_unpinned_lab=False,
+                 metadata=None, capture_id=None):
     if not shutil.which(mame) and not Path(mame).is_file():
         raise B3Stop("MAME_NOT_FOUND")
     version = call([mame, "-version"], timeout=10)
@@ -122,25 +123,38 @@ def capture_tape(mame, rompath, *, allow_unpinned_lab=False, metadata=None):
     if metadata is not None:
         metadata.update({"mame_version": actual_version,
                          "mame_version_pinned": is_pinned})
-    if OUT_TAPE.exists() or OUT_MAME_WAV.exists():
-        # Do not destroy an earlier native session's private evidence.
-        # To reuse it choose --tape; otherwise archive/rename it privately first.
+    if capture_id is not None and (type(capture_id) is not str or
+            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}", capture_id) is None):
+        raise B3Stop("MAME_CAPTURE_ID_INVALID")
+    tape_path = (OUT_TAPE if capture_id is None else
+                 PRIVATE / ("mame-audio-events-" + capture_id + ".jsonl"))
+    wav_path = (OUT_MAME_WAV if capture_id is None else
+                PRIVATE / ("mame-native-audio-" + capture_id + ".wav"))
+    tape_path = ensure_private(tape_path)
+    wav_path = ensure_private(wav_path)
+    if tape_path.exists() or wav_path.exists():
+        # Preserve operator's prior MAME evidence, never overwrite on retry.
         raise B3Stop("MAME_CAPTURE_OUTPUT_ALREADY_EXISTS")
+    if metadata is not None:
+        metadata["reference_wav_path"] = wav_path
     argv = [mame, "gngb", "-rompath", str(rompath),
             "-autoboot_script", "scripts/audio_mame_taps.lua",
-            "-autoboot_delay", "0", "-wavwrite", str(OUT_MAME_WAV)]
+            "-autoboot_delay", "0", "-wavwrite", str(wav_path)]
     # Interactive native session; stop MAME after representative title/gameplay audio.
     try:
+        import os
+        env = dict(os.environ)
+        env["GNG_AUDIO_TAP_OUT"] = str(tape_path)
         result = subprocess.run(argv, cwd=ROOT, timeout=180, stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL, check=False)
+                                stderr=subprocess.DEVNULL, env=env, check=False)
     except (OSError, subprocess.TimeoutExpired):
         raise B3Stop("MAME_CAPTURE_STOP") from None
     if result.returncode != 0:
         raise B3Stop("MAME_CAPTURE_STOP")
-    return ensure_private(OUT_TAPE, must_exist=True)
+    return ensure_private(tape_path, must_exist=True)
 
 
-def inspect_tape(tape):
+def inspect_tape(tape, *, require_ym=True):
     tape = ensure_private(tape, must_exist=True)
     if tape.stat().st_size > MAX_CAPTURE_BYTES:
         raise B3Stop("TAPE_TOO_LARGE")
@@ -151,6 +165,8 @@ def inspect_tape(tape):
     prior_seq = 0
     first_ym_tick = None
     reset_after_first_write = False
+    resets_asserted = 0
+    resets_released = 0
     lines = 0
     with tape.open("r", encoding="utf8") as handle:
         for line in handle:
@@ -183,6 +199,8 @@ def inspect_tape(tape):
             elif k == "AUDIO_RESET_WRITE":
                 if addr != 0x3d01 or value not in (0, 1):
                     raise B3Stop("TAPE_BAD_RESET")
+                resets_asserted += (value == 0)
+                resets_released += (value == 1)
                 if first_ym_tick is not None and value == 0:
                     reset_after_first_write = True
             elif k == "SOUNDLATCH_WRITE" and addr != 0x3a00:
@@ -191,7 +209,7 @@ def inspect_tape(tape):
                 raise B3Stop("TAPE_BAD_LATCH")
             kinds[k] += 1
             prior_tick, prior_frame, prior_seq = tick, frame, seq
-    if not kinds["YM2203_WRITE"]:
+    if require_ym and not kinds["YM2203_WRITE"]:
         raise B3Stop("TAPE_NO_YM_EVENTS")
     if reset_after_first_write:
         # Current ymfm offline renderer has no timed reset event support.
@@ -201,7 +219,45 @@ def inspect_tape(tape):
             "ym_chip_1_writes": ym_chip_writes[1],
             "sound_commands": kinds["SOUNDLATCH_WRITE"],
             "latch_reads": kinds["Z80_LATCH_READ"],
-            "first_ym_tick": first_ym_tick}
+            "first_ym_tick": first_ym_tick,
+            "reset_asserted_writes": resets_asserted,
+            "reset_released_writes": resets_released,
+            "last_observed_frame": prior_frame,
+            "last_observed_tick12m": prior_tick}
+
+
+def summarize_capture(tape):
+    """Diagnostic metadata only; never emit raw ROM, YM register values, or audio."""
+    report = inspect_tape(tape, require_ym=False)
+    if report["events"] == 0:
+        hint = "NO_TAP_BUS_EVENTS_OBSERVED"
+    elif report["ym_writes"]:
+        hint = "YM_EVENTS_PRESENT"
+    elif report["latch_reads"]:
+        hint = "Z80_LATCH_READS_BUT_NO_YM_WRITES"
+    elif report["sound_commands"]:
+        hint = "MAIN_SOUND_COMMANDS_BUT_NO_Z80_LATCH_READS"
+    elif report["reset_asserted_writes"] and not report["reset_released_writes"]:
+        hint = "RESET_WRITE_ASSERTED_NO_RELEASE_OBSERVED"
+    else:
+        hint = "NO_YM_WRITES_CAUSE_UNDETERMINED"
+    return {
+        "kind": "GNG_AUDIO_B3_CAPTURE_DIAG_V1",
+        "status": "ACTIVITY_SUMMARY_NOT_NATIVE_PARITY",
+        "events_total": report["events"],
+        "ym_writes": report["ym_writes"],
+        "ym_chip_0_writes": report["ym_chip_0_writes"],
+        "ym_chip_1_writes": report["ym_chip_1_writes"],
+        "sound_commands": report["sound_commands"],
+        "latch_reads": report["latch_reads"],
+        "reset_asserted_writes": report["reset_asserted_writes"],
+        "reset_released_writes": report["reset_released_writes"],
+        "last_observed_frame": report["last_observed_frame"],
+        "activity_hint": hint,
+        "z80_execution_verified": False,
+        "mame_tap_coverage_verified": False,
+        "rom_bytes_exported": False,
+    }
 
 
 def wav_metrics(source, *, expected_rate=None, max_ms=SAMPLE_LIMIT):
