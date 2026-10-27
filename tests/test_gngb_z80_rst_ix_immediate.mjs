@@ -79,7 +79,7 @@ test('B4 RST stack decrements wrap from 0000 to FFFE',async()=>{
 
 test('B4 unsupported DD indexed forms still stop with semantic family not raw bytes',()=>{
   for(const [second,want] of [[0x22,'INDEX_LD_RR_ABSOLUTE'],
-    [0x70,'INDEX_DISPLACEMENT_STORE'],[0xcb,'INDEX_BIT_ROTATE_DISPLACEMENT']]){
+    [0x36,'INDEX_DISPLACEMENT_UPDATE'],[0xcb,'INDEX_BIT_ROTATE_DISPLACEMENT']]){
     const rom=new Uint8Array(0x8000);rom.set([0xdd,second],0);
     const result=compileZ80Prefix(rom);
     assert.equal(result.compiled,0);
