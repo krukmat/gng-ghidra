@@ -62,3 +62,27 @@ Código de capturas actualizado y parseado en validación estática;
 No hay ejecución automática del bot en el agua ni prueba de derrota del
 jefe. Siguiente entrada requerida, si la demo efectivamente muestra
 el salto, es su `review.zip`; el usuario **no necesita jugar**.
+
+
+## Corrección B5.1 — carrera al iniciar demo
+
+Error observado en Mac: el servidor se inicia con éxito y declara
+B3_G4, pero la consulta inmediata a /state todavía muestra
+operatorPause=false. La pausa del primer VBlank aparece después del
+primer frame conocido. El grabador anterior lanzaba prematuramente
+BOT_RECORD_DEMO_NOT_PAUSED.
+
+Solución en main: bot/live/wait-demo-gate.mjs espera esa pausa durante
+un máximo de 30 segundos, sin mandar controles ni continuar el motor.
+Abortar si hay HALT, cambia la sesión, el operador cancela o se agota
+el plazo. Solo entonces bot/record-gameplay.mjs llama a /continue.
+
+Pruebas ROM-free del gate: 5/5 PASS en harness V8 aislado sobre el código
+recuperado de main; falta prueba integral con bundle B3_G4 en Mac.
+
+Comando para repetir:
+
+    git pull --ff-only && node bot/record-gameplay.mjs --demo 240
+
+Si no encuentra pausa, informar el nuevo error específico
+BOT_DEMO_GATE_WAIT_TIMEOUT o BOT_DEMO_GATE_ENGINE_HALT_*.
