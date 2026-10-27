@@ -70,6 +70,11 @@ export function classifyZ80Family(opcode) {
     case 0x27: case 0x2f: case 0x37: case 0x3f: return 'ALU_FLAG_MISC';
     case 0x22: case 0x2a: case 0x32: case 0x3a: return 'LD_DIRECT';
     case 0x00: return 'NOP';
+    case 0x09: case 0x19: case 0x29: case 0x39: return 'ADD_HL_RR';
+    case 0x02: case 0x0a: case 0x12: case 0x1a: return 'LD_ACCUMULATOR_INDIRECT';
+    case 0x07: case 0x0f: case 0x17: case 0x1f: return 'ROTATE_ACCUMULATOR';
+    case 0xe9: return 'JP_INDIRECT';
+    case 0xf9: return 'LD_SP_HL';
   }
   if(opcode>=0x40&&opcode<=0x7f)return 'LD_R_R';
   if(opcode>=0x80&&opcode<=0xbf)return 'ALU_REGISTER';
@@ -283,6 +288,70 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
           'const hi=bus.read8($.sp,$.t+7);$.sp=($.sp+1)&65535;',
           '$.pc=(hi<<8)|lo;$.t+=10;'];targets=[];break;
       default:
+        if(opcode>=0x40 && opcode<=0x7f && opcode!==0x76) {
+          // LD r,r'; HALT remains unsupported. 4T reg, 7T memory.
+          const dst=(opcode>>>3)&7,src=opcode&7;
+          const memory=dst===6||src===6;
+          const from=src===6?'bus.read8($.hl,$.t+7)':r8ReadSource[src];
+          const write=dst===6?'bus.write8($.hl,value,$.t+7);':r8WriteSource[dst];
+          lines=['const value='+from+';',write,
+            '$.pc='+next(1)+';','$.t+='+String(memory?7:4)+';'];
+          targets=[next(1)];
+          break;
+        }
+        if(opcode>=0x80 && opcode<=0xbf) {
+          // ADD/ADC/SUB/SBC/AND/XOR/OR/CP A,r; static operand selection.
+          const alu=(opcode>>>3)&7,src=opcode&7;
+          const memory=src===6;
+          const from=memory?'bus.read8($.hl,$.t+7)':r8ReadSource[src];
+          lines=['const rhs='+from+';','const a=$.a;'];
+          if(alu<=3 || alu===7) {
+            const sub=alu===2||alu===3||alu===7;
+            const carry=(alu===1||alu===3)?'($.f&1)':'0';
+            lines.push('const carry='+carry+';');
+            if(sub)lines.push(
+              'const raw=a-rhs-carry;const result=raw&255;',
+              'const h=(a&15)<((rhs&15)+carry);',
+              'const ov=(((a^rhs)&(a^result)&128)!==0);',
+              '$.f='+(alu===7?'(rhs&0xa8)':'(result&0xa8)')+
+                '|(result===0?64:0)|(h?16:0)|(ov?4:0)|2|(raw<0?1:0);'
+            );
+            else lines.push(
+              'const raw=a+rhs+carry;const result=raw&255;',
+              'const h=((a&15)+(rhs&15)+carry)>15;',
+              'const ov=(((~(a^rhs))&(a^result)&128)!==0);',
+              '$.f=(result&0xa8)|(result===0?64:0)|(h?16:0)|(ov?4:0)|(raw>255?1:0);'
+            );
+            if(alu!==7)lines.push('$.a=result;');
+          } else {
+            const expr=alu===4?'a&rhs':alu===5?'a^rhs':'a|rhs';
+            lines.push(
+              'const result=('+expr+')&255;',
+              'let parity=result;parity^=parity>>>4;parity^=parity>>>2;parity^=parity>>>1;',
+              '$.f=(result&0xa8)|(result===0?64:0)|'+(alu===4?'16':'0')+'|((parity&1)===0?4:0);',
+              '$.a=result;'
+            );
+          }
+          lines.push('$.pc='+next(1)+';','$.t+='+String(memory?7:4)+';');
+          targets=[next(1)];
+          break;
+        }
+        if((opcode&0xc7)===0xc0) {
+          // RET NZ/Z/NC/C/PO/PE/P/M: 5T miss; 11T return.
+          const condition=(opcode>>>3)&7;
+          const mask=[64,64,1,1,4,4,128,128][condition];
+          const set=(condition&1)===1;
+          lines=[
+            'const take=(($.f&'+mask+')!==0)==='+String(set)+';',
+            'if(take){',
+            'const lo=bus.read8($.sp,$.t+5);$.sp=($.sp+1)&65535;',
+            'const hi=bus.read8($.sp,$.t+8);$.sp=($.sp+1)&65535;',
+            '$.pc=(hi<<8)|lo;$.t+=11;',
+            '}else{$.pc='+next(1)+';$.t+=5;}'
+          ];
+          targets=[next(1)];
+          break;
+        }
         if((opcode&0xc7)===0x06) {
           // LD r,n: B/C/D/E/H/L/A = 7 T; LD (HL),n = 10 T.
           // Operand and register selection are resolved at build time.
