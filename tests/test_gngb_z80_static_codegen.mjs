@@ -39,8 +39,8 @@ test('ROM-private frontier gives instruction family but never opcode bytes',()=>
   const rom=new Uint8Array(0x8000);
   rom[0]=0xed;
   const result=compileZ80Prefix(rom);
-  assert.deepEqual(result.blockers,[{pc:0,reason:'UNSUPPORTED_Z80_OPCODE',
-    family:'ED_EXTENDED_PREFIX'}]);
+  assert.deepEqual(result.blockers,[{pc:0,reason:'UNSUPPORTED_Z80_ED_INSTRUCTION',
+    family:'ED_EXTENDED_PREFIX',ed_instruction:'ED_UNASSIGNED_OR_UNDOCUMENTED'}]);
   assert.doesNotMatch(JSON.stringify(result.blockers),/"opcode"|"bytes"/);
   assert.throws(()=>classifyZ80Family(-1),Z80StaticError);
   assert.throws(()=>classifyZ80Family(256),Z80StaticError);
@@ -112,4 +112,45 @@ test('ED 16-bit register-pair instruction classifier respects register selection
     [0x43,'ED_LD_DIRECT_RR'],[0x73,'ED_LD_DIRECT_RR'],
     [0x4b,'ED_LD_RR_DIRECT'],[0x7b,'ED_LD_RR_DIRECT']
   ]) assert.equal(classifyZ80EdInstruction(second),kind);
+});
+
+test('DJNZ branches on B after wrapping decrement and preserves C, flags and A', async()=>{
+  const rom=new Uint8Array(0x8000);
+  // LD BC, 0x0107 ; DJNZ +2 -> 0x0007 ; NOP fallthrough ; RET at target.
+  rom.set([0x01,0x07,0x01,0x10,0x02,0x00,0x00,0xc9],0);
+  const compiled=compileZ80Prefix(rom);
+  assert.equal(compiled.blockers.length,0);
+  const output=await import('data:text/javascript,'+encodeURIComponent(compiled.source));
+  const jump=output.z80AotBlocks.get(3);
+  assert.equal(typeof jump,'function');
+  const options=[
+    {bc:0x0207,expectedBC:0x0107,target:7,cycles:13},
+    {bc:0x0107,expectedBC:0x0007,target:5,cycles:8},
+    {bc:0x0007,expectedBC:0xff07,target:7,cycles:13}
+  ];
+  for(const x of options){
+    const state={pc:3,bc:x.bc,f:0xd7,a:0x89,t:41};
+    jump(state,{});
+    assert.deepEqual(
+      [state.pc,state.bc,state.f,state.a,state.t],
+      [x.target,x.expectedBC,0xd7,0x89,41+x.cycles]
+    );
+  }
+  assert.equal(output.z80AotBlocks.has(5),true);
+  assert.equal(output.z80AotBlocks.has(7),true);
+});
+
+test('DJNZ negative displacement loops safely, including self-loop',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0x10,0xfe,0xc9],0); // DJNZ -2 (back to PC 0), or fallthrough at 2
+  const result=compileZ80Prefix(rom);
+  assert.equal(result.blockers.length,0);
+  assert.equal(result.compiled,2);
+  const module=await import('data:text/javascript,'+encodeURIComponent(result.source));
+  const step=module.z80AotBlocks.get(0);
+  const state={pc:0,bc:0x0201,t:0,f:0xa5};
+  step(state,{});
+  assert.deepEqual([state.pc,state.bc,state.t,state.f],[0,0x0101,13,0xa5]);
+  step(state,{});
+  assert.deepEqual([state.pc,state.bc,state.t,state.f],[2,0x0001,21,0xa5]);
 });
