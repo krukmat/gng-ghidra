@@ -18,7 +18,8 @@ test('B1 report groups separate branch frontiers; family order is deterministic'
     {family:'DD_IX_PREFIX',blocked_static_pcs:1,first_pc:4,priority:'P0'}
   ]);
   assert.deepEqual(report.frontiers,[
-    {pc:2,family:'CB_BIT_ROTATE_PREFIX',reason:'UNSUPPORTED_Z80_OPCODE'},
+    {pc:2,family:'CB_BIT_ROTATE_PREFIX',reason:'UNSUPPORTED_Z80_OPCODE',
+      cb_instruction:'CB_ROTATE_SHIFT'},
     {pc:4,family:'DD_IX_PREFIX',reason:'UNSUPPORTED_Z80_OPCODE',
       indexed_instruction:'INDEX_LD_RR_ABSOLUTE'}
   ]);
