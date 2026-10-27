@@ -130,13 +130,17 @@ def capture_tape(mame, rompath, *, allow_unpinned_lab=False,
                  PRIVATE / ("mame-audio-events-" + capture_id + ".jsonl"))
     wav_path = (OUT_MAME_WAV if capture_id is None else
                 PRIVATE / ("mame-native-audio-" + capture_id + ".wav"))
+    health_path = (PRIVATE / "mame-audio-health.json" if capture_id is None else
+                   PRIVATE / ("mame-audio-health-" + capture_id + ".json"))
     tape_path = ensure_private(tape_path)
     wav_path = ensure_private(wav_path)
-    if tape_path.exists() or wav_path.exists():
+    health_path = ensure_private(health_path)
+    if tape_path.exists() or wav_path.exists() or health_path.exists():
         # Preserve operator's prior MAME evidence, never overwrite on retry.
         raise B3Stop("MAME_CAPTURE_OUTPUT_ALREADY_EXISTS")
     if metadata is not None:
         metadata["reference_wav_path"] = wav_path
+        metadata["tap_health_path"] = health_path
     argv = [mame, "gngb", "-rompath", str(rompath),
             "-autoboot_script", "scripts/audio_mame_taps.lua",
             "-autoboot_delay", "0", "-wavwrite", str(wav_path)]
@@ -145,6 +149,7 @@ def capture_tape(mame, rompath, *, allow_unpinned_lab=False,
         import os
         env = dict(os.environ)
         env["GNG_AUDIO_TAP_OUT"] = str(tape_path)
+        env["GNG_AUDIO_TAP_HEALTH_OUT"] = str(health_path)
         result = subprocess.run(argv, cwd=ROOT, timeout=180, stdout=subprocess.DEVNULL,
                                 stderr=subprocess.DEVNULL, env=env, check=False)
     except (OSError, subprocess.TimeoutExpired):
@@ -226,10 +231,50 @@ def inspect_tape(tape, *, require_ym=True):
             "last_observed_tick12m": prior_tick}
 
 
+def read_tap_health(tape):
+    """Read allowlisted Lua instrumentation counters; never raw capture content."""
+    tape = ensure_private(tape, must_exist=True)
+    match = re.fullmatch(r"mame-audio-events(?:-([A-Za-z0-9_-]+))?\\.jsonl",
+                         tape.name)
+    if match is None:
+        return {"status": "NOT_AVAILABLE_NONSTANDARD_TAPE_NAME"}
+    suffix = ("-" + match.group(1)) if match.group(1) else ""
+    target = ensure_private(PRIVATE / ("mame-audio-health" + suffix + ".json"))
+    if not target.is_file():
+        return {"status": "NOT_AVAILABLE_LEGACY_CAPTURE"}
+    if target.stat().st_size > 4096:
+        return {"status": "INVALID_TAP_HEALTH"}
+    try:
+        obj = json.loads(target.read_text(encoding="utf8"))
+    except (OSError, ValueError, UnicodeError):
+        return {"status": "INVALID_TAP_HEALTH"}
+    fields = ("frames_observed", "ym_callbacks", "main_latch_callbacks",
+              "sound_latch_callbacks", "reset_callbacks",
+              "disabled_side_effect_callbacks")
+    if (not isinstance(obj, dict) or
+        obj.get("kind") != "GNG_AUDIO_MAME_TAP_HEALTH_V1" or
+        obj.get("tap_armed") is not True or
+        type(obj.get("capture_closed")) is not bool or
+        any(type(obj.get(k)) is not int or obj.get(k) < 0 for k in fields)):
+        return {"status": "INVALID_TAP_HEALTH"}
+    return {"status": "ARMED_CAPTURE_CLOSED" if obj["capture_closed"]
+            else "ARMED_CAPTURE_NOT_CLOSED",
+            "tap_armed": True,
+            "capture_closed": obj["capture_closed"],
+            **{k: obj[k] for k in fields}}
+
+
 def summarize_capture(tape):
     """Diagnostic metadata only; never emit raw ROM, YM register values, or audio."""
     report = inspect_tape(tape, require_ym=False)
-    if report["events"] == 0:
+    tap_health = read_tap_health(tape)
+    if report["events"] == 0 and tap_health.get("status") == "ARMED_CAPTURE_CLOSED" \\
+            and tap_health.get("frames_observed", 0) > 0:
+        hint = "FRAMES_ADVANCED_NO_BUS_TAP_CALLBACKS"
+    elif report["events"] == 0 and tap_health.get("tap_armed") is True \\
+            and tap_health.get("frames_observed") == 0:
+        hint = "TAPS_ARMED_BUT_NO_FRAMES_OBSERVED"
+    elif report["events"] == 0:
         hint = "NO_TAP_BUS_EVENTS_OBSERVED"
     elif report["ym_writes"]:
         hint = "YM_EVENTS_PRESENT"
@@ -254,6 +299,7 @@ def summarize_capture(tape):
         "reset_released_writes": report["reset_released_writes"],
         "last_observed_frame": report["last_observed_frame"],
         "activity_hint": hint,
+        "tap_health": tap_health,
         "z80_execution_verified": False,
         "mame_tap_coverage_verified": False,
         "rom_bytes_exported": False,
