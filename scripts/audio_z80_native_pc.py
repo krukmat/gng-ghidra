@@ -26,7 +26,7 @@ TRACE_MARKER = re.compile(r"\bAUDIOPC=([0-9A-Fa-f]{4})(?![0-9A-Fa-f])")
 # util::stream_format(*m_file, "%s: %s\\n", buffer.pc_to_string(pc), instruction)
 # Z80 uses four hexadecimal PC digits. This is an alternate instrument
 # source ONLY for a private audiocpu-selected trace, not an arbitrary hex scan.
-STANDARD_Z80_TRACE_PC = re.compile(r"^[ \\t]*([0-9A-Fa-f]{4}):[ \\t]+\\S")
+STANDARD_Z80_TRACE_PC = re.compile(r"^[ \t]*([0-9A-Fa-f]{4}):[ \t]+\S")
 ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}\Z")
 HEALTH_KIND = "GNG_AUDIO_Z80_PC_TRACE_HEALTH_V1"
 
