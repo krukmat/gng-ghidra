@@ -13,7 +13,7 @@ export class AudioZ80ProbeStop extends Error {
   constructor(code){super(code);this.code=code;}
 }
 export async function probeZ80SoundExecution(rom,roots,{
-  targetTStates=12500,maxSteps=100000,latchValue=null
+  targetTStates=12500,maxSteps=100000,latchValue=null,nativeControls=null
 }={}) {
   if(!(rom instanceof Uint8Array)||rom.length!==0x8000||
      !Array.isArray(roots)||roots.length<1||roots.length>64||
@@ -22,8 +22,31 @@ export async function probeZ80SoundExecution(rom,roots,{
      targetTStates>3000000||
      !Number.isInteger(maxSteps)||maxSteps<1||maxSteps>1000000||
      (latchValue!==null&&(!Number.isInteger(latchValue)||latchValue<0||
-                          latchValue>255)))
+                          latchValue>255))||
+     (nativeControls!==null&&latchValue!==null))
     throw new AudioZ80ProbeStop('AUDIO_T3_PROBE_INVALID_CONFIGURATION');
+  if(nativeControls!==null) {
+    if(!nativeControls||typeof nativeControls!=='object'||
+       nativeControls.kind!=='GNG_AUDIO_B4_T3_PRIVATE_NATIVE_CONTROLS_V1'||
+       nativeControls.clock!=='RESET_RELEASE_RELATIVE_MASTER_12MHZ'||
+       nativeControls.main_sound_controls_only!==true||
+       nativeControls.irq_phase_native_verified!==false||
+       (nativeControls.pre_release_latch!==null&&
+        (!Number.isInteger(nativeControls.pre_release_latch)||
+         nativeControls.pre_release_latch<0||nativeControls.pre_release_latch>255))||
+       !Array.isArray(nativeControls.events)||nativeControls.events.length>4096)
+      throw new AudioZ80ProbeStop('AUDIO_T3_PROBE_CONTROLS_INVALID');
+    let prior=-1;
+    for(const event of nativeControls.events) {
+      if(!event||event.kind!=='SOUNDLATCH_WRITE'||
+         !Number.isSafeInteger(event.tick12m)||
+         event.tick12m<0||event.tick12m%8!==0||
+         event.tick12m<prior||event.tick12m>120000000||
+         !Number.isInteger(event.value)||event.value<0||event.value>255)
+        throw new AudioZ80ProbeStop('AUDIO_T3_PROBE_CONTROLS_INVALID');
+      prior=event.tick12m;
+    }
+  }
   const compiled=compileZ80Prefix(rom,{entries:roots,limit:16384});
   // A data: module stays in process memory; never persisted or returned.
   const generated=await import('data:text/javascript,'+
@@ -41,10 +64,39 @@ export async function probeZ80SoundExecution(rom,roots,{
   z80.syncBoardReset();
   if(latchValue!==null)
     bus.applyMainEvent({kind:'SOUNDLATCH_WRITE',value:latchValue,cycle:0});
+  if(nativeControls?.pre_release_latch!==null&&
+     nativeControls?.pre_release_latch!==undefined)
+    bus.applyMainEvent({kind:'SOUNDLATCH_WRITE',
+      value:nativeControls.pre_release_latch,cycle:0});
+  let appliedSoundCommands=0,maxSoundCommandLatenessTStates=0;
+  const recordedControls=nativeControls?.events??[];
+  const nextCommandOffset=recordedControls.length?
+    recordedControls[0].tick12m/4:null;
   let runtimeStatus='LAB_ADVANCE_OK';
   let runtimeStopCode=null,advance=null;
   try {
-    advance=z80.advanceTo(targetTStates,{maxSteps});
+    for(const event of recordedControls) {
+      const target=event.tick12m/4;
+      if(target>targetTStates)break;
+      const remaining=maxSteps-z80.snapshot().executedSteps;
+      if(remaining<1)
+        throw new AudioZ80ProbeStop('AUDIO_T3_PROBE_STEP_BUDGET_STOP');
+      if(target>z80.state.t)
+        z80.advanceTo(target,{maxSteps:remaining});
+      // The main event is applied only AFTER completing the current Z80
+      // instruction; crossing the event tick is bounded and reported.
+      const lag=z80.state.t-target;
+      if(lag>64)
+        throw new AudioZ80ProbeStop('AUDIO_T3_PROBE_CONTROL_PHASE_STOP');
+      maxSoundCommandLatenessTStates=Math.max(maxSoundCommandLatenessTStates,lag);
+      bus.applyMainEvent({kind:'SOUNDLATCH_WRITE',
+        value:event.value,cycle:event.tick12m/8});
+      appliedSoundCommands++;
+    }
+    const remaining=maxSteps-z80.snapshot().executedSteps;
+    if(targetTStates>z80.state.t&&remaining<1)
+      throw new AudioZ80ProbeStop('AUDIO_T3_PROBE_STEP_BUDGET_STOP');
+    advance=z80.advanceTo(targetTStates,{maxSteps:Math.max(1,remaining)});
   } catch(e) {
     runtimeStatus='STOP_BEFORE_TARGET';
     const code=e?.code;
@@ -70,6 +122,13 @@ export async function probeZ80SoundExecution(rom,roots,{
     cpu_halted_at_stop:state.halted,
     ym_port_writes_from_running_z80:ymWrites,
     ym1_writes:ymChip1Writes,ym2_writes:ymChip2Writes,
+    native_sound_controls_supplied:nativeControls!==null,
+    native_sound_controls_total:recordedControls.length,
+    native_sound_controls_applied:appliedSoundCommands,
+    first_sound_command_tstates_after_release:nextCommandOffset,
+    max_sound_command_lateness_tstates:maxSoundCommandLatenessTStates,
+    sound_control_phase_native_verified:false,
+    native_ym_events_replayed:false,
     scheduler_target_overshoot:advance?.boundaryOvershootTStates??null,
     native_mame_same_rom_verified:false,
     native_instruction_parity_verified:false,
