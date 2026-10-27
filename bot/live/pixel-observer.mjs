@@ -5,6 +5,7 @@
 import {detectWaterTerrain,createIslandVelocityTracker}
   from '../perception/terrain-water.mjs';
 import {detectArthurSkin} from '../perception/arthur-skin.mjs';
+import {detectRedDemon} from '../perception/red-demon.mjs';
 export function createLivePixelObserver({base='http://127.0.0.1:18609',
   fetchImpl=fetch,maxFrameGap=24}={}){
   const tracker=createIslandVelocityTracker({maxGapFrames:maxFrameGap});
@@ -33,6 +34,7 @@ export function createLivePixelObserver({base='http://127.0.0.1:18609',
     const terrain=detectWaterTerrain({rgba:bytes});
     const arthur=detectArthurSkin({rgba:bytes,roiLeft:96,roiRight:165});
     const motion=tracker.observe({frame,session:String(session),terrain});
+    const demon=detectRedDemon({rgba:bytes});
     prior={frame,session};
     return {status:'OBSERVED_CANDIDATES',frame,session,
       bankX:terrain.leftBank?.right??null,
@@ -40,7 +42,8 @@ export function createLivePixelObserver({base='http://127.0.0.1:18609',
       islandRight:terrain.island?.right??null,
       arthurX:arthur.kind==='ARTHUR_SKIN_CANDIDATE'?arthur.x:null,
       islandVelocity:motion.status==='MOTION_CANDIDATE'?motion.velocity:null,
-      bossDefeated:'UNKNOWN',grounded:'UNKNOWN',rightBank:'UNKNOWN',
+      redDemon:demon.status,bossDefeated:'UNKNOWN',grounded:'UNKNOWN',
+      rightBank:terrain.rightBank?.left??null,
       gameplay:'STOP_UNCALIBRATED'};
   }
   return {sample};
