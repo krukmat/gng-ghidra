@@ -9,6 +9,41 @@ export class Z80StaticError extends Error {
 }
 const sign8=x=>(x&128)?x-256:x;
 
+const r8ReadSource=[
+  '($.bc>>>8)&255','$.bc&255','($.de>>>8)&255','$.de&255',
+  '($.hl>>>8)&255','$.hl&255',null,'$.a'
+];
+const r8WriteSource=[
+  '$.bc=(($.bc&255)|(value<<8));',
+  '$.bc=(($.bc&65280)|value);',
+  '$.de=(($.de&255)|(value<<8));',
+  '$.de=(($.de&65280)|value);',
+  '$.hl=(($.hl&255)|(value<<8));',
+  '$.hl=(($.hl&65280)|value);',
+  null,
+  '$.a=value;'
+];
+// Selected at offline compile-time. Generated functions contain no opcode decode.
+function compileIncDecR(opcode,next) {
+  const index=(opcode>>>3)&7,increment=(opcode&7)===4;
+  const memory=index===6;
+  const old=memory?'bus.read8($.hl,$.t+4)':r8ReadSource[index];
+  const updated=increment?'(old+1)&255':'(old-1)&255';
+  const half=increment?'(old&15)===15':'(old&15)===0';
+  const overflow=increment?'old===127':'old===128';
+  const lines=[
+    'const old='+old+';',
+    'const value='+updated+';',
+    '$.f=($.f&1)|(value&0xa8)|(value===0?0x40:0)|('+
+      half+'?0x10:0)|('+overflow+'?0x04:0)'+(increment?'':'|0x02')+';',
+    memory?'bus.write8($.hl,value,$.t+8);':r8WriteSource[index],
+    '$.pc='+next+';',
+    '$.t+='+String(memory?11:4)+';'
+  ];
+  return lines;
+}
+
+
 /**
  * ROM-private diagnostic categories: never emit instruction bytes or operands.
  * This classifies the Z80 instruction family, not its correctness or reachability.
@@ -194,6 +229,13 @@ export function compileZ80Prefix(rom, {entry=0, limit=512}={}) {
           'const hi=bus.read8($.sp,$.t+7);$.sp=($.sp+1)&65535;',
           '$.pc=(hi<<8)|lo;$.t+=10;'];targets=[];break;
       default:
+        if((opcode&0xc7)===0x05 || (opcode&0xc7)===0x04) {
+          // DEC/INC B,C,D,E,H,L,(HL),A: signed-8-bit flag semantics.
+          // Register operand: 4 T-states; (HL): 11 T-states.
+          lines=compileIncDecR(opcode,next(1));
+          targets=[next(1)];
+          break;
+        }
         blockers.push({pc,reason:'UNSUPPORTED_Z80_OPCODE',family:classifyZ80Family(opcode)});
         continue;
     }
