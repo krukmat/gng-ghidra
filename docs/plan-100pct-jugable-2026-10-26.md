@@ -139,7 +139,7 @@ flowchart TD
 | --- | --- | --- |
 | **H0: motor real** | AOT + render + puertos | PASS (B2-C/B2-D, parcial vídeo) |
 | **H1: crédito + Start** | Créditos y cambio visual de pantalla, comparados con MAME | **GO (V3.B3)**: idéntico byte a byte a MAME 0.288 |
-| **H2: primer prototipo jugable** | Arthur controlable + 5 min + no `UNCOMPILED` | **CASI GO**: Arthur controlable; 6,4 min de juego por bot idénticos a MAME offline; **en vivo, g4 completa 24.000 frames (~8 min) sin HALT** con `sustainA`/`sustainB` (G1.4: bloques multi-entrada y 241 tablas de salto estáticas). Falta la sesión humana |
+| **H2: primer prototipo jugable** | Arthur controlable + 5 min + no `UNCOMPILED` | **CASI GO**: Arthur controlable; 6,4 min de juego por bot idénticos a MAME offline; **en vivo, g4 completa 24.000 frames (~8 min) sin HALT** con `sustainA`/`sustainB`, y `botA` 18.000 frames (G1.4: bloques multi-entrada y 241 tablas de salto estáticas). Falta la sesión humana |
 | **H3: primer nivel completo** | G3 GO + derrota/respawn | PENDIENTE |
 | **H4: contenido completo** | G4 GO, ambas vueltas, final verdadero | PENDIENTE |
 | **H5: paridad audiovisual** | G5 y G6 GO | PENDIENTE |
