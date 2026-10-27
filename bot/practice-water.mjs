@@ -7,7 +7,7 @@
  * The encounter with the red demon is NOT guaranteed killed by this tape.
  */
 import {spawn,spawnSync} from 'node:child_process';
-import {mkdirSync,writeFileSync,existsSync} from 'node:fs';
+import {mkdirSync,writeFileSync,existsSync,readFileSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
@@ -15,6 +15,12 @@ import {resolveB3LabTape} from '../src/v3_b3_external_tape.mjs';
 import {waitForAttractGate} from './live/wait-demo-gate.mjs';
 import {buildPracticePlayback,playbackDue}
   from './live/practice-playback.mjs';
+import {readReplayContactPng,replayContactFrame}
+  from './perception/png-contact.mjs';
+import {comparePracticeWitness}
+  from './live/practice-witness.mjs';
+import {createPracticeHandoffUI}
+  from './live/practice-handoff-ui.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const BASE='http://127.0.0.1:18609';
@@ -38,6 +44,8 @@ const save=(name,value)=>writeFileSync(join(directory,name),
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let server=null,recorder=null,serverLog='',recorderLog='',stopRequested=false;
 let expectedSession=null,handoff=false,browserOpened=false;
+let frozen=false,resumed=false,ui=null,uiPhase='BOOT',uiReason=null;
+let handoffUI=null;
 let recordZip=null,recorderFinished=false;
 process.on('SIGINT',()=>{stopRequested=true;});
 process.on('SIGTERM',()=>{stopRequested=true;});
@@ -120,16 +128,25 @@ async function boot(){
     throw Error('BOT_PRACTICE_SESSION_CHANGED');
   console.log('BOT_PRACTICE_GATE=READY frame='+gate.frame);
 }
-function startBrowserAndRecorder(){
+async function startBrowserAndRecorder(){
+  handoffUI=createPracticeHandoffUI({
+    readStatus:()=>({phase:uiPhase,reason:uiReason}),
+    onResume:async()=>{
+      if(!frozen||uiPhase!=='FROZEN')throw Error('PRACTICE_NOT_FROZEN');
+      process.kill(server.pid,'SIGCONT');
+      frozen=false;resumed=true;uiPhase='PLAYING';
+      console.log('BOT_PRACTICE_RESUMED=TRUE');
+    }});
+  ui=await handoffUI.start();
   if(process.platform==='darwin'){
-    const opened=spawnSync('open',[BASE],{stdio:'ignore'});
+    const opened=spawnSync('open',[ui],{stdio:'ignore'});
     browserOpened=opened.status===0;
   }
-  console.log('BOT_PRACTICE_BROWSER='+BASE);
+  console.log('BOT_PRACTICE_BROWSER='+ui);
   // This child attaches to the ALREADY RUNNING server. It records only
   // native RGBA + real original input tape and does not press gameplay keys.
   recorder=spawn(process.execPath,
-    [join(ROOT,'bot/record-gameplay.mjs'),'300'],
+    [join(ROOT,'bot/record-gameplay.mjs'),'--practice','900'],
     {cwd:ROOT,stdio:['ignore','pipe','pipe'],detached:true});
   captureLog(recorder,'recorder');
   recorder.once('close',()=>{recorderFinished=true;});
@@ -144,7 +161,8 @@ async function main(){
   let outcome='NOT_STARTED',lastFrame=null,lateMax=0,eventsSent=0;
   try{
     await boot();
-    startBrowserAndRecorder();
+    await startBrowserAndRecorder();
+    uiPhase='AUTOPLAY';
     console.log('BOT_PRACTICE_SOURCE='+source);
     console.log('BOT_PRACTICE_TARGET='+targetFrame);
     console.log('BOT_PRACTICE_AUTOPLAY=START');
