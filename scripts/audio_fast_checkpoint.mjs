@@ -12,6 +12,7 @@ const tests=[
   'tests/test_gngb_z80_live_families.mjs',
   'tests/test_gngb_z80_indirect_immediate.mjs',
   'tests/test_gngb_z80_rst_ix_immediate.mjs',
+  'tests/test_gngb_z80_index_add_pop.mjs',
   'tests/test_gngb_z80_irq_boundary.mjs',
   'tests/test_gngb_audio_frontier_report.mjs',
   'tests/test_gngb_audio_fast_cli.mjs',
