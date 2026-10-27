@@ -344,14 +344,17 @@ def inspect_chronology_diagnostics(tape):
             if is_main:
                 if tick < last_main_tick:
                     counters["tick_regressions_main_stream"] += 1
+                    bad = True
                 last_main_tick = tick
             else:
                 if tick < last_audio_tick:
                     counters["tick_regressions_audio_stream"] += 1
+                    bad = True
                 last_audio_tick = tick
             if is_ym:
                 if tick < last_ym_tick:
                     counters["tick_regressions_ym_only"] += 1
+                    bad = True
                 last_ym_tick = tick
             if frame < last_frame:
                 counters["frame_regressions"] += 1
