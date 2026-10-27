@@ -6,7 +6,7 @@ import {compileZ80Prefix,classifyZ80IndexedInstruction,Z80StaticError}
 async function compileOne(bytes,{pc=0}={}) {
   const rom=new Uint8Array(0x8000);
   rom.set(bytes,pc);
-  rom[pc+bytes.length]=0xcb; // deliberately unsupported terminator
+  rom.set([0xcb,0x40],pc+bytes.length); // deliberately unsupported CB BIT
   const compiled=compileZ80Prefix(rom,{entry:pc});
   assert.equal(compiled.compiled,1);
   assert.deepEqual(compiled.visitedPcs,[pc]);
@@ -111,7 +111,7 @@ test('B4.T2-B4: POP BC/DE/HL/AF reads little-endian stack, wraps SP and charges 
 });
 
 test('B4.T2-B4: POP AF followed by conditional RET honors popped flags',async()=>{
-  const rom=new Uint8Array(0x8000);rom.set([0xf1,0xc8,0xcb],0);
+  const rom=new Uint8Array(0x8000);rom.set([0xf1,0xc8,0xcb,0x40],0);
   const compiled=compileZ80Prefix(rom);
   assert.equal(compiled.compiled,2);
   const module=await import('data:text/javascript,'+encodeURIComponent(compiled.source));
