@@ -67,6 +67,12 @@ F-N:  MOTOR (cinta humana → residuo dinámico + certificación) → REGLAS →
 - **5.1** Medir: código alcanzable estáticamente por banco (vectores reset/IRQ, semillas de g4, las 241 tablas de [v3_b3_jump_tables.mjs](../src/v3_b3_jump_tables.mjs), código copiado a RAM) frente a bloques compilados. Da el dato real de código traducido.
 - **5.2** Compilar todo lo alcanzable en una generación nueva; listar cada salto indirecto no resuelto con su ubicación.
 - **5.3** Certificar con las reglas habituales (cintas previas idénticas, doble replay, sin fallback).
+  - **Resultado 5.1–5.3 (27/10/2026): GO, g5 certificada.**
+    - **Cierre estático:** 9965 bloques (6502 fijos; por banco 393/511/711/1136/712). Hay 473 salidas indirectas; quedan cubiertas por las tablas y por el modo multientrada.
+    - **Bundle:** g5 tiene 10028 funciones y 37977 entradas. `program.mjs` ocupa 27 MB (g4: 6,6 MB).
+    - **Certificación:** B2-D sin cambios, las 9 cintas B3 con doble replay idénticas a g4 y MAME `sustainB` coincide en los frames 2000/12000/23990.
+    - **Runtime:** g5 empaqueta el runtime certificado de B2-D. El tap de audio de `src/gngb_runtime.mjs` necesita su propia certificación.
+    - **Siguiente:** atajo de laboratorio para empezar en la fase N (escritura en la RAM igual en MAME y AOT) y avanzar F-2…F-6 sin cinta humana.
 - [ExportFunctionGraph.java](../ghidra_scripts/ExportFunctionGraph.java) solo analiza el banco 4: ampliar o recorrer con el decodificador del compilador AOT.
 - **GO:** alcanzable compilado, residuo listado, cintas previas idénticas. **STOP:** cambio de hash en una cinta certificada.
 

@@ -20,15 +20,19 @@ import {loadFrozen,freezeBundle,runFrozen,rewriteProgram,sha256,MODULES}
   from '../src/v2_b1_frozen.mjs';
 import {compileProgram,blockKey} from '../src/mc6809_aot.mjs';
 import * as AOT_LIB from '../src/mc6809_aot_lib.mjs';
-import {createBoard,GngbRuntimeError} from '../src/gngb_runtime.mjs';
+// Runtime modules come from the certified B2-D bundle, not src/: later
+// observation-only changes in src (audio tap) need their own certification.
+let createBoard,GngbRuntimeError;
 import {locateRamCode,romBytes} from './r35_t5_run.mjs';
 import {b2dTape,b2dCoverageFrames,B2D_PROFILES} from '../src/v3_b2d_tapes.mjs';
 import {b2dCertified} from '../src/v3_b2d_selection.mjs';
 import {B3_PROFILES,B3_HORIZONS,b3Tape} from '../src/v3_b3_tapes.mjs';
 import {createOnDemandBlocks} from '../src/v3_b3_ondemand.mjs';
-import {B3_GENERATION,B3_MULTI_ENTRY_FROM,B3_STATIC_TABLES_FROM,b3GenerationDir}
+import {B3_GENERATION,B3_MULTI_ENTRY_FROM,B3_STATIC_TABLES_FROM,
+  B3_STATIC_CLOSURE_FROM,b3GenerationDir}
   from '../src/v3_b3_bundle.mjs';
 import {findJumpTables,jumpTableSeeds} from '../src/v3_b3_jump_tables.mjs';
+import {staticClosure} from '../src/v3_b3_static_closure.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const B2D=join(ROOT,'out/v3/b2d/frozen');
@@ -40,6 +44,7 @@ export const B3_LIVE_FRAMES=6000;
 const fail=s=>{throw Error('V3_B3_'+s);};
 const ENTRIES=B3_GENERATION>=B3_MULTI_ENTRY_FROM;
 const TABLES=B3_GENERATION>=B3_STATIC_TABLES_FROM;
+const CLOSURE=B3_GENERATION>=B3_STATIC_CLOSURE_FROM;
 const keyOf=s=>blockKey(s.overlay==null?s.bank:null,s.pc,s.overlay??null);
 const hashFrame=r=>{
   const h=createHash('sha256');
@@ -84,8 +89,10 @@ async function main(){
   if(!b2dCertified(parentReport,parent))fail('B2D_PARENT_NOT_CERTIFIED');
   const libUrl=pathToFileURL(join(ROOT,'src/mc6809_aot_lib.mjs')).href;
   for(const module of MODULES)
-    if(sha256(readFileSync(join(ROOT,'src',module)))!==parent.files[module])
+    if(sha256(readFileSync(join(B2D,module)))!==parent.files[module])
       fail('PARENT_RUNTIME_DRIFT');
+  ({createBoard,GngbRuntimeError}=
+    await import(pathToFileURL(join(B2D,'gngb_runtime.mjs')).href));
   const parentSeeds=parentReport.seeds.map(s=>({...s}));
   const rebuilt=compileProgram(code,parentSeeds,{libUrl});
   if(rebuilt.blockCount!==parent.blocks||
@@ -133,6 +140,14 @@ async function main(){
   }
   if(TABLES)console.log('V3_B3_JUMP_TABLES='+findJumpTables(code).length+
     '_TARGETS_'+tableSeeds.length+'_NEW_'+tableNew);
+  const closure=CLOSURE?staticClosure(code):null;
+  let closureNew=0;
+  for(const s of closure?.seeds??[]){
+    const k=keyOf(s);
+    if(!known.has(k)){known.add(k);seeds.push(s);closureNew++;}
+  }
+  if(CLOSURE)console.log('V3_B3_STATIC_CLOSURE='+closure.seeds.length+
+    '_BLOCKS_NEW_'+closureNew+'_INDIRECT_EXITS_'+closure.indirect);
   const built=compileProgram(code,seeds,{libUrl,entries:ENTRIES});
   console.log('V3_B3_FUNCTIONS='+built.functions+'_ENTRIES_'+ENTRIES);
   console.log('V3_B3_BLOCKS='+built.blockCount+'_NEW_SEEDS_'+
@@ -141,7 +156,7 @@ async function main(){
   const work=mkdtempSync(join(OUT,'work-'));
   const candidate=join(work,'candidate-frozen');
   const modules=Object.fromEntries(MODULES.map(n=>
-    [n,readFileSync(join(ROOT,'src',n),'utf8')]));
+    [n,readFileSync(join(B2D,n),'utf8')]));
   const head=execFileSync('git',['rev-parse','HEAD'],{cwd:ROOT,encoding:'utf8'}).trim();
   freezeBundle(candidate,{generated:built.source,code,overlays:code.ramOverlays,
     modules,provenance:{frames:B3_LIVE_FRAMES,blocks:built.blockCount,
@@ -212,7 +227,8 @@ async function main(){
     parent_program_sha256:parent.files['program.mjs'],parent_blocks:parent.blocks,
     blocks:built.blockCount,functions:built.functions,
     block_entries:ENTRIES?'ALL_INSTRUCTION_BOUNDARIES':'BLOCK_START_ONLY',
-    static_jump_table_seeds:tableSeeds.length,seeds,
+    static_jump_table_seeds:tableSeeds.length,
+    static_closure_seeds:closure?.seeds.length??0,seeds,
     extra_overlays:code.ramOverlays.slice(parentOverlays).map(ov=>
       ({start:ov.start,hex:Buffer.from(ov.bytes).toString('hex')})),
     no_input:'PASS_600_FRAMES_IDENTICAL_B2D',
