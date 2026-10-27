@@ -107,6 +107,9 @@ async function boot(){
   }
   if(expectedSession===null)
     throw Error('BOT_PRACTICE_SERVER_NOT_READY_'+serverLog.slice(-700));
+  // /state may answer before stdout delivery reaches this parent.
+  for(let i=0;i<25&&!/V3_B2C_AOT_BUNDLE=(\S+)/.test(serverLog);i++)
+    await sleep(100);
   const bundle=/V3_B2C_AOT_BUNDLE=(\S+)/.exec(serverLog)?.[1];
   console.log('BOT_PRACTICE_BUNDLE='+(bundle??'UNKNOWN'));
   if(bundle!=='B3_G4')
@@ -177,6 +180,8 @@ async function main(){
     await post('/release');
     handoff=true;outcome='HANDOFF_TO_HUMAN';
     const s=await state();
+    if(s.halt||s.sessionId!==expectedSession)
+      throw Error('BOT_PRACTICE_HANDOFF_STATE_NOT_VALID');
     save('handoff.json',{source,tapeHash:tape.sha256,targetFrame,
       reachedFrame:s.frame,session:s.sessionId,eventsSent,maxInputLag:lateMax,
       bossDefeated:'UNVERIFIED',islandLanding:'UNVERIFIED',
