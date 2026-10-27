@@ -329,3 +329,37 @@ Expected **98 Node**, **71 Python** (68+3), still unverified on Mac. Only after 
 Return only the sanitized stdout JSON of the fast checkpoint, scanner and coverage helper. Never paste raw MAME trace, PC root files, private reports, ROM or generated JS.
 
 **Next decision:** if most native-observed PCs are covered despite many static-only PCs, prioritize real Z80 scheduler, IRQ 240Hz / HALT + latch/reset validation, and stop broad speculative opcode implementation. If native-observed PCs are missing, privately isolate those verified gaps before scheduler promotion. B4 remains unverified for actual browser gameplay audio.
+
+## B4.T2 exit decision and B4.T3-A lab scheduler (2026-10-27)
+
+**Operator-verified:** `node scripts/audio_fast_checkpoint.mjs` returned **98/98 Node** and **71/71 Python** with sound ROM `SHA1_MATCH`. The 64-root private scan returned `PARTIAL_UNCERTIFIED`, **3609 compiled static PCs** and **11 frontier blockers** including three `OUTSIDE_SOUND_ROM` static edges; they are *not* native-executed branches. The saved MAME 0.288 trace contains **194 distinct observed ROM PCs**. `audio_z80_coverage.py` reported **194 observed/compiled intersection, 0 observed missing, 3415 static-only**. This is *PC-set overlap* only, **NOT** register/ISA/timing/IRQ parity, sound generation proof or complete gameplay coverage. We therefore **stop speculative opcode expansion** and prioritize B4.T3 instead.
+
+**B4.T3-A implementation** (new `src/gngb_z80_scheduler_lab.mjs`, no engine/bot changes):
+- Deterministic *laboratory* stepping of a precompiled `Map<PC,function>` through existing `stepZ80AotAtBoundary` and the existing Z80 sound bus. No ROM data packaged, interpreted or emitted.
+- Sound-clock cadence **3,000,000 Hz / 240 Hz = 12,500 Z80 T-states per IRQ** from `Z80_SOUND_HARDWARE`. Pending interrupts are represented as a single latched bit, a **deliberate unverified IRQ-pulse/phase assumption**; this model does not claim MAME board IRQ pulse timing.
+- **IM1 only**: enabled and eligible maskable IRQ performs a 13 T-state service, pushes the *current* PC high then low at T+10/T+13, jumps to `0x0038`, clears IFF1/IFF2, and exits HALT. IM0 and IM2 are **explicit STOP**, and IM1 vector must be precompiled. No implicit vector invention, NMI or refresh-R parity.
+- `EI` inhibition and HALT behavior use the already tested boundary helper. While halted the lab advances synthetic 4 T-state idle periods only; no fake instruction execution. Reset is driven by explicit `syncBoardReset()` after a Z80 sound bus reset control transition; resetting CPU registers is distinct from globally rewinding the T-state clock.
+- `advanceTo(target)` tracks **instruction-boundary overshoot** and applies a finite step budget. It is NOT yet a cycle-accurate multi-CPU interleaver; do not connect live main-CPU events or browser A/V timing to it without a further gate.
+- New `tests/test_gngb_z80_scheduler_lab.mjs` has **8 ROM-free tests**, integrated into `scripts/audio_fast_checkpoint.mjs`. Synthetic tests cover reset-held safety, first 240 Hz request, IM1 stack/service/RET, EI+HALT, DI gating, IM0/2 fail-closed, missing vector, reset transitions, sound latch → actual AOT YM MMIO write, and target skew / budget refusal. Isolated V8 run of the new test source: **8/8 PASS**. Complete Mac checkpoint remains pending.
+- A synthetic YM2203 register write callback emitted by stepping compiled sound instructions is **NOT audible PCM**, does not prove chip parity, and does not certify the live sound program.
+
+External Z80 documentation: [Zilog Z80 user manual](https://zany80.github.io/documentation/Z80/UserManual.html) (maskable interrupts, IFF and EI delay), [Z80 IM1 timing reference](https://www.cpcwiki.eu/index.php/Z80) (IM1 = 13T and 0x0038 vector). The native board's precise phase, latch response, alternate modes and register state remain open verification gates.
+
+### B4.T3 remaining critical work
+
+| Block | Dependencies | Acceptance |
+|---|---|---|
+| **T3-A LAB IM1** | B4.T2 native observed set overlap, isolated bus/AOT | Lab tests PASS; never certify game/native audio | Implemented, Mac pending |
+| **T3-B board/CPU differential** | MAME private Z80 timing/IRQ scenarios, sound-command inputs | Verify board IRQ mode/pulse width/phase, reset, latch, Z80 register paths, first live YM events without tape | NOT DONE |
+| **T3-C deterministic MC6809↔Z80 interleaving** | T3-B native evidence, timestamped board observer | No past/future audio events, bounded skew, no unverified workarounds | NOT DONE |
+| **T3-D native parity and runtime promotion** | T3-B/C, real compiled 194-PC path and gap checks | Reproducible native-backed CPU/IRQ/YM bus parity, explicit unsupported-gate STOP | NOT DONE |
+
+Only after these gates should B4.T4 real-time YM2203 synth/WASM and B4.T5 browser AudioWorklet start. No changes to `src/gngb_runtime.mjs` or bot during T3-A.
+
+### Immediate Mac checkpoint
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected **106 Node + 71 Python** (8 new Node tests), *not yet operator-confirmed*. No MAME recapture and no new static frontier scan needed for this gate. Return only the sanitized checkpoint JSON. Retain the existing `b4trace1` private trace as differential reference; never share its file, ROM, generated AOT, native sound or debugger output.
