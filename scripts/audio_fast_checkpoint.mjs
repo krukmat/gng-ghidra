@@ -10,6 +10,7 @@ import fs from 'node:fs';
 const tests=[
   'tests/test_gngb_z80_static_codegen.mjs',
   'tests/test_gngb_audio_frontier_report.mjs',
+  'tests/test_gngb_audio_fast_cli.mjs',
   'tests/test_gngb_audio_events.mjs',
   'tests/test_gngb_z80_sound_bus.mjs',
   'tests/test_gngb_audio_pcm_queue.mjs'
