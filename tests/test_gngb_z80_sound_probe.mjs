@@ -86,3 +86,42 @@ test('G5 final gate rejects nonfunction live YM observer before decoding ROM',as
   }),e=>e instanceof AudioZ80ProbeStop&&
        e.code==='AUDIO_T3_PROBE_INVALID_CONFIGURATION');
 });
+
+test('G5 final authentic late command crosses old 3M ceiling and creates Z80-origin YM writes',async()=>{
+  // Synthetic ROM polls a sound latch until command 0x28 and then programs
+  // YM PSG volume. A valid command is delivered strictly AFTER T=3,000,000.
+  // This detects exactly the earlier single-second false-silence gate.
+  const rom=new Uint8Array(0x8000);
+  rom.set([
+    0x3a,0x00,0xc8,   // LD A,(C800)
+    0xfe,0x28,        // CP 28
+    0x20,0xf9,        // JR NZ,0000
+    0x3e,0x08,0x32,0x00,0xe0, // YM register selection
+    0x3e,0x0f,0x32,0x01,0xe0, // YM PSG volume 15
+    0x76,0xcb,0x40
+  ]);
+  const writes=[];
+  const result=await probeZ80SoundExecution(rom,[0],{
+    targetTStates:3_000_250,maxSteps:500_000,
+    nativeControls:{
+      kind:'GNG_AUDIO_B4_T3_PRIVATE_NATIVE_CONTROLS_V1',
+      clock:'RESET_RELEASE_RELATIVE_MASTER_12MHZ',
+      irq_phase_native_verified:false,main_sound_controls_only:true,
+      pre_release_latch:null,events:[
+        {kind:'SOUNDLATCH_WRITE',tick12m:4*3_000_012,value:0x28}
+      ]
+    },
+    onYmWrite:e=>writes.push([e.addr,e.value,e.z80TState])
+  });
+  assert.equal(result.status,'LAB_ADVANCE_OK');
+  assert.ok(result.reached_tstates>=3_000_250);
+  assert.equal(result.native_sound_controls_applied,1);
+  assert.equal(result.ym_port_writes_from_running_z80,2);
+  assert.equal(writes.length,2);
+  assert.deepEqual(writes.map(x=>x.slice(0,2)),[
+    [0xe000,0x08],[0xe001,0x0f]
+  ]);
+  assert.ok(writes[0][2]>3_000_012);
+  assert.equal(result.native_ym_events_replayed,false);
+  assert.equal(result.irq_phase_parity_verified,false);
+});
