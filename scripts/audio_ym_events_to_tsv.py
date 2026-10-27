@@ -31,22 +31,31 @@ def main(argv=None):
     p=argparse.ArgumentParser()
     p.add_argument("--in-jsonl", type=Path, required=True)
     p.add_argument("--out-tsv", type=Path, required=True)
+    p.add_argument("--window-ms", type=int, default=0,
+                   help="Optional first N milliseconds of YM events (up to 30000)")
     args=p.parse_args(argv)
     if not args.out_tsv.as_posix().startswith("out/audio/"):
         print("AUDIO_OUTPUT_MUST_BE_PRIVATE_OUT", file=sys.stderr)
         return 2
     try:
+        if args.window_ms < 0 or args.window_ms > 30000:
+            raise ValueError("AUDIO_INVALID_WINDOW")
         with args.in_jsonl.open(encoding="utf8") as stream:
             rows=convert(stream)
+        total=len(rows)
+        origin=rows[0][0]
+        if args.window_ms:
+            rows=[r for r in rows if (r[0]-origin) < args.window_ms*12000]
         args.out_tsv.parent.mkdir(parents=True,exist_ok=True)
         with args.out_tsv.open("w",encoding="ascii") as output:
             for tick,addr,value in rows:
-                output.write(f"{tick} {addr} {value}\n")
+                output.write(f"{tick-origin} {addr} {value}\n")
     except (ValueError,OSError,json.JSONDecodeError) as error:
         print(json.dumps({"kind":"GNG_AUDIO_YM_TAPE_V1","status":"STOP","error":type(error).__name__}))
         return 2
     print(json.dumps({"kind":"GNG_AUDIO_YM_TAPE_V1",
-                      "status":"LAB_EVENTS_ONLY","writes":len(rows),"master_hz":MASTER_HZ,
+                      "status":"LAB_EVENTS_ONLY","writes":len(rows),"truncated":total-len(rows),
+                      "time_origin":"first_ym_write","master_hz":MASTER_HZ,
                       "z80_certified":False,"pcm_certified":False}))
     return 0
 
