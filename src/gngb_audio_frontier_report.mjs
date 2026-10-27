@@ -37,6 +37,11 @@ function safeFrontier(blocker) {
       throw Error('AUDIO_REPORT_INDEX_FAMILY_MISMATCH');
     item.indexed_instruction=cleanTag(blocker.indexed_instruction);
   }
+  if(blocker.cb_instruction!==undefined) {
+    if(item.family!=='CB_BIT_ROTATE_PREFIX')
+      throw Error('AUDIO_REPORT_CB_FAMILY_MISMATCH');
+    item.cb_instruction=cleanTag(blocker.cb_instruction);
+  }
   return item;
 }
 
