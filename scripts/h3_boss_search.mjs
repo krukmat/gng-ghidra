@@ -79,7 +79,7 @@ board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
       board.state.records[i-1]=null;
       applyLabPokes(POKES,board.state,i);
       const h=r.record[0x510]<<8|r.record[0x511];
-      if(i>START&&(h<0x6000||r.record[0xac]&&(h===0x8e05||(h&0xffe0)===0x9c40)))dead=true;
+      if(i>START&&(h<0x6000||r.record[0xac]&&(h===0x8e05||h===0x9c64||(h&0xffe0)===0x9c40)))dead=true;
     }});
 if(board.lab.advanceTo(START).status!=='FRAMES_DONE')throw Error('H3_BOSS_START_FAILED');
 const s0=look(board.state.ramBytes(0,0x600).bytes);
