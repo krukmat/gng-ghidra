@@ -139,7 +139,7 @@ flowchart TD
 | --- | --- | --- |
 | **H0: motor real** | AOT + render + puertos | PASS (B2-C/B2-D, parcial vídeo) |
 | **H1: crédito + Start** | Créditos y cambio visual de pantalla, comparados con MAME | **GO (V3.B3)**: idéntico byte a byte a MAME 0.288 |
-| **H2: primer prototipo jugable** | Arthur controlable + 5 min + no `UNCOMPILED` | **PARCIAL**: Arthur controlable; 6,4 min de juego por bot idénticos a MAME offline; en vivo, HALT `0xFEFA` en el frame 1.974 (timing) → G1.4 |
+| **H2: primer prototipo jugable** | Arthur controlable + 5 min + no `UNCOMPILED` | **CASI GO**: Arthur controlable; 6,4 min de juego por bot idénticos a MAME offline; **en vivo, g4 completa 24.000 frames (~8 min) sin HALT** con `sustainA`/`sustainB` (G1.4: bloques multi-entrada y 241 tablas de salto estáticas). Falta la sesión humana |
 | **H3: primer nivel completo** | G3 GO + derrota/respawn | PENDIENTE |
 | **H4: contenido completo** | G4 GO, ambas vueltas, final verdadero | PENDIENTE |
 | **H5: paridad audiovisual** | G5 y G6 GO | PENDIENTE |
@@ -158,6 +158,8 @@ No asignar progreso global por número de bloques: el porcentaje solo puede deri
 ## 6. Siguiente bloque seleccionado y tareas concretas
 
 > **Actualización 26/10/2026:** G0.1/G0.2/G1 cerrados por V3.B3 ([informe](v3-b3-playable-2026-10-26.md)). G0.3 (MAME) GO. **Nuevo bloqueo:** en vivo, el timing real abre rutas indirectas no compiladas (`0xFEFA`). Siguiente: **G1.4, cobertura robusta** (grabador de puertos en vivo, fuzzing con jitter, recuperación estática de saltos indirectos) antes de la sesión humana (G2.3) y de G3.
+>
+> **Actualización 27/10/2026 (G1.4):** la causa raíz del HALT en vivo eran los puntos de reanudación a mitad de bloque tras el IRQ, no saltos indirectos. Se resolvió con bloques multi-entrada (g3). La segunda clase de fallo, tablas de despacho no visitadas (`0xEC83`), se resolvió con recuperación estática (g4: 241 tablas, 531 destinos nuevos). El grabador de puertos en vivo con replay exacto está listo. Siguiente: **sesión humana (G2.3)**.
 
 **Bloque inmediato G0+G1 — No crear otro visor ni ampliar attract a ciegas.**
 
