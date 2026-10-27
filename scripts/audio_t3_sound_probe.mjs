@@ -24,7 +24,7 @@ function allowedPrivate(name) {
     throw Error('AUDIO_T3_PROBE_PRIVATE_FILE_REQUIRED');
   return loc;
 }
-const permitted=new Set(['--roots','--target-tstates','--max-steps']);
+const permitted=new Set(['--roots','--native-controls','--target-tstates','--max-steps']);
 function options(args) {
   if(args.length%2!==0 || args.length<2)
     throw Error('AUDIO_T3_PROBE_BAD_ARGUMENTS');
@@ -53,9 +53,20 @@ async function main() {
       throw Error('AUDIO_T3_PROBE_ROM_IDENTITY_STOP');
     const roots=parseZ80OperatorSeeds(fs.readFileSync(
       allowedPrivate(opt['--roots']),'utf8'));
+    let nativeControls=null;
+    if(opt['--native-controls']!==undefined) {
+      if(!/^out\/audio\/z80-native-controls-[A-Za-z0-9_-]+\.json$/
+          .test(opt['--native-controls']))
+        throw Error('AUDIO_T3_PROBE_CONTROLS_PATH_INVALID');
+      const filepath=allowedPrivate(opt['--native-controls']);
+      if(fs.statSync(filepath).size>1024*1024)
+        throw Error('AUDIO_T3_PROBE_CONTROLS_TOO_LARGE');
+      nativeControls=JSON.parse(fs.readFileSync(filepath,'utf8'));
+    }
     const summary=await probeZ80SoundExecution(new Uint8Array(rom),roots,{
       targetTStates:opt['--target-tstates']??12500,
-      maxSteps:opt['--max-steps']??100000
+      maxSteps:opt['--max-steps']??100000,
+      nativeControls
     });
     // Positive whitelist only: never include private native trace, ROM or AOT.
     console.log(JSON.stringify({...summary,rom_sha1_match:true,
