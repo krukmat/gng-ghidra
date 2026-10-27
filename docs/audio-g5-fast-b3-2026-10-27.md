@@ -168,3 +168,41 @@ Start/coin/play/attack and leave MAME running until gameplay or title sound can 
 An empty older tape can continue to be summarized safely:
 
     python3 scripts/audio_b3_checkpoint.py --diagnose --tape out/audio/mame-audio-events.jsonl
+
+
+## B3 native breakthrough: callbacks verified, JSONL serialization at fault
+
+Operator evidence from capture heartbeat1, after running 1653 frames:
+- YM2203 write callbacks: **238062**
+- Main soundlatch callbacks: **17**
+- Sound CPU soundlatch read callbacks: **5322**
+- Reset callbacks: **2**
+- Serialized JSONL events: **0**
+
+The old NO_BUS_TAP_CALLBACKS hint contradicted the health counters. This definitively proves active native YM sound writes reached the Lua callback, but not that their JSONL rows were saved. The remaining failure is on the recorder serialization/output path, **not absence of Z80 or YM activity**. The emulator's memory-map addresses need no speculative changes.
+
+The preceding full regression had Node 54/54 PASS and Python 34 executed with a single test failure, test_unpinned_mame_lab_capture_is_opt_in_and_provenance_is_explicit. The unit test was too strict: it compared the entire MAME metadata mapping, unaware of added private reference WAV and heartbeat artifact paths. The assertion now checks the intended version/pin plus the expected safe paths. This requires a fresh Mac test run.
+
+The Lua writer now tracks four new allowlisted heartbeat counters:
+- written_events: rows successfully handed to the file
+- format_errors: exceptions in timestamp or row serialization
+- write_errors: failures on output:write
+- flush_errors: failures on periodic/final flush
+
+The tap loop handles these errors without publishing private event bytes. The Python diagnostic understands the new counters and retains compatibility with old heartbeat sidecars. It now correctly classifies active callbacks with no JSONL rows, and differentiates format/write failures or a reported tape/path mismatch. Three further tests cover the observed legacy counter pattern, new failure categories and typed heartbeat validation.
+
+First synchronize and validate before another native capture:
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+**Expected only, not yet confirmed**: 54 Node and 37 Python tests. If any fail, pass only the sanitized JSON containing python.failing_test_names. Never skip a failed gate.
+
+Then use an unused capture ID, preserving original and heartbeat1 evidence:
+
+    python3 scripts/audio_b3_checkpoint.py --capture --capture-id heartbeat2 --lab-allow-unpinned-mame --ymfm-src out/audio/ymfm --duration-ms 5000
+
+On STOP TAPE_NO_YM_EVENTS, send only capture_diagnostics: it will contain tap_health written_events, format_errors, write_errors and flush_errors. This will pinpoint the stage where recording fails. If successful, open the private out/audio/b3-first-audio.wav locally and report audibility. Audio/parity remains NOT_CERTIFIED until real non-silent WAV is observed.
+
+B3 tape event count cap was increased from 250000 to 1000000 (while retaining the 64MiB file-size cap) after the real 243403 callback total nearly reached the previous bound. No ROM content, music samples or recorded event values have been added to the repository.
