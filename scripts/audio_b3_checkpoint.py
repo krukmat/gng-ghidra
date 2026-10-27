@@ -146,7 +146,7 @@ def inspect_tape(tape):
             "first_ym_tick": first_ym_tick}
 
 
-def wav_metrics(source, *, expected_rate=None):
+def wav_metrics(source, *, expected_rate=None, max_ms=SAMPLE_LIMIT):
     source = ensure_private(source, must_exist=True)
     try:
         with wave.open(str(source), "rb") as wav:
@@ -159,7 +159,7 @@ def wav_metrics(source, *, expected_rate=None):
                 raise B3Stop("WAV_FORMAT_INVALID")
             if expected_rate is not None and (rate != expected_rate or channels != 1):
                 raise B3Stop("WAV_FORMAT_INVALID")
-            if frames > SAMPLE_LIMIT * rate // 1000 + rate:
+            if frames > max_ms * rate // 1000 + rate:
                 raise B3Stop("WAV_TOO_LONG")
             payload = wav.readframes(frames)
     except (wave.Error, EOFError, OSError, struct.error):
@@ -207,8 +207,24 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None):
     reference = "NOT_AVAILABLE"
     native = None
     if native_wav is not None:
-        native = wav_metrics(native_wav)
+        native = wav_metrics(native_wav, max_ms=180000)
         reference = "REFERENCE_DIAGNOSTICS_ONLY" if native["peak"] else "REFERENCE_SILENT"
+    contrast = None
+    if native is not None:
+        # Native MAME WAV begins at the emulator session's audio epoch,
+        # while the YM tape is rebased to its first write. No sample/time
+        # alignment is asserted; ratios are descriptive ONLY.
+        contrast = {
+            "duration_difference_ms_unaligned": signal["duration_ms"] - native["duration_ms"],
+            "rms_ratio_unaligned": (
+                round(signal["rms"] / native["rms"], 4) if native["rms"] else None
+            ),
+            "peak_ratio_unaligned": (
+                round(signal["peak"] / native["peak"], 4) if native["peak"] else None
+            ),
+            "sample_timeline_aligned": False,
+            "waveform_parity_verified": False,
+        }
     result = {
         "kind": "GNG_AUDIO_B3_CHECKPOINT_V1",
         "status": "LAB_NON_SILENT_FROM_MAME_YM_EVENTS_NOT_CERTIFIED",
@@ -219,6 +235,7 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None):
         "wav": signal,
         "reference_status": reference,
         "native_reference_stats": native,
+        "native_activity_contrast": contrast,
         "mame_input_alignment_verified": False,
         "z80_native_parity_verified": False,
         "ym_waveform_parity_verified": False,
