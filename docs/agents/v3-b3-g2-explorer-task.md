@@ -1,13 +1,71 @@
 # Explorador con búsqueda (V3.B3 G2.1)
 
-Estado: E0 GO; E1 PARTIAL (posición y vidas validadas, fase provisional); E2 GO hasta
-`x=1606`, siguiente iteración STOP por estancamiento y pérdida de vida; E3 no
-necesario para esta cinta; E4 GO hasta el frame 2730. Checkpoint 27/10/2026.
+Estado actual: **bot STOP por falta de avance sostenido**. E1 PARTIAL
+(posición y vidas validadas, fase provisional); E2: pico diagnóstico `x=1700`
+seguido de muerte, ninguna fase completa. E3: 24 ramas con `UNCOMPILED`,
+bloqueo externo al bot; motor congelado. E0 y E4 conservan únicamente sus
+gates históricos. Checkpoint 27/10/2026.
 
 **Dirección actual:** el objetivo es terminar el juego completo, incluidos los
 recorridos y niveles posteriores ([plan general](../plan-100pct-jugable-2026-10-26.md)).
 El operador indicó detener el bot si ya no progresa. La búsqueda está detenida
-en este STOP; no se ha superado el jefe ni completado la primera fase.
+en este STOP; no se ha superado el encuentro ni completado la primera fase.
+Siguiente tarea: [investigar estrategias contra el estancamiento](gng-bot-antistuck-task.md).
+
+### Reanudación anterior a 2400: STOP (27/10/2026)
+
+**Decisión vigente:** aplicar el [límite estricto del bot](gng-bot-gameplay-plan-2026-10-27.md).
+Los nuevos componentes están en `bot/` y `tests/bot/`; ejecutan el `createBoard`
+original de g4 desde reset para cada candidato. No utilizan snapshots,
+clonación, compilación, escrituras de memoria ni modificaciones del motor.
+Los snapshots del apartado histórico no son el método de este bloque.
+
+- Referencia `explorer-g4-2730-1606.json`, prolongada hasta 3600: primera
+  pérdida observable de vida en **2839**, reaparición entre 3100 y 3200,
+  `x=40` al terminar. No hay cambio de fase demostrado.
+- **253 candidatos** con cortes 1920/2100/2190/2280/2340: 13 del primer
+  barrido, 72 del segundo, 72 de espera/retirada/agacharse/disparo y 96 de
+  cadencias de salto/disparo con distintos desfases. Cada uno parte de reset;
+  no se añaden monedas ni Start al prefijo original.
+- **229 ejecuciones completas y 24 censuradas por HALT**. Diecinueve
+  `UNCOMPILED` en `0xE79E` y cinco en `0xC3A3`; veinte antes del primer
+  decremento observable de vidas y cuatro después. Eso no acredita que las
+  veinte estuvieran a salvo. Cada rama se detuvo y conservó su cinta; no se
+  amplió AOT ni se cambió de bundle.
+- Mejor pico de la primera vida: **1700**, `late-sweep/trial-6.json`, corte
+  2100, derecha+disparo+salto cada 44 frames. Pierde una vida en **2881**,
+  reaparece y acaba en `x=451`/2 vidas en 3600. Son +94 de pico y +42 frames
+  hasta el decremento frente a la referencia, **no avance sostenido ni GO**.
+- Solo dos candidatos completos conservan todas las vidas: se quedan en
+  `x=1039` y `x=1279`. El segundo (`late-sweep/trial-67.json`, retirada con
+  disparo desde 2340) conserva 3 vidas hasta **5000**, sin moverse desde
+  aproximadamente 2400. Sus imágenes del motor fueron inspeccionadas.
+  Sobrevivir inmóvil no cuenta como progreso.
+- Ninguno registra cambios de `0x0052`; esa dirección sigue sin validarse
+  como fase. **Cero transiciones reales y cero vueltas completadas**.
+
+`bot/evaluation.mjs` acumula pérdidas aunque después se recuperen vidas,
+congela el máximo de la primera vida y mantiene por separado la posición
+final y los cambios candidatos de fase. `survivalFrames` mide hasta el
+**decremento observable** de vidas, no hasta la colisión mortal. El ranking
+no certifica progreso: incluso superar a la referencia puede significar
+quedarse inmóvil. Las señales actuales solo están calibradas para estos
+prefijos con 3 vidas y candidato de fase 1; no acreditan pantallas de demo.
+
+**Artefactos privados:** `out/bot/{early-sweep,late-sweep,early-tactics,jump-cadence}/`
+(informes y cintas) y `out/bot/safe-retreat/` (replay e imágenes). No se han
+certificado estas cintas nuevas contra MAME ni en vivo; el E4 histórico no
+se extiende a ellas. MAME no se ha usado para jugar ni para buscar acciones.
+
+Verificación: Node 22.23.0, Python 3.15.0; fixtures sintéticos y suite
+ROM-free: **458 PASS, 0 FAIL, 1 SKIP**, incluidos 11 tests nuevos del bot.
+No queda una búsqueda ni un bot de este bloque en ejecución.
+
+```bash
+node --test tests/test_*.mjs tests/bot/*.test.mjs
+# Solo reproducción de evidencia privada, no reanuda la búsqueda:
+node bot/replay.mjs out/bot/late-sweep/trial-67.json 5000 2340,2800,3600,5000 verify-retreat
+```
 
 ### Revisión del atasco (27/10/2026)
 
@@ -23,7 +81,7 @@ en este STOP; no se ha superado el jefe ni completado la primera fase.
   Los intentos terminaron; la próxima búsqueda deberá empezar antes del 2400
   y exigir supervivencia posterior, además de avance, para aceptar una rama.
 
-## Checkpoint ejecutado (g4, 27/10/2026)
+## Checkpoint previo: explorador con snapshots (g4, 27/10/2026)
 
 | Bloque | Resultado y evidencia |
 | --- | --- |

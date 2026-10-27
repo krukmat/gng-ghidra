@@ -3,6 +3,8 @@
 **Propósito:** handoff operativo y puerta de entrada para un modelo sucesor de mayor capacidad.
 **Repositorio:** `krukmat/gng-ghidra` · **Rama:** `main` · **Checkpoint:** 26/10/2026.
 **Plan dedicado del bot (engine congelado):** [BT-0→BT-6 — rendimiento en gameplay](gng-bot-gameplay-plan-2026-10-27.md).
+**Bloque actual:** bot detenido tras 253 candidatos sin avance sostenido;
+la [tarea contra el estancamiento](gng-bot-antistuck-task.md) está pendiente.
 **Plan de dependencias y aceptación:** [G0–G7 / H0–H6](../plan-100pct-jugable-2026-10-26.md).
 
 > **MANDATO INVARIABLE: lograr el 100% de jugabilidad auténtica de Ghosts ’n Goblins.**
@@ -34,7 +36,7 @@
 | Audio | El runtime principal expone un `soundlatch` | Cadena real de sonido y síntesis sin certificar |
 | Runtime largo | Sesión en vivo de 36.000 frames (~10 min); el worker libera los snapshots entregados | Cadencia/latencia y sesiones de horas (P7) |
 
-**No inventar porcentaje general de progreso ni fechas.** Crédito, Start y Arthur controlable están confirmados en V3.B3; el explorador alcanza `world_x=1606` en fase 1 ([checkpoint](v3-b3-g2-explorer-task.md)). Aún no hay fase completa ni 100% jugable.
+**No inventar porcentaje general de progreso ni fechas.** Crédito, Start y Arthur controlable están confirmados en V3.B3. El último bloque del bot, desde reset y sin cambios del motor, probó 253 candidatos anteriores al frame 2400: pico transitorio `world_x=1700`, pérdida de vida en 2881; la retirada que conserva 3 vidas hasta 5000 queda inmóvil en `x=1279` ([checkpoint](v3-b3-g2-explorer-task.md)). Bot **STOP**; no hay fase completa ni vuelta completada. Veinticuatro ramas encontraron cobertura AOT ausente, conservada como dependencia externa sin modificar g4.
 
 ## 3. Plan recomendado y dependencias (completamente revisables)
 
