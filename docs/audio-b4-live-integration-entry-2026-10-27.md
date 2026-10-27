@@ -290,3 +290,42 @@ Expected **98 Node + 68 Python** (unverified pending Mac run). If PASS, scan SAM
 Return only sanitized stdout. A `PARTIAL_UNCERTIFIED` / code 2 may remain appropriate; look for `source_pc` if `OUTSIDE_SOUND_ROM` is still present, and identify any newly exposed instruction families.
 
 **Critical separation:** B4.T2 static block availability is not proof of dynamic Z80 scheduler, 240Hz IRQ acknowledgment, Z80 timing parity, same loaded ROM in MAME, or game audio. Full dynamic executed PC census in `b4trace1` contains **194 unique ROM PCs**, while the current scanner used only 64 selected entry roots; this coverage gap must be closed (by private multi-batch scan/differential checks) before claiming broadly reachable native code. Never reinterpret 0xF509 as a valid ROM instruction or guess code bytes there. Engine and bot untouched.
+
+## B4.T2-B7 — Fix four false regressions and audit native-vs-static PC overlap (2026-10-27)
+
+**Operator checkpoint at entry:** B6 resulted `STOP_REGRESSION`: **94/98 Node**, **68/68 Python**, ROM not checked by checkpoint because it stopped early. The native-root scan independently verified local SHA1_MATCH and returned `PARTIAL_UNCERTIFIED`, **3609 static compiled PCs** and **11 static blockers**: 3 CB BIT, 3 outside sound ROM, 2 indexed instructions, 1 LD_DIRECT, 1 accumulator rotate, 1 FD stack/jump.
+
+**Source-backed 4-test diagnosis and fix:**
+- A prior JR conditional out-of-ROM test expected only `{pc,reason}`; the compiler intentionally now supplies privacy-safe `source_pc` (first predecessor PC). Updated the test to require it.
+- Three old test fixtures used the DD/FD `INDEX_DISPLACEMENT_STORE` subfamily (DD 70) as an unsupported sentinel, but it became supported in B6. Changed these fixtures to still-unsupported `INDEX_DISPLACEMENT_UPDATE` (DD/FD 36), preserving fail-closed tests instead of weakening assertions.
+- A standalone execution of 79 ROM-free Node tests of compiler/frontiers/boundary from the current GitHub sources now reports **79/79 PASS**. This is NOT the operator's full 98-test Node suite or 68-test Python suite. Mac rerun is required.
+
+**Key architectural observation:** 3609 statically explored PCs exceeds the **194 distinct PCs actually observed** in the saved, private MAME 0.288 audio CPU trace; broad overapproximation is plausible as branches explore unexecuted paths or noncode regions. Do not interpret compiled static PCs as native execution evidence or convert 3609 into a gameplay completion percentage. The outside-ROM frontiers remain PC-only static edges:
+- `0x8000` from `0x7fff` — possible sequential fallthrough beyond ROM image;
+- `0xee09` from `0x0152`;
+- `0xf509` from `0x014e`.
+None has been proven executed or valid code outside the ROM. Do not invent code or silently broaden the Z80 bus map.
+
+**New B7 native/static overlap audit:**
+- `scripts/audio_z80_scan.mjs` now adds `static_visited_pcs` to the **private JSON report only**. Console stdout remains the same sanitized family/count summary, and no ROM bytes or instruction bodies are serialized.
+- `scripts/audio_z80_coverage.py`: validates the original ROM hash and closed debugger trace from existing capture ID; safely reads the private static report; validates that root PCs were native-backed (except default 0); and computes distinct-PC set intersection. Console output contains **counts only**: native ROM PCs, static compiled PCs, intersection, observed native PCs missing from AOT, and compiled static PCs never observed. Flags explicitly deny CPU/IRQ parity and game audio.
+- `tests/test_audio_z80_coverage.py`: 3 ROM-free Python unittest cases for intersection arithmetic, bogus/non-native roots and forged private metadata, and private-path / empty trace refusal.
+- This audit does NOT require another MAME capture, cannot independently establish same ROM loaded by emulator, and cannot certify instruction/IRQ timing. It is a decision gate for whether to stop expanding speculative static paths and begin validating sound CPU scheduler/IRQ with the native-backed subset.
+
+### Next Mac commands
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected **98 Node**, **71 Python** (68+3), still unverified on Mac. Only after PASS:
+
+    node scripts/audio_z80_scan.mjs --roots out/audio/z80-native-roots-b4trace1.json --out out/audio/z80-frontier-b4trace1-b8.json
+
+`PARTIAL_UNCERTIFIED`/exit 2 is expected. The newly generated private b8 report includes the exact static compiled PC census. Compare with the previously captured MAME executed PCs, reading **only from local ignored out/audio/**:
+
+    python3 scripts/audio_z80_coverage.py --id b4trace1 --report z80-frontier-b4trace1-b8.json
+
+Return only the sanitized stdout JSON of the fast checkpoint, scanner and coverage helper. Never paste raw MAME trace, PC root files, private reports, ROM or generated JS.
+
+**Next decision:** if most native-observed PCs are covered despite many static-only PCs, prioritize real Z80 scheduler, IRQ 240Hz / HALT + latch/reset validation, and stop broad speculative opcode implementation. If native-observed PCs are missing, privately isolate those verified gaps before scheduler promotion. B4 remains unverified for actual browser gameplay audio.
