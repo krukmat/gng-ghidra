@@ -190,6 +190,20 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
         length=4;
         lines=['$.'+reg+'='+nn+';','$.pc='+next(4)+';','$.t+=14;'];
         targets=[next(4)];
+      } else if((second&0xc7)===0x46 && second!==0x76) {
+        // DD/FD LD r,(IX/IY+d): only the seven destination registers,
+        // never the invalid HALT-form. H/L target regular H/L, not IXH/IXL.
+        const index=opcode===0xdd?'ix':'iy';
+        const displacement=sign8(read8(pc,2));
+        const dst=(second>>>3)&7;
+        length=3;
+        lines=[
+          'const effective=($.'+index+'+('+displacement+'))&65535;',
+          'const value=bus.read8(effective,$.t+19);',
+          r8WriteSource[dst],
+          '$.pc='+next(3)+';','$.t+=19;'
+        ];
+        targets=[next(3)];
       } else {
         blockers.push({pc,reason:'UNSUPPORTED_Z80_OPCODE',
           family:opcode===0xdd?'DD_IX_PREFIX':'FD_IY_PREFIX',
@@ -267,6 +281,35 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
       }
       case 0x3e: {
         const v=read8(pc,1);length=2;lines=['$.a='+v+';','$.pc='+next(2)+';','$.t+=7;'];targets=[next(2)];break;
+      }
+      case 0x09: case 0x19: case 0x29: case 0x39: {
+        // ADD HL,BC/DE/HL/SP: preserve S/Z/PV, reset N,
+        // set H from bit 11, C from bit 15, F3/F5 from result high byte.
+        const source=opcode===0x09?'$.bc':opcode===0x19?'$.de':
+          opcode===0x29?'$.hl':'$.sp';
+        lines=[
+          'const left=$.hl;const right='+source+';',
+          'const sum=left+right;const result=sum&65535;',
+          '$.f=($.f&0xc4)|((result>>>8)&0x28)|',
+          '(((left&4095)+(right&4095)>4095)?16:0)|(sum>65535?1:0);',
+          '$.hl=result;',
+          '$.pc='+next(1)+';','$.t+=11;'
+        ];
+        targets=[next(1)];
+        break;
+      }
+      case 0xc1: case 0xd1: case 0xe1: case 0xf1: {
+        // POP BC/DE/HL/AF: two reads in little-endian stack order.
+        // AF is split into A and F; it does not use a synthetic AF field.
+        const reg=opcode===0xc1?'bc':opcode===0xd1?'de':'hl';
+        lines=[
+          'const lo=bus.read8($.sp,$.t+7);$.sp=($.sp+1)&65535;',
+          'const hi=bus.read8($.sp,$.t+10);$.sp=($.sp+1)&65535;',
+          opcode===0xf1?'$.a=hi;$.f=lo;':'$.'+reg+'=(hi<<8)|lo;',
+          '$.pc='+next(1)+';','$.t+=10;'
+        ];
+        targets=[next(1)];
+        break;
       }
       case 0xaf: lines=['$.a=0;$.f=0x44;','$.pc='+next(1)+';','$.t+=4;'];targets=[next(1)];break;
       case 0x02: case 0x0a: case 0x12: case 0x1a: {
