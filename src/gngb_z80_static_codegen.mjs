@@ -204,6 +204,21 @@ export function compileZ80Prefix(rom, {entry=0, limit=512}={}) {
         const dest=next(2+sign8(read8(pc,1)));length=2;
         lines=['$.pc='+dest+';','$.t+=12;'];targets=[dest];break;
       }
+      case 0x20: case 0x28: case 0x30: case 0x38: {
+        // JR NZ/Z/NC/C,e. Only F.Z (0x40) or F.C (0x01) is inspected.
+        // Flags and registers are unchanged. Taken=12 T; not taken=7 T.
+        const fallthrough=next(2), dest=next(2+sign8(read8(pc,1)));
+        const mask=(opcode===0x20||opcode===0x28)?0x40:0x01;
+        const wantSet=(opcode===0x28||opcode===0x38);
+        length=2;
+        lines=[
+          'const take='+(wantSet?'(($.f&'+mask+')!==0);':'(($.f&'+mask+')===0);'),
+          '$.pc=(take?'+dest+':'+fallthrough+');',
+          '$.t+=(take?12:7);'
+        ];
+        targets=[fallthrough,dest];
+        break;
+      }
       case 0x10: {
         // DJNZ e: decrement B (high byte of BC) modulo 256, leave flags intact.
         // Not taken: 8 T-states; taken: 13 T-states. Explore BOTH static edges.
