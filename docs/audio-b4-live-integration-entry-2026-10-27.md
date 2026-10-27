@@ -94,3 +94,30 @@ After `PRIVATE_NATIVE_TRACE_PROFILE_NOT_CPU_PARITY`, compile frontiers from *obs
 The scanner may exit 2 for `PARTIAL_UNCERTIFIED` while still printing a safe JSON of grouped Z80 blocker families: this is expected and defines actual next compiler work. Never publish private trace, ROM, codegen, WAV or profiler root JSON. Only return the three sanitized stdout checkpoint JSONs.
 
 B4.T2-A is **IMPLEMENTED / NATIVE VALIDATION PENDING**. Subsequent B4.T2-B develops only instruction families proven necessary by the dynamic-backed roots; B4.T3 implements scheduler/240Hz IRQ, B4.T4 live YMFM PCM producer, B4.T5 Worklet + gameplay A/V sync.
+
+## B4.T2-A checkpoint — MAME 0.288 markerless trace, recovery before recapture
+
+Mac operator: Node **59/59**, Python **64/64**, ROM SHA1_MATCH. Command `audio_z80_native_pc.py --capture --id b4trace1 --frame-limit 360 --lab-allow-unpinned-mame` returned `NATIVE_TRACE_CAPTURED_PRIVATE_PROFILE_PENDING` with installed MAME **0.288**. Subsequently the profile returned `STOP/TRACE_MARKER_NOT_SEEN`, and the roots scanner returned `AUDIO_SCAN_INPUT_OR_RUNTIME_STOP` because the roots file did not exist. Neither result demonstrates any Z80 PC coverage, and `trace_armed` is a Lua-script status, **not independent evidence that MAME traced sound instructions**.
+
+**Diagnosis from MAME 0.288 source, without inspecting the private file remotely:** MAME 0.288 `src/emu/debug/debugcpu.cpp` `device_debug::tracer::update` emits default instruction trace lines in the shape `"%s: %s\\n"` (PC string, colon, disassembly) regardless of whether custom debugger `tracelog` action markers appear. The old profiler assumed **only** `AUDIOPC=hhhh` marker lines, so it could reject a valid default MAME tracer file.
+
+**Fix on main:** a bounded read-only `--inspect` mode classifies the existing private b4trace1 file and outputs **only counts**, closed heartbeat and presence of 4-hex-PC default MAME trace lines. `--profile` prefers `AUDIOPC` markers if present, otherwise recovers PCs from anchored, canonical MAME standard disassembly headers `hhhh: instruction`; it never scans arbitrary hexadecimal tokens or exports instruction strings. Recovered roots are limited to the private `gg2.bin` ROM region, with the usual SHA1, size, path and no-overwrite gates. It explicitly declares `source_cpu_independently_verified=false` and no native Z80 parity.
+
+Four more tests cover default PC-line recovery, inspector no writes, marker-vs-default precedence and rejecting ambiguous hex text.
+
+**Next commands, WITHOUT rerunning MAME:**
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+    python3 scripts/audio_z80_native_pc.py --inspect --id b4trace1
+
+Expected tests: Node **59**, Python **68** (previous 64 + 4), not yet Mac validated. If `status=MAME_STANDARD_DISASSEMBLY_PC_LINES_RECOVERABLE` or `MARKED_PC_LINES_AVAILABLE`, run:
+
+    python3 scripts/audio_z80_native_pc.py --profile --id b4trace1
+
+Only if profile `status=PRIVATE_NATIVE_TRACE_PROFILE_NOT_CPU_PARITY` generates private roots, run:
+
+    node scripts/audio_z80_scan.mjs --roots out/audio/z80-native-roots-b4trace1.json --out out/audio/z80-frontier-b4trace1.json
+
+If `NO_RECOGNIZED_PC_LINES` (possibly zero-byte trace), STOP and share **only inspector JSON**. The next task would then instrument whether debugger `trace` returned an error and whether MAME's audiocpu actually executed with tracing enabled. Do not guess PC roots, alter files in `out/audio/`, or send raw tracer text.
