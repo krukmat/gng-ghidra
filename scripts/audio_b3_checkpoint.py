@@ -558,14 +558,16 @@ def wav_metrics(source, *, expected_rate=None, max_ms=SAMPLE_LIMIT):
 
 
 def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None,
-           source_mode="OPERATOR_PROVIDED_TAPE", mame_metadata=None):
+           source_mode="OPERATOR_PROVIDED_TAPE", mame_metadata=None,
+           allow_cross_cpu_skew_lab=False):
     if type(duration_ms) is not int or not 1 <= duration_ms <= SAMPLE_LIMIT:
         raise B3Stop("DURATION_INVALID")
     if source_mode not in ("OPERATOR_PROVIDED_TAPE", "MAME_SESSION_CAPTURE"):
         raise B3Stop("CAPTURE_SOURCE_INVALID")
     # Regression / privacy guard is independent of partial Z80 reachability.
     verify_rom_identity()
-    integrity = inspect_tape(tape)
+    integrity = inspect_tape(tape,
+                             allow_cross_cpu_skew_lab=allow_cross_cpu_skew_lab)
     health = read_tap_health(tape)
     if health.get("status") == "ARMED_CAPTURE_CLOSED" and "written_events" in health:
         if (health["written_events"] != integrity["events"]
@@ -624,6 +626,10 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None,
         "mame_loaded_same_rom_verified": False,
         "events_total": integrity["events"],
         "ym_writes": integrity["ym_writes"],
+        "lab_cross_cpu_tick_regressions": integrity["lab_cross_cpu_clock_inversions"],
+        "global_timeline_strictly_monotonic": integrity["global_timeline_strictly_monotonic"],
+        "per_cpu_ym_order_verified_from_tape": True,
+        "cross_cpu_temporal_parity_verified": False,
         "ym_chip_0_writes": integrity["ym_chip_0_writes"],
         "ym_chip_1_writes": integrity["ym_chip_1_writes"],
         "sound_commands": integrity["sound_commands"],
@@ -659,6 +665,8 @@ def main(argv=None):
                    help="Only summarize private MAME bus activity; no ROM access or rendering")
     p.add_argument("--capture-id", type=str,
                    help="Unique 1-32 character [A-Za-z0-9_-] capture suffix; preserves previous captures")
+    p.add_argument("--lab-allow-cross-cpu-skew", action="store_true",
+                   help="Explicit replay-only LAB exception for clock regressions solely across CPUs; Z80/YM order remains strict")
     p.add_argument("--lab-allow-unpinned-mame", action="store_true",
                    help="Explicit laboratory exception for an installed MAME other than 0.289; never native parity")
     p.add_argument("--rompath", default="roms")
@@ -668,6 +676,8 @@ def main(argv=None):
     try:
         if args.lab_allow_unpinned_mame and not args.capture:
             raise B3Stop("MAME_LAB_OVERRIDE_REQUIRES_CAPTURE")
+        if args.lab_allow_cross_cpu_skew and (args.capture or args.diagnose):
+            raise B3Stop("LAB_SKEW_OVERRIDE_REQUIRES_TAPE_RENDER")
         if args.capture_id is not None and not args.capture:
             raise B3Stop("MAME_CAPTURE_ID_REQUIRES_CAPTURE")
         if args.diagnose and (args.capture or args.reference_wav is not None):
@@ -699,7 +709,8 @@ def main(argv=None):
                         duration_ms=args.duration_ms, native_wav=reference,
                         source_mode=("MAME_SESSION_CAPTURE" if args.capture
                                      else "OPERATOR_PROVIDED_TAPE"),
-                        mame_metadata=capture_meta)
+                        mame_metadata=capture_meta,
+                        allow_cross_cpu_skew_lab=args.lab_allow_cross_cpu_skew)
         print(json.dumps(report, separators=(",", ":")))
         return 0
     except B3Stop as e:
