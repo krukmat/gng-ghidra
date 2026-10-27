@@ -14,7 +14,7 @@ import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {rendererUnknownCount} from '../src/v2_b1_observable.mjs';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
 import {gngbGraphics,rendererInputs} from './r35_t5_render_check.mjs';
-import {B3_HORIZONS,b3Tape} from '../src/v3_b3_tapes.mjs';
+import {resolveB3LabTape} from '../src/v3_b3_external_tape.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const SELECTED=selectB3Bundle(ROOT);
@@ -23,9 +23,10 @@ const DIR=SELECTED.dir;
 console.log('V3_B3_BUNDLE_GENERATION='+SELECTED.generation);
 const [profile,list]=process.argv.slice(2);
 const want=(list??'').split(',').map(Number);
-if(!profile||!want.length||want.some(f=>!Number.isInteger(f)||f<1||
-   f>B3_HORIZONS[profile]))throw Error('V3_B3_WITNESS_USAGE');
-const tape=b3Tape(profile);
+if(!profile)throw Error('V3_B3_WITNESS_USAGE');
+const tape=resolveB3LabTape(profile);
+if(!want.length||want.some(f=>!Number.isInteger(f)||f<1||
+   f>tape.frames))throw Error('V3_B3_WITNESS_USAGE');
 const {code}=loadFrozen(DIR);
 const {blocks}=await import(pathToFileURL(join(DIR,'program.mjs')).href);
 const {createBoard}=await import(pathToFileURL(join(DIR,'gngb_runtime.mjs')).href);
@@ -67,7 +68,7 @@ order.forEach((f,n)=>{
 });
 const out=join(ROOT,'out/v3/b3/witness');
 mkdirSync(out,{recursive:true,mode:0o700});
-const file=join(out,profile+'-'+order[0]+'-'+order.at(-1)+'.png');
+const file=join(out,tape.profile+'-'+order[0]+'-'+order.at(-1)+'.png');
 writeFileSync(file,png(MW,MH,montage),{mode:0o600});
 console.log('V3_B3_WITNESS_RUN='+result.status);
 console.log('V3_B3_WITNESS_FRAMES='+order.join(','));

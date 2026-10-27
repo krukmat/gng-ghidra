@@ -66,6 +66,7 @@ test('lab snapshot resumes identical records at several frame boundaries',async(
 });
 
 test('lab runtime rejects an unexpected runtime digest',async()=>{
-  await assert.rejects(()=>labCreateBoard(runtimePath,'0'.repeat(64),{},new Map()),
+  await assert.rejects(()=>labCreateBoard(runtimePath,'0'.repeat(64),{},new Map(),
+    {frames:1}),
     /V3_B3_LAB_RUNTIME_HASH_MISMATCH/);
 });

@@ -12,7 +12,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
-import {B3_HORIZONS,b3Tape} from '../src/v3_b3_tapes.mjs';
+import {resolveB3LabTape} from '../src/v3_b3_external_tape.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const SELECTED=selectB3Bundle(ROOT);
@@ -21,16 +21,17 @@ const DIR=SELECTED.dir;
 console.log('V3_B3_BUNDLE_GENERATION='+SELECTED.generation);
 const [profile,list]=process.argv.slice(2);
 const frames=[...new Set((list??'').split(',').map(Number))].sort((a,b)=>a-b);
-if(!profile||!frames.length||frames.some(f=>!Number.isInteger(f)||f<2||
-   f>B3_HORIZONS[profile]))throw Error('V3_B3_ORACLE_USAGE');
-const tape=b3Tape(profile);
+if(!profile)throw Error('V3_B3_ORACLE_USAGE');
+const tape=resolveB3LabTape(profile);
+if(!frames.length||frames.some(f=>!Number.isInteger(f)||f<2||
+   f>tape.frames))throw Error('V3_B3_ORACLE_USAGE');
 const spec=tape.events.map(e=>{
   if(e.cycle%CYCLES_PER_FRAME)throw Error('V3_B3_ORACLE_TAPE_NOT_FRAME_ALIGNED');
   return e.cycle/CYCLES_PER_FRAME+':'+e.control+':'+(e.pressed?1:0);
 }).join(',');
 const out=join(ROOT,'out/v3/b3/oracle');
 mkdirSync(out,{recursive:true,mode:0o700});
-const work=mkdtempSync(join(out,profile+'-'));
+const work=mkdtempSync(join(out,tape.profile+'-'));
 const log=execFileSync('mame',['gngb','-rompath',join(ROOT,'roms'),
   '-cfg_directory',join(work,'cfg'),'-nvram_directory',join(work,'nvram'),
   '-video','none','-sound','none','-nothrottle','-skip_gameinfo',
@@ -83,6 +84,6 @@ for(const [n,f] of frames.entries()){
   console.log('V3_B3_ORACLE_FRAME_'+f+'='+(ok?'MATCH':'DIFF '+JSON.stringify(diffs))+
     ' unknown_skipped='+unknown);
 }
-console.log('V3_B3_ORACLE_'+profile+'='+(worst?'MISMATCH':'PASS_ALL_FRAMES_MATCH'));
+console.log('V3_B3_ORACLE_'+tape.profile+'='+(worst?'MISMATCH':'PASS_ALL_FRAMES_MATCH'));
 console.log('V3_B3_ORACLE_MAME_DIR='+work);
 process.exitCode=worst?2:0;

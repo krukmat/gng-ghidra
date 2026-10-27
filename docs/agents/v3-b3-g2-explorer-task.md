@@ -1,6 +1,34 @@
-# Tarea preparada — explorador con búsqueda (V3.B3 G2.1)
+# Explorador con búsqueda (V3.B3 G2.1)
 
-Estado: preparada el 27/10/2026. No iniciada.
+Estado: E0 GO; E1 PARTIAL (posición y vidas validadas, fase provisional); E2 GO hasta
+`x=1606`, siguiente iteración STOP por estancamiento; E3 no necesario para
+esta cinta; E4 GO hasta el frame 2730. Checkpoint 27/10/2026.
+
+## Checkpoint ejecutado (g4, 27/10/2026)
+
+| Bloque | Resultado y evidencia |
+| --- | --- |
+| **E0 GO** | `src/v3_b3_lab_board.mjs` instrumenta **en memoria** el runtime congelado solo si coincide con el SHA-256 del manifiesto. Guarda/restaura registros y máscaras CPU, RAM y máscaras, paleta, DMA, scroll, banco, IRQ/SYNC, latches, sonido, ciclo y contadores. `scripts/v3_b3_lab_snapshot_check.mjs`: `arthurControls`, 2200 frames, cortes 311/640/1200/1974; todos los hashes de record coinciden con g4 sin cortes y tras restaurar. Test ROM-free con cuatro cortes. Ningún bundle modificado. |
+| **E1 PARTIAL** | Posición absoluta de Arthur: palabra big-endian `0x00A0–0x00A1`; vidas: byte `0x0060`. En `botA`, `world_x=138`/scroll=10 (frame 1600) y `world_x=204`/scroll=76 (frame 2000): ambos dan x=128 en pantalla y coinciden con sprites DMA. Las vidas bajan 3→2 entre 2200–2600 y 2→1 entre 3800–4200, con muerte/respawn visibles. `0x0052=1` durante estas cintas, pero **no está validado como fase**: no hubo transición de nivel. El buscador solo puntúa posición y vidas. |
+| **E2 GO / frontera STOP** | `scripts/v3_b3_explore.mjs` hace búsqueda por ramas desde snapshots y emite únicamente transiciones P1 en formato B3. Máximo de `botA` vivo: `x=500`. La mejor cinta privada `out/v3/b3/explorer/explorer-g4-2730-1606.json` llega a `x=1606` con 3 vidas, frente al agua y un enemigo rojo al final del tramo visto. Variantes de 90 y 30 frames (derecha, disparo, salto temprano/tardío, arriba, izquierda) no superaron `x=1606` hasta el horizonte 6000. Siguiente puntuación debe incluir supervivencia/enemigo y acción contextual cerca del agua; no declarar fase 1 completa. |
+| **E3 no activado** | Ninguna rama elegida llegó a `UNCOMPILED`/`BLOCK_ENTRY` hasta 2730. g4 sigue seleccionado; no hay g5 ni modificación de paquete certificado. |
+| **E4 GO para esta cinta** | Imagen de los frames 1920/2200/2400/2600/2730 inspeccionada en privado. `v3_b3_oracle.mjs`: frames 1200, 1740, 1920, 2200, 2400, 2600, 2730 idénticos a MAME 0.288, 0 bytes desconocidos. `v3_b3_live_bot.mjs`: 2730 frames, 142/142 eventos, retraso máximo 0, sin HALT; `v3_b3_live_replay.mjs`: hash final idéntico. |
+
+Comandos de reproducción local:
+
+```bash
+node scripts/v3_b3_lab_snapshot_check.mjs
+node scripts/v3_b3_explore.mjs out/v3/b3/explorer/explorer-g4-1920-846.json 2000
+node scripts/v3_b3_oracle.mjs out/v3/b3/explorer/explorer-g4-2730-1606.json 1200,1740,1920,2200,2400,2600,2730
+node scripts/v3_b3_live_bot.mjs out/v3/b3/explorer/explorer-g4-2730-1606.json 2730
+node scripts/v3_b3_live_replay.mjs out/v3/b3/live-tapes/bot-explorer-g4-2730.json
+python3 tests/generate_synthetic.py && python3 tests/generate_function_fixtures.py
+node --test tests/test_*.mjs
+```
+
+Node 22.23.0 no acepta `node --test tests/` como directorio (intenta cargarlo
+como módulo). La invocación explícita anterior dio 447 PASS, 0 FAIL, 1 SKIP.
+Los archivos de `out/` son privados e ignorados por Git; no se publican.
 
 ## Contexto
 

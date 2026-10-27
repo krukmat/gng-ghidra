@@ -34,7 +34,7 @@
 | Audio | El runtime principal expone un `soundlatch` | Cadena real de sonido y síntesis sin certificar |
 | Runtime largo | Sesión en vivo de 36.000 frames (~10 min); el worker libera los snapshots entregados | Cadencia/latencia y sesiones de horas (P7) |
 
-**No inventar porcentaje general de progreso ni fechas.** Lo confirmado es motor/render/lecturas reales, todavía no el primer crédito ni Arthur controlable.
+**No inventar porcentaje general de progreso ni fechas.** Crédito, Start y Arthur controlable están confirmados en V3.B3; el explorador alcanza `world_x=1606` en fase 1 ([checkpoint](v3-b3-g2-explorer-task.md)). Aún no hay fase completa ni 100% jugable.
 
 ## 3. Plan recomendado y dependencias (completamente revisables)
 

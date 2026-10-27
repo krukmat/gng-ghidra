@@ -10,15 +10,17 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
-import {B3_HORIZONS,b3Tape} from '../src/v3_b3_tapes.mjs';
+import {resolveB3LabTape} from '../src/v3_b3_external_tape.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const BASE='http://127.0.0.1:18609';
 const [profile,lastArg]=process.argv.slice(2);
-const last=Number(lastArg??B3_HORIZONS[profile]);
-if(!profile||!Number.isInteger(last)||last<400||last>B3_HORIZONS[profile])
+if(!profile)throw Error('V3_B3_LIVE_BOT_USAGE');
+const source=resolveB3LabTape(profile);
+const last=Number(lastArg??source.frames);
+if(!Number.isInteger(last)||last<400||last>source.frames)
   throw Error('V3_B3_LIVE_BOT_USAGE');
-const events=b3Tape(profile).events.map(e=>({frame:e.cycle/CYCLES_PER_FRAME,
+const events=source.events.map(e=>({frame:e.cycle/CYCLES_PER_FRAME,
   control:e.control,pressed:e.pressed})).filter(e=>e.frame<last);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const state=async()=>(await fetch(BASE+'/state',{cache:'no-store'})).json();
@@ -72,7 +74,7 @@ try{
   const tape=await (await fetch(BASE+'/tape',{cache:'no-store'})).text();
   const dir=join(ROOT,'out/v3/b3/live-tapes');
   mkdirSync(dir,{recursive:true,mode:0o700});
-  const file=join(dir,'bot-'+profile+'-'+last+'.json');
+  const file=join(dir,'bot-'+source.profile+'-'+last+'.json');
   writeFileSync(file,tape,{mode:0o600});
   console.log('V3_B3_LIVE_BOT_TAPE='+file);
   console.log('V3_B3_LIVE_BOT='+(s.halt?'BLOCKED_HALT':'PASS_'+s.frame+'_LIVE_FRAMES'));
