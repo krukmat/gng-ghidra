@@ -36,8 +36,23 @@ for(let i=0;i<count;i++){
 const speeds=observations.filter(o=>o.islandVelocity!==null)
   .map(o=>o.islandVelocity).sort((a,b)=>a-b);
 const median=speeds.length?speeds[Math.floor(speeds.length/2)]:null;
+const approachSpeeds=[];
+for(let i=1;i<observations.length;i++){
+  const a=observations[i-1],b=observations[i];
+  if(a.bankX!==null&&b.bankX!==null&&a.arthurX!==null&&
+     b.arthurX!==null&&b.frame-a.frame<=20&&
+     a.arthurX<a.bankX+8&&b.arthurX<b.bankX+8){
+    approachSpeeds.push(((b.arthurX-b.bankX)-
+      (a.arthurX-a.bankX))/(b.frame-a.frame));
+  }
+}
+approachSpeeds.sort((a,b)=>a-b);
+const approachMedian=approachSpeeds.length?
+  approachSpeeds[Math.floor(approachSpeeds.length/2)]:null;
 console.log('BOT_WATER_OBSERVATIONS='+JSON.stringify(observations));
 console.log('BOT_WATER_CALIBRATION='+JSON.stringify({session,
   availableSamples:speeds.length,medianRelativeIslandSpeed:median,
+  approachSamples:approachSpeeds.length,
+  medianArthurRelativeBankSpeed:approachMedian,
   calibrated:false,landing:'UNKNOWN',bossKill:'UNKNOWN',
   stage:'READ_ONLY_VISUAL_DIAGNOSTIC'}));
