@@ -94,6 +94,7 @@ test('jump without visual landing evidence never counts as success',()=>{
 
 test('calibration must be explicit; no gameplay constants inferred',()=>{
   assert.throws(()=>createWaterCrossingPolicy(),/CALIBRATION_REQUIRED/);
+  assert.ok(createWaterCrossingPolicy({flightFrames:12,runSpeedPxPerFrame:0}));
   assert.throws(()=>createWaterCrossingPolicy({flightFrames:12,
     runSpeedPxPerFrame:-1}),/CALIBRATION_REQUIRED/);
 });
