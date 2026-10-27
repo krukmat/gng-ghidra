@@ -236,3 +236,26 @@ When green, record another unique private session:
     python3 scripts/audio_b3_checkpoint.py --capture --capture-id heartbeat3 --lab-allow-unpinned-mame --ymfm-src out/audio/ymfm --duration-ms 5000
 
 Interact with MAME (coin 5, start 1, move/shoot) and exit normally. Return ONLY the sanitized GNG_AUDIO_B3_CHECKPOINT_V1 JSON. On native success, privately listen with afplay out/audio/b3-first-audio.wav; confirm actual audible music/effects. Existing heartbeat1 and heartbeat2 evidence must not be deleted or committed.
+
+
+## B3 heartbeat3 — Numeric conversion isolated (2026-10-27)
+
+Mac operator checkpoint passed **54/54 Node + 40/40 Python tests**, ROM identity SHA1_MATCH, Z80 reset-root static prefix 22 PCs (still not Z80/IRQ parity). The native heartbeat3 recorder saw **1764 frames, 259158 YM register callbacks, 21 main sound commands, 5764 Z80 latch read callbacks, 2 reset callbacks**. All **264945** callbacks failed a numeric field conversion; clock_errors=0, format_errors=0, write_errors=0. The private tape has zero events. **No playable B3 WAV is yet demonstrated**.
+
+MAME Lua 0.289 docs confirm screen.frame_number is read-only and memory tap callbacks receive absolute offset, data and mask. The specific failing field was not observed in heartbeat3, so the fix must remain evidence-gated. B3 now:
+- Counts separate frame_errors, address_errors and data_errors in the private heartbeat. It also counts frame_fallbacks when screen.frame_number cannot be read as a decimal integer and the Lua frame notifier counter is substituted. This fallback is LAB-only: native frame alignment is not certified.
+- Never invents an MMIO address or bus data value if the MAME callback value cannot be validated. Such events remain a STOP.
+- Validates each new heartbeat field before surfacing numeric counters, while accepting older health formats.
+- Adds ROM-free tests for per-field diagnostic classification and rejecting malformed health counters.
+
+Next operator checkpoint, preserving heartbeat1, heartbeat2, and heartbeat3:
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected (not yet observed): **54/54 Node and 42/42 Python**. Once PASS:
+
+    python3 scripts/audio_b3_checkpoint.py --capture --capture-id heartbeat4 --lab-allow-unpinned-mame --ymfm-src out/audio/ymfm --duration-ms 5000
+
+Trigger audio in MAME, exit normally, return ONLY the sanitized GNG_AUDIO_B3_CHECKPOINT_V1 JSON. The new frame/address/data counters distinguish whether any remaining problem is a UI frame wrapper or unconvertible MMIO values. Never share private native tapes, WAV, extracted ROMs, or captured register values.
