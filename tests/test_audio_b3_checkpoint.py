@@ -69,6 +69,8 @@ class B3CheckpointTests(unittest.TestCase):
         out = b3.inspect_tape(path)
         self.assertEqual(out["events"], 6)
         self.assertEqual(out["ym_writes"], 3)
+        self.assertEqual(out["ym_chip_0_writes"], 2)
+        self.assertEqual(out["ym_chip_1_writes"], 1)
         self.assertEqual(out["sound_commands"], 1)
         self.assertEqual(out["latch_reads"], 1)
 
