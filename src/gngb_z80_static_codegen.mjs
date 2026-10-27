@@ -25,11 +25,9 @@ export function compileZ80Prefix(rom, {entry=0, limit=512}={}) {
     if(pc<0 || pc>=0x8000){
       blockers.push({pc,reason:'OUTSIDE_SOUND_ROM'});continue;
     }
-    const opcode=rom[pc],next=(pc+n)&0xffff;
+    const opcode=rom[pc],next=n=>(pc+n)&0xffff;
     let lines=[],targets=[],length=1;
     const w16=()=>read8(pc,1)|(read8(pc,2)<<8);
-    const fixed=(n,t,body)=>{length=n;lines=[body,'$.pc='+t+';','$.t+='+String(t===undefined?0:cycles)+';'];};
-    let cycles=4;
     switch(opcode) {
       case 0x00: lines=['$.pc='+next(1)+';','$.t+=4;'];targets=[next(1)];break;
       case 0xf3: lines=['$.iff1=false;$.iff2=false;$.pc='+next(1)+';','$.t+=4;'];targets=[next(1)];break;
