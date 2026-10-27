@@ -73,7 +73,10 @@ function run(argv) {
     seedSource:args['--roots']===null?'RESET_VECTOR_ONLY':'OPERATOR_SUPPLIED_PCS'
   });
   if(!fs.existsSync(PRIVATE))throw Error('AUDIO_SCAN_PRIVATE_ROOT_MISSING');
-  fs.writeFileSync(out,JSON.stringify(report,null,2)+'\n',{encoding:'utf8',flag:'w',mode:0o600});
+  // The visited PC census is for PRIVATE native-trace comparison only.
+  // Never place PC inventories or ROM-derived instructions in stdout.
+  const privateAudit={...report,static_visited_pcs:result.visitedPcs};
+  fs.writeFileSync(out,JSON.stringify(privateAudit,null,2)+'\n',{encoding:'utf8',flag:'w',mode:0o600});
   const short={
     kind:report.kind,status:report.status,rom_identity:report.rom_identity,
     static_decoded_pcs:report.static_decoded_pcs,
