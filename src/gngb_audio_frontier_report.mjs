@@ -42,6 +42,11 @@ function safeFrontier(blocker) {
       throw Error('AUDIO_REPORT_CB_FAMILY_MISMATCH');
     item.cb_instruction=cleanTag(blocker.cb_instruction);
   }
+  if(blocker.source_pc!==undefined) {
+    if(item.reason!=='OUTSIDE_SOUND_ROM')
+      throw Error('AUDIO_REPORT_SOURCE_PC_REASON_MISMATCH');
+    item.source_pc=cleanPC(blocker.source_pc);
+  }
   return item;
 }
 
