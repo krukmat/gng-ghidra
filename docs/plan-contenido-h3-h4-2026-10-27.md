@@ -1,6 +1,6 @@
 # Plan de contenido — de H3 a H4 (fases, jefes, dos vueltas y final)
 
-**Fecha:** 2026-10-27 · **Rama:** `main` · **Estado:** pasos 1–2 GO; paso 5 GO (g6); verificación de jefes por búsqueda diferida (§8). Paso 3 (grabación del operador) pendiente: no bloquea la compilación, solo la certificación.
+**Fecha:** 2026-10-27 · **Rama:** `main` · **Estado:** pasos 1–2 GO; paso 5 GO (g6); verificación de jefes por búsqueda diferida (§8); barrido de cobertura de jefes: 0 % UNCOMPILED en lo alcanzado, sin g7. Paso 3 (grabación del operador) pendiente: no bloquea la compilación, solo la certificación.
 
 > **Avance 27/10/2026.** Herramienta: [h3_tape.mjs](../scripts/h3_tape.mjs) + [h3_tape_recorder.lua](../scripts/h3_tape_recorder.lua) + [h3_tape_convert.mjs](../src/h3_tape_convert.mjs).
 > **Paso 1 GO:** `titleCoinStart` inyectada y convertida → 4/4 eventos idénticos; 2.012 lecturas reales de CPU iguales a lo anotado.
@@ -112,6 +112,24 @@ F-N:  MOTOR (cinta humana → residuo dinámico + certificación) → REGLAS →
     - **Avance:** [scripts/h3_boss_search.mjs](../scripts/h3_boss_search.mjs) (búsqueda en haz; éxito = `0x72` avanza) llega desde la mitad de la fase 1 hasta el cíclope ante la puerta (scroll fijo en 3072) sin `UNCOMPILED`; ningún jefe derrotado ni comparado con MAME. La herramienta no está validada tras corregir la armadura a `0x00AC`.
     - **Decisión del operador:** la verificación de jefes queda diferida hasta después de la implementación completa (§8). Los jefes se certifican con la cinta humana en F-N.
     - **Límite:** 34/34 puntos de control de estas escenas coinciden, sin `UNCOMPILED`/`UNSUPPORTED`; no se modifica el cierre ni se crea g7. Solo hay combate visible del demonio de la fase 1. En la cueva de la fase 3, un barrido adicional de `0x006A`/`0x007E` por 0, 4, 8, 12, 16, 20, 24, 28, 32, 40, 48 y 64 con X=3300 tampoco mostró jefe. Falta encontrar estados coherentes junto a los jefes de las fases 2–6, derrotarlos y recorrer la segunda vuelta por una ruta legítima. Los saltos directos a X muy avanzada omiten el curso de apariciones; los saltos verticales pueden dejar a Arthur cayendo. La coincidencia de bytes en esos estados no certifica un jefe.
+  - **Barrido de cobertura de jefes con g6 (27/10/2026): 0 % UNCOMPILED en todo lo alcanzado; sin g7.**
+    - **Método:** [scripts/h3_boss_search.mjs](../scripts/h3_boss_search.mjs) desde `titleCoinStart` + atajo; haz de 8, 32 y 96 hasta el frame 9000. Se añadieron `cp` (`$81`) al estado, contadores `branches`/`halts` y el peso de subida `H3_WU`.
+    - **Inicio de fase validado:** `H3_POKE=1840:2120:114:N` da `$72`=N y `$81`=0 para N=0–5. La X difiere de la de mitad de fase, salvo en N=4 (6736 frente a 6784) y en N=5, donde inicio y mitad son idénticos (X=7472, Y=1615).
+    - **Métrica:** % de ramas evaluadas que acaban en `H3_BOSS_HALT`. Infla el volumen, porque casi todas las ramas reejecutan el mismo código; no mide bloques nuevos (pendiente, ver «Siguiente»).
+
+      | Fase (`0x72`) | Arranques | Ramas | HALT | Alcance real |
+      |---|---|---|---|---|
+      | 1 (`0`) | inicio, mitad ×2 | 56 154 | 0 (0 %) | Arena del cíclope (scroll 3073), sostenida del frame ~3700 al 9000; sin victoria |
+      | 2 (`1`) | inicio, mitad ×2 | 52 374 | 0 (0 %) | Estancado en X≈5449 (scroll 5066); jefe no alcanzado |
+      | 3 (`2`) | inicio, mitad ×3 | 51 298 | 0 (0 %) | `0x72` 2→3 en el frame 5680 (haz 32); no comparado con MAME |
+      | 4 (`3`) | inicio, mitad ×2 | 63 126 | 0 (0 %) | Scroll fijo en 6144 hasta el frame 9000; posible arena, jefe sin confirmar |
+      | 5 (`4`) | inicio, mitad ×4 | 24 556 + 1 cortado | 0 (0 %) | Subiendo muere hacia el frame 2980; bajando (`H3_WY`) llega a Y≈1172 vivo en el frame 5800 (cortado) |
+      | 6 (`5`) | inicio, mitad ×2 | 5 390 | 0 (0 %) | Muere en menos de 700 frames; jefe no alcanzado |
+      | Sala final (`6`) | `114:6` | 47 292 | 0 (0 %) | En la sala hasta el frame 9000 (scroll 7936, `0x71`=2); puntuación 0, sin combate acreditado |
+
+    - **Total:** 300 190 ramas, 0 `UNCOMPILED`/`UNSUPPORTED`. No hay residuo, así que no se crea g7. Ningún jefe consta como derrotado ni comparado con MAME.
+    - **Límite:** el resultado esperado ya era 0, porque g6 cubre el 100 % de las funciones de ROM más el modo multientrada. Ensanchar el haz (8→96) no cambió el alcance en las fases 5–6: el cuello de botella es la poda por muerte, no el ancho. Faltan los jefes de las fases 2, 5 y 6 y el combate con Astaroth.
+    - **Siguiente:** medir los bloques compilados distintos que ejecutan las cintas de este barrido frente a las cintas certificadas (instrumentación de laboratorio sobre `blocks`, sin tocar el bundle). Recomendación para los jefes: una cinta humana por tramo.
 - [ExportFunctionGraph.java](../ghidra_scripts/ExportFunctionGraph.java) solo analiza el banco 4: ampliar o recorrer con el decodificador del compilador AOT.
 - **GO:** alcanzable compilado, residuo listado, cintas previas idénticas. **STOP:** cambio de hash en una cinta certificada.
 

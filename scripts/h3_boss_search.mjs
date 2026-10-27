@@ -10,7 +10,7 @@
  * DEFERRED (27/10/2026): not validated after the 0x00AC fix; no boss defeated yet.
  * Success: 0x72 advances (boss defeated, key taken, gate crossed).
  * Usage: H3_POKE=... node scripts/h3_boss_search.mjs <phase> [start=2200] [step=60] [end=9000]
- * Env: H3_SEED earlier tape to resume from, H3_WX/H3_WY/H3_WS progress weights (x, y, score),
+ * Env: H3_SEED earlier tape to resume from, H3_WX/H3_WY/H3_WS/H3_WU progress weights (x, max y, score, climb = start y - min y),
  * H3_LAST save the last beam head instead of the best, H3_WA armour-loss penalty, H3_XCAP x cap (boss arena), H3_WIDTH beam width.
  * Output: out/h3/boss/search-p<phase>-<frame>.json (inputs only, private).
  */
@@ -35,7 +35,7 @@ const {blocks}=await import(pathToFileURL(join(selected.dir,'program.mjs')).href
 const [phase,START,K,END]=[0,2200,60,9000].map((d,i)=>Number(process.argv[2+i]??d));
 const WIDTH=Number(process.env.H3_WIDTH??8);
 const WX=Number(process.env.H3_WX??1),WY=Number(process.env.H3_WY??0),WS=Number(process.env.H3_WS??0.02);
-const WA=Number(process.env.H3_WA??2000),XCAP=Number(process.env.H3_XCAP??65535);
+const WU=Number(process.env.H3_WU??0),WA=Number(process.env.H3_WA??2000),XCAP=Number(process.env.H3_XCAP??65535);
 const POKES=parseLabPokes();
 const actions=['right','right_fire','right_jump','right_fire_jump','right_late_jump',
   'fire','jump','duck_fire','left','left_fire','left_jump','up','up_fire','down'];
@@ -56,7 +56,7 @@ function segment(start,action){
   return e.sort((a,b)=>a.cycle-b.cycle||a.control.localeCompare(b.control));
 }
 const bcd=b=>[0x68,0x69,0x6a,0x6b].reduce((v,a)=>v*100+(b[a]>>4)*10+(b[a]&15),0);
-const look=b=>({phase:b[0x72],loop:b[0x71],lives:b[0x60],x:b[0xa0]<<8|b[0xa1],y:b[0xa2]<<8|b[0xa3],
+const look=b=>({phase:b[0x72],cp:b[0x81],loop:b[0x71],lives:b[0x60],x:b[0xa0]<<8|b[0xa1],y:b[0xa2]<<8|b[0xa3],
   handler:b[0x510]<<8|b[0x511],armor:b[0xac],score:bcd(b),scroll:b[0x58]<<8|b[0x59]});
 let schedule=defineInputSchedule(base),dead=false,board;
 board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
@@ -74,23 +74,24 @@ const s0=look(board.state.ramBytes(0,0x600).bytes);
 console.log('H3_BOSS_START '+JSON.stringify(s0));
 if(s0.phase!==phase)throw Error('H3_BOSS_START_PHASE '+s0.phase);
 // XCAP stops rewarding x in a boss arena.
-const value=(s,maxX,maxY)=>s.phase!==phase?1e9:
-  WX*Math.min(maxX,XCAP)+WY*maxY+WS*s.score-WA*s.armor;
-let beam=[{snap:board.lab.save(),events:[],s:s0,maxX:s0.x,maxY:s0.y,v:0,route:[]}],best=beam[0],done=null;
+const value=(s,maxX,maxY,minY)=>s.phase!==phase?1e9:
+  WX*Math.min(maxX,XCAP)+WY*maxY+WU*(s0.y-minY)+WS*s.score-WA*s.armor;
+let branches=0,halts=0;
+let beam=[{snap:board.lab.save(),events:[],s:s0,maxX:s0.x,maxY:s0.y,minY:s0.y,v:0,route:[]}],best=beam[0],done=null;
 for(let frame=START;frame+K<=END&&!done;frame+=K){
   const next=[];
   for(const p of beam)for(const a of actions){
     board.lab.restore(p.snap);dead=false;
     const events=[...p.events,...segment(frame,a)];
     schedule=defineInputSchedule([...base,...events]);
-    const res=board.lab.advanceTo(frame+K);
-    if(res.status!=='FRAMES_DONE'){console.log('H3_BOSS_HALT '+frame+' '+a+' '+res.status+' pc='+res.pc);continue;}
+    const res=board.lab.advanceTo(frame+K);branches++;
+    if(res.status!=='FRAMES_DONE'){halts++;console.log('H3_BOSS_HALT '+frame+' '+a+' '+res.status+' pc='+res.pc);continue;}
     const s=look(board.state.ramBytes(0,0x600).bytes);
     if(s.phase===phase&&(dead||s.lives<p.s.lives)){
       if(process.env.H3_DEBUG)console.log('H3_BOSS_PRUNE f='+frame+' '+a+' dead='+dead+' '+JSON.stringify(s));
       continue;}
-    const c={snap:board.lab.save(),events,s,maxX:Math.max(p.maxX,s.x),maxY:Math.max(p.maxY,s.y),route:[...p.route,a]};
-    c.v=value(s,c.maxX,c.maxY);next.push(c);
+    const c={snap:board.lab.save(),events,s,maxX:Math.max(p.maxX,s.x),maxY:Math.max(p.maxY,s.y),minY:Math.min(p.minY,s.y),route:[...p.route,a]};
+    c.v=value(s,c.maxX,c.maxY,c.minY);next.push(c);
     if(s.phase!==phase){done=c;break;}
   }
   if(done)break;
@@ -112,6 +113,6 @@ const sha256=createHash('sha256').update(JSON.stringify(metadata)).digest('hex')
 const out=join(ROOT,'out/h3/boss');mkdirSync(out,{recursive:true,mode:0o700});
 const file=join(out,'search-p'+phase+'-'+win.snap.recordCount+'.json');
 writeFileSync(file,JSON.stringify({...metadata,sha256,h3:{poke:process.env.H3_POKE??'',route:win.route}})+'\n',{mode:0o600});
-console.log('H3_BOSS_RESULT '+(done?'PHASE_ADVANCED':'NOT_ADVANCED')+' frame='+win.snap.recordCount+' '+JSON.stringify(win.s));
+console.log('H3_BOSS_RESULT '+(done?'PHASE_ADVANCED':'NOT_ADVANCED')+' frame='+win.snap.recordCount+' branches='+branches+' halts='+halts+' '+JSON.stringify(win.s));
 console.log('H3_BOSS_TAPE='+file);
 process.exitCode=done?0:2;
