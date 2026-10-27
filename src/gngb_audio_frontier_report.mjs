@@ -101,3 +101,15 @@ export function summarizeZ80Frontiers(result,{
     static_generated_code_exported:false
   });
 }
+
+
+export function parseZ80OperatorSeeds(json){
+  let obj;
+  try{obj=JSON.parse(json)}catch{throw Error('AUDIO_SCAN_ROOTS_INVALID')}
+  if(!obj||obj.kind!=='GNG_AUDIO_Z80_OPERATOR_PCS_V1'||
+    obj.rom_sha1!=='7ef9ec5c2072e21c787a6bbf700033f50c759c1d'||
+    !Array.isArray(obj.pcs)||obj.pcs.length<1||obj.pcs.length>64||
+    obj.pcs.some(pc=>!Number.isInteger(pc)||pc<0||pc>=32768))
+    throw Error('AUDIO_SCAN_ROOTS_INVALID');
+  return [...new Set([0,...obj.pcs])];
+}
