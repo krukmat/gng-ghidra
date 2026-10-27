@@ -171,6 +171,32 @@ class B3CheckpointTests(unittest.TestCase):
         with self.assertRaisesRegex(b3.B3Stop, "LOCAL_SOUND_ROM_IDENTITY_STOP"):
             b3.verify_rom_identity()
 
+    def test_mame_capture_refuses_unpinned_version(self):
+        from types import SimpleNamespace
+        with patch.object(b3.shutil, "which", return_value="mame"), \
+             patch.object(b3, "call",
+                          return_value=SimpleNamespace(stdout="0.288", stderr="")):
+            with self.assertRaisesRegex(b3.B3Stop, "MAME_VERSION_NOT_PINNED_0289"):
+                b3.capture_tape("mame", "roms")
+
+    def test_mame_capture_writes_private_tape_in_one_interactive_session(self):
+        from types import SimpleNamespace
+        args_seen = []
+        def mock_mame(argv, **kwargs):
+            args_seen.append(argv)
+            self.tape([self.event(1, "YM2203_WRITE", 100, 0xe000, 7)])
+            return SimpleNamespace(returncode=0)
+        with patch.object(b3.shutil, "which", return_value="mame"), \
+             patch.object(b3, "call",
+                          return_value=SimpleNamespace(stdout="0.289", stderr="")), \
+             patch.object(b3.subprocess, "run", side_effect=mock_mame):
+            path = b3.capture_tape("mame", "roms")
+        self.assertEqual(path, self.base / "mame-audio-events.jsonl")
+        self.assertEqual(args_seen[0][0:2], ["mame", "gngb"])
+        self.assertIn("-autoboot_script", args_seen[0])
+        self.assertIn("-wavwrite", args_seen[0])
+        self.assertIn(str(self.base / "mame-native-audio.wav"), args_seen[0])
+
     def test_cli_fail_closed_and_no_private_path_in_stdout(self):
         output = io.StringIO()
         with redirect_stdout(output):
