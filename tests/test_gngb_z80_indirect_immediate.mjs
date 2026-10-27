@@ -70,9 +70,8 @@ test('B4.T2-B2 immediate ALU includes halfcarry, zero, borrow and parity extreme
   }
 });
 
-test('B4.T2-B2 DD/FD index extension recognizes semantic family but refuses execution',()=>{
+test('B4.T2-B2 remaining DD/FD index instructions are classified and fail closed',()=>{
   const patterns=[
-    [0x21,'INDEX_LD_RR_IMMEDIATE'],
     [0x22,'INDEX_LD_RR_ABSOLUTE'],
     [0x23,'INDEX_INC_DEC_RR'],
     [0x09,'INDEX_ADD_RR'],
@@ -103,7 +102,7 @@ test('B4.T2-B2 DD/FD index extension recognizes semantic family but refuses exec
 });
 
 test('B4.T2-B2 index tag safety rejects malicious marker or unrelated family',()=>{
-  const rom=new Uint8Array(0x8000);rom.set([0xdd,0x21],0);
+  const rom=new Uint8Array(0x8000);rom.set([0xdd,0x22],0);
   const original=compileZ80Prefix(rom);
   const changed={...original,blockers:[{...original.blockers[0],
     indexed_instruction:'SENSITIVE RAW PC: e000'}]};
