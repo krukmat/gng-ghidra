@@ -5,6 +5,7 @@ Real ROM, captured events, generated TSV, and WAV never leave out/audio.
 No PCM or MAME parity claim; only non-silent lab audio from native YM writes.
 """
 import argparse
+import hashlib
 import json
 import math
 import shutil
@@ -19,6 +20,7 @@ PRIVATE = ROOT / "out" / "audio"
 EXPECTED_RATE = 62500
 MAX_EVENTS = 250000
 MAX_CAPTURE_BYTES = 64 * 1024 * 1024
+EXPECTED_ROM_SHA1 = "7ef9ec5c2072e21c787a6bbf700033f50c759c1d"
 SAMPLE_LIMIT = 30000
 ALLOWED_KINDS = frozenset({
     "SOUNDLATCH_WRITE", "AUDIO_RESET_WRITE", "Z80_LATCH_READ",
@@ -62,6 +64,18 @@ def call(argv, *, timeout=120):
         # The child output can contain paths, raw timings, ROM data or audio.
         raise B3Stop("LOCAL_COMMAND_STOP")
     return result
+
+
+def verify_rom_identity():
+    rom = ensure_private(PRIVATE / "gg2.bin", must_exist=True)
+    if rom.stat().st_size != 32768:
+        raise B3Stop("LOCAL_SOUND_ROM_IDENTITY_STOP")
+    with rom.open("rb") as stream:
+        identity = hashlib.sha1(stream.read()).hexdigest()
+    if identity != EXPECTED_ROM_SHA1:
+        raise B3Stop("LOCAL_SOUND_ROM_IDENTITY_STOP")
+    # Does not independently establish MAME's loaded ROM or gameplay scenario.
+    return True
 
 
 def capture_tape(mame, rompath):
@@ -189,6 +203,7 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None):
     if type(duration_ms) is not int or not 1 <= duration_ms <= SAMPLE_LIMIT:
         raise B3Stop("DURATION_INVALID")
     # Regression / privacy guard is independent of partial Z80 reachability.
+    verify_rom_identity()
     integrity = inspect_tape(tape)
     source = Path(ymfm_source).expanduser().resolve()
     if not source.is_dir():
@@ -228,6 +243,8 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None):
     result = {
         "kind": "GNG_AUDIO_B3_CHECKPOINT_V1",
         "status": "LAB_NON_SILENT_FROM_MAME_YM_EVENTS_NOT_CERTIFIED",
+        "rom_identity": "SHA1_MATCH_LOCAL_ONLY",
+        "mame_loaded_same_rom_verified": False,
         "events_total": integrity["events"],
         "ym_writes": integrity["ym_writes"],
         "sound_commands": integrity["sound_commands"],
@@ -240,6 +257,7 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None):
         "z80_native_parity_verified": False,
         "ym_waveform_parity_verified": False,
         "gameplay_audio_verified": False,
+        "lab_pcm_generated": True,
         "private_outputs_only": True,
         "rom_bytes_exported": False,
     }
