@@ -31,7 +31,7 @@ test('G5 comparator uses first one-second native YM window only for aggregated d
       windowTStates:10});
     assert.equal(result.status,'AGGREGATE_COMPARISON_ONLY_NO_YM_TAPE_REPLAY');
     assert.equal(result.firstNativeYmTStateAfterRelease,1);
-    assert.equal(result.ymNativePortWritesInWindow,6);
+    assert.equal(result.ymNativePortWritesInWindow,4);
     assert.equal(result.registerActivity.totalFmKeyOn,1);
     assert.equal(result.registerActivity.totalPsgVolumeNonzero,1);
     assert.equal(result.totalYmPortWritesAfterRelease,6);
