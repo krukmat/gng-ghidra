@@ -10,6 +10,10 @@ para reanudar; **no ejecuta nuevas partidas ni búsquedas en este bloque**.
 herramientas `bot/`; consultar `git log -1 --format=%h -- bot/search.mjs`.
 Los resultados nuevos no pertenecen a `d93a100`.
 
+**Investigación externa complementaria:** [BT-R1 — ChatGPT Investigación avanzada](gng-bot-external-research-task.md).
+Incluye contexto para compartir, consultas acotadas, criterios de fuentes y
+formato de informe; no reanuda partidas ni sustituye la validación local.
+
 ## Alcance y fuentes
 
 - Engine, AOT, renderizador, servidor y bundles certificados **congelados**.

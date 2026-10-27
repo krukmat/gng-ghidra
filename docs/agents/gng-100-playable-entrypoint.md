@@ -5,6 +5,7 @@
 **Plan dedicado del bot (engine congelado):** [BT-0→BT-6 — rendimiento en gameplay](gng-bot-gameplay-plan-2026-10-27.md).
 **Bloque actual:** bot detenido tras 253 candidatos sin avance sostenido;
 la [tarea contra el estancamiento](gng-bot-antistuck-task.md) está pendiente.
+Investigación externa preparada: [BT-R1 — ChatGPT Investigación avanzada](gng-bot-external-research-task.md).
 **Plan de dependencias y aceptación:** [G0–G7 / H0–H6](../plan-100pct-jugable-2026-10-26.md).
 
 > **MANDATO INVARIABLE: lograr el 100% de jugabilidad auténtica de Ghosts ’n Goblins.**
