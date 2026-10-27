@@ -104,3 +104,34 @@ If Python still fails, use full test output (no private ROM or tape needed):
     python3 -m unittest discover -s tests -p 'test_audio_*.py' -v
 
 Do not claim native success until the checkpoint returns LAB_NON_SILENT_FROM_MAME_YM_EVENTS_NOT_CERTIFIED, and the operator confirms the private WAV can actually be heard.
+
+
+## B3 incident: empty YM trace and guarded re-capture (27 October 2026)
+
+Operator's first native laboratory capture returned STOP/TAPE_NO_YM_EVENTS, so no new B3 PCM was generated. Playing b3-first-audio.wav failed because a valid WAV was not present. A second attempt correctly refused to overwrite the existing native evidence (MAME_CAPTURE_OUTPUT_ALREADY_EXISTS).
+
+The corresponding bus address taps were checked against MAME 0.289 capcom/gng.cpp: Z80 program writes at 0xe000-0xe003 (two YM2203), main CPU sound latch 0x3a00, reset latch 0x3d01, Z80 sound latch read 0xc800. No unsupported address changes were made.
+
+### Diagnose first (private values never exported)
+
+    python3 scripts/audio_b3_checkpoint.py --diagnose --tape out/audio/mame-audio-events.jsonl
+
+This prints sanitized GNG_AUDIO_B3_CAPTURE_DIAG_V1 counters for total bus events, YM writes, main sound commands, Z80 latch reads, reset asserted/released writes and last observed frame. The activity hint is diagnostic only: it does not prove why YM writes are missing. It does not require ROM, MAME, ymfm or a renderer.
+
+If out/audio/mame-native-audio.wav exists, it can be heard locally with:
+
+    afplay out/audio/mame-native-audio.wav
+
+An audible reference with zero recorded YM writes would suggest a tap/capture instrumentation problem; silence does not, by itself, prove what caused the missing activity.
+
+### Retry without overwriting the original evidence
+
+Choose a unique, unused identifier (letters, digits, underscores, dashes, max 32):
+
+    python3 scripts/audio_b3_checkpoint.py --capture --capture-id retry1 --lab-allow-unpinned-mame --ymfm-src out/audio/ymfm --duration-ms 5000
+
+The new native output paths become out/audio/mame-audio-events-retry1.jsonl and out/audio/mame-native-audio-retry1.wav. The output path is passed to the existing Lua tap via its GNG_AUDIO_TAP_OUT environment variable. Old captures are retained. Run through title music, or coin/start/movement/attack, before closing MAME normally.
+
+On a further no-YM STOP, the B3 checkpoint now automatically attaches the safe capture_diagnostics object. Share the JSON only, not ROM or audio files.
+
+Still missing: an actual native tape with YM writes, a real non-silent WAV, and eventual waveform parity. No engine, bot or gameplay changes were introduced.
