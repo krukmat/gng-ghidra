@@ -96,7 +96,7 @@ test('B1 report uses positive allowlist for tags, reasons, PCs and never seriali
   result.source='private ROM-derived secret phrase';
   const report=summarizeZ80Frontiers(result);
   assert.equal(JSON.stringify(report).includes('secret phrase'),false);
-  const fail=structuredClone(result);
+  const fail={...result,blockers:result.blockers.map(b=>({...b}))};
   fail.blockers=[{pc:0,reason:'bad',family:'CB_BIT_ROTATE_PREFIX'}];
   assert.throws(()=>summarizeZ80Frontiers(fail),/AUDIO_REPORT_INVALID_REASON/);
   fail.blockers=[{pc:0,reason:'UNSUPPORTED_Z80_OPCODE',
