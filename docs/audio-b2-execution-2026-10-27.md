@@ -164,3 +164,15 @@ Implementación en main:
     node scripts/audio_z80_build.mjs
 
 El JSON de compilación puede seguir reportando PARTIAL_UNCERTIFIED por otra familia Z80. Devolver solo estado/contadores/first_blocker, no datos de ROM ni archivos de out/audio. G5 y H5 siguen PENDING.
+
+
+## G5-FAST B0+B1 (2026-10-27)
+
+Nuevo checkpoint de optimización del proceso: [audio-g5-fast-b0-b1-2026-10-27.md](audio-g5-fast-b0-b1-2026-10-27.md).
+
+Se sustituyó el intercambio de un único first_blocker por diagnóstico multirraíz/CFG, agrupación/priorización de familias, informe privado seguro y un comando que reúne tests Node+Python, integridad ROM, guardia Git/out, scanner y AOT parcial:
+
+    git pull --ff-only
+    node scripts/audio_fast_checkpoint.mjs
+
+El resultado esperado contiene kind=GNG_AUDIO_G5_FAST_CHECKPOINT_V1. No implica ejecución completa del Z80, paridad MAME ni audio reproducible. La ROM y todos los artefactos derivados permanecen privados y locales. No se modifican engine ni bot.
