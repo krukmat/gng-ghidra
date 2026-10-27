@@ -234,7 +234,7 @@ def inspect_tape(tape, *, require_ym=True):
 def read_tap_health(tape):
     """Read allowlisted Lua instrumentation counters; never raw capture content."""
     tape = ensure_private(tape, must_exist=True)
-    match = re.fullmatch(r"mame-audio-events(?:-([A-Za-z0-9_-]+))?\\.jsonl",
+    match = re.fullmatch(r"mame-audio-events(?:-([A-Za-z0-9_-]+))?\.jsonl",
                          tape.name)
     if match is None:
         return {"status": "NOT_AVAILABLE_NONSTANDARD_TAPE_NAME"}
@@ -268,10 +268,10 @@ def summarize_capture(tape):
     """Diagnostic metadata only; never emit raw ROM, YM register values, or audio."""
     report = inspect_tape(tape, require_ym=False)
     tap_health = read_tap_health(tape)
-    if report["events"] == 0 and tap_health.get("status") == "ARMED_CAPTURE_CLOSED" \\
+    if report["events"] == 0 and tap_health.get("status") == "ARMED_CAPTURE_CLOSED" \
             and tap_health.get("frames_observed", 0) > 0:
         hint = "FRAMES_ADVANCED_NO_BUS_TAP_CALLBACKS"
-    elif report["events"] == 0 and tap_health.get("tap_armed") is True \\
+    elif report["events"] == 0 and tap_health.get("tap_armed") is True \
             and tap_health.get("frames_observed") == 0:
         hint = "TAPS_ARMED_BUT_NO_FRAMES_OBSERVED"
     elif report["events"] == 0:
