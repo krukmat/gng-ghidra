@@ -9,6 +9,11 @@ import {compileZ80Prefix} from './gngb_z80_static_codegen.mjs';
 import {createZ80SoundBus,Z80_SOUND_HARDWARE} from './gngb_z80_sound_bus.mjs';
 import {createZ80SchedulerLab} from './gngb_z80_scheduler_lab.mjs';
 
+// A captured MAME session may contain real main-CPU commands many seconds
+// after reset. The runner still advances for at most 3,000,000 Z80 T-states;
+// do NOT mistake an input capture's full timestamp range for a run budget.
+// One hour of 12MHz board time is the explicit input safety ceiling.
+export const MAX_NATIVE_CONTROLS_TICK12M=12_000_000*3600;
 export class AudioZ80ProbeStop extends Error {
   constructor(code){super(code);this.code=code;}
 }
@@ -41,7 +46,8 @@ export async function probeZ80SoundExecution(rom,roots,{
       if(!event||event.kind!=='SOUNDLATCH_WRITE'||
          !Number.isSafeInteger(event.tick12m)||
          event.tick12m<0||event.tick12m%8!==0||
-         event.tick12m<prior||event.tick12m>120000000||
+         event.tick12m<prior||
+         event.tick12m>MAX_NATIVE_CONTROLS_TICK12M||
          !Number.isInteger(event.value)||event.value<0||event.value>255)
         throw new AudioZ80ProbeStop('AUDIO_T3_PROBE_CONTROLS_INVALID');
       prior=event.tick12m;
