@@ -295,7 +295,7 @@ class B3CheckpointTests(unittest.TestCase):
             output.append((argv, kwargs.get("env", {}).get("GNG_AUDIO_TAP_OUT")))
             dest = self.base / "mame-audio-events-second_run.jsonl"
             dest.write_text(json.dumps(self.event(1, "YM2203_WRITE",
-                                                  10, 0xe001, 9)) + "\\n")
+                                                  10, 0xe001, 9)) + "\n")
             return SimpleNamespace(returncode=0)
         with patch.object(b3.shutil, "which", return_value="mame"), \
              patch.object(b3, "call", return_value=SimpleNamespace(
