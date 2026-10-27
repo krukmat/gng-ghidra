@@ -25,8 +25,8 @@ export async function probeZ80SoundExecution(rom,roots,{
      !Array.isArray(roots)||roots.length<1||roots.length>64||
      roots.some(pc=>!Number.isInteger(pc)||pc<0||pc>=0x8000)||
      !Number.isSafeInteger(targetTStates)||targetTStates<4||
-     targetTStates>3000000||
-     !Number.isInteger(maxSteps)||maxSteps<1||maxSteps>1000000||
+     targetTStates>36000000||
+     !Number.isInteger(maxSteps)||maxSteps<1||maxSteps>5000000||
      (latchValue!==null&&(!Number.isInteger(latchValue)||latchValue<0||
                           latchValue>255))||
      (nativeControls!==null&&latchValue!==null)||
@@ -67,7 +67,7 @@ export async function probeZ80SoundExecution(rom,roots,{
     else ymChip2Writes++;
   }});
   const z80=createZ80SchedulerLab(generated.z80AotBlocks,bus,{
-    maxStepsPerAdvance:maxSteps
+    maxStepsPerAdvance:Math.min(1000000,maxSteps)
   });
   bus.applyMainEvent({kind:'AUDIO_RESET_LINE',value:1,cycle:0});
   z80.syncBoardReset();
@@ -81,17 +81,33 @@ export async function probeZ80SoundExecution(rom,roots,{
   const recordedControls=nativeControls?.events??[];
   const nextCommandOffset=recordedControls.length?
     recordedControls[0].tick12m/4:null;
+  // The Z80 board can stay silent until a captured main-CPU command
+  // several seconds after reset. Run the *same* CPU/bus session across
+  // bounded chunks instead of resetting at the old 1-second ceiling.
+  const advanceBounded=(target)=>{
+    let last=null;
+    while(z80.state.t<target){
+      const remaining=maxSteps-z80.snapshot().executedSteps;
+      if(remaining<=0)
+        throw new AudioZ80ProbeStop('AUDIO_T3_PROBE_STEP_BUDGET_STOP');
+      const timeCap=Math.min(target,z80.state.t+3_000_000);
+      last=z80.advanceTo(timeCap,{
+        maxSteps:Math.min(remaining,1_000_000)
+      });
+    }
+    return Object.freeze({
+      boundaryOvershootTStates:z80.state.t-target,
+      lastChunkBoundaryOvershootTStates:
+        last?.boundaryOvershootTStates??null
+    });
+  };
   let runtimeStatus='LAB_ADVANCE_OK';
   let runtimeStopCode=null,advance=null;
   try {
     for(const event of recordedControls) {
       const target=event.tick12m/4;
       if(target>targetTStates)break;
-      const remaining=maxSteps-z80.snapshot().executedSteps;
-      if(remaining<1)
-        throw new AudioZ80ProbeStop('AUDIO_T3_PROBE_STEP_BUDGET_STOP');
-      if(target>z80.state.t)
-        z80.advanceTo(target,{maxSteps:remaining});
+      if(target>z80.state.t)advanceBounded(target);
       // The main event is applied only AFTER completing the current Z80
       // instruction; crossing the event tick is bounded and reported.
       const lag=z80.state.t-target;
@@ -102,10 +118,7 @@ export async function probeZ80SoundExecution(rom,roots,{
         value:event.value,cycle:event.tick12m/8});
       appliedSoundCommands++;
     }
-    const remaining=maxSteps-z80.snapshot().executedSteps;
-    if(targetTStates>z80.state.t&&remaining<1)
-      throw new AudioZ80ProbeStop('AUDIO_T3_PROBE_STEP_BUDGET_STOP');
-    advance=z80.advanceTo(targetTStates,{maxSteps:Math.max(1,remaining)});
+    advance=advanceBounded(targetTStates);
   } catch(e) {
     runtimeStatus='STOP_BEFORE_TARGET';
     const code=e?.code;
