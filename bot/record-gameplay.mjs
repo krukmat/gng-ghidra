@@ -13,6 +13,7 @@ import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {once} from 'node:events';
 import {createFrameLedger} from './live/recording-ledger.mjs';
+import {waitForAttractGate} from './live/wait-demo-gate.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const BASE='http://127.0.0.1:18609';
@@ -126,8 +127,12 @@ async function run(){
     // Human mode only opens the browser; demo mode releases the existing
     // operator pause with /continue, NEVER P1/Coin/Start ports.
     if(DEMO){
-      const start=await state();
-      if(!start.operatorPause)throw Error('BOT_RECORD_DEMO_NOT_PAUSED');
+      console.log('BOT_RECORD_DEMO=WAIT_FIRST_VISIBLE_FRAME');
+      // The server is reachable before the worker renders its first frame.
+      // Continuing early fails with HTTP 409 NOT_PAUSED.
+      const gate=await waitForAttractGate({readState:state,sleep,
+        maxPolls:300,pollMs:100,shouldStop:()=>stopRequested});
+      console.log('BOT_RECORD_DEMO_GATE='+JSON.stringify(gate));
       const resume=await fetch(BASE+'/continue',{method:'POST',
         signal:AbortSignal.timeout(2000)});
       if(!resume.ok)throw Error('BOT_RECORD_DEMO_RESUME_'+resume.status);
