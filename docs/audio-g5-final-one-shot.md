@@ -84,3 +84,35 @@ Full audio DONE still requires these three independent conditions:
 
 The final one-shot may clear the difficult Z80→YM→PCM dependency; it
 **does not falsely mark conditions 1–3 as done**.
+
+## 2026-10-28: real one-shot result — YM activity but silent PCM
+
+The operator ran the real private end-to-end command:
+
+- Regression: **120 Node + 78 Python PASS**.
+- **323,564** Z80 AOT instructions, **3,000,002** T-states, runtime `LAB_ADVANCE_OK`.
+- Periodic IRQ: **239 requested, 169 IM1 acknowledged** in the current unverified lab model.
+- **7,440 freshly generated YM writes**, split 3,720 per chip. The event stream came directly from running the private Z80 ROM, **not** recorded MAME YM events.
+- No post-reset commands applied in this 1s interval (native first command occurs ~19.78m T-states after release, although a pre-release latch value was available).
+- Pinned dual-YM renderer generated **63,187** PCM frames, **all zero**. Status `STOP/AUDIO_FINAL_PCM_SILENT`. Therefore **the goal has NOT been met**. Valid YM bus writes do not prove that meaningful tone/volume/key-on register operations occurred.
+- This result makes random static opcode expansion inappropriate. Audio engine and bot remain untouched.
+
+### Targeted final diagnosis, not another exploration cycle
+
+The existing `node scripts/audio_live_final.mjs` command now also produces **two strictly count-only YM register activity profiles**:
+1. `ymRegisterHealth`: classify the **actual 7,440+ Z80-originating** address/data port operations into FM key-on/off, frequency writes, operator programming, PSG volume and mixer counts (separately by chip). No raw YM address-selected bytes, values, or event sequences are printed.
+2. `nativeYmComparison`: **read-only** parse of the already captured MAME 0.288 `heartbeat4` native YM tape within the **same first 3,000,000 Z80 T-states after reset release**. This is solely an aggregate reference to diagnose missing channel activation. It is **NOT** fed to the YM renderer or replayed in the audio output, and no native trace/ROM is uploaded. If the reference isn't locally available or fails parsing, the generator still runs; the comparison is explicitly marked unavailable.
+
+The diagnostic distinguishes:
+- 7,440 address operations without real FM key-on or nonzero PSG volume ⇒ **silent source programming**, Z80 execution/IRQ/boot/sound-latch semantics to investigate.
+- Z80 produces key-ons/nonzero PSG gain, but renderer remains identically zero ⇒ **YM state, mixer, reset or output path** to isolate using the already proven B3 renderer.
+- Native and lab first-second register family counts differ strongly ⇒ **missing behavioral parity**, NOT an invitation to fabricate YM writes or expand random opcodes.
+
+New `src/gngb_ym_register_health.mjs` and `src/gngb_ym_native_baseline.mjs`. New ROM-free tests `tests/test_gngb_ym_register_health.mjs` and `tests/test_gngb_ym_native_baseline.mjs` added to the same gate (3+2). Isolated JS YM health tests **3/3 PASS**; separate mocked native baseline window validation PASS. Complete Mac gate expected **125 Node + 78 Python**, pending operator run.
+
+**One final operator command**, using the existing local private evidence:
+
+    git pull --ff-only
+    node scripts/audio_live_final.mjs
+
+Return **only its JSON**. The evidence will identify the silent **register activation** boundary; no need to rerun MAME captures, repeat scanner batches or pass any `out/audio` files. If still silent without a clear source-vs-renderer diagnosis, report **BLOCKED: native Z80/IRQ and YM output parity unproven** and stop declaring progress. Do not claim browser sound without a continuous MC6809/Z80/dual YM PCM/AudioWorklet path.
