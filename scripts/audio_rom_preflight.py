@@ -31,6 +31,8 @@ def check_archives(paths):
                     continue
                 found = True
                 return "PASS" if check_rom(archive.read(ROM_NAME)) else "MISMATCH"
+        except FileNotFoundError:
+            continue  # clone set may omit gg2.bin and rely on the parent archive
         except (OSError, zipfile.BadZipFile, RuntimeError):
             return "ARCHIVE_ERROR"
     return "MISSING" if not found else "MISMATCH"
