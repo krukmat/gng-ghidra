@@ -53,6 +53,39 @@ export function classifyZ80Family(opcode) {
   if((opcode&0xc7)===0xc7)return 'RST';
   return 'Z80_OTHER';
 }
+
+/**
+ * Classify the SECOND byte of ED for private frontier diagnostics.
+ * Only mnemonic/family names leave the Mac; no ROM-derived bytes are logged.
+ */
+export function classifyZ80EdInstruction(second) {
+  if(!Number.isInteger(second)||second<0||second>255)
+    throw new Z80StaticError('AUDIO_Z80_ED_DIAGNOSTIC_INVALID');
+  if([0x46,0x4e,0x66,0x6e].includes(second))return 'ED_IM_0';
+  if([0x56,0x76].includes(second))return 'ED_IM_1';
+  if([0x5e,0x7e].includes(second))return 'ED_IM_2';
+  if([0x44,0x4c,0x54,0x5c,0x64,0x6c,0x74,0x7c].includes(second))return 'ED_NEG';
+  if(second===0x4d)return 'ED_RETI';
+  if([0x45,0x55,0x5d,0x65,0x6d,0x75,0x7d].includes(second))return 'ED_RETN';
+  if(second===0x47)return 'ED_LD_I_A';
+  if(second===0x4f)return 'ED_LD_R_A';
+  if(second===0x57)return 'ED_LD_A_I';
+  if(second===0x5f)return 'ED_LD_A_R';
+  if(second===0x67)return 'ED_RRD';
+  if(second===0x6f)return 'ED_RLD';
+  if([0xa0,0xa8,0xb0,0xb8].includes(second))return 'ED_BLOCK_TRANSFER';
+  if([0xa1,0xa9,0xb1,0xb9].includes(second))return 'ED_BLOCK_COMPARE';
+  if([0xa2,0xaa,0xb2,0xba].includes(second))return 'ED_BLOCK_INPUT';
+  if([0xa3,0xab,0xb3,0xbb].includes(second))return 'ED_BLOCK_OUTPUT';
+  if((second&0xc7)===0x40)return 'ED_IN_PORT';
+  if((second&0xc7)===0x41)return 'ED_OUT_PORT';
+  if((second&0xc7)===0x42)return 'ED_SBC_HL_RR';
+  if((second&0xc7)===0x4a)return 'ED_ADC_HL_RR';
+  if((second&0xc7)===0x43)return 'ED_LD_DIRECT_RR';
+  if((second&0xc7)===0x4b)return 'ED_LD_RR_DIRECT';
+  return 'ED_UNASSIGNED_OR_UNDOCUMENTED';
+}
+
 export function compileZ80Prefix(rom, {entry=0, limit=512}={}) {
   if(!(rom instanceof Uint8Array) || rom.length!==0x8000)
     throw new Z80StaticError('AUDIO_Z80_ROM_IMAGE_INVALID');
@@ -74,6 +107,34 @@ export function compileZ80Prefix(rom, {entry=0, limit=512}={}) {
     let lines=[],targets=[],length=1;
     const w16=()=>read8(pc,1)|(read8(pc,2)<<8);
     switch(opcode) {
+      case 0xed: {
+        const ext=read8(pc,1);
+        const kind=classifyZ80EdInstruction(ext);
+        if(kind==='ED_IM_0'||kind==='ED_IM_1'||kind==='ED_IM_2') {
+          const mode=Number(kind[kind.length-1]);
+          length=2;
+          lines=['$.im='+mode+';','$.pc='+next(2)+';','$.t+=8;'];
+          targets=[next(2)];
+        } else if(kind==='ED_NEG') {
+          length=2;
+          lines=[
+            'const old=$.a;const value=(-old)&255;',
+            // S, Z, F5, H, F3, P/V, N, C. No Z80 R/I handling claimed.
+            '$.f=(value&0xa8)|(value===0?0x40:0)|',
+            '((old&15)!==0?0x10:0)|(old===128?0x04:0)|0x02|(old!==0?1:0);',
+            '$.a=value;$.pc='+next(2)+';','$.t+=8;'];
+          targets=[next(2)];
+        } else if(kind==='ED_LD_I_A') {
+          length=2;
+          lines=['$.i=$.a;','$.pc='+next(2)+';','$.t+=9;'];
+          targets=[next(2)];
+        } else {
+          blockers.push({pc,reason:'UNSUPPORTED_Z80_ED_INSTRUCTION',
+            family:'ED_EXTENDED_PREFIX',ed_instruction:kind});
+          continue;
+        }
+        break;
+      }
       case 0x00: lines=['$.pc='+next(1)+';','$.t+=4;'];targets=[next(1)];break;
       case 0xf3: lines=['$.iff1=false;$.iff2=false;$.pc='+next(1)+';','$.t+=4;'];targets=[next(1)];break;
       case 0x31: {
