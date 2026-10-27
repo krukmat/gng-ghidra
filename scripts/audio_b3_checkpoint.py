@@ -407,7 +407,9 @@ def main(argv=None):
         if not args.diagnose and args.ymfm_src is None:
             raise B3Stop("YMFM_SOURCE_REQUIRED")
         PRIVATE.mkdir(parents=True, exist_ok=True)
-        if PRIVATE.resolve() != PRIVATE:
+        # Reject symlinks in our controlled out/audio hierarchy, but permit
+        # macOS /var -> /private/var parent aliases.
+        if PRIVATE.is_symlink() or PRIVATE.parent.is_symlink():
             raise B3Stop("PRIVATE_ROOT_SYMLINK")
         verify_repository_privacy()
         if args.diagnose:
