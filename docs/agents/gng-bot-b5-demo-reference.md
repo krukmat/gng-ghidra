@@ -86,3 +86,26 @@ Comando para repetir:
 
 Si no encuentra pausa, informar el nuevo error específico
 BOT_DEMO_GATE_WAIT_TIMEOUT o BOT_DEMO_GATE_ENGINE_HALT_*.
+
+
+## Corrección posterior — demo descartada para el cruce
+
+Tras revisar la demostración, el usuario comprobó que **salta de una
+secuencia del nivel 1 al final del nivel 2**; no muestra de manera
+continua el encuentro con el jefe, la entrada al agua, el aterrizaje
+sobre el islote móvil y la salida a tierra firme. Por tanto, **no es
+un testigo válido para temporizar esta maniobra**. La hipótesis previa
+sobre usar la demo para aprender el primer salto queda invalidada.
+
+**No solicitar nuevas capturas de la demo para este objetivo.**
+Retomar las cintas originales `out/bot/late-sweep/trial-6.json`,
+`out/v3/b3/explorer/explorer-g4-2730-1606.json` y la grabación humana
+`review.zip` para calibración. Ruta crítica:
+
+1. Observador fiable de combate, orilla, isla y contacto de Arthur.
+2. Corrección de acción de salto a partir de cinemática medida,
+   usando controles P1 y motor inalterado, sin presumir la derrota del jefe.
+3. Ensayo acotado y verificable con grabación/JSON de un candidato real;
+   pedir review solo al llegar a un nuevo resultado de gameplay.
+
+No declarar jugabilidad ni éxito sin una captura positiva real.
