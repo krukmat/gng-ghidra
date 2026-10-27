@@ -131,3 +131,25 @@ test('B4.T2-B6: CB BIT,RES,SET remain blocked; family metadata contains no ROM b
   for(const value of [-1,256,'0xff',1.5])
     assert.throws(()=>classifyZ80CbInstruction(value),Z80StaticError);
 });
+
+test('B4.T2-B6: outside-ROM static jump reports only the source PC, not ROM data',()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0xc3,0x09,0xf5],0); // Synthetic JP to address 0xf509.
+  const result=compileZ80Prefix(rom);
+  assert.equal(result.compiled,1);
+  assert.deepEqual(result.blockers,[
+    {pc:0xf509,reason:'OUTSIDE_SOUND_ROM',source_pc:0}
+  ]);
+  const safe=summarizeZ80Frontiers(result);
+  assert.deepEqual(safe.frontiers,[
+    {pc:0xf509,family:'OUTSIDE_SOUND_ROM',reason:'OUTSIDE_SOUND_ROM',source_pc:0}
+  ]);
+  assert.equal(safe.native_trace_parity_verified,false);
+  const wrongReason={...result,blockers:[{pc:0,reason:'UNSUPPORTED_Z80_OPCODE',
+    family:'CB_BIT_ROTATE_PREFIX',source_pc:20}]};
+  assert.throws(()=>summarizeZ80Frontiers(wrongReason),
+    /AUDIO_REPORT_SOURCE_PC_REASON_MISMATCH/);
+  const wrongSource={...result,blockers:[{pc:0xf509,
+    reason:'OUTSIDE_SOUND_ROM',source_pc:'private_ROM_bytes'}]};
+  assert.throws(()=>summarizeZ80Frontiers(wrongSource),/AUDIO_REPORT_UNSAFE_PC/);
+});
