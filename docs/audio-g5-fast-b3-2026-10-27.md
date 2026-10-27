@@ -259,3 +259,26 @@ Expected (not yet observed): **54/54 Node and 42/42 Python**. Once PASS:
     python3 scripts/audio_b3_checkpoint.py --capture --capture-id heartbeat4 --lab-allow-unpinned-mame --ymfm-src out/audio/ymfm --duration-ms 5000
 
 Trigger audio in MAME, exit normally, return ONLY the sanitized GNG_AUDIO_B3_CHECKPOINT_V1 JSON. The new frame/address/data counters distinguish whether any remaining problem is a UI frame wrapper or unconvertible MMIO values. Never share private native tapes, WAV, extracted ROMs, or captured register values.
+
+
+## B3 heartbeat4: native events finally written, chronology still blocked (27 October 2026)
+
+Operator Mac result: Node **54/54 PASS**, Python **42/42 PASS**, ROM SHA1_MATCH, static 22-PC reset prefix still NOT Z80 parity. A new MAME session named heartbeat4 now returned STOP/TAPE_BAD_CHRONOLOGY rather than TAPE_NO_YM_EVENTS. This establishes that the JSONL recorder is no longer uniformly empty, but it does **not** establish the specific chronology fault or audio fidelity.
+
+The validator deliberately requires strict increments of JSONL seq and non-decreasing 12MHz ticks and frame numbers. A violated assertion could be due to a sequence gap, reversed native tick, backwards reported frame, or a negative value. No field values from heartbeat4 were supplied, so none may be presumed to be the cause.
+
+New read-only audited diagnosis: the existing private JSONL is sufficient; **do not run MAME again yet**.
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+    python3 scripts/audio_b3_checkpoint.py --diagnose --tape out/audio/mame-audio-events-heartbeat4.jsonl
+
+Expected after adding four ROM-free unit tests: Node 54 and Python **46 tests**, pending Mac confirmation. The second command prints GNG_AUDIO_B3_CAPTURE_DIAG_V1 with nested GNG_AUDIO_B3_CHRONOLOGY_DIAG_V1. It contains only counters for bad_sequence (gaps vs duplicate/backwards), tick_regressions, frame_regressions, negative_clock_or_frame, invalid_chronology_types, the first bad row **index** and tap_health safe counters; **no timestamps, byte values, PC or addresses** are printed.
+
+Any chronology failure remains STOP_CHRONOLOGY_NOT_RENDERABLE, and it will not generate a WAV. Investigate based on counters:
+- frame_regressions only: check mixed MAME frame_number/heartbeat fallback and screen reset; do not reinterpret an unaligned frame field as certified.
+- tick_regressions: inspect native clock source and callbacks scheduling offline; do not reorder events and falsely claim parity.
+- bad_sequence: inspect row loss/insertion/tap lifecycle and heartbeat written_events; do not renumber blindly.
+
+Do not share the actual tape, private WAV, sound ROM or raw event timestamps. Native YM parity remains PENDING.

@@ -540,6 +540,73 @@ class B3CheckpointTests(unittest.TestCase):
         self.assertEqual(b3.summarize_capture(b3.OUT_TAPE)["tap_health"]["status"],
                          "INVALID_TAP_HEALTH")
 
+    def test_chronology_audit_classifies_seq_tick_and_frame_independently(self):
+        tape = self.tape([
+            self.event(1, "YM2203_WRITE", 500, 0xe000, 32, frame=10),
+            self.event(2, "YM2203_WRITE", 501, 0xe001, 64, frame=11),
+            self.event(4, "YM2203_WRITE", 490, 0xe002, 128, frame=9),
+            self.event(4, "YM2203_WRITE", 493, 0xe003, 0, frame=9),
+        ])
+        with self.assertRaisesRegex(b3.B3Stop, "TAPE_BAD_CHRONOLOGY"):
+            b3.inspect_tape(tape)
+        report = b3.inspect_chronology_diagnostics(tape)
+        self.assertEqual(report["status"], "CHRONOLOGY_INVALID_NOT_RENDERABLE")
+        self.assertEqual(report["records_scanned"], 4)
+        self.assertEqual(report["first_bad_event_index"], 3)
+        self.assertEqual(report["bad_sequence"], 2)
+        self.assertEqual(report["sequence_gaps"], 1)
+        self.assertEqual(report["sequence_duplicates_or_backwards"], 1)
+        self.assertEqual(report["tick_regressions"], 1)
+        self.assertEqual(report["frame_regressions"], 1)
+        self.assertFalse(report["capture_validated"])
+        self.assertNotIn(str(tape), json.dumps(report))
+        self.assertNotIn("57344", json.dumps(report))
+        self.assertNotIn("128", json.dumps(report))
+
+    def test_heartbeat4_invalid_chronology_cli_diagnose_without_rom(self):
+        tape = self.tape([
+            self.event(1, "YM2203_WRITE", 100, 0xe000, 2, frame=4),
+            self.event(2, "YM2203_WRITE", 98, 0xe001, 3, frame=4),
+        ])
+        output = io.StringIO()
+        with patch.object(b3, "verify_repository_privacy", return_value=True), \
+             redirect_stdout(output):
+            status = b3.main(["--diagnose", "--tape", str(tape)])
+        self.assertEqual(status, 0)
+        result = json.loads(output.getvalue())
+        self.assertEqual(result["status"], "STOP_CHRONOLOGY_NOT_RENDERABLE")
+        self.assertEqual(result["chronology"]["tick_regressions"], 1)
+        self.assertFalse(result["native_parity_verified"])
+        self.assertNotIn(str(tape), output.getvalue())
+
+    def test_invalid_chronology_render_stops_without_building_ymfm(self):
+        tape = self.tape([
+            self.event(1, "YM2203_WRITE", 100, 0xe000, 2, frame=4),
+            self.event(2, "YM2203_WRITE", 99, 0xe001, 3, frame=4),
+        ])
+        report = io.StringIO()
+        with patch.object(b3, "verify_repository_privacy", return_value=True), \
+             patch.object(b3, "verify_rom_identity", return_value=True), \
+             patch.object(b3, "call") as calls, redirect_stdout(report):
+            status = b3.main(["--tape", str(tape),
+                              "--ymfm-src", str(self.base)])
+        self.assertEqual(status, 2)
+        calls.assert_not_called()
+        result = json.loads(report.getvalue())
+        self.assertEqual(result["reason"], "TAPE_BAD_CHRONOLOGY")
+        self.assertEqual(result["capture_diagnostics"]["chronology"]["tick_regressions"], 1)
+        self.assertFalse(result["audio_working"])
+
+    def test_chronology_audit_valid_sequence_does_not_certify_audio(self):
+        tape = self.tape([
+            self.event(1, "YM2203_WRITE", 500, 0xe000, 32, frame=10),
+            self.event(2, "YM2203_WRITE", 501, 0xe001, 64, frame=11),
+        ])
+        result = b3.inspect_chronology_diagnostics(tape)
+        self.assertEqual(result["status"], "NO_CHRONOLOGY_ERROR_OBSERVED")
+        self.assertIsNone(result["first_bad_event_index"])
+        self.assertFalse(result["capture_validated"])
+
     def test_no_ym_stop_returns_diagnostic_without_file_contents(self):
         path = self.tape([self.event(1, "SOUNDLATCH_WRITE", 20, 0x3a00, 55)])
         output = io.StringIO()
