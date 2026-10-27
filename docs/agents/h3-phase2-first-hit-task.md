@@ -1,7 +1,12 @@
 # H3-F2 — Diagnosticar el primer impacto cerca de X=5464
 
-**Estado:** PENDIENTE. **Dirección vigente:** identificar la causa del impacto
-antes de ampliar la búsqueda de acciones. Esta tarea pertenece al laboratorio
+**Estado:** CERRADA (27/10/2026): causa demostrada, mejora local y sin avance.
+El `right_jump` de 7221 eleva a Arthur hasta un objeto de tipo 3 que cae en
+X=5444. El impacto llega en 7233 y `0x9c64`, 58 frames después. La maniobra
+`retirada` evita el impacto durante 240 frames, pero ninguna supera X=5464.
+La evidencia y el siguiente paso están en el plan (fase 2, «Primer impacto»).
+Hubo tres replays desde reset: el tercero, la ampliación de 60 frames, lo
+autorizó el operador. Esta tarea pertenece al laboratorio
 H3 del [plan de contenido](../plan-contenido-h3-h4-2026-10-27.md), paso 5.
 No reanuda el bot de `bot/`.
 

@@ -1,8 +1,8 @@
 # Plan de contenido — de H3 a H4 (fases, jefes, dos vueltas y final)
 
-**Fecha:** 2026-10-27 · **Rama:** `main` · **Estado:** pasos 1–2 GO; paso 5 GO (g6); verificación de jefes por búsqueda diferida (§8); barrido de cobertura de jefes: 0 % UNCOMPILED en lo alcanzado, sin g7. En fase 2 hay una meseta de avance cerca de X=5464; no está demostrada su causa ni una señal de jefe o puerta funcional. Paso 3 (grabación del operador) pendiente: no bloquea la compilación, solo la certificación.
+**Fecha:** 2026-10-27 · **Rama:** `main` · **Estado:** pasos 1–2 GO; paso 5 GO (g6); verificación de jefes por búsqueda diferida (§8); barrido de cobertura de jefes: 0 % UNCOMPILED en lo alcanzado, sin g7. En fase 2 el avance real se detiene en la columna de X≈5450; X=5464 solo se alcanza lanzado por un impacto fatal (causa demostrada en H3-F2). No hay señal de jefe ni de puerta funcional. Paso 3 (grabación del operador) pendiente: no bloquea la compilación, solo la certificación.
 
-**Siguiente acción del paso 5:** [H3-F2 — diagnosticar el primer impacto](agents/h3-phase2-first-hit-task.md), con traza causal corta antes de nuevas búsquedas; incluye límites, aceptación y prompt de continuación.
+**Siguiente acción del paso 5:** corregir la poda y la métrica de [h3_boss_search.mjs](../scripts/h3_boss_search.mjs). Debe cortar en el impacto (modo 3 en `0x0503` sin armadura) en lugar de esperar a `0x9c64`, y no premiar la X ganada en ese modo. Se verifica con `search-p1-7290.json`: la rama `right_jump` de 7221 debe podarse en su propio segmento. [H3-F2](agents/h3-phase2-first-hit-task.md) está cerrada con causa demostrada; sigue abierto cómo superar la columna.
 
 > **Avance 27/10/2026.** Herramienta: [h3_tape.mjs](../scripts/h3_tape.mjs) + [h3_tape_recorder.lua](../scripts/h3_tape_recorder.lua) + [h3_tape_convert.mjs](../src/h3_tape_convert.mjs).
 > **Paso 1 GO:** `titleCoinStart` inyectada y convertida → 4/4 eventos idénticos; 2.012 lecturas reales de CPU iguales a lo anotado.
@@ -138,6 +138,39 @@ F-N:  MOTOR (cinta humana → residuo dinámico + certificación) → REGLAS →
       - Se ve una puerta como elemento arquitectónico a la izquierda, y la cinta larga muestra transitoriamente en el frame 7900 un personaje rojo de 2×2 sprites entrando por el borde. No hay interacción con la puerta, objeto persistente atribuible a jefe, cambio de fase, llave, apertura ni cruce. Por tanto no se afirma puerta funcional, combate ni jefe. Solo AOT, sin MAME y sin g7.
     - **Sondeo de salto y ataque desde la cinta (27/10/2026).** Se corrigió el filtro de muerte de [h3_boss_search.mjs](../scripts/h3_boss_search.mjs): la máscara anterior cubría `0x9c5c`, pero no `0x9c64`, aunque ambos estaban documentados como estados de impacto sin armadura. Los resultados anteriores siguen siendo observaciones de sus cintas, no garantía de supervivencia. Desde el frame 7060 (X=5449, fase 1, 2 vidas y sin armadura), se probaron segmentos de 23 frames con 14 acciones, incluidos salto y disparo, haz 8, retroceso 2 y límite 3. Hasta el frame 7428: 1848 ramas, 1 retroceso, 0 HALT; con peso de subida 2 hasta 7451: 1960 ramas, 1 retroceso, 0 HALT. Ninguna búsqueda avanzó de fase. Es un sondeo acotado, no una prueba de que no exista paso.
       - La repetición hasta 7290 guardó `out/h3/boss/search-p1-7290.json` (privada), 1022 ramas y 0 HALT: X=5464/Y=79/scroll=5080, 2 vidas y fase 1. Hash interno `dcbab2a62f43d8b999ab186960a6ca76e84028cdc13f129ed3480b0cf3874d49`, SHA-256 de archivo `bdd0129156f01e2e5aba963fdce20924a5b911566dc178d979a8be22cb6b156d`. En la cola sin entradas, el frame 7300 ya muestra `0x9c64` con armadura ausente y en el 7500 queda una vida. Una prueba desde el frame 7291 confirmó que el filtro corregido poda las 14 acciones en ese estado. No identifica qué causó el impacto ni acredita jefe, puerta o combate.
+    - **Primer impacto en fase 2 (H3-F2, 27/10/2026): causa demostrada; mejora local, sin avance.** Traza AOT causal y maniobras dirigidas sobre g6, sin MAME ni g7; bundle y runtime intactos.
+      - **Herramientas:**
+        - [h3_boss_trace.mjs](../scripts/h3_boss_trace.mjs) ([h3_lab_trace.mjs](../src/h3_lab_trace.mjs)) envuelve en memoria la tabla de bloques y `$.wk`/`$.rd`/`$.rk`. Registra entradas de bloque, escrituras y lecturas acotadas. Después repite la ventana sin registro desde el estado guardado y exige el mismo hash.
+        - [h3_boss_maneuver.mjs](../scripts/h3_boss_maneuver.mjs) ([h3_lab_maneuver.mjs](../src/h3_lab_maneuver.mjs)) ejecuta hasta tres maniobras P1 desde un prefijo guardado, con la cinta propia como control.
+        - Tests: `tests/test_h3_lab_trace.mjs` y `tests/test_h3_lab_maneuver.mjs`.
+      - **Convención y neutralidad:**
+        - El registro *i* es la RAM en el ciclo *i*·25152−1, o justo antes de la primera escritura en ese ciclo o después. `onFrame` corre tras esa captura y antes del poke; en todas las filas la RAM viva coincide con el registro y `$.frame`+1 = *i*.
+        - Trazas 7240–7301 y 7180–7301, esta última con la ampliación de 60 frames. Fueron tres replays desde reset; el tercero lo autorizó el operador.
+        - El hash con registro es igual al hash sin registro (`a0485a0a…` y `31962c18…`). Coinciden 24/24 filas del inspector y el tramo 7240–7301 es idéntico byte a byte entre ambas trazas.
+      - **Cadena causal:**
+        1. Un emisor crea objetos de tipo 3 (tabla `0x13C0`, 6×0x20) en su propia X y con su Y −8: su X está en `0x0EB6` y el código es 0xD228–0xD242. Aparecieron en X=5444 en 7176 y 7226, y en la ventana caen además dos con X=5458. Caen 2 px por frame y atraviesan el suelo.
+        2. La rutina 0xF530–0xF5A1 compara al jugador (`0x0500`) con cada objeto cuando `0x00AD`=0 y está activo el bit 0 de `0x0500`. Hay impacto si −6 ≤ dX ≤ 6 y −8 ≤ dY ≤ 8 (tipo 3, tabla ROM 0xF5A2); con `0x051F` activo el rango vertical es −8…2. Si el tipo no es 0, 0xF586–0xF596 escribe:
+           - `0x0500`: 1→2;
+           - modo y subestado (`0x0503`/`0x0504`): 3/0;
+           - `0x00AE`: dX;
+           - estado del objeto: 1→2.
+        3. En X=5449, la gota de 5444 queda a dX=−5. El `right_jump` de 7221 (`button2` en 7222–7227) pone el modo 2 desde 7223 (0x9221) y eleva a Arthur hasta la gota: impacto en 7233 con dY=7; en 7232 el dY era 11.
+        4. Sin armadura (`0x00AC`=1 desde antes de 7180), el modo 3 pasa por 0x9AF9 → 0x9C39 (tabla 0x9C42) y recorre los subestados 1–5. El subestado 4 arma `0x0520`=20 en 7272 (0x9C0D). Al vencer, en 7291, 0x98FE escribe `0x9c60` (tabla 0x9C54, indexada por `0x051E`) y 0x9093 lo avanza a `0x9c64`. Las vidas pasan de 2 a 1 en 7451.
+      - **Consecuencias:**
+        - `0x9c64` llega 52–58 frames después del impacto.
+        - X=5464 es el lanzamiento del impacto, no un avance: en el aire, Y sube hasta 143 y cruza X=5450 en 7245, a Y≈140.
+        - La búsqueda conservó la rama porque la poda esperaba a `0x9c64` y la métrica premia la X.
+        - El «GO acotado» de X=5460 (Y=142 en 7300, vida perdida en 7500) sigue el mismo patrón, aunque esa cinta no se trazó.
+      - **Maniobras:** prefijo 7220, segmentos de 23 frames, horizonte 7221–7460, 1,6 s en total. El control reproduce 81/81 registros de la traza.
+
+        | Variante | Condición que cambia | Resultado | Previsto |
+        |---|---|---|---|
+        | `sin-salto`: derecha ×3 | dY: sin salto | Impacto en 7247 en X=5449; `0x9c64` en 7299; pierde una vida en 7459 | 7247 |
+        | `retirada`: izquierda 23 frames | dX fuera de ±6 | Sin impacto en 240 frames; X=5425, 2 vidas: **mejora local** | sin impacto |
+        | `retirada-salto`: izquierda, salto con carrera, derecha ×8 | Saltar entre dos gotas desde fuera de su alcance | Se bloquea en X=5450 a Y≈112 (ápice 118); la gota siguiente impacta en 7299 | ~7298 |
+
+        Ninguna variante supera X=5464, así que **no hay avance**. Las cintas privadas son `out/h3/boss/f2/maneuver-7220-*.json`, con SHA-256 de archivo `7a9d72b2…`, `bec8d6ae…` y `c419396d…`.
+      - **Límite:** con derecha sostenida, X no pasa de 5450 ni en el suelo ni con salto con carrera; solo el lanzamiento la cruza, a Y≈140. Falta trazar la colisión con el fondo y saber cómo se supera la columna legítimamente. No hay jefe, combate ni puerta funcional demostrados.
     - **Cobertura real (27/10/2026):** [scripts/h3_boss_coverage.mjs](../scripts/h3_boss_coverage.mjs) envuelve en memoria `blocks.get` de `program.mjs` (cuenta claves distintas con función) antes de `labCreateBoard`; bundle y runtime intactos. Validación barata con B2-D `lateStart` (1500 frames): 897 bloques en dos ejecuciones con el mismo conjunto, hash de frames estable e idéntico al de la ejecución sin envolver. Las cintas certificadas (5 B2-D + 9 B3) ejecutan 1491 bloques de 38 084 en g6 (3,92 %). Resultado en `out/h3/boss/coverage.json` (sin commit).
 
       | Cinta | Fin (fase, scroll) | Bloques | Nuevos vs certificadas | % de g6 | Banco |
