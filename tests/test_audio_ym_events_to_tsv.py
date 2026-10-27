@@ -15,6 +15,18 @@ class YMEventTapeTests(unittest.TestCase):
             json.dumps({"kind":"YM2203_WRITE","tick12m":6,"address":57345,"value":170}),
             json.dumps({"kind":"YM2203_WRITE","tick12m":10,"address":57346,"value":44})]
         self.assertEqual(converter.convert(lines),[(6,0xe000,40),(6,0xe001,170),(10,0xe002,44)])
+    def test_b3_absolute_private_output_accepted_without_widening_scope(self):
+        root=converter.ROOT
+        requested=root/"out"/"audio"/"b3-ym-events.tsv"
+        self.assertEqual(converter.safe_private_output(requested),requested)
+        self.assertEqual(converter.safe_private_output(Path("out/audio/b3-ym-events.tsv")),requested)
+        with self.assertRaises(ValueError):
+            converter.safe_private_output(root/"docs"/"not-private.tsv")
+        with self.assertRaises(ValueError):
+            converter.safe_private_output(Path("out/audio/../not-private.tsv"))
+        with self.assertRaises(ValueError):
+            converter.safe_private_output(Path("/tmp/not-private.tsv"))
+
     def test_non_monotonic_rejected(self):
         lines=[
             json.dumps({"kind":"YM2203_WRITE","tick12m":10,"address":0xe000,"value":1}),
