@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-10-27 · **Rama de referencia:** `main` · **Estado:** IMPLEMENTACIÓN PARCIAL; M1 demostrado en el caso de desarrollo 2672; M2 BLOQUEADO por `UNCOMPILED` externo tras 90 de 120 frames en tierra; ninguna fase completada.
 **Objetivo superior:** terminar el juego original con jugabilidad auténtica. **Objetivo del presente plan:** mejorar la habilidad del BOT hasta completar la fase 1 y generalizar al resto, **SIN CAMBIAR EL ENGINE**.
-**Gate por fase (decisión del operador, 27/10/2026):** no se avanza a la fase N+1 sin que el bot complete la N; criterios en el [plan de contenido §5](../plan-contenido-h3-h4-2026-10-27.md#5-gate-del-bot-por-fase-b-n).
+**Fuera de la ruta crítica (decisión del operador, 27/10/2026):** el contenido se completa sin verificación del bot; ver [plan de contenido §5](../plan-contenido-h3-h4-2026-10-27.md).
 
 **Dirección actual:** cerrar una habilidad de agua completa antes de ampliar la arquitectura o la búsqueda. La sincronización del prefijo está verificada en una ejecución; el controlador visual offline confirma embarque estable en el caso de desarrollo 2672 (M1); el segundo salto (M2) aterriza en la orilla derecha, pero el bundle g4 se detiene con `UNCOMPILED` en x≈1905 antes de completar la ventana. Ver [Resultado M2](#resultado-m2-2026-10-27). Las [tareas inmediatas y sus criterios](#entregas-medibles-vigentes) prevalecen sobre el orden inicial BT-0→BT-6. La [evaluación y evidencia histórica](gng-bot-evaluacion-2026-10-27.md) conserva el diagnóstico; no se reproduce aquí.
 
