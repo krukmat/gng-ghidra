@@ -409,6 +409,48 @@ class B3CheckpointTests(unittest.TestCase):
         self.assertEqual(b3.read_tap_health(b3.OUT_TAPE)["status"],
                          "ARMED_CAPTURE_CLOSED")
 
+    def test_normalized_heartbeat_exposes_clock_and_value_failures(self):
+        self.tape([])
+        health = self.base / "mame-audio-health.json"
+        obj = {
+            "kind": "GNG_AUDIO_MAME_TAP_HEALTH_V1",
+            "tap_armed": True, "capture_closed": True,
+            "frames_observed": 200, "ym_callbacks": 31,
+            "main_latch_callbacks": 2, "sound_latch_callbacks": 4,
+            "reset_callbacks": 1, "disabled_side_effect_callbacks": 0,
+            "written_events": 0, "format_errors": 0,
+            "write_errors": 0, "flush_errors": 0,
+            "clock_errors": 30, "value_errors": 0, "clock_fallbacks": 0
+        }
+        health.write_text(json.dumps(obj))
+        self.assertEqual(b3.summarize_capture(b3.OUT_TAPE)["activity_hint"],
+                         "LUA_CLOCK_ACCESS_FAILURES")
+        obj["clock_errors"] = 0
+        obj["value_errors"] = 30
+        health.write_text(json.dumps(obj))
+        detail = b3.summarize_capture(b3.OUT_TAPE)
+        self.assertEqual(detail["activity_hint"], "LUA_NUMERIC_CONVERSION_FAILURES")
+        self.assertEqual(detail["tap_health"]["value_errors"], 30)
+        obj["value_errors"] = "30"
+        health.write_text(json.dumps(obj))
+        self.assertEqual(b3.read_tap_health(b3.OUT_TAPE)["status"], "INVALID_TAP_HEALTH")
+
+    def test_older_heartbeat_still_valid_after_numeric_normalization(self):
+        self.tape([])
+        health = self.base / "mame-audio-health.json"
+        health.write_text(json.dumps({
+            "kind": "GNG_AUDIO_MAME_TAP_HEALTH_V1",
+            "tap_armed": True, "capture_closed": True,
+            "frames_observed": 2102, "ym_callbacks": 319462,
+            "main_latch_callbacks": 23, "sound_latch_callbacks": 7124,
+            "reset_callbacks": 2, "disabled_side_effect_callbacks": 0,
+            "written_events": 0, "format_errors": 326611,
+            "write_errors": 0, "flush_errors": 0
+        }))
+        report = b3.summarize_capture(b3.OUT_TAPE)
+        self.assertEqual(report["activity_hint"], "LUA_EVENT_SERIALIZATION_FAILURES")
+        self.assertEqual(report["tap_health"]["format_errors"], 326611)
+
     def test_tap_heartbeat_rejects_forged_or_untrusted_values(self):
         self.tape([])
         health = self.base / "mame-audio-health.json"
