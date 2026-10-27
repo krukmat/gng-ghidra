@@ -383,6 +383,15 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None,
     # Regression / privacy guard is independent of partial Z80 reachability.
     verify_rom_identity()
     integrity = inspect_tape(tape)
+    health = read_tap_health(tape)
+    if health.get("status") == "ARMED_CAPTURE_CLOSED" and "written_events" in health:
+        if (health["written_events"] != integrity["events"]
+            or any(health.get(k, 0) != 0 for k in (
+                "format_errors", "write_errors", "flush_errors",
+                "clock_errors", "value_errors"))):
+            # A render from a truncated/missing row stream is not evidence
+            # for native replay. Preserve all inputs for local diagnosis.
+            raise B3Stop("NATIVE_TAPE_INCOMPLETE_OR_LOSSY")
     source = Path(ymfm_source).expanduser().resolve()
     if not source.is_dir():
         raise B3Stop("YMFM_SOURCE_MISSING")
@@ -445,6 +454,7 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None,
         "ym_waveform_parity_verified": False,
         "gameplay_audio_verified": False,
         "lab_pcm_generated": True,
+        "native_capture_health": health,
         "private_outputs_only": True,
         "rom_bytes_exported": False,
     }
