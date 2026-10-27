@@ -20,6 +20,11 @@ try{
   fs.writeFileSync(outFile,result.source);
   console.log(JSON.stringify({kind:'GNG_AUDIO_Z80_AOT_PREFIX_V1',status:result.status,
     compiled:result.compiled,unsupported:result.blockers.length,pending:result.pending,
+    first_blocker:result.blockers.length ? {
+      pc:result.blockers[0].pc, family:result.blockers[0].family??'UNKNOWN',
+      reason:result.blockers[0].reason
+    } : null,
+    instruction_bytes_exported:false,
     audio_working:false,has_native_parity:false}));
   // Fail closed until no unsupported opcode/path. Output is diagnostic only.
   if(result.status!=='SUPPORTED_PREFIX_ONLY')process.exitCode=2;
