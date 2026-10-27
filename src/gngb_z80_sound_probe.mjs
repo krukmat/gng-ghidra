@@ -60,7 +60,12 @@ export async function probeZ80SoundExecution(rom,roots,{
   const generated=await import('data:text/javascript,'+
                                encodeURIComponent(compiled.source));
   let ymWrites=0,ymChip1Writes=0,ymChip2Writes=0;
-  const bus=createZ80SoundBus(rom,{onYmWrite:e=>{
+  let latchReads=0,latchReadsAfterCommand=0;
+  let appliedSoundCommands=0,maxSoundCommandLatenessTStates=0;
+  const bus=createZ80SoundBus(rom,{onLatchRead:()=>{
+    latchReads++;
+    if(appliedSoundCommands>0)latchReadsAfterCommand++;
+  },onYmWrite:e=>{
     if(onYmWrite)onYmWrite(e);
     ymWrites++;
     if(e.addr<=0xe001)ymChip1Writes++;
@@ -77,7 +82,6 @@ export async function probeZ80SoundExecution(rom,roots,{
      nativeControls?.pre_release_latch!==undefined)
     bus.applyMainEvent({kind:'SOUNDLATCH_WRITE',
       value:nativeControls.pre_release_latch,cycle:0});
-  let appliedSoundCommands=0,maxSoundCommandLatenessTStates=0;
   const recordedControls=nativeControls?.events??[];
   const nextCommandOffset=recordedControls.length?
     recordedControls[0].tick12m/4:null;
@@ -147,6 +151,8 @@ export async function probeZ80SoundExecution(rom,roots,{
     native_sound_controls_supplied:nativeControls!==null,
     native_sound_controls_total:recordedControls.length,
     native_sound_controls_applied:appliedSoundCommands,
+    z80_sound_latch_reads:latchReads,
+    z80_sound_latch_reads_after_command:latchReadsAfterCommand,
     first_sound_command_tstates_after_release:nextCommandOffset,
     max_sound_command_lateness_tstates:maxSoundCommandLatenessTStates,
     sound_control_phase_native_verified:false,
