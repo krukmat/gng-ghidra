@@ -379,7 +379,8 @@ test('B1 multiple independent roots expose multiple true frontiers, not blind re
   assert.deepEqual(result.entrypoints,[0,0x100,0x200]);
   assert.deepEqual(result.blockers,[
     {pc:0,reason:'UNSUPPORTED_Z80_OPCODE',family:'CB_BIT_ROTATE_PREFIX'},
-    {pc:0x100,reason:'UNSUPPORTED_Z80_OPCODE',family:'DD_IX_PREFIX'},
+    {pc:0x100,reason:'UNSUPPORTED_Z80_OPCODE',family:'DD_IX_PREFIX',
+      indexed_instruction:'INDEX_LD_RR_IMMEDIATE'},
     {pc:0x200,reason:'UNSUPPORTED_Z80_ED_INSTRUCTION',
       family:'ED_EXTENDED_PREFIX',ed_instruction:'ED_BLOCK_COMPARE'}
   ]);
