@@ -171,6 +171,28 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
           length=2;
           lines=['$.i=$.a;','$.pc='+next(2)+';','$.t+=9;'];
           targets=[next(2)];
+        } else if(kind==='ED_BLOCK_TRANSFER') {
+          // LDI/LDD/LDIR/LDDR: one byte transfer per compiled step.
+          // Repeating forms retain PC on BC != 0, so the scheduler can
+          // service interrupts between iterations (scheduler NOT certified).
+          const delta=(ext===0xa0||ext===0xb0)?1:-1;
+          const repeat=ext===0xb0||ext===0xb8;
+          length=2;
+          lines=[
+            'const byte=bus.read8($.hl,$.t+8);',
+            'bus.write8($.de,byte,$.t+11);',
+            '$.hl=($.hl+'+delta+')&65535;',
+            '$.de=($.de+'+delta+')&65535;',
+            '$.bc=($.bc-1)&65535;',
+            // Z80 undocumented F5 is bit 1 of A+byte; F3 is bit 3.
+            // S,Z,C are preserved; H,N reset; P/V follows new BC.
+            'const sum=($.a+byte)&255;',
+            '$.f=($.f&0xc1)|(sum&8)|((sum&2)<<4)|($.bc!==0?4:0);',
+            repeat?
+              '$.pc=($.bc!==0?'+pc+':'+next(2)+');$.t+=($.bc!==0?21:16);':
+              '$.pc='+next(2)+';$.t+=16;'
+          ];
+          targets=repeat?[pc,next(2)]:[next(2)];
         } else {
           blockers.push({pc,reason:'UNSUPPORTED_Z80_ED_INSTRUCTION',
             family:'ED_EXTENDED_PREFIX',ed_instruction:kind});
