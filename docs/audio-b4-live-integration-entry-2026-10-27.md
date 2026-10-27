@@ -363,3 +363,46 @@ Only after these gates should B4.T4 real-time YM2203 synth/WASM and B4.T5 browse
     node scripts/audio_fast_checkpoint.mjs
 
 Expected **106 Node + 71 Python** (8 new Node tests), *not yet operator-confirmed*. No MAME recapture and no new static frontier scan needed for this gate. Return only the sanitized checkpoint JSON. Retain the existing `b4trace1` private trace as differential reference; never share its file, ROM, generated AOT, native sound or debugger output.
+
+## B4.T3-B1/B2 — MAME 0.288 board contract and first native evidence gates
+
+**Operator accepted B4.T3-A:** `GNG_AUDIO_G5_FAST_CHECKPOINT_V1`, Node **106/106**, Python **71/71**, ROM SHA1_MATCH, private-safe, `audio_working:false` and `native_parity_verified:false`. The reset-vector-only scan (22 statically decoded PCs) is not the native 194-PC overlap result and must not supersede it.
+
+### Source-verified MAME 0.288 sound hardware
+
+Read original tag `mame0288`, `mamedev/mame/src/mame/capcom/gng.cpp`:
+- `Z80("audiocpu", XTAL(12'000'000)/4)` -> **3 MHz**;
+- `set_periodic_int(...irq0_line_hold, attotime::from_hz(4*60))` -> **240Hz, HOLD_LINE**; nominal 12500 Z80 T-states per request, but source alone does **not** expose real interrupt acknowledgement timestamps or periodic phase relative to reset.
+- `LS259.q_out_cb<1>().set_inputline("audiocpu", INPUT_LINE_RESET).invert()` and `.append(ym_reset_w)` -> active-low sound-CPU reset, with **both YM2203 devices also reset on assertion**.
+- sound ROM `0x0000..0x7fff`, RAM `0xc000..0xc7ff`, soundlatch read `0xc800`, YM writes `0xe000..0xe003`. Main sound command write `0x3a00`.
+- YM2203 device clocks are each `12 MHz / 8 = 1.5 MHz`.
+
+`gngb_z80_scheduler_lab.mjs` now explicitly names its **HOLD_LINE approximation** while preserving `nativeIrqRequestTraceObserved:false` and `nativeIrqAckTraceObserved:false`. The lab's reset-relative IRQ phase assumption remains **unverified**; do not promote it to native parity simply because the periodic frequency and signal category match MAME source. YM reset callback is still a requirement for the eventual real-time synth (bus observer alone cannot synthesize chip resets).
+
+### Implemented native-evidence scaffolding (no game engine or bot modifications)
+
+**B4.T3-B1 — read-only audio tape metadata**: `scripts/audio_t3_native_board_audit.py` reuses the existing strict B3 tape validation on `out/audio/mame-audio-events-<id>.jsonl`. It reports **only counts** of sound commands, latch reads and value matching by 12MHz timestamp, reset assertions/releases, writes to both YM ports, and previous B3 cross-CPU clock inversions. Inputs stay private; outputs contain no ROM/register/port data. The tape captures **NO native IRQ request/ACK**, so all IRQ parity flags explicitly remain false. Three ROM-free Python tests check chronology, cross-CPU inversions and malformed ports.
+
+**B4.T3-B2 — bounded real ROM execution lab**: `src/gngb_z80_sound_probe.mjs` and `scripts/audio_t3_sound_probe.mjs` verify local sound ROM SHA1, read the existing private native-backed 64-root set, AOT-compile within process and execute from Z80 PC 0 via the B4.T3-A scheduler. Output includes only execution steps/T-states, supported runtime STOP code, lab IRQ request/ACK counts, and YM **port-write counters created by executing Z80 instructions**. No captured YM event tape is read or replayed; no generated source/ROM is logged, persisted or shared, and no PCM is produced. It intentionally does not inject a guessed sound command. A real ROM may stop on an unsupported dynamic branch or IRQ mode; this is the next factual blocker to triage, not a pass by itself. Four ROM-free Node tests cover MMIO from a compiled Z80 program, 240Hz unsupported IM0 stop, execution budget and malformed inputs; isolated synthetic checks of the first three scenarios PASS.
+
+### Next Mac checkpoint (no new MAME capture)
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected: **110 Node + 74 Python** (previously 106 + 4, 71 + 3), *operator verification pending*.
+
+After PASS, execute read-only audit of EXISTING native tape:
+
+    python3 scripts/audio_t3_native_board_audit.py --id heartbeat4
+
+Then execute bounded ROM from the existing 64 native PC roots, without injecting a sound command:
+
+    node scripts/audio_t3_sound_probe.mjs --roots out/audio/z80-native-roots-b4trace1.json --target-tstates 12500 --max-steps 100000
+
+Return **only three sanitized JSON stdout messages**. STOP from the probe is legitimate runtime evidence, not authorization to fabricate missing opcode behavior. No new MAME capture and no engine/bot changes required for this block.
+
+### Remaining B4.T3-B3 — actual native differential, still NOT VERIFIED
+
+The MAME audio tape has YM writes, latch reads and resets, **not** IRQ ACKs, register snapshots or synchronized emulator CPU state. To assert CPU/IRQ/YM parity will require MAME-side private IRQ/HALT/PC instrumentation, matching board inputs/initial conditions and safe local comparison of real execution traces. Until that succeeds, do not claim 240Hz IRQ **service** parity or runtime audio playback. Future real-time dual YM synthesizer must reset *both* chips when LS259 bit1 asserts reset, as MAME 0.288 does.
