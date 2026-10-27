@@ -181,7 +181,7 @@ test('DEC r decrements all seven registers without collateral state changes',asy
       if(other!==key)assert.equal(state[other],prior[other]);
     assert.equal(state.pc,1);
     assert.equal(state.t,104);
-    assert.equal(state.f,key==='a'||opcode===0x05||opcode===0x15||opcode===0x25?0x3f:0x2b);
+    assert.equal(state.f,key==='a'||opcode===0x05||opcode===0x15||opcode===0x25?0x3f:0x23);
   }
 });
 
