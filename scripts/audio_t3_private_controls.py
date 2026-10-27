@@ -15,6 +15,8 @@ import audio_b3_checkpoint as b3
 
 CAPTURE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}\Z")
 
+# This capture-file bound is independent of the 3M-T-state probe run limit.
+MAX_NATIVE_CONTROLS_TICK12M = 12_000_000 * 3600
 
 class ControlsStop(Exception):
     pass
@@ -67,6 +69,8 @@ def export(capture_id, output_id):
                     relative = tick - first_release
                     if relative < 0 or relative % 8:
                         raise ControlsStop("AUDIO_T3_CONTROLS_CLOCK_ALIGNMENT_STOP")
+                    if relative > MAX_NATIVE_CONTROLS_TICK12M:
+                        raise ControlsStop("AUDIO_T3_CONTROLS_CLOCK_RANGE_STOP")
                     main_controls.append({
                         "kind": "SOUNDLATCH_WRITE",
                         "tick12m": relative,
