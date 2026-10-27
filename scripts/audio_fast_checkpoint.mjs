@@ -66,11 +66,17 @@ function run() {
     nodeCounts.ran!==null&&nodeCounts.failed===0&&
     pyCounts.ran!==null&&pyCounts.ok;
   const artifactsSafe=privateArtifactsGuard();
+  // Only allowlisted unittest method names, never Python tracebacks,
+  // local filesystem paths, ROM content or native event payloads.
+  const failingPythonTests=[...((python.stdout||'')+'\n'+(python.stderr||''))
+      .matchAll(/(?:^|\n)(?:FAIL|ERROR): ([A-Za-z0-9_]+) \(/g)]
+      .map(match=>match[1]).slice(0,12);
   if(!basic || !artifactsSafe){
     console.log(JSON.stringify({kind:'GNG_AUDIO_G5_FAST_CHECKPOINT_V1',
       status:artifactsSafe?'STOP_REGRESSION':'STOP_PRIVATE_ARTIFACT_GUARD',
       node:{exit_code:node.exit_code,...nodeCounts},
-      python:{exit_code:python.exit_code,...pyCounts},
+      python:{exit_code:python.exit_code,...pyCounts,
+        failing_test_names:failingPythonTests},
       rom_checked:false,private_artifacts_safe:artifactsSafe}));
     return 2;
   }
