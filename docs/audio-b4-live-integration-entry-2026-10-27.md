@@ -178,3 +178,30 @@ Expected **70 Node + 68 Python**, not yet confirmed on operator Mac. Once PASS:
 The report may remain `PARTIAL_UNCERTIFIED` and return exit 2; this is an expected *coverage* STOP, not a regression. Return its stdout JSON with `families`, `first_frontiers` and `static_decoded_pcs`. The DD `indexed_instruction` values specify what IX handling is actually needed in **B4.T2-B3**, rather than implementing the entire index-prefix ISA speculatively.
 
 **Critical remaining dependencies:** Z80 IRQ servicing at 240 Hz, EI/HALT semantics, sound ROM dynamic branches, reset/latch parity, real-time ymfm/WASM PCM producer, AudioWorklet synchronization. Neither an empty *static* frontier report nor a 15-second recognizable **offline** WAV certifies live game audio.
+
+## B4.T2-B3 — Six frontier breakthrough and regression correction (2026-10-27)
+
+**Operator Mac checkpoint:** B4.T2-B2 returned `STOP_REGRESSION` with **69/70 Node, 68/68 Python**, so B2 was not accepted despite the native-backed scan advancing from 67 decoded PCs / 28 frontiers to **92 decoded PCs / 6 frontiers**. The existing 64-root scan reported 5 DD_IX_PREFIX blockers, all explicitly classified `INDEX_LD_RR_IMMEDIATE`, plus 1 `RST` blocker at PC 287. No native timing/audio parity is implied.
+
+**Regression diagnosis:** prior Node test `B1 multiple independent roots expose multiple true frontiers` expected the old three-field DD blocker object. The previously added, privacy-safe indexed diagnostic now includes `indexed_instruction`, so the strict deep equality was stale. Updated it; also retained the other privacy regression fixtures using unsupported **DD22** rather than the now implemented DD21. This is the source-level identified mismatch; complete Mac gate remains pending.
+
+**Implementation:**
+- `src/gngb_z80_static_codegen.mjs` statically compiles *only* `DD 21 nn nn` / `FD 21 nn nn` as `LD IX/IY,nn`, preserving all flags and other state, 4 bytes and 14 T-states, with ROM-boundary guards. All other DD/FD indexed instructions still fail closed under their recognized safe class names.
+- Compiles all eight unprefixed `RST` opcodes into fixed 0x00..0x38 call vectors, pushing address of the following instruction onto the stack (high byte then low byte), 11 T-states, stack accesses charged at +8 / +11 T from instruction start, leaving flags intact. AOT statically follows the vector and fall-through but does NOT claim native IRQ parity.
+- `tests/test_gngb_z80_rst_ix_immediate.mjs` adds 5 ROM-free tests for IX/IY register/timing, truncated ROM rejection, eight RST targets and stack/clock activity, stack wrap, and strict unsupported DD behavior. Existing exact DD blocker fixture and frontier-report fixture updated to **DD22** where a blocker is intended; DD21 is now compiled. The tests are integrated into the existing `scripts/audio_fast_checkpoint.mjs`.
+- Independent V8 synthetic smoke verified 11 DD/FD and RST emitted-code scenarios with zero failures. This is not the full Node suite or native CPU parity.
+- No edits to gameplay engine, bot, recorder, private ROM, browser playback, or GitHub Actions.
+
+### Next operator Mac gate
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+**Expected 75 Node / 68 Python** (previous 70 + five new Node tests), pending operator confirmation. Only if PASS, run a NEW private report filename against the previously recovered 64 native-backed PC roots, no new MAME capture:
+
+    node scripts/audio_z80_scan.mjs --roots out/audio/z80-native-roots-b4trace1.json --out out/audio/z80-frontier-b4trace1-b4.json
+
+The output may report further newly reachable unsupported instruction families and remain PARTIAL_UNCERTIFIED; that is a coverage gap to triage, not a reason to mark live sound done. If the 64-root static frontier becomes empty, do NOT infer full Z80 coverage: full native executed PC census is **194**, while the scanner seeds only 64. Remaining native trace coverage, IRQ servicing, sound reset/latch, YM event stream from *running JS* and live PCM are independent gates.
+
+**B4.T2-B3 source implementation is prepared, not yet operator-validated.**
