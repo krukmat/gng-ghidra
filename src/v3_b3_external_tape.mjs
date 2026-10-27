@@ -8,7 +8,8 @@ import {B3_HORIZONS,B3_TAPE_SCHEMA,b3Tape} from './v3_b3_tapes.mjs';
 export function resolveB3LabTape(name){
   if(Object.hasOwn(B3_HORIZONS,name))return b3Tape(name);
   const raw=JSON.parse(readFileSync(name,'utf8'));
-  if(raw?.schema!==B3_TAPE_SCHEMA||raw.profile!=='explorer-g4'||
+  if(raw?.schema!==B3_TAPE_SCHEMA||
+     !['explorer-g4','mame-recording'].includes(raw.profile)||
      !Number.isSafeInteger(raw.frames)||raw.frames<1||raw.frames>216000||
      !Array.isArray(raw.events))
     throw Error('V3_B3_EXTERNAL_TAPE_INVALID');

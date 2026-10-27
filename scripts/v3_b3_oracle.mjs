@@ -36,8 +36,10 @@ const log=execFileSync('mame',['gngb','-rompath',join(ROOT,'roms'),
   '-cfg_directory',join(work,'cfg'),'-nvram_directory',join(work,'nvram'),
   '-video','none','-sound','none','-nothrottle','-skip_gameinfo',
   '-autoboot_script',join(ROOT,'scripts/v3_b3_oracle.lua'),
-  '-seconds_to_run',String(Math.ceil(frames.at(-1)/50)+30)],
-  {env:{...process.env,GNG_B3_ORACLE_DIR:work,GNG_B3_ORACLE_TAPE:spec,
+  '-seconds_to_run',String(Math.ceil(frames.at(-1)/50)+30),
+  '-keyboardprovider','none','-mouseprovider','none',
+  '-joystickprovider','none','-lightgunprovider','none'],
+  {env:{...process.env,SDL_VIDEODRIVER:'dummy',SDL_AUDIODRIVER:'dummy',GNG_B3_ORACLE_DIR:work,GNG_B3_ORACLE_TAPE:spec,
     GNG_B3_ORACLE_FRAMES:frames.join(',')},stdio:['ignore','pipe','pipe'],
   encoding:'utf8'});
 if(!log.includes('V3_B3_ORACLE_LUA=RECORDED')){
