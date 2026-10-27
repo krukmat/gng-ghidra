@@ -9,6 +9,7 @@ import {readReplayContactPng,replayContactFrame}
 import {detectWaterTerrain,createIslandVelocityTracker}
   from './perception/terrain-water.mjs';
 import {detectArthurSkin} from './perception/arthur-skin.mjs';
+import {detectRedDemon} from './perception/red-demon.mjs';
 const [source,session='replay',firstArg='2500',stepArg='10',countArg='31']=
   process.argv.slice(2);
 const first=Number(firstArg),step=Number(stepArg),count=Number(countArg);
@@ -23,6 +24,7 @@ for(let i=0;i<count;i++){
   const frame=first+i*step,visual=replayContactFrame(png,i);
   const terrain=detectWaterTerrain(visual),arthur=detectArthurSkin({...visual,roiLeft:96,roiRight:165});
   const motion=tracker.observe({frame,session,terrain});
+  const demon=detectRedDemon(visual);
   observations.push({frame,
     bankX:terrain.leftBank?.right??null,
     islandLeft:terrain.island?.left??null,
@@ -31,7 +33,8 @@ for(let i=0;i<count;i++){
     arthurVisible:arthur.kind==='ARTHUR_SKIN_CANDIDATE',
     islandVelocity:motion.status==='MOTION_CANDIDATE'?motion.velocity:null,
     motionStatus:motion.status,
-    landing:'UNKNOWN',bossDefeated:'UNKNOWN',rightBank:'UNKNOWN'});
+    landing:'UNKNOWN',redDemon:demon.status,
+    bossDefeated:'UNKNOWN',rightBank:terrain.rightBank?.left??null});
 }
 const speeds=observations.filter(o=>o.islandVelocity!==null)
   .map(o=>o.islandVelocity).sort((a,b)=>a-b);
