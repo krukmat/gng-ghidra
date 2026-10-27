@@ -176,3 +176,14 @@ Se sustituyó el intercambio de un único first_blocker por diagnóstico multirr
     node scripts/audio_fast_checkpoint.mjs
 
 El resultado esperado contiene kind=GNG_AUDIO_G5_FAST_CHECKPOINT_V1. No implica ejecución completa del Z80, paridad MAME ni audio reproducible. La ROM y todos los artefactos derivados permanecen privados y locales. No se modifican engine ni bot.
+
+
+## B3 — Primer WAV de laboratorio desde eventos nativos (2026-10-27)
+
+Checkpoint previo confirmado por el operador: **54/54** Node PASS, **11/11** Python PASS, ROM SHA1_MATCH, 22 PCs de prefijo AOT sin fronteras estáticas, NO Z80 completa. La nueva fase ya no continúa ampliando opcodes sin evidencia dinámica.
+
+Implementado en main el ejecutor privado B3 (MAME 0.289 → YM2203 events JSONL → TSV → ymfm fijado a commit → WAV 62500Hz), pruebas ROM-free y diagnósticos opcionales sobre WAV de referencia MAME, con rechazo de cinta inválida, reinicios de YM, ROM errónea y PCM silencioso. Se conserva en privado la captura anterior sin sobrescribirla. La implementación de B3 está lista, pero **no se ha observado MAME nativo, WAV real ni paridad sonora en este checkout remoto**.
+
+Ver contrato completo y comando único: [audio-g5-fast-b3-2026-10-27.md](audio-g5-fast-b3-2026-10-27.md).
+
+Siguiente evidencia solicitada: solo JSON GNG_AUDIO_B3_CHECKPOINT_V1 y confirmación local de audibilidad del WAV, sin enviar archivos out/audio.
