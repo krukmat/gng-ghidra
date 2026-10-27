@@ -115,7 +115,9 @@ test('B4.T3-B4 long native capture timeline is accepted without future input inj
 
 test('B4.T3-B4 bounded IM1 IRQ probe crosses first HOLD_LINE approximation without commands',async()=>{
   const rom=new Uint8Array(0x8000);
-  rom.set([0xed,0x56,0xfb,0x76,0x18,0xfe,0xcb,0x40],0);
+  // Realistic Z80 reset program initializes stack RAM before accepting IRQ.
+  rom.set([0x31,0x00,0xc1,0xed,0x56,0xfb,0x76,
+    0x18,0xfe,0xcb,0x40],0);
   rom.set([0xc9,0xcb,0x40],0x38);
   const result=await probeZ80SoundExecution(rom,[0,0x38],{
     targetTStates:12540,maxSteps:10000,
