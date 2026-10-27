@@ -22,7 +22,8 @@ try{
     compiled:result.compiled,unsupported:result.blockers.length,pending:result.pending,
     first_blocker:result.blockers.length ? {
       pc:result.blockers[0].pc, family:result.blockers[0].family??'UNKNOWN',
-      reason:result.blockers[0].reason
+      reason:result.blockers[0].reason,
+      ...(result.blockers[0].ed_instruction ? {ed_instruction:result.blockers[0].ed_instruction} : {})
     } : null,
     instruction_bytes_exported:false,
     audio_working:false,has_native_parity:false}));
