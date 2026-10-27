@@ -126,6 +126,32 @@ export function classifyZ80EdInstruction(second) {
   return 'ED_UNASSIGNED_OR_UNDOCUMENTED';
 }
 
+/**
+ * Static classifier for DD/FD SECOND byte, no opcode/operand values in reports.
+ * This is NOT indexed instruction execution, and never implies parity.
+ */
+export function classifyZ80IndexedInstruction(second) {
+  if(!Number.isInteger(second)||second<0||second>255)
+    throw new Z80StaticError('AUDIO_Z80_INDEX_DIAGNOSTIC_INVALID');
+  if(second===0x21)return 'INDEX_LD_RR_IMMEDIATE';
+  if(second===0x22||second===0x2a)return 'INDEX_LD_RR_ABSOLUTE';
+  if(second===0x23||second===0x2b)return 'INDEX_INC_DEC_RR';
+  if([0x09,0x19,0x29,0x39].includes(second))return 'INDEX_ADD_RR';
+  if([0x24,0x25,0x26,0x2c,0x2d,0x2e].includes(second))
+    return 'INDEX_HIGH_LOW_REGISTER';
+  if([0x34,0x35,0x36].includes(second))return 'INDEX_DISPLACEMENT_UPDATE';
+  if((second&0xc7)===0x46 && second!==0x76)
+    return 'INDEX_DISPLACEMENT_LOAD';
+  if((second&0xf8)===0x70 && second!==0x76)
+    return 'INDEX_DISPLACEMENT_STORE';
+  if((second&0xc7)===0x86)return 'INDEX_DISPLACEMENT_ALU';
+  if(second===0xcb)return 'INDEX_BIT_ROTATE_DISPLACEMENT';
+  if([0xe1,0xe3,0xe5,0xe9,0xf9].includes(second))
+    return 'INDEX_STACK_JUMP_TRANSFER';
+  if(second===0xdd||second===0xfd)return 'INDEX_PREFIX_CHAIN';
+  return 'INDEX_UNHANDLED_SECOND_OPCODE';
+}
+
 export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
   if(!(rom instanceof Uint8Array) || rom.length!==0x8000)
     throw new Z80StaticError('AUDIO_Z80_ROM_IMAGE_INVALID');
@@ -154,6 +180,15 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
     const opcode=rom[pc],next=n=>(pc+n)&0xffff;
     let lines=[],targets=[],length=1;
     const w16=()=>read8(pc,1)|(read8(pc,2)<<8);
+    // DD/FD block execution explicitly. Classify only their second byte
+    // to choose the necessary indexed instruction family in the NEXT batch.
+    if(opcode===0xdd||opcode===0xfd) {
+      const indexKind=classifyZ80IndexedInstruction(read8(pc,1));
+      blockers.push({pc,reason:'UNSUPPORTED_Z80_OPCODE',
+        family:opcode===0xdd?'DD_IX_PREFIX':'FD_IY_PREFIX',
+        indexed_instruction:indexKind});
+      continue;
+    }
     switch(opcode) {
       case 0xed: {
         const ext=read8(pc,1);
