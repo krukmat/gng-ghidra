@@ -50,13 +50,13 @@ test('B4.T2-B4: indexed effective address wraps 16 bits for signed displacement'
   }
 });
 
-test('B4.T2-B4: indexed load requires full displacement byte and unsupported IX writes remain gated',()=>{
+test('B4.T2-B4: indexed load requires full displacement byte and unsupported IX updates remain gated',()=>{
   for(const prefix of [0xdd,0xfd]){
     const rom=new Uint8Array(0x8000);
-    rom.set([prefix,0x70,0x03],0);
+    rom.set([prefix,0x36,0x03,0x42],0);
     const blocked=compileZ80Prefix(rom);
     assert.equal(blocked.compiled,0);
-    assert.equal(blocked.blockers[0].indexed_instruction,'INDEX_DISPLACEMENT_STORE');
+    assert.equal(blocked.blockers[0].indexed_instruction,'INDEX_DISPLACEMENT_UPDATE');
     // Can't synthesize a displacement from outside a ROM boundary.
     const edge=new Uint8Array(0x8000);
     edge.set([prefix,0x46],0x7ffe);
