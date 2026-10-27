@@ -116,6 +116,8 @@ test('G5 final authentic late command crosses old 3M ceiling and creates Z80-ori
   assert.equal(result.status,'LAB_ADVANCE_OK');
   assert.ok(result.reached_tstates>=3_000_250);
   assert.equal(result.native_sound_controls_applied,1);
+  assert.ok(result.z80_sound_latch_reads>0);
+  assert.ok(result.z80_sound_latch_reads_after_command>0);
   assert.equal(result.ym_port_writes_from_running_z80,2);
   assert.equal(writes.length,2);
   assert.deepEqual(writes.map(x=>x.slice(0,2)),[
