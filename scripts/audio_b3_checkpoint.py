@@ -38,21 +38,34 @@ class B3Stop(Exception):
 
 
 def ensure_private(p, *, must_exist=False):
-    """Deny traversal, symlinks and outputs anywhere outside ignored out/audio."""
+    """Deny path escapes/symlinks while allowing canonical OS path aliases.
+
+    On macOS /var may resolve to /private/var, including Python tempfile's
+    default location. That system-level alias is safe when BOTH the intended
+    private root and the candidate resolve within the same canonical root.
+    """
     p = Path(p)
-    if not p.is_absolute():
-        p = ROOT / p
-    candidate = p.absolute()
-    if not candidate.is_relative_to(PRIVATE) or candidate == PRIVATE:
+    candidate = (p if p.is_absolute() else ROOT / p).absolute()
+    private_root = PRIVATE.absolute()
+    # Traversal is denied even if resolving it would re-enter the root.
+    if ".." in candidate.parts or not candidate.is_relative_to(private_root) \
+            or candidate == private_root:
         raise B3Stop("PRIVATE_PATH_REQUIRED")
-    if candidate.resolve() != candidate:
+    canonical_root = private_root.resolve()
+    canonical_candidate = candidate.resolve()
+    if (not canonical_candidate.is_relative_to(canonical_root)
+            or canonical_candidate == canonical_root):
         raise B3Stop("PRIVATE_PATH_SYMLINK_OR_TRAVERSAL")
+    # A symlink below our designated root is never accepted, even if its
+    # destination is still inside out/audio. OS parent aliases are allowed.
+    current = private_root
+    for part in candidate.relative_to(private_root).parts:
+        current = current / part
+        if current.is_symlink():
+            raise B3Stop("PRIVATE_PATH_SYMLINK_OR_TRAVERSAL")
     if must_exist and not candidate.is_file():
         raise B3Stop("PRIVATE_INPUT_MISSING")
-    if candidate.exists() and candidate.is_symlink():
-        raise B3Stop("PRIVATE_PATH_SYMLINK")
     return candidate
-
 
 def call(argv, *, timeout=120):
     try:
