@@ -1,7 +1,8 @@
 /** Water crossing policy: original P1 controls only, no engine/RAM access.
  * Consumes *visually confirmed* observations in screen pixels.
  * Does not detect sprites or platforms: calibrate upstream on private captures.
- * A moving target, jump duration and Arthur SCREEN-x speed must be demonstrated;
+ * A moving target, jump duration and Arthur speed relative to fixed
+ * terrain must be demonstrated; camera scrolling must cancel out;
  * untrusted/late data causes STOP, never a blind attempt.
  */
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
@@ -59,7 +60,8 @@ export function createWaterCrossingPolicy({
     const delta=last?frame-last.frame:0;
     if(last&&(delta<1||delta>maxObservationGap))
       return stop('STALE_FRAME');
-    const center=(platform.left+platform.right)/2;
+    // Stationary departure bank cancels camera scroll in velocity estimate.
+    const center=(platform.left+platform.right)/2-water.left;
     if(lastPlatform){
       const instantaneous=(center-lastPlatform.center)/delta;
       if(Math.abs(instantaneous)>maxPlatformSpeedPxPerFrame)
@@ -97,14 +99,16 @@ export function createWaterCrossingPolicy({
       if(Math.abs(platform.topY-arthur.feetY)>landingHeightTolerancePx)
         return unknown('WAIT','LANDING_HEIGHT_NOT_CALIBRATED');
       const shift=velocity*flightFrames;
-      const projected=arthur.x+runSpeedPxPerFrame*flightFrames;
-      const left=platform.left+shift+landingMarginPx;
-      const right=platform.right+shift-landingMarginPx;
-      if(left>right||projected<left||projected>right)
+      const projectedRelative=arthur.x-water.left+runSpeedPxPerFrame*flightFrames;
+      const projected=projectedRelative+water.left;
+      const left=platform.left-water.left+shift+landingMarginPx;
+      const right=platform.right-water.left+shift-landingMarginPx;
+      if(left>right||projectedRelative<left||projectedRelative>right)
         return unknown('WAIT','NO_SAFE_INTERCEPT');
       jumpStart=frame;projectedLandingX=projected;state='AIRBORNE';
       return {phase:'TAKEOFF',action:'right_jump',reason:'PREDICTED_PLATFORM_INTERCEPT',
-        projectedLandingX,platformVelocity:velocity};
+        projectedLandingX,projectedLandingRelativeX:projectedRelative,
+        platformVelocity:velocity};
     }
     if(state==='AIRBORNE'){
       const elapsed=frame-jumpStart;
