@@ -282,3 +282,42 @@ Any chronology failure remains STOP_CHRONOLOGY_NOT_RENDERABLE, and it will not g
 - bad_sequence: inspect row loss/insertion/tap lifecycle and heartbeat written_events; do not renumber blindly.
 
 Do not share the actual tape, private WAV, sound ROM or raw event timestamps. Native YM parity remains PENDING.
+
+
+## Heartbeat4 gate: 11 global tick regressions — scoped lab replay
+
+Operator Mac facts: Node 54/54 PASS; Python 46/46 PASS; SHA1_MATCH. The private heartbeat4 event tape records **312533/312533** callbacks without loss, including **305698 YM2203 writes**. There are **11 global tick regressions**, first observed at event index **68359**, but **zero sequence gaps, zero frame regressions and zero type errors**. The recorder's frame_fallbacks=312533, so the frame field is a coarse fallback: native frame alignment is NOT certified.
+
+The only relevant clock contract for the initial offline waveform is the sound CPU's ordered YM write stream. MAME may interleave native memory taps from distinct main/sound CPU execution slices in a way that makes adjacent global event ticks nonmonotonic. **This is a hypothesis, not yet proven for heartbeat4**.
+
+Implementation on main:
+- Read-only private chronology diagnostics now count main CPU vs audio CPU stream inversions, YM-only inversions, CPU transition vs same CPU transition inversions and safe **bucketed** regression magnitudes; no event timestamps/registers/ROM/audio are emitted.
+- Default native-tape validation remains STRICT: every global tick regression blocks.
+- An explicit existing-tape-only opt-in, **--lab-allow-cross-cpu-skew**, is accepted ONLY when the validator proves each CPU stream individually monotonically timed, all YM writes monotonically timed, all 11 (or actual number) global regressions occur on a main-to-audio/audio-to-main transition, and sequence/frame/ROM/privacy/integrity gates pass. It does not reorder, clamp, renumber, edit, or overwrite the original JSONL. It never permits YM register/write timeline regressions or gaps.
+- Report contains lab_cross_cpu_tick_regressions, global_timeline_strictly_monotonic and cross_cpu_temporal_parity_verified=false. Other native parity, gameplay audio and waveform parity flags remain false.
+- The standalone YM-to-TSV converter previously accepted only relative private paths, while the B3 orchestrator passed an absolute path; the converter now securely accepts either form in ignored out/audio without allowing escape/symlink traversal.
+- New ROM-free tests cover both legal cross-CPU interleave and illegal same-CPU/YM inversions, seq gaps, backwards frames, no source rewriting, mock audio output and converter absolute-path safety.
+
+Mac checkpoint, with existing heartbeat4 (DO NOT recapture or send JSONL):
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected Python: **52 tests** (previous 46 + six new), Node 54, not yet verified on Mac.
+
+Inspect if desired:
+
+    python3 scripts/audio_b3_checkpoint.py --diagnose --tape out/audio/mame-audio-events-heartbeat4.jsonl
+
+In chronology report, strict_lab_projection_possible=true means cross-CPU-only regression category satisfies the lab gate; false means original event tape must remain blocked.
+
+If regression suite passes, attempt existing private tape replay WITHOUT MAME:
+
+    python3 scripts/audio_b3_checkpoint.py --tape out/audio/mame-audio-events-heartbeat4.jsonl --lab-allow-cross-cpu-skew --ymfm-src out/audio/ymfm --duration-ms 5000
+
+The validator checks strict eligibility even with the opt-in; if a real Z80/YM clock inversion exists it stops as TAPE_BAD_CHRONOLOGY and prints the sanitized diagnostic. The other independent stops remain authoritative (reset, missing/invalid YM writes, native tape row loss, ymfm build/renderer errors, silent PCM). A success means LAB_NON_SILENT_FROM_MAME_YM_EVENTS_NOT_CERTIFIED, **not** certified original sound fidelity. If successful, operator may play privately:
+
+    afplay out/audio/b3-first-audio.wav
+
+Report only stdout JSON and whether audio is recognizable. Never upload ROM, raw trace, native WAV or generated TSV.
