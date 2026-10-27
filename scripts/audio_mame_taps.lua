@@ -12,16 +12,30 @@ local taps = {}
 local health_path = os.getenv("GNG_AUDIO_TAP_HEALTH_OUT")
 local health = { frames = 0, ym = 0, latch = 0, sound_read = 0,
                  reset = 0, disabled = 0, written = 0,
-                 format_errors = 0, write_errors = 0, flush_errors = 0 }
+                 format_errors = 0, write_errors = 0, flush_errors = 0,
+                 clock_errors = 0, value_errors = 0, clock_fallbacks = 0 }
 local function save_health(closed)
   if not health_path then return end
   local f = assert(io.open(health_path, "w"), "AUDIO_TAP_HEALTH_FILE_STOP")
   f:write(string.format(
-    '{"kind":"GNG_AUDIO_MAME_TAP_HEALTH_V1","tap_armed":true,"frames_observed":%d,"ym_callbacks":%d,"main_latch_callbacks":%d,"sound_latch_callbacks":%d,"reset_callbacks":%d,"disabled_side_effect_callbacks":%d,"written_events":%d,"format_errors":%d,"write_errors":%d,"flush_errors":%d,"capture_closed":%s}\n',
+    '{"kind":"GNG_AUDIO_MAME_TAP_HEALTH_V1","tap_armed":true,"frames_observed":%d,"ym_callbacks":%d,"main_latch_callbacks":%d,"sound_latch_callbacks":%d,"reset_callbacks":%d,"disabled_side_effect_callbacks":%d,"written_events":%d,"format_errors":%d,"write_errors":%d,"flush_errors":%d,"clock_errors":%d,"value_errors":%d,"clock_fallbacks":%d,"capture_closed":%s}\n',
     health.frames, health.ym, health.latch, health.sound_read,
     health.reset, health.disabled, health.written, health.format_errors,
-    health.write_errors, health.flush_errors, tostring(closed)))
+    health.write_errors, health.flush_errors, health.clock_errors,
+    health.value_errors, health.clock_fallbacks, tostring(closed)))
   f:close()
+end
+
+-- MAME's Lua bindings can return numeric values as floats or 64-bit
+-- wrappers. Lua's string.format %d requires a native integer; use
+-- bounded exact decimal formatting for our short laboratory captures.
+local function decimal(value, upper)
+  local n = tonumber(value)
+  if n == nil then n = tonumber(tostring(value)) end
+  if n == nil or n ~= n or n < 0 or n > upper or n % 1 ~= 0 then
+    return nil
+  end
+  return string.format("%.0f", n)
 end
 
 local function capture(kind, address, data)
@@ -34,13 +48,49 @@ local function capture(kind, address, data)
   if kind == "Z80_LATCH_READ" then health.sound_read = health.sound_read + 1 end
   if kind == "AUDIO_RESET_WRITE" then health.reset = health.reset + 1 end
 
-  -- MAME Lua tap exceptions can prevent a row from being written without
-  -- stopping the emulated game. Track the failing phase, not private data.
+  -- Numeric conversions, clock access, serialization and file I/O are
+  -- tracked separately. Do not log any ROM, address, register or sound value.
+  local ok_clock, native_tick = pcall(function()
+    return machine.time:as_ticks(12000000)
+  end)
+  if not ok_clock then
+    health.clock_errors = health.clock_errors + 1
+    return
+  end
+  local tick = decimal(native_tick, 12000000 * 3600)
+  if tick == nil then
+    -- Laboratory-only fallback, potentially +/- one 12MHz tick:
+    -- keep clock_fallbacks in heartbeat and do NOT claim MAME timing parity.
+    local ok_fallback, seconds = pcall(function()
+      return machine.time:as_double()
+    end)
+    if not ok_fallback then
+      health.clock_errors = health.clock_errors + 1
+      return
+    end
+    local n = tonumber(seconds)
+    if n ~= nil and n >= 0 then tick = decimal(math.floor(n * 12000000), 12000000 * 3600) end
+    if tick == nil then
+      health.clock_errors = health.clock_errors + 1
+      return
+    end
+    health.clock_fallbacks = health.clock_fallbacks + 1
+  end
+  local frame = decimal(screen.frame_number, 1000000000)
+  local addr = decimal(address, 65535)
+  local value_number = tonumber(data)
+  if value_number == nil then value_number = tonumber(tostring(data)) end
+  local value = value_number and decimal(value_number % 256, 255) or nil
+  if not frame or not addr or not value then
+    health.value_errors = health.value_errors + 1
+    return
+  end
+  -- %s is intentional: it preserves validated decimal integers regardless
+  -- of their Lua number subtype, avoiding %d conversion exceptions.
   local good_format, row = pcall(function()
-    local tick = machine.time:as_ticks(12000000)
     return string.format(
-      '{"kind":"%s","seq":%d,"frame":%d,"tick12m":%d,"address":%d,"value":%d}\n',
-      kind, seq + 1, screen.frame_number, tick, address, data & 0xff)
+      '{"kind":"%s","seq":%s,"frame":%s,"tick12m":%s,"address":%s,"value":%s}\n',
+      kind, decimal(seq + 1, 1000000), frame, tick, addr, value)
   end)
   if not good_format or type(row) ~= "string" then
     health.format_errors = health.format_errors + 1
