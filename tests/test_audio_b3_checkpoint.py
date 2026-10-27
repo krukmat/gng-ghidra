@@ -132,7 +132,8 @@ class B3CheckpointTests(unittest.TestCase):
             if len(calls) == 3:
                 self.make_wav([0, 300, -500, 1000, -1000] * 100,
                               b3.OUT_WAV.name)
-        with patch.object(b3, "call", side_effect=fake_call):
+        with patch.object(b3, "call", side_effect=fake_call), \
+             patch.object(b3, "verify_rom_identity", return_value=True):
             report = b3.run_b3(tape=tape, ymfm_source=src, duration_ms=2000)
         self.assertEqual(len(calls), 3)
         self.assertEqual(report["status"],
@@ -158,9 +159,17 @@ class B3CheckpointTests(unittest.TestCase):
                 b3.OUT_TSV.write_text("0 57344 4\n")
             else:
                 self.make_wav([0] * 256, b3.OUT_WAV.name)
-        with patch.object(b3, "call", side_effect=mocked):
+        with patch.object(b3, "call", side_effect=mocked), \
+             patch.object(b3, "verify_rom_identity", return_value=True):
             with self.assertRaisesRegex(b3.B3Stop, "PCM_SILENT_STOP"):
                 b3.run_b3(tape=tape, ymfm_source=src)
+
+    def test_private_gg2_identity_rejects_arbitrary_rom_and_missing_file(self):
+        with self.assertRaisesRegex(b3.B3Stop, "PRIVATE_INPUT_MISSING"):
+            b3.verify_rom_identity()
+        (self.base / "gg2.bin").write_bytes(bytes(32768))
+        with self.assertRaisesRegex(b3.B3Stop, "LOCAL_SOUND_ROM_IDENTITY_STOP"):
+            b3.verify_rom_identity()
 
     def test_cli_fail_closed_and_no_private_path_in_stdout(self):
         output = io.StringIO()
