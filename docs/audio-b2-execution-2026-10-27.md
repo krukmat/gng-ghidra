@@ -101,3 +101,22 @@ La subinstrucción ED inicial concreta es desconocida en este hilo: no asumir qu
     node scripts/audio_z80_build.mjs out/audio/gg2.bin out/audio/z80-prefix.mjs
 
 El tercer comando puede acabar en exit 2 por una nueva instrucción no soportada: STOP esperado. Compartir solamente el JSON GNG_AUDIO_Z80_AOT_PREFIX_V1 y first_blocker (pc/family/ed_instruction si lo hay). No enviar gg2.bin, compilación derivada, trazas, out/audio ni bytes de ROM. Ninguna paridad de Z80 o audio se certifica por tests sintéticos.
+
+
+## Checkpoint A2.T2c — DJNZ después de 5 instrucciones compiladas (27/10/2026)
+
+Resultados del operador en Mac: 8/9 tests Node PASS. La única aserción fallida esperaba el formato obsoleto de diagnóstico ED (UNSUPPORTED_Z80_OPCODE); el formato correcto es UNSUPPORTED_Z80_ED_INSTRUCTION con ed_instruction=ED_UNASSIGNED_OR_UNDOCUMENTED. El test está reparado. La compilación Z80 pasó de 0 a 5 instrucciones y se bloqueó en PC=233 (0x00E9), familia DJNZ. ROM gg2.bin validada en el checkpoint anterior; ningún byte de ROM fue enviado al repositorio.
+
+Cambios actuales en main:
+- DJNZ e Z80 AOT: decrementa B (byte alto de BC) módulo 256, sin modificar C ni flags. Salta a PC+2+desplazamiento con signo si B != 0 (13 T-states) y cae en PC+2 si B == 0 (8 T-states).
+- El grafo de compilación offline visita ambos destinos estáticos; ningún opcode se interpreta durante runtime.
+- Pruebas sintéticas añadidas: salto tomado/no tomado, B=0 -> 255, desplazamiento negativo, autobucle, flags y C intactos.
+- La validación aislada del código JS generado fue PASS. Los 11 tests completos definidos no fueron ejecutados en este entorno y requieren el Mac.
+
+### Próximo gate local
+
+    git checkout main && git pull --ff-only
+    node --test tests/test_gngb_z80_static_codegen.mjs
+    node scripts/audio_z80_build.mjs out/audio/gg2.bin out/audio/z80-prefix.mjs
+
+No declarar audio, paridad Z80, ni G5 GO. El comando Z80 puede finalizar en PARTIAL_UNCERTIFIED con exit 2 al descubrir otra instrucción pendiente. Compartir únicamente JSON GNG_AUDIO_Z80_AOT_PREFIX_V1: status, compiled y first_blocker. No enviar ROM, volcados ni artefactos derivados desde out/audio.
