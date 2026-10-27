@@ -178,10 +178,10 @@ async function main(){
     // Release the machine's scheduled controls atomically. Do NOT stop
     // the original running engine or tamper with its memory.
     await post('/release');
-    handoff=true;outcome='HANDOFF_TO_HUMAN';
     const s=await state();
     if(s.halt||s.sessionId!==expectedSession)
       throw Error('BOT_PRACTICE_HANDOFF_STATE_NOT_VALID');
+    handoff=true;outcome='HANDOFF_TO_HUMAN';
     save('handoff.json',{source,tapeHash:tape.sha256,targetFrame,
       reachedFrame:s.frame,session:s.sessionId,eventsSent,maxInputLag:lateMax,
       bossDefeated:'UNVERIFIED',islandLanding:'UNVERIFIED',
