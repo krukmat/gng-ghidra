@@ -75,3 +75,12 @@ no identifican la causa física de muerte ni distinguen Arremer, agua o salto.
 Para cerrar B1.2 hay que inspeccionar las tres imágenes privadas generadas
 (`out/bot/{b1-peak,b1-baseline,b1-plateau}/frames.png`) y etiquetar como
 `UNKNOWN` lo no visible. **Sin nuevos barridos, sin editar engine.**
+
+
+## B2: giro por hipótesis de caída al agua
+
+Tras inspeccionar las capturas aportadas, el siguiente frente ya no es la
+táctica contra el enemigo rojo, sino el salto al islote móvil. Se implementó
+el [controlador B2 de cruce](gng-bot-water-crossing-b2.md) con tests ROM-free
+y parada conservadora. La validación real permanece pendiente de calibración
+visual y de fotografías pre-impacto; no se ha demostrado un aterrizaje.
