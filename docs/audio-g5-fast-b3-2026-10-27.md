@@ -358,3 +358,25 @@ When both utilities are published, synchronize and run regression before running
 Expected Node **54** and Python **59** (53 prior + 6 new tests), not yet verified on the Mac.
 
 Only report their **sanitized JSON** and whether the private MAME reference audio is audible. Do not send any WAV, ROM, input tape, TSV, register payload or local filesystem paths. The source event tape is never modified; the prior cross-CPU timestamp exception does not certify global CPU temporal parity.
+
+
+## B3 ACCEPTED — first recognizable Ghosts 'n Goblins intro from MAME YM bus (2026-10-27)
+
+**Operator acceptance from Mac:** the replay of private heartbeat4 after changing the lab duration to 15000 ms returned `LAB_NON_SILENT_FROM_MAME_YM_EVENTS_NOT_CERTIFIED`. The operator listened to `out/audio/b3-first-audio.wav` and explicitly confirmed **it is the beginning of the game** (recognizable Ghosts 'n Goblins intro). This is a human auditory confirmation, NOT quantitative waveform parity.
+
+Evidence from the sanitized checkpoint:
+- 312533 native memory tap events recorded without losses; 305698 YM2203 writes (chip0=152920, chip1=152778).
+- 11 cross-CPU tick regressions accepted under explicit replay-only LAB mode; within-CPU/YM ordering valid; global cross-CPU temporal parity **NOT VERIFIED**.
+- 15000 ms mono PCM16 at 62500 Hz: 937500 frames, 543583 nonzero, peak=23115, RMS=3261.574, clipping=0.
+- Sound ROM local SHA1_MATCH. Source tape originated from an unpinned-MAME capture; no independent verification of the emulator-loaded ROM identity. Original native reference WAV was not used for aligned comparison.
+- Static reset-root Z80 AOT coverage remains 22 PCs; no conclusion about full sound CPU ISA, IRQ, runtime, AudioWorklet or gameplay synchronization.
+
+**B3 functional milestone: ACCEPTED / first recognizable laboratory audio.** Do not equate this with complete audio playback, game playability or bit/sample parity.
+
+### B4 proposed work, gated by B3 acceptance
+- B4.T1: verify reference WAV recording and consistent ROM/MAME/input provenance; define a common reference epoch and compare aligned PCM rather than raw duration or unaligned RMS.
+- B4.T2: evaluate two YM2203 signal paths (FM/PSG), reset/timer implications, output sample rate and audio mix; document measurable deviations from MAME.
+- B4.T3: integrate dynamic Z80 AOT scheduling, IRQ/latch/reset and YM2203 native-write generation; do not claim completion on the 22-PC static prefix.
+- B4.T4: browser AudioWorklet/PCM buffering and deterministic A/V sync with gameplay; protect bot and main engine from unrelated changes.
+
+Acceptance for B4 must include a reproducible playable segment **with in-game audio**, reference comparison and evidence of temporal synchronization. Preserve ROM, native tapes, reference WAV and synthesized PCM only under ignored `out/audio/`.
