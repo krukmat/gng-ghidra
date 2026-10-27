@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {compileZ80Prefix} from '../src/gngb_z80_static_codegen.mjs';
-import {summarizeZ80Frontiers} from '../src/gngb_audio_frontier_report.mjs';
+import {summarizeZ80Frontiers,parseZ80OperatorSeeds} from '../src/gngb_audio_frontier_report.mjs';
 
 const EXPECTED_SHA1='7ef9ec5c2072e21c787a6bbf700033f50c759c1d';
 const ROOT=process.cwd();
@@ -55,15 +55,6 @@ function intArg(value,maximum) {
     throw Error('AUDIO_SCAN_BAD_LIMIT');
   return num;
 }
-export function parseOperatorRoots(json) {
-  const obj=JSON.parse(json);
-  if(!obj||obj.kind!=='GNG_AUDIO_Z80_OPERATOR_PCS_V1'||
-     obj.rom_sha1!==EXPECTED_SHA1||
-     !Array.isArray(obj.pcs)||obj.pcs.length<1||obj.pcs.length>64||
-     obj.pcs.some(pc=>!Number.isInteger(pc)||pc<0||pc>=32768))
-    throw Error('AUDIO_SCAN_ROOTS_INVALID');
-  return [...new Set([0,...obj.pcs])];
-}
 function run(argv) {
   const args=flags(argv);
   const romPath=privatePath(args['--rom']);
@@ -74,7 +65,7 @@ function run(argv) {
   if(rom.length!==32768 || createHash('sha1').update(rom).digest('hex')!==EXPECTED_SHA1)
     throw Error('AUDIO_SCAN_ROM_IDENTITY_STOP');
   const entries=args['--roots']===null?[0]:
-    parseOperatorRoots(fs.readFileSync(privatePath(args['--roots']),'utf8'));
+    parseZ80OperatorSeeds(fs.readFileSync(privatePath(args['--roots']),'utf8'));
   const result=compileZ80Prefix(new Uint8Array(rom),{entries,limit});
   // Explicit source whitelist: generated AOT source never enters this object.
   const report=summarizeZ80Frontiers(result,{
