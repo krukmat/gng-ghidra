@@ -120,6 +120,9 @@ async function run(){
       non_tape_ym_events:capturedYm.length,
       native_timing_parity_verified:false
     };
+    // Any rejected producer event is a hard stop. Never render a partially
+    // corrupt stream after a callback-level safety failure.
+    if(z80.reason?.startsWith('AUDIO_FINAL_'))fail(z80.reason);
     if(capturedYm.length===0){
       const code=z80.status==='LAB_ADVANCE_OK'?
         'AUDIO_FINAL_Z80_NO_YM_WRITES':'AUDIO_FINAL_Z80_RUNTIME_STOP';
@@ -127,6 +130,8 @@ async function run(){
     }
     // Rendering never reads MAME's captured register-event tape.
     // Only YM writes emitted by the Z80 compiled code in THIS process.
+    if(!fs.existsSync(path.join(OUT,'ym2203_lab')))
+      fail('AUDIO_FINAL_YMFM_RENDERER_MISSING');
     const binary=privateInput('ym2203_lab');
     const suffix=new Date().toISOString().replace(/[-:.TZ]/g,'').slice(0,14)+
       '-'+process.pid;
