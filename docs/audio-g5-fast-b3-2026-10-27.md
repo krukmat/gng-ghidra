@@ -304,7 +304,7 @@ Mac checkpoint, with existing heartbeat4 (DO NOT recapture or send JSONL):
     git merge --no-edit origin/main
     node scripts/audio_fast_checkpoint.mjs
 
-Expected Python: **52 tests** (previous 46 + six new), Node 54, not yet verified on Mac.
+Expected Python: **53 tests** (previous 46 + seven new), Node 54, not yet verified on Mac.
 
 Inspect if desired:
 
