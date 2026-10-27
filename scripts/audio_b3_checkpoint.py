@@ -253,8 +253,11 @@ def read_tap_health(tape):
               "disabled_side_effect_callbacks")
     extras = ("written_events", "format_errors", "write_errors", "flush_errors")
     detailed = ("clock_errors", "value_errors", "clock_fallbacks")
+    fields_v3 = ("frame_errors", "address_errors", "data_errors",
+                 "frame_fallbacks")
     present = [k in obj for k in extras] if isinstance(obj, dict) else []
     extra_present = [k in obj for k in detailed] if isinstance(obj, dict) else []
+    v3_present = [k in obj for k in fields_v3] if isinstance(obj, dict) else []
     if (not isinstance(obj, dict) or
         obj.get("kind") != "GNG_AUDIO_MAME_TAP_HEALTH_V1" or
         obj.get("tap_armed") is not True or
@@ -265,7 +268,10 @@ def read_tap_health(tape):
             obj.get(k) < 0 for k in extras))
         or (any(extra_present) and not all(extra_present))
         or (all(extra_present) and any(type(obj.get(k)) is not int or
-            obj.get(k) < 0 for k in detailed))):
+            obj.get(k) < 0 for k in detailed))
+        or (any(v3_present) and not all(v3_present))
+        or (all(v3_present) and any(type(obj.get(k)) is not int or
+            obj.get(k) < 0 for k in fields_v3))):
         return {"status": "INVALID_TAP_HEALTH"}
     return {"status": "ARMED_CAPTURE_CLOSED" if obj["capture_closed"]
             else "ARMED_CAPTURE_NOT_CLOSED",
@@ -273,7 +279,8 @@ def read_tap_health(tape):
             "capture_closed": obj["capture_closed"],
             **{k: obj[k] for k in fields},
             **({k: obj[k] for k in extras} if all(present) else {}),
-            **({k: obj[k] for k in detailed} if all(extra_present) else {})}
+            **({k: obj[k] for k in detailed} if all(extra_present) else {}),
+            **({k: obj[k] for k in fields_v3} if all(v3_present) else {})}
 
 
 def summarize_capture(tape):
@@ -285,6 +292,12 @@ def summarize_capture(tape):
         "sound_latch_callbacks", "reset_callbacks"))
     if report["events"] == 0 and tap_health.get("clock_errors", 0) > 0:
         hint = "LUA_CLOCK_ACCESS_FAILURES"
+    elif report["events"] == 0 and tap_health.get("address_errors", 0) > 0:
+        hint = "LUA_ADDRESS_CONVERSION_FAILURES"
+    elif report["events"] == 0 and tap_health.get("data_errors", 0) > 0:
+        hint = "LUA_DATA_CONVERSION_FAILURES"
+    elif report["events"] == 0 and tap_health.get("frame_errors", 0) > 0:
+        hint = "LUA_FRAME_CONVERSION_FAILURES"
     elif report["events"] == 0 and tap_health.get("value_errors", 0) > 0:
         hint = "LUA_NUMERIC_CONVERSION_FAILURES"
     elif report["events"] == 0 and tap_health.get("format_errors", 0) > 0:
