@@ -2,8 +2,10 @@
  * G5 B4.T3-A: isolated, deterministic Z80 sound-CPU scheduler LAB.
  *
  * NO MC6809 engine wiring, PCM synthesis, bot changes or native parity.
- * Explicit hardware assumption: 240 Hz IRQ requests are latched until serviced
- * (MAME pulse width / interrupt phase remain unverified). Only IM1 is serviced.
+ * MAME 0.288 capcom/gng.cpp uses 240 Hz set_periodic_int and irq0_line_hold
+ * (HOLD_LINE). This lab approximates asserted-line persistence as one pending
+ * bit until acknowledgement. IRQ phase and CPU/native parity are unverified.
+ * Only IM1 is serviced.
  * 12500 T-states per period; Z80 IM1 acknowledgement is 13 T-states.
  * The fixed step API can overshoot a requested target to finish an instruction.
  */
@@ -131,6 +133,8 @@ export function createZ80SchedulerLab(blocks,bus,{
     status:'LAB_IM1_ONLY_PENDING_IRQ_PHASE_NOT_CERTIFIED',
     pc:state.pc,tStates:state.t,inReset:heldReset,halted:state.halted,
     interruptMode:state.im,irqPending,irqRequests,irqAcknowledged,
+    interruptLineModel:'MAME_0288_HOLD_LINE_APPROXIMATION',
+    nativeIrqRequestTraceObserved:false,nativeIrqAckTraceObserved:false,
     nextIrqTState:nextIrqAt,haltIdleTStates:idleHaltCycles,
     executedSteps:steps,resets,boundaryOvershootTStates:overshootTStates,
     irqPulseWidthNativeVerified:false,irqPhaseNativeVerified:false,
