@@ -46,3 +46,32 @@ Si un replay no dispone de `roms/gng.zip`, g4 o frames conocidos, conservar el e
 **STOP:** capturas no accesibles, señal de scroll/vida no confiable, `UNCOMPILED`, presupuesto insuficiente, dependencia de RAM live, necesidad de cambiar engine/AOT/render/servidor o inferencia de victoria a partir de picos.
 
 **Siguiente dependencia real:** acceso local a `out/bot/` y al bundle g4. Ningún artefacto privado se ha copiado a GitHub. La investigación avanzada externa, si llega, es contexto adicional y no reemplaza la validación visual.
+
+
+## Checkpoint local: auditor + tres replays (evidencia comunicada, 27/10/2026)
+
+**Pruebas ROM-free Node:** 18/18 PASS, 0 FAIL (`duration_ms=43.570166`).
+**Auditor:** 253 intentos, 229 `FRAMES_DONE`, 24 censurados,
+0 no resueltos, 227 con pérdida de vida, 2 candidatos a plateau.
+HALT por PC: `0xE79E=19` y `0xC3A3=5`.
+`checkpointMatch=true`.
+
+**Los tres replays locales terminaron `FRAMES_DONE` y escribieron capturas
+privadas PNG; ninguna captura fue inspeccionada remotamente.**
+
+| Caso / PNG privado | Pico | Vida perdida | Final / frame | Observación |
+| --- | ---: | --- | ---: | --- |
+| `b1-peak/frames.png` | 1700 | Frame 2881 | 451 / 3600 | `world=1700,y=26` entre 2800 y 3200, respawn visible solo por datos al 3300 |
+| `b1-baseline/frames.png` | 1606 | Frame 2839 | 40 / 3600 | `world=1606,y=54` entre 2700 y 3100, cambio de posición al 3200 |
+| `b1-plateau/frames.png` | **1318** | No | **1279 / 5000** | `world=1279,y=62` estable de 2400 a 5000, tres vidas conservadas |
+
+**Corrección importante:** el plateau tiene `maxWorld=1318`, no 1279:
+1279 es su posición final y el valor estabilizado. Ni ese máximo ni
+`FRAMES_DONE` acreditan victoria. El decremento de vidas tampoco revela
+el instante de colisión.
+
+**Gate de imagen:** `STOP_VISUAL_VALIDATION_PENDING`. Los datos numéricos
+no identifican la causa física de muerte ni distinguen Arremer, agua o salto.
+Para cerrar B1.2 hay que inspeccionar las tres imágenes privadas generadas
+(`out/bot/{b1-peak,b1-baseline,b1-plateau}/frames.png`) y etiquetar como
+`UNKNOWN` lo no visible. **Sin nuevos barridos, sin editar engine.**
