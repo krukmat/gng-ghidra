@@ -11,7 +11,7 @@ export async function summarizeNativeYmRegisterWindow(
   tape,{windowTStates=3000000}={}
 ){
   if(typeof tape!=='string'||!Number.isSafeInteger(windowTStates)||
-     windowTStates<1||windowTStates>3000000)
+     windowTStates<1||windowTStates>36000000)
     throw Error('AUDIO_YM_NATIVE_BASELINE_BAD_ARGUMENTS');
   const stat=fs.lstatSync(tape);
   if(!stat.isFile()||stat.isSymbolicLink()||stat.size>256*1024*1024)
