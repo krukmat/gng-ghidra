@@ -5,7 +5,7 @@ el juego completo **en el motor implementado del repo**, incluidos los niveles
 posteriores y las dos vueltas. Esta task prepara una estrategia verificable
 para reanudar; **no ejecuta nuevas partidas ni búsquedas en este bloque**.
 
-**Ejecución: NOT_STARTED.** Rama de referencia: `main`; checkpoint anterior:
+**Ejecución: PARTIAL (remota; bot STOP).** Rama de referencia: `main`; checkpoint anterior:
 `d93a100`. El checkpoint nuevo es el commit que incorpora esta task y las
 herramientas `bot/`; consultar `git log -1 --format=%h -- bot/search.mjs`.
 Los resultados nuevos no pertenecen a `d93a100`.
@@ -13,6 +13,8 @@ Los resultados nuevos no pertenecen a `d93a100`.
 **Investigación externa complementaria:** [BT-R1 — ChatGPT Investigación avanzada](gng-bot-external-research-task.md).
 Incluye contexto para compartir, consultas acotadas, criterios de fuentes y
 formato de informe; no reanuda partidas ni sustituye la validación local.
+
+**Checkpoint B1/B2:** [diagnóstico documentado](gng-bot-antistuck-block1.md) y [handoff local con herramientas ROM-free](gng-bot-antistuck-block2.md). La revisión de capturas privadas y la ejecución Node siguen pendientes; no hay gameplay nuevo certificado.
 
 ## Alcance y fuentes
 
