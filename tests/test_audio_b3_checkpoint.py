@@ -692,6 +692,20 @@ class B3CheckpointTests(unittest.TestCase):
         self.assertFalse(report["gameplay_audio_verified"])
         self.assertEqual(len(commands), 3)
 
+    def test_auditor_detects_per_cpu_backwards_tick_even_when_neighbor_increases(self):
+        tape = self.tape([
+            self.event(1, "SOUNDLATCH_WRITE", 100, 0x3a00, 1),
+            self.event(2, "YM2203_WRITE", 90, 0xe000, 5),
+            self.event(3, "SOUNDLATCH_WRITE", 95, 0x3a00, 2),
+        ])
+        report = b3.inspect_chronology_diagnostics(tape)
+        self.assertEqual(report["tick_regressions"], 1)
+        self.assertEqual(report["tick_regressions_main_stream"], 1)
+        self.assertEqual(report["first_bad_event_index"], 2)
+        self.assertFalse(report["strict_lab_projection_possible"])
+        with self.assertRaisesRegex(b3.B3Stop, "TAPE_BAD_CHRONOLOGY"):
+            b3.inspect_tape(tape, allow_cross_cpu_skew_lab=True)
+
     def test_chronology_audit_valid_sequence_does_not_certify_audio(self):
         tape = self.tape([
             self.event(1, "YM2203_WRITE", 500, 0xe000, 32, frame=10),
