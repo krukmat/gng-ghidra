@@ -107,6 +107,10 @@ flowchart TD
 
 ### G5 — Audio del hardware original (P1, paralelo a G3/G4)
 
+> **27/10/2026 — B-AUDIO-2 (parcial):** Z80 AOT offline limitado, bus sonoro aislado, laboratorio YM2203 con ymfm y transporte PCM/AudioWorklet; la ROM privada, captura MAME, compilación nativa, síntesis validada e integración live siguen pendientes. [Checkpoint, instrucciones Mac y gates](audio-b2-execution-2026-10-27.md). No se declara G5/H5 PASS.
+
+
+
 > **27/10/2026 — B-AUDIO-1 activado en paralelo:** contrato `gngb` Z80/2×YM2203, preflight de `gg2.bin`, observador opcional de `soundlatch` y reset, capturador MAME y comparador de comandos. **Sin ROM validada, MAME ejecutado ni audio sintetizado en este checkpoint.** [Tasks, evidencia y pasos Mac](audio-b1-foundation-2026-10-27.md).
 
 
