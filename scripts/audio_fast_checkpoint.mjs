@@ -14,6 +14,7 @@ const tests=[
   'tests/test_gngb_audio_fast_cli.mjs',
   'tests/test_gngb_audio_events.mjs',
   'tests/test_gngb_z80_sound_bus.mjs',
+  'tests/test_gngb_audio_main_z80_bridge.mjs',
   'tests/test_gngb_audio_pcm_queue.mjs'
 ];
 function invoke(cmd,args){
