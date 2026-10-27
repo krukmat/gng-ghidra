@@ -180,16 +180,23 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
     const opcode=rom[pc],next=n=>(pc+n)&0xffff;
     let lines=[],targets=[],length=1;
     const w16=()=>read8(pc,1)|(read8(pc,2)<<8);
-    // DD/FD block execution explicitly. Classify only their second byte
-    // to choose the necessary indexed instruction family in the NEXT batch.
+    // Only DD/FD 21 (LD IX/IY,nn) is admitted by this narrowly
+    // native-backed batch. All other indexed instructions remain blocked.
     if(opcode===0xdd||opcode===0xfd) {
-      const indexKind=classifyZ80IndexedInstruction(read8(pc,1));
-      blockers.push({pc,reason:'UNSUPPORTED_Z80_OPCODE',
-        family:opcode===0xdd?'DD_IX_PREFIX':'FD_IY_PREFIX',
-        indexed_instruction:indexKind});
-      continue;
-    }
-    switch(opcode) {
+      const second=read8(pc,1);
+      if(second===0x21) {
+        const nn=read8(pc,2)|(read8(pc,3)<<8);
+        const reg=opcode===0xdd?'ix':'iy';
+        length=4;
+        lines=['$.'+reg+'='+nn+';','$.pc='+next(4)+';','$.t+=14;'];
+        targets=[next(4)];
+      } else {
+        blockers.push({pc,reason:'UNSUPPORTED_Z80_OPCODE',
+          family:opcode===0xdd?'DD_IX_PREFIX':'FD_IY_PREFIX',
+          indexed_instruction:classifyZ80IndexedInstruction(second)});
+        continue;
+      }
+    } else switch(opcode) {
       case 0xed: {
         const ext=read8(pc,1);
         const kind=classifyZ80EdInstruction(ext);
@@ -333,6 +340,20 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
         lines=['const lo=bus.read8($.sp,$.t+4);$.sp=($.sp+1)&65535;',
           'const hi=bus.read8($.sp,$.t+7);$.sp=($.sp+1)&65535;',
           '$.pc=(hi<<8)|lo;$.t+=10;'];targets=[];break;
+      case 0xc7: case 0xcf: case 0xd7: case 0xdf:
+      case 0xe7: case 0xef: case 0xf7: case 0xff: {
+        // RST p: one-byte CALL into a fixed 8-byte vector. Push the
+        // address of the NEXT instruction, high byte then low byte.
+        // M1=5T, stack writes=3T each; total 11 T-states.
+        const vector=opcode&0x38,ret=next(1);
+        lines=[
+          '$.sp=($.sp-1)&65535;bus.write8($.sp,'+(ret>>>8)+',$.t+8);',
+          '$.sp=($.sp-1)&65535;bus.write8($.sp,'+(ret&255)+',$.t+11);',
+          '$.pc='+vector+';','$.t+=11;'
+        ];
+        targets=[vector,ret];
+        break;
+      }
       default:
         if(opcode>=0x40 && opcode<=0x7f && opcode!==0x76) {
           // LD r,r'; HALT remains unsupported. 4T reg, 7T memory.
