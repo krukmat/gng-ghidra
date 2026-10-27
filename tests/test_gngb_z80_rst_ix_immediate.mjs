@@ -14,7 +14,7 @@ test('B4 LD IX,nn and LD IY,nn compile 4-byte prefix with 14 T and preserve flag
     [0xdd,'ix','iy'],[0xfd,'iy','ix']
   ]) {
     const rom=new Uint8Array(0x8000);
-    rom.set([prefix,0x21,0x34,0xc2,0xcb],0);
+    rom.set([prefix,0x21,0x34,0xc2,0xcb,0x40],0);
     const {result,blocks}=await compileSynthetic(rom);
     assert.equal(result.compiled,1);
     assert.equal(result.blockers[0].pc,4);
@@ -29,7 +29,7 @@ test('B4 LD IX,nn and LD IY,nn compile 4-byte prefix with 14 T and preserve flag
 
 test('B4 DD/FD 21 immediate wrap-around and truncated ROM boundary fail closed',async()=>{
   const rom=new Uint8Array(0x8000);
-  rom.set([0xdd,0x21,0xff,0xff,0xcb],0);
+  rom.set([0xdd,0x21,0xff,0xff,0xcb,0x40],0);
   const {result,blocks}=await compileSynthetic(rom);
   const state={pc:0,t:4,ix:0,f:0x00};
   blocks.get(0)(state,{});
@@ -47,7 +47,8 @@ test('B4 all eight RST vectors push next PC high then low, 11T, no flags modifie
   for(const opcode of [0xc7,0xcf,0xd7,0xdf,0xe7,0xef,0xf7,0xff]) {
     const rom=new Uint8Array(0x8000);
     const vector=opcode&0x38,pc=0x123;
-    rom[pc]=opcode;rom[pc+1]=0xcb;rom[vector]=0xcb;
+    rom[pc]=opcode;rom[pc+1]=0xcb;rom[pc+2]=0x40;
+    rom[vector]=0xcb;rom[vector+1]=0x40;
     const {result,blocks}=await compileSynthetic(rom,{entry:pc});
     assert.equal(result.compiled,1);
     const calls=[];
@@ -67,7 +68,8 @@ test('B4 all eight RST vectors push next PC high then low, 11T, no flags modifie
 
 test('B4 RST stack decrements wrap from 0000 to FFFE',async()=>{
   const rom=new Uint8Array(0x8000);
-  rom[0x100]=0xff;rom[0x101]=0xcb;rom[0x38]=0xcb;
+  rom[0x100]=0xff;rom[0x101]=0xcb;rom[0x102]=0x40;
+  rom[0x38]=0xcb;rom[0x39]=0x40;
   const {blocks}=await compileSynthetic(rom,{entry:0x100});
   const calls=[],state={pc:0x100,sp:0,t:0,f:0};
   blocks.get(0x100)(state,{write8:(...args)=>calls.push(args)});
