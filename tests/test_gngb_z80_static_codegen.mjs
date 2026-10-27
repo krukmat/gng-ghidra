@@ -51,7 +51,7 @@ test('ED interrupt modes (documented and alias) advance two bytes in eight T-sta
   for(const [second,im] of [[0x46,0],[0x4e,0],[0x66,0],[0x6e,0],
                              [0x56,1],[0x76,1],[0x5e,2],[0x7e,2]]) {
     const rom=new Uint8Array(0x8000);
-    rom.set([0xed,second,0xcb],0);
+    rom.set([0xed,second,0xcb,0x40],0);
     const result=compileZ80Prefix(rom);
     assert.equal(result.compiled,1);
     assert.equal(result.blockers[0].pc,2);
@@ -65,7 +65,7 @@ test('ED interrupt modes (documented and alias) advance two bytes in eight T-sta
 test('ED NEG sign, halfcarry, parity-overflow and undocumented F5/F3 flags',async()=>{
   for(const second of [0x44,0x4c,0x54,0x5c,0x64,0x6c,0x74,0x7c]) {
     const rom=new Uint8Array(0x8000);
-    rom.set([0xed,second,0xcb],0);
+    rom.set([0xed,second,0xcb,0x40],0);
     const result=compileZ80Prefix(rom);
     assert.equal(result.compiled,1);
     const module=await import('data:text/javascript,'+encodeURIComponent(result.source));
@@ -79,7 +79,7 @@ test('ED NEG sign, halfcarry, parity-overflow and undocumented F5/F3 flags',asyn
 
 test('ED LD I,A has 9 T-states and preserves flags',async()=>{
   const rom=new Uint8Array(0x8000);
-  rom.set([0xed,0x47,0xcb],0);
+  rom.set([0xed,0x47,0xcb,0x40],0);
   const result=compileZ80Prefix(rom);
   assert.equal(result.compiled,1);
   const module=await import('data:text/javascript,'+encodeURIComponent(result.source));
