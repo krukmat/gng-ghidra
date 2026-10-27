@@ -77,3 +77,51 @@ y posterior avance verificable; `FRAMES_DONE`, máximo x y un plateau
 no acreditan éxito.
 
 **Gate actual: B2_IMPLEMENTED_ROM_FREE / BOT STOP GAMEPLAY.**
+
+
+## Corrección de prioridad: jefe antes del agua (27/10/2026)
+
+**Requisito del usuario:** primero **matar al jefe/demonio** del encuentro,
+y **después** cruzar el agua. El cruce comprende dos saltos:
+**orilla inicial → islote móvil → tierra firme derecha**.
+
+Se preserva el comportamiento de combate existente como encargado del jefe.
+El código nuevo **no acredita que lo mate**; solo bloquea el cruce hasta
+que un detector visual fiable confirme el evento. Desaparición del sprite
+por sí sola no equivale a matar al jefe.
+
+### Orden implementado ROM-free
+
+1. BOSS: bot/policy/boss-defeat-gate.mjs mantiene el control en
+   EXISTING_BOSS_COMBAT. Exige dos evidencias sucesivas confiables de
+   KILL_ANIMATION en la misma vida y sesión. Sin prueba, no hay salto.
+2. HANDOFF: el combate debe liberar sus controles y confirmar
+   combatReleased=true antes de ceder el control al cruce.
+3. ISLAND: bot/policy/water-crossing.mjs estima la intercepción al
+   islote en coordenadas relativas a la orilla fija; así descuenta
+   el scroll de cámara. Se exige apoyo confirmado.
+4. MAINLAND: bot/policy/mainland-hop.mjs ejecuta un segundo salto
+   independiente desde el islote y confirma dos observaciones de
+   apoyo sobre tierra firme en la orilla derecha.
+5. DONE: solo tras ambos aterrizajes; si cambia sesión/vida o fallan
+   observaciones/frame timing, STOP.
+
+Orquestación: bot/policy/boss-water-journey.mjs. No introduce APIs,
+RAM live, ROM, cambios de engine/AOT/render/servidor ni cambios en
+bundles.
+
+**Pruebas locales sintéticas:** 26/26 PASS en Node (14 originales y
+12 nuevas). Cubren prioridad del combate, kill confirmada vs
+desaparición, salto 1 y salto 2, cambio de vida y scroll de cámara.
+Aún **NO** hay validación de gameplay ni conexión al cliente live.
+Falta calibrar los observadores visuales de jefe, islote, grounded y
+orilla, además de tiempos de salto y velocidad horizontal.
+
+Comando local tras actualizar main:
+
+    node --test tests/bot/water-*.test.mjs tests/bot/boss-*.test.mjs tests/bot/mainland-hop.test.mjs
+
+**Gate siguiente:** detectar muerte real del jefe en capturas privadas,
+calibrar sensores visuales, integrar al loop existente, comprobar
+cuotas 5h/7d y ejecutar un experimento pareado muy pequeño desde reset.
+Mantener BOT STOP hasta cubrir esas dependencias.
