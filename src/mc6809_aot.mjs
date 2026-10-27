@@ -533,8 +533,10 @@ function genInsn(byte,pc,stopsTable){
   return bad('UNSUPPORTED_OPCODE_'+(page?h(page)+':':'')+h(op));
 }
 
-/** Compiles one basic block starting at (bank, pc). */
-function compileBlock(code,bank,pc,stopsTable,overlay=null,maxInsns=256){
+/** Compiles one basic block starting at (bank, pc). With `entries`, every
+ * instruction boundary is also a `case` entry, placed after the time-slice
+ * check so entering at pc_i runs exactly what a fresh block at pc_i would. */
+function compileBlock(code,bank,pc,stopsTable,overlay=null,entries=false,maxInsns=256){
   const ov=overlay===null?null:code.ramOverlays[overlay];
   const byte=a=>{
     if(ov){
@@ -547,9 +549,11 @@ function compileBlock(code,bank,pc,stopsTable,overlay=null,maxInsns=256){
   };
   const lines=[];
   const succ=[];
+  const pcs=[];
   let p=pc,ended=false;
   for(let n=0;n<maxInsns&&!ended;n++){
     if(n>0)lines.push(`if($.C>=$.T){$.PC=${h(p)};return;}`);
+    if(entries){lines.push(`case ${h(p)}:`);pcs.push(p);}
     let ins;
     try{ins=genInsn(byte,p,stopsTable);}
     catch{lines.push(`$.ipc=${h(p)};$.bad("CODE_OUTSIDE_ROM");`);ended=true;break;}
@@ -563,7 +567,11 @@ function compileBlock(code,bank,pc,stopsTable,overlay=null,maxInsns=256){
     p=nextPc;
   }
   if(!ended)lines.push(`$.PC=${h(p)};return;`);
-  return {body:lines.join('\n'),succ};
+  if(entries){
+    lines.unshift('switch($.PC){default:$.bad("BLOCK_ENTRY");return;');
+    lines.push('}');
+  }
+  return {body:lines.join('\n'),succ,pcs};
 }
 
 /**
@@ -572,9 +580,10 @@ function compileBlock(code,bank,pc,stopsTable,overlay=null,maxInsns=256){
  * Branch targets in the banked window inherit the block's bank; targets
  * reached from fixed code through the window are left to run-time seeds.
  */
-export function compileProgram(code,seeds,{libUrl}){
+export function compileProgram(code,seeds,{libUrl,entries=false}){
   const stopsTable=new Map();
   const done=new Map();
+  const internal=new Map();
   const queue=[...seeds];
   while(queue.length){
     const {bank,pc,overlay=null}=queue.shift();
@@ -583,8 +592,12 @@ export function compileProgram(code,seeds,{libUrl}){
     const b=pc>=FIXED_START||ov?null:bank;
     const key=blockKey(b,pc,inOv(pc)?overlay:null);
     if(key<0||done.has(key))continue;
-    const block=compileBlock(code,b,pc,stopsTable,inOv(pc)?overlay:null);
+    const block=compileBlock(code,b,pc,stopsTable,inOv(pc)?overlay:null,entries);
     done.set(key,block.body);
+    // Internal entries stay in the block's own key space (bank, fixed, overlay).
+    if(entries)internal.set(key,block.pcs.slice(1)
+      .filter(a=>inOv(pc)||(b===null)===(a>=FIXED_START))
+      .map(a=>blockKey(b,a,inOv(pc)?overlay:null)));
     for(const t of block.succ){
       if(inOv(t))queue.push({bank:null,pc:t,overlay});
       else if(t>=FIXED_START)queue.push({bank:null,pc:t});
@@ -596,7 +609,15 @@ export function compileProgram(code,seeds,{libUrl}){
     `import * as L from ${JSON.stringify(libUrl)};`];
   for(const [key,i] of stopsTable)out.push(`const S${i}=[${key}];`);
   out.push('export const blocks=new Map();');
-  for(const [key,body] of [...done].sort((a,b)=>a[0]-b[0]))
+  const sorted=[...done].sort((a,b)=>a[0]-b[0]);
+  for(const [key,body] of sorted)
     out.push(`blocks.set(${h(key)},function($){let ea=0,v=0,k=0,t=0,kt=0;\n${body}\n});`);
-  return {source:out.join('\n')+'\n',blockCount:done.size};
+  // Aliases: the first block (by key) containing a boundary serves it.
+  const alias=new Map();
+  for(const [key] of sorted)for(const a of internal.get(key)??[])
+    if(!done.has(a)&&!alias.has(a))alias.set(a,key);
+  for(const [a,key] of [...alias].sort((x,y)=>x[0]-y[0]))
+    out.push(`blocks.set(${h(a)},blocks.get(${h(key)}));`);
+  return {source:out.join('\n')+'\n',blockCount:done.size+alias.size,
+    functions:done.size};
 }

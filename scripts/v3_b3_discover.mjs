@@ -26,7 +26,7 @@ import {b2dTape,b2dCoverageFrames,B2D_PROFILES} from '../src/v3_b2d_tapes.mjs';
 import {b2dCertified} from '../src/v3_b2d_selection.mjs';
 import {B3_PROFILES,B3_HORIZONS,b3Tape} from '../src/v3_b3_tapes.mjs';
 import {createOnDemandBlocks} from '../src/v3_b3_ondemand.mjs';
-import {B3_GENERATION,b3GenerationDir} from '../src/v3_b3_bundle.mjs';
+import {B3_GENERATION,B3_MULTI_ENTRY_FROM,b3GenerationDir} from '../src/v3_b3_bundle.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const B2D=join(ROOT,'out/v3/b2d/frozen');
@@ -36,6 +36,7 @@ const FROZEN=join(OUT,'frozen');
 const REPORT=join(OUT,'discovery-report.json');
 export const B3_LIVE_FRAMES=6000;
 const fail=s=>{throw Error('V3_B3_'+s);};
+const ENTRIES=B3_GENERATION>=B3_MULTI_ENTRY_FROM;
 const keyOf=s=>blockKey(s.overlay==null?s.bank:null,s.pc,s.overlay??null);
 const hashFrame=r=>{
   const h=createHash('sha256');
@@ -92,7 +93,7 @@ async function main(){
   // --- Offline one-pass discovery -------------------------------------
   const base=await importProgram(join(B2D,'program.mjs'));
   const parentOverlays=code.ramOverlays.length;
-  const od=createOnDemandBlocks(base,code,{libUrl,lib:AOT_LIB});
+  const od=createOnDemandBlocks(base,code,{libUrl,lib:AOT_LIB,entries:ENTRIES});
   const discovered={};
   for(const profile of B3_PROFILES){
     const tape=b3Tape(profile),frames=B3_HORIZONS[profile];
@@ -121,7 +122,8 @@ async function main(){
     const k=keyOf(s);
     if(!known.has(k)){known.add(k);seeds.push(s);}
   }
-  const built=compileProgram(code,seeds,{libUrl});
+  const built=compileProgram(code,seeds,{libUrl,entries:ENTRIES});
+  console.log('V3_B3_FUNCTIONS='+built.functions+'_ENTRIES_'+ENTRIES);
   console.log('V3_B3_BLOCKS='+built.blockCount+'_NEW_SEEDS_'+
     (seeds.length-parentSeeds.length));
   mkdirSync(OUT,{recursive:true,mode:0o700});
@@ -174,6 +176,18 @@ async function main(){
       sequence_sha256:sha256(a.hashes.join('\n')),hashes:a.hashes};
     console.log('V3_B3_'+profile+'=PASS_'+frames+'_FRAMES_DOUBLE_REPLAY');
   }
+  // A newer generation must not change any frame of a tape the previous
+  // certified generation already covered.
+  const priorPath=join(b3GenerationDir(ROOT,B3_GENERATION-1),'discovery-report.json');
+  if(B3_GENERATION>1&&existsSync(priorPath)){
+    const priorReport=JSON.parse(readFileSync(priorPath,'utf8'));
+    for(const [p,c] of Object.entries(priorReport.profiles??{})){
+      if(!certified[p]||c.tape_sha256!==certified[p].tape_sha256)continue;
+      if(c.sequence_sha256!==certified[p].sequence_sha256)
+        fail('PRIOR_GENERATION_DIVERGES_'+p);
+      console.log('V3_B3_PRIOR_'+p+'=PASS_IDENTICAL_TO_G'+(B3_GENERATION-1));
+    }
+  }
   const h=p=>certified[p].hashes;
   // Diagnostics only: visible gates are judged on rendered witnesses.
   const effects={
@@ -185,7 +199,8 @@ async function main(){
   const report={schema:'gng.v3.b3-playable.v1',status:'DISCOVERY_COMPLETE',
     generation:B3_GENERATION,
     parent_program_sha256:parent.files['program.mjs'],parent_blocks:parent.blocks,
-    blocks:built.blockCount,seeds,
+    blocks:built.blockCount,functions:built.functions,
+    block_entries:ENTRIES?'ALL_INSTRUCTION_BOUNDARIES':'BLOCK_START_ONLY',seeds,
     extra_overlays:code.ramOverlays.slice(parentOverlays).map(ov=>
       ({start:ov.start,hex:Buffer.from(ov.bytes).toString('hex')})),
     no_input:'PASS_600_FRAMES_IDENTICAL_B2D',

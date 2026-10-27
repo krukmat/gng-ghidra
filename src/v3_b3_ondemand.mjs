@@ -26,7 +26,7 @@ function evaluate(source,lib){
   return new Function('L',body+'\nreturn blocks;')(lib);
 }
 
-export function createOnDemandBlocks(base,code,{libUrl,lib}){
+export function createOnDemandBlocks(base,code,{libUrl,lib,entries=false}){
   const found=[];
   class OnDemandBlocks extends Map{
     get(key){
@@ -34,7 +34,7 @@ export function createOnDemandBlocks(base,code,{libUrl,lib}){
       if(fn)return fn;
       const seed=seedFromKey(key);
       found.push(seed);
-      const generated=compileProgram(code,[seed],{libUrl});
+      const generated=compileProgram(code,[seed],{libUrl,entries});
       for(const [k,f] of evaluate(generated.source,lib))
         if(!super.has(k))super.set(k,f);
       return super.get(key);
