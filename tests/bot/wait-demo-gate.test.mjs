@@ -52,6 +52,6 @@ test('invalid state cannot silently enable demo',async()=>{
   await assert.rejects(waitForAttractGate({
     readState:async()=>({operatorPause:true}),sleep:noDelay,
   }),/BOT_DEMO_GATE_INVALID_STATE/);
-  assert.throws(()=>waitForAttractGate({maxPolls:0}),
+  await assert.rejects(waitForAttractGate({maxPolls:0}),
     /BOT_DEMO_GATE_OPTIONS/);
 });
