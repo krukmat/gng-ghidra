@@ -244,6 +244,21 @@ export function compileZ80Prefix(rom, {entry=0, limit=512}={}) {
           'const hi=bus.read8($.sp,$.t+7);$.sp=($.sp+1)&65535;',
           '$.pc=(hi<<8)|lo;$.t+=10;'];targets=[];break;
       default:
+        if((opcode&0xc7)===0x06) {
+          // LD r,n: B/C/D/E/H/L/A = 7 T; LD (HL),n = 10 T.
+          // Operand and register selection are resolved at build time.
+          const index=(opcode>>>3)&7, value=read8(pc,1);
+          const memory=index===6;
+          length=2;
+          lines=[
+            memory ? 'bus.write8($.hl,'+value+',$.t+10);' :
+              'const value='+value+';'+r8WriteSource[index],
+            '$.pc='+next(2)+';',
+            '$.t+='+String(memory?10:7)+';'
+          ];
+          targets=[next(2)];
+          break;
+        }
         if((opcode&0xc7)===0x05 || (opcode&0xc7)===0x04) {
           // DEC/INC B,C,D,E,H,L,(HL),A: signed-8-bit flag semantics.
           // Register operand: 4 T-states; (HL): 11 T-states.
