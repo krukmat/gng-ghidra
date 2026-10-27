@@ -26,8 +26,7 @@ for(const [label,source] of cases){
     endFrame:2900,label:'b2-water-'+label}));continue;}
   const run=spawnSync(process.execPath,args,{cwd:ROOT,encoding:'utf8',
     timeout:120000,maxBuffer:1<<20});
-  for(const line of (run.stdout||'').split('
-'))
+  for(const line of (run.stdout||'').split(String.fromCharCode(10)))
     if(line.startsWith('BOT_WITNESS=')||line.startsWith('BOT_WITNESS_FRAMES='))
       console.log(line);
   if(run.status!==0){
