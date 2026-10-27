@@ -7,6 +7,7 @@ inter-CPU phase, exact IRQ schedule and CPU register parity are established.
 """
 import argparse
 import json
+import os
 import re
 import sys
 
@@ -90,7 +91,9 @@ def export(capture_id, output_id):
         "pre_release_latch": latest_pre_release_latch,
         "events": main_controls,
     }
-    with out.open("x", encoding="utf8") as dest:
+    # Exclusive private file creation, never overwrite existing evidence.
+    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf8") as dest:
         json.dump(out_document, dest, separators=(",", ":"))
         dest.write("\n")
     return {
