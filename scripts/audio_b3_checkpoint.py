@@ -98,11 +98,10 @@ def capture_tape(mame, rompath):
     version = call([mame, "-version"], timeout=10)
     if "0.289" not in (version.stdout + version.stderr):
         raise B3Stop("MAME_VERSION_NOT_PINNED_0289")
-    if OUT_TAPE.exists():
-        # Never silently reuse a prior capture as a new real MAME session.
-        OUT_TAPE.unlink()
-    if OUT_MAME_WAV.exists():
-        OUT_MAME_WAV.unlink()
+    if OUT_TAPE.exists() or OUT_MAME_WAV.exists():
+        # Do not destroy an earlier native session's private evidence.
+        # To reuse it choose --tape; otherwise archive/rename it privately first.
+        raise B3Stop("MAME_CAPTURE_OUTPUT_ALREADY_EXISTS")
     argv = [mame, "gngb", "-rompath", str(rompath),
             "-autoboot_script", "scripts/audio_mame_taps.lua",
             "-autoboot_delay", "0", "-wavwrite", str(OUT_MAME_WAV)]
