@@ -199,9 +199,12 @@ def wav_metrics(source, *, expected_rate=None, max_ms=SAMPLE_LIMIT):
             "clipped_fraction": round(clipped / count, 6)}
 
 
-def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None):
+def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None,
+           source_mode="OPERATOR_PROVIDED_TAPE"): 
     if type(duration_ms) is not int or not 1 <= duration_ms <= SAMPLE_LIMIT:
         raise B3Stop("DURATION_INVALID")
+    if source_mode not in ("OPERATOR_PROVIDED_TAPE", "MAME_SESSION_CAPTURE"):
+        raise B3Stop("CAPTURE_SOURCE_INVALID")
     # Regression / privacy guard is independent of partial Z80 reachability.
     verify_rom_identity()
     integrity = inspect_tape(tape)
@@ -244,6 +247,7 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None):
         "kind": "GNG_AUDIO_B3_CHECKPOINT_V1",
         "status": "LAB_NON_SILENT_FROM_MAME_YM_EVENTS_NOT_CERTIFIED",
         "rom_identity": "SHA1_MATCH_LOCAL_ONLY",
+        "event_capture_source": source_mode,
         "mame_loaded_same_rom_verified": False,
         "events_total": integrity["events"],
         "ym_writes": integrity["ym_writes"],
@@ -288,7 +292,9 @@ def main(argv=None):
         if args.capture and reference is None and OUT_MAME_WAV.exists():
             reference = OUT_MAME_WAV
         report = run_b3(tape=tape, ymfm_source=args.ymfm_src,
-                        duration_ms=args.duration_ms, native_wav=reference)
+                        duration_ms=args.duration_ms, native_wav=reference,
+                        source_mode=("MAME_SESSION_CAPTURE" if args.capture
+                                     else "OPERATOR_PROVIDED_TAPE"))
         print(json.dumps(report, separators=(",", ":")))
         return 0
     except B3Stop as e:
