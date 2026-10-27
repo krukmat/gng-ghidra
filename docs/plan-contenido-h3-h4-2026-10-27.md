@@ -1,6 +1,6 @@
 # Plan de contenido — de H3 a H4 (fases, jefes, dos vueltas y final)
 
-**Fecha:** 2026-10-27 · **Rama:** `main` · **Estado:** pasos 1–2 GO; en curso: paso 5 (cobertura estática). Paso 3 (grabación del operador) pendiente: no bloquea la compilación, solo la certificación.
+**Fecha:** 2026-10-27 · **Rama:** `main` · **Estado:** pasos 1–2 GO; paso 5 GO (g6); verificación de jefes por búsqueda diferida (§8). Paso 3 (grabación del operador) pendiente: no bloquea la compilación, solo la certificación.
 
 > **Avance 27/10/2026.** Herramienta: [h3_tape.mjs](../scripts/h3_tape.mjs) + [h3_tape_recorder.lua](../scripts/h3_tape_recorder.lua) + [h3_tape_convert.mjs](../src/h3_tape_convert.mjs).
 > **Paso 1 GO:** `titleCoinStart` inyectada y convertida → 4/4 eventos idénticos; 2.012 lecturas reales de CPU iguales a lo anotado.
@@ -105,6 +105,12 @@ F-N:  MOTOR (cinta humana → residuo dinámico + certificación) → REGLAS →
       | 6 (`5`) | X=7560, Y=2336: Arthur toca a un enemigo grande; no consta que sea el jefe ni su derrota | 5/5 (2210–2600) MATCH con disparos, 0 omitidos |
       | Sala final (`6`) | Astaroth visible en 2350–2700; el atajo pasa a `0x71=2` sin acreditar una victoria | 7/7 (2200–2700) MATCH, 0 omitidos |
 
+  - **Revisión del barrido y verificación de jefes diferida (27/10/2026):**
+    - **Corrección:** `0x0068–0x006B` es la puntuación BCD (se suma con `DAA` en el banco 3, 0x5402, y se compara con el récord en `0x00D0`) y `0x007E` es un contador (+0x15 en 0xEBFA); ninguno es un cursor de apariciones. Los pokes `0x006A`/`0x007E` del barrido anterior no dan estados coherentes, y el «demonio rojo» de la fase 1 es un Red Arremer, no el jefe. La tabla anterior **no** contiene ningún combate de jefe.
+    - **Estado coherente disponible:** `0x0081` es el checkpoint de la fase (0 = inicio, 1 = mitad). 0xED64 lo pone a 1 cuando la X de Arthur (`0x009C`) supera `0xED88[fase]` = 1792, 4608, 1024, 4864, 6656, 7424, 7936; la reaparición (0x6D25, tabla 0x6CE9) reconstruye la mitad de la fase. `H3_POKE=1840:2120:114:N,1840:2120:129:1` sobre `titleCoinStart` sitúa a Arthur a mitad de las fases 1–6 (`N`=0–5) por ese mismo código; la sala de Astaroth (`N`=6) no tiene checkpoint.
+    - **Armadura:** `0x00AC`=1 sin armadura; la reaparición lo pone a 0.
+    - **Avance:** [scripts/h3_boss_search.mjs](../scripts/h3_boss_search.mjs) (búsqueda en haz; éxito = `0x72` avanza) llega desde la mitad de la fase 1 hasta el cíclope ante la puerta (scroll fijo en 3072) sin `UNCOMPILED`; ningún jefe derrotado ni comparado con MAME. La herramienta no está validada tras corregir la armadura a `0x00AC`.
+    - **Decisión del operador:** la verificación de jefes queda diferida hasta después de la implementación completa (§8). Los jefes se certifican con la cinta humana en F-N.
     - **Límite:** 34/34 puntos de control de estas escenas coinciden, sin `UNCOMPILED`/`UNSUPPORTED`; no se modifica el cierre ni se crea g7. Solo hay combate visible del demonio de la fase 1. En la cueva de la fase 3, un barrido adicional de `0x006A`/`0x007E` por 0, 4, 8, 12, 16, 20, 24, 28, 32, 40, 48 y 64 con X=3300 tampoco mostró jefe. Falta encontrar estados coherentes junto a los jefes de las fases 2–6, derrotarlos y recorrer la segunda vuelta por una ruta legítima. Los saltos directos a X muy avanzada omiten el curso de apariciones; los saltos verticales pueden dejar a Arthur cayendo. La coincidencia de bytes en esos estados no certifica un jefe.
 - [ExportFunctionGraph.java](../ghidra_scripts/ExportFunctionGraph.java) solo analiza el banco 4: ampliar o recorrer con el decodificador del compilador AOT.
 - **GO:** alcanzable compilado, residuo listado, cintas previas idénticas. **STOP:** cambio de hash en una cinta certificada.
@@ -174,6 +180,8 @@ Coste estimado (muy aproximado; recalibrar tras el paso 2):
 ## 8. Diferido (solo con disparador)
 
 - **`.inp` de terceros:** no se buscan. Si el operador aporta uno de `gngb` que se reproduce en la versión de MAME disponible, se procesa con el pipeline del paso 1 y sus conversiones quedan en `out/`; si set o versión no coinciden, se descarta.
+
+- **Verificación de jefes por búsqueda (laboratorio):** diferida por el operador (27/10/2026) hasta después de la implementación completa. Retomar desde la revisión del paso 5 (checkpoint `0x0081`, armadura `0x00AC`, [h3_boss_search.mjs](../scripts/h3_boss_search.mjs)).
 
 ## 9. Fuera de alcance
 
