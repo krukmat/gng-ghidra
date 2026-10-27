@@ -132,7 +132,7 @@ function startBrowserAndRecorder(){
     [join(ROOT,'bot/record-gameplay.mjs'),'300'],
     {cwd:ROOT,stdio:['ignore','pipe','pipe'],detached:true});
   captureLog(recorder,'recorder');
-  recorder.once('exit',()=>{recorderFinished=true;});
+  recorder.once('close',()=>{recorderFinished=true;});
 }
 async function completeRecorder(){
   if(!recorder||recorderFinished)return;
@@ -158,6 +158,8 @@ async function main(){
         throw Error('BOT_PRACTICE_ENGINE_HALT_'+
           String(s.halt.status??s.halt.code??'UNKNOWN'));
       lastFrame=s.frame;
+      if(s.frame>targetFrame+8)
+        throw Error('BOT_PRACTICE_OVERSHOT_TARGET_'+s.frame);
       const due=playbackDue(plan,index,s.frame,targetFrame);
       if(due.status==='LAG_STOP')throw Error(
         'BOT_PRACTICE_INPUT_LAG_'+due.lag+'_FRAME_'+due.lateEvent.frame);
