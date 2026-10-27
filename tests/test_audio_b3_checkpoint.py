@@ -457,6 +457,61 @@ class B3CheckpointTests(unittest.TestCase):
                 b3.run_b3(tape=tape, ymfm_source=src)
         spawn.assert_not_called()
 
+    def test_field_level_mame_numeric_failure_classification(self):
+        self.tape([])
+        health = self.base / "mame-audio-health.json"
+        counts = {
+            "kind": "GNG_AUDIO_MAME_TAP_HEALTH_V1",
+            "tap_armed": True, "capture_closed": True,
+            "frames_observed": 1764, "ym_callbacks": 259158,
+            "main_latch_callbacks": 21, "sound_latch_callbacks": 5764,
+            "reset_callbacks": 2, "disabled_side_effect_callbacks": 0,
+            "written_events": 0, "format_errors": 0,
+            "write_errors": 0, "flush_errors": 0,
+            "clock_errors": 0, "value_errors": 264945,
+            "clock_fallbacks": 0, "frame_errors": 0,
+            "address_errors": 264945, "data_errors": 0, "frame_fallbacks": 0
+        }
+        for field, hint in [
+            ("address_errors", "LUA_ADDRESS_CONVERSION_FAILURES"),
+            ("data_errors", "LUA_DATA_CONVERSION_FAILURES"),
+            ("frame_errors", "LUA_FRAME_CONVERSION_FAILURES")]:
+            for key in ("address_errors", "data_errors", "frame_errors"):
+                counts[key] = 0
+            counts[field] = 264945
+            health.write_text(json.dumps(counts))
+            diagnosis = b3.summarize_capture(b3.OUT_TAPE)
+            self.assertEqual(diagnosis["activity_hint"], hint)
+            self.assertEqual(diagnosis["tap_health"][field], 264945)
+        self.assertFalse(diagnosis["z80_execution_verified"])
+
+    def test_partial_or_forged_v3_heartbeat_is_rejected(self):
+        self.tape([])
+        health = self.base / "mame-audio-health.json"
+        counts = {
+            "kind": "GNG_AUDIO_MAME_TAP_HEALTH_V1",
+            "tap_armed": True, "capture_closed": True,
+            "frames_observed": 1, "ym_callbacks": 0,
+            "main_latch_callbacks": 0, "sound_latch_callbacks": 0,
+            "reset_callbacks": 0, "disabled_side_effect_callbacks": 0,
+            "written_events": 0, "format_errors": 0,
+            "write_errors": 0, "flush_errors": 0,
+            "clock_errors": 0, "value_errors": 0,
+            "clock_fallbacks": 0, "frame_errors": 0,
+            "address_errors": 0, "data_errors": 0
+        }
+        health.write_text(json.dumps(counts))
+        self.assertEqual(b3.read_tap_health(b3.OUT_TAPE)["status"],
+                         "INVALID_TAP_HEALTH")
+        counts["frame_fallbacks"] = 0
+        health.write_text(json.dumps(counts))
+        self.assertEqual(b3.read_tap_health(b3.OUT_TAPE)["status"],
+                         "ARMED_CAPTURE_CLOSED")
+        counts["data_errors"] = "not-a-number"
+        health.write_text(json.dumps(counts))
+        self.assertEqual(b3.read_tap_health(b3.OUT_TAPE)["status"],
+                         "INVALID_TAP_HEALTH")
+
     def test_older_heartbeat_still_valid_after_numeric_normalization(self):
         self.tape([])
         health = self.base / "mame-audio-health.json"
