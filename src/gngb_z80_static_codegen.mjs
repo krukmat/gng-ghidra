@@ -152,6 +152,16 @@ export function classifyZ80IndexedInstruction(second) {
   return 'INDEX_UNHANDLED_SECOND_OPCODE';
 }
 
+/** Classify CB second opcode only; never export its operand bits. */
+export function classifyZ80CbInstruction(second) {
+  if(!Number.isInteger(second)||second<0||second>255)
+    throw new Z80StaticError('AUDIO_Z80_CB_DIAGNOSTIC_INVALID');
+  if(second<0x40)return 'CB_ROTATE_SHIFT';
+  if(second<0x80)return 'CB_BIT_TEST';
+  if(second<0xc0)return 'CB_RESET_BIT';
+  return 'CB_SET_BIT';
+}
+
 export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
   if(!(rom instanceof Uint8Array) || rom.length!==0x8000)
     throw new Z80StaticError('AUDIO_Z80_ROM_IMAGE_INVALID');
@@ -182,6 +192,12 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
     const w16=()=>read8(pc,1)|(read8(pc,2)<<8);
     // Only DD/FD 21 (LD IX/IY,nn) is admitted by this narrowly
     // native-backed batch. All other indexed instructions remain blocked.
+    if(opcode===0xcb) {
+      blockers.push({pc,reason:'UNSUPPORTED_Z80_OPCODE',
+        family:'CB_BIT_ROTATE_PREFIX',
+        cb_instruction:classifyZ80CbInstruction(read8(pc,1))});
+      continue;
+    }
     if(opcode===0xdd||opcode===0xfd) {
       const second=read8(pc,1);
       if(second===0x21) {
@@ -298,6 +314,44 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
         targets=[next(1)];
         break;
       }
+      case 0xeb: {
+        // EX DE,HL - 4T, flags unaffected.
+        lines=['const tmp=$.de;$.de=$.hl;$.hl=tmp;',
+          '$.pc='+next(1)+';','$.t+=4;'];
+        targets=[next(1)];break;
+      }
+      case 0x08: {
+        // EX AF,AF' - alternate registers are explicit, never copied from A.
+        lines=['const a=$.a,f=$.f;$.a=$.aAlt;$.f=$.fAlt;',
+          '$.aAlt=a;$.fAlt=f;',
+          '$.pc='+next(1)+';','$.t+=4;'];
+        targets=[next(1)];break;
+      }
+      case 0xd9: {
+        // EXX - three independent main/alternate register pair swaps.
+        lines=['const bc=$.bc,de=$.de,hl=$.hl;',
+          '$.bc=$.bcAlt;$.de=$.deAlt;$.hl=$.hlAlt;',
+          '$.bcAlt=bc;$.deAlt=de;$.hlAlt=hl;',
+          '$.pc='+next(1)+';','$.t+=4;'];
+        targets=[next(1)];break;
+      }
+      case 0xe3: {
+        // EX (SP),HL - both RAM bytes are read before either is overwritten.
+        // Preserve flags; stack pointer unchanged. 19T.
+        lines=['const lo=bus.read8($.sp,$.t+4);',
+          'const hi=bus.read8(($.sp+1)&65535,$.t+7);',
+          'const old=$.hl;',
+          'bus.write8($.sp,old&255,$.t+11);',
+          'bus.write8(($.sp+1)&65535,old>>>8,$.t+14);',
+          '$.hl=(hi<<8)|lo;$.pc='+next(1)+';$.t+=19;'];
+        targets=[next(1)];break;
+      }
+      case 0x76: {
+        // HALT: the fetch completes (4T) then execution STOPS until
+        // externally serviced IRQ/NMI/reset. Cannot fall through in a runner.
+        lines=['$.halted=true;$.pc='+next(1)+';$.t+=4;'];
+        targets=[next(1)];break;
+      }
       case 0xc1: case 0xd1: case 0xe1: case 0xf1: {
         // POP BC/DE/HL/AF: two reads in little-endian stack order.
         // AF is split into A and F; it does not use a synthetic AF field.
@@ -339,6 +393,20 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
       }
       case 0xc3: {
         const addr=w16();length=3;lines=['$.pc='+addr+';','$.t+=10;'];targets=[addr];break;
+      }
+      case 0xc2: case 0xca: case 0xd2: case 0xda:
+      case 0xe2: case 0xea: case 0xf2: case 0xfa: {
+        // JP cc,nn; both taken and not-taken cost 10 T-states.
+        const dest=w16(),fallthrough=next(3),condition=(opcode>>>3)&7;
+        const mask=[64,64,1,1,4,4,128,128][condition];
+        const wantSet=(condition&1)===1;
+        length=3;
+        lines=[
+          'const take=(($.f&'+mask+')!==0)==='+String(wantSet)+';',
+          '$.pc=(take?'+dest+':'+fallthrough+');','$.t+=10;'
+        ];
+        targets=[fallthrough,dest];
+        break;
       }
       case 0x18: {
         const dest=next(2+sign8(read8(pc,1)));length=2;
