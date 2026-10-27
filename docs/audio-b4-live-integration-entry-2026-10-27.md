@@ -441,3 +441,31 @@ This writes `out/audio/z80-native-controls-heartbeat4-t3b3.json` **privately**. 
 At 12540 T states the runner should cross the first lab IRQ boundary; it may discover an IM1 vector/stack/runtime STOP. The command count applied by then depends on the **real** first command offset printed by extraction; no fabricated values should be introduced. Both tools return safe count-only JSON. Share only the 3 JSON results. `audio_working`, native Z80 parity and live YM PCM remain false until further independent gates.
 
 **Next decision after results:** if IM1 IRQ service is valid, extend a bounded native-control window toward the first observed YM event offset; if stopped, fix only the actual runtime opcode/vector/bus discrepancy. Then obtain private synchronized MAME IRQ ACK/register evidence before asserting differential parity.
+
+## B4.T3-B4 — Fix private captured-input clock range, first IRQ probe (2026-10-27)
+
+**Operator-proven entry evidence:**
+- Complete Mac gate **115/115 Node, 77/77 Python PASS**, ROM SHA1_MATCH.
+- Existing native MAME `heartbeat4` input extraction succeeded, capturing **22 sound commands after reset release** and an existing pre-release latch value. Native first post-release sound command was **19,782,194 Z80 T-states** after release, whereas MAME's first observed YM write was at **898,884 T-states**. Hence the initial sound program can produce YM activity much earlier than that first post-release command; testing only 12,540 T states cannot establish YM-output correctness.
+- Native-controls Z80 probe returned `STOP_SETUP_OR_COMPILE / AUDIO_T3_PROBE_CONTROLS_INVALID` **before any sound ROM execution**; private YM events were not replayed. The saved controls file must NOT be shared.
+
+**Source-backed root cause candidate and fix:**
+- The private controls extractor correctly supported long captures, but `src/gngb_z80_sound_probe.mjs` rejected any `tick12m>120000000`, just **10 seconds at the 12 MHz master clock**. This is incompatible with authentic sound-control events later in normal captures, even when the requested Z80 probe itself covers only 12,540 T-states. As raw controls are not accessible here, the precise failed field in the operator's private JSON is **inferred, not independently established**.
+- The probe now accepts up to **12 MHz × 3600s = 43,200,000,000 master ticks** for **input evidence validation only**, while keeping the existing max **3,000,000 T-states** for Z80 execution and the existing 4096-events bound; future commands beyond the requested target remain **not applied**. Extractor `scripts/audio_t3_private_controls.py` now uses the same one-hour bound, failing closed on longer captures. The existing, already-exported private controls JSON remains usable and should **not** be regenerated or overwritten.
+- Added **3 ROM-free Node tests** for long captured timelines, future commands not injected, one-hour input ceiling, and synthetic IM1 ACK with correctly initialized RAM stack at 12,540 T states. Added **1 ROM-free Python test** of the long-capture extraction and out-of-bound rejection. Isolated V8 run of all **8 tests in the updated native-controls test file PASS**; complete Mac regression pending.
+- Corrected synthetic IRQ setup to explicitly execute `LD SP,0xc100` before IM1 service, because Z80 reset's initial SP=FFFF points outside the mapped sound RAM. Without stack initialization, an `AUDIO_Z80_UNMAPPED_WRITE` STOP correctly occurred on IRQ push; fail-closed RAM mapping was not relaxed.
+- No engine, bot, 6809 runtime, YM synth or browser playback changes.
+
+### Next operator Mac gate (no new capture; use existing private controls file)
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected **118 Node + 78 Python**, unverified on operator Mac. Then:
+
+    node scripts/audio_t3_sound_probe.mjs --roots out/audio/z80-native-roots-b4trace1.json --native-controls out/audio/z80-native-controls-heartbeat4-t3b3.json --target-tstates 12540 --max-steps 100000
+
+**Interpretation:** the 22 post-release captured sound commands should still be **unapplied** by 12,540 T-states because the first occurs at 19,782,194 T-states. The existing pre-release latch value is provided at the lab reset release; its native persistence/phase is not yet proven. This first probe should only test the 240Hz lab IRQ boundary and the currently running ROM. If it stops with a Z80/IRQ/bus code, that is actionable evidence, not a failure of timeline extraction.
+
+Only once this is accepted should the operator try a longer bounded run **toward MAME's first YM event at 898,884 T-states** (while still before the first post-release command), using a deliberate step budget and no copied YM events. CPU state, IRQ phase and YM writes still require independent MAME differential verification. Continue leaving `native_instruction_parity_verified`, `irq_phase_parity_verified`, `sound_pcm_working`, `browser_audio_working` false.
