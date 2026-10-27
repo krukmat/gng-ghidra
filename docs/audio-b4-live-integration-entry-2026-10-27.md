@@ -205,3 +205,33 @@ The report may remain `PARTIAL_UNCERTIFIED` and return exit 2; this is an expect
 The output may report further newly reachable unsupported instruction families and remain PARTIAL_UNCERTIFIED; that is a coverage gap to triage, not a reason to mark live sound done. If the 64-root static frontier becomes empty, do NOT infer full Z80 coverage: full native executed PC census is **194**, while the scanner seeds only 64. Remaining native trace coverage, IRQ servicing, sound reset/latch, YM event stream from *running JS* and live PCM are independent gates.
 
 **B4.T2-B3 source implementation is prepared, not yet operator-validated.**
+
+## B4.T2-B4 — Native-backed indexed displacement load, ADD HL,rr, POP rr/AF
+
+**Mac-verified entry state:** Node 75/75, Python 68/68, sound ROM local SHA1_MATCH. Existing `b4trace1` 64-root scanner now reports `PARTIAL_UNCERTIFIED` with 102 statically compiled PCs, eight new blockers:
+- 5 `DD_IX_PREFIX / INDEX_DISPLACEMENT_LOAD` (at distinct static frontiers);
+- 2 `ADD_HL_RR`;
+- 1 `POP_RR`.
+
+The increase from 6 to 8 blockers is expected because supported instructions exposed new static edges. None of these values certifies live Z80 execution or waveform parity. The 194 observed MAME PC addresses are still a broader evidence set than the selected 64 roots.
+
+**Implementation committed on main:**
+1. `src/gngb_z80_static_codegen.mjs`: offline compiles all seven legal `DD/FD LD r,(IX/IY+d)` subforms, excluding 0x76/HALT; displacement is signed 8-bit, effective address wraps 16 bits, reads sound bus at 19 T, register destination includes the *ordinary* H/L fields (not IXH/IXL), flags unaffected. Full ROM-boundary checks; remaining indexed load/store/ALU/bit/stack forms still fail closed.
+2. Same compiler now supports `ADD HL,BC/DE/HL/SP`, 11 T, preserving S/Z/PV, setting H/C from true 16-bit carry and half-carry, undocumented F3/F5 from high result byte, clearing N.
+3. Supports `POP BC/DE/HL/AF`, 10 T, little-endian sound bus stack reads with SP wrapping, correct AF A+F split, no fabricated register or stack data.
+4. Kept old unsupported DD tests on `INDEX_DISPLACEMENT_STORE` and other still unsupported opcode categories rather than incorrectly requiring newly compiled `LD r,(IX+d)` to fail.
+5. `tests/test_gngb_z80_index_add_pop.mjs`: six new ROM-free instruction tests, included in `scripts/audio_fast_checkpoint.mjs`. Separate isolated JS/V8 smoke of the actual generated source passed **27 indexed-load, ADD HL and POP cases**; complete Mac regression still pending.
+
+No main MC6809 engine, bot, audio tape, private ROM, MAME debugger capture, YM synthesis, or browser playback was altered.
+
+### Immediate operator checkpoint
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+**Expected Node 81/81, Python 68/68** (unverified until Mac run). If passed, reuse native-backed roots with a fresh private output:
+
+    node scripts/audio_z80_scan.mjs --roots out/audio/z80-native-roots-b4trace1.json --out out/audio/z80-frontier-b4trace1-b5.json
+
+Return only the sanitized JSON report, particularly family counts and indexed subfamily tags. A `PARTIAL_UNCERTIFIED` scanner exit 2 remains an expected coverage gate and must not be confused with test failure. Further supported instructions can expose more blockers, particularly during IRQ/latch processing. **Even zero static blockers from 64 roots cannot certify all 194 executed PCs or full sound hardware timing.** Live audio still requires dynamic Z80 scheduling/IRQ, YM PCM generation, and AudioWorklet integration.
