@@ -201,7 +201,16 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
         break;
       }
       case 0x00: lines=['$.pc='+next(1)+';','$.t+=4;'];targets=[next(1)];break;
-      case 0xf3: lines=['$.iff1=false;$.iff2=false;$.pc='+next(1)+';','$.t+=4;'];targets=[next(1)];break;
+      case 0xfb: {
+        // Zilog Z80 EI: IFF1/IFF2 set immediately, maskable INT cannot be
+        // acknowledged until AFTER the following instruction completes.
+        // eiDelay=2 is consumed by the optional audio-only boundary helper.
+        // No IRQ service, R-register fetches or native parity implied.
+        lines=['$.iff1=true;$.iff2=true;$.eiDelay=2;',
+          '$.pc='+next(1)+';','$.t+=4;'];
+        targets=[next(1)];break;
+      }
+      case 0xf3: lines=['$.iff1=false;$.iff2=false;$.eiDelay=0;$.pc='+next(1)+';','$.t+=4;'];targets=[next(1)];break;
       case 0x31: {
         const v=w16();length=3;lines=['$.sp='+v+';','$.pc='+next(3)+';','$.t+=10;'];targets=[next(3)];break;
       }

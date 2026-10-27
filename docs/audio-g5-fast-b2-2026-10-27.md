@@ -39,3 +39,26 @@ Esperado: GNG_AUDIO_G5_FAST_CHECKPOINT_V1 con Node/Python regresión PASS y un N
 1. Implementar en lotes las familias efectivamente bloqueantes que revele el escáner; evitar opcode-a-opcode si hay varias familias.
 2. Mantener B3 paralelo como camino crítico hacia primer WAV YM2203 generado en laboratorio desde escrituras nativas, sin esperar Z80 completa.
 3. No declarar audio durante gameplay hasta conectar Z80→YM→PCM y cotejar eventos/timestamps contra MAME.
+
+
+## B2.T4 — EI y frontera de interrupciones (27/10/2026)
+
+**Nuevo gate verificado por operador en Mac:** B0+B1+B2 ED transfer pasó Node **48/48** y Python **11/11**, ROM SHA1_MATCH, privacidad PASS. AOT pasó de 13 a 20 instrucciones estáticas; nueva frontera en PC=267 (0x010B), familia EI. Todavía no se han observado audio reproducible ni paridad MAME.
+
+Cambios publicados:
+- src/gngb_z80_static_codegen.mjs compila EI (0xFB) a IFF1=true, IFF2=true, PC+1 y +4 T-states. EI no modifica flags. La prohibición de aceptar IRQ hasta DESPUÉS de completar la siguiente instrucción se representa por eiDelay=2, sin ejecutar ni aceptar interrupciones.
+- El compilador DI (0xF3) limpia IFF1, IFF2 y cualquier EI pendiente (eiDelay=0).
+- src/gngb_z80_irq_boundary.mjs añade stepZ80AotAtBoundary(...) para decrementar la ventana de EI en cada instrucción terminada y canAcceptZ80MaskableIrq(...) como PREDICADO de elegibilidad, no servicio de interrupciones. EI+RET, EI+DI y EI+EI se contemplan sin aceptar IRQ prematuramente.
+- tests/test_gngb_z80_irq_boundary.mjs incluye seis casos sintéticos. El runner único incorpora el nuevo archivo.
+- **40/40** tests sintéticos del compilador, del informe de fronteras y de EI pasan en ejecución aislada JS. El conjunto integral de tests Node+Python del Mac todavía está pendiente para este commit.
+
+Semántica basada en Zilog Z80 CPU User Manual: https://www.zilog.com/docs/z80/z80cpu_um.pdf — EI activa ambos flip-flops de inmediato pero retrasa la aceptación de solicitudes INT pendientes hasta terminar la instrucción posterior.
+
+**Límites de certificación:** El helper no está integrado en un scheduler Z80 runnable, y no implementa reconocimiento o despacho IRQ, IM0/1/2, reset real, NMI, contador R ni paridad de temporización MAME. Invocar bloques AOT directamente NO constituye una ejecución IRQ válida; el estado eiDelay=2 es rechazado por el helper hasta que su consumidor use el ciclo completo.
+
+### Próximo checkpoint Mac
+
+    git pull --ff-only origin main
+    node scripts/audio_fast_checkpoint.mjs
+
+Enviar únicamente GNG_AUDIO_G5_FAST_CHECKPOINT_V1. La siguiente frontera reportada determina qué familias incorporar. No enviar ROM ni archivos out/audio. B3 YM2203 y PCM continúa como ruta crítica paralela al AOT.
