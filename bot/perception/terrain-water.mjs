@@ -17,12 +17,14 @@ const runs=(indices,maxGap=4)=>{
   out.push([left,right]);return out;
 };
 export function detectWaterTerrain({rgba,width=256,height=224,
-  grassTop=196,scanBottom=200,bankTop=192,bankBottom=206}={}){
+  grassTop=196,scanBottom=200,bankTop=192,bankBottom=206,
+  minIslandSeparationPx=12}={}){
   if(!(rgba instanceof Uint8Array||rgba instanceof Uint8ClampedArray)||
      !integer(width,32)||!integer(height,64)||rgba.length!==width*height*4||
      !integer(grassTop)||!integer(scanBottom)||!integer(bankTop)||
      !integer(bankBottom)||grassTop>scanBottom||
-     bankTop>bankBottom||bankBottom>=height)
+     bankTop>bankBottom||bankBottom>=height||
+     !Number.isSafeInteger(minIslandSeparationPx)||minIslandSeparationPx<0)
     throw Error('BOT_TERRAIN_INPUT');
   const greens=Array(width).fill(0),banks=Array(width).fill(0);
   for(let x=0;x<width;x++){
@@ -44,11 +46,18 @@ export function detectWaterTerrain({rgba,width=256,height=224,
       }
     }
   }
-  const islands=runs(greens.map((n,x)=>n>=2?x:null)
-    .filter(x=>x!==null)).filter(([a,b])=>b-a>=14&&b-a<=64)
+  // Keep small visible fragments for a temporal observer to reason about
+  // occlusion. They are not standalone island detections.
+  const islandFragments=runs(greens.map((n,x)=>n>=2?x:null)
+    .filter(x=>x!==null)).filter(([a,b])=>b-a>=2&&b-a<=64)
     .map(([left,right])=>({left,right,topY:grassTop,
       pixelEvidence:greens.slice(left,right+1).reduce((a,b)=>a+b,0)}));
-  const island=shore===null?null:islands.find(v=>v.left>shore+12)??null;
+  const islands=islandFragments.filter(v=>v.right-v.left>=14);
+  // A tracked platform can approach the bank closely enough to board.
+  // The diagnostic default retains separation; calibrated observers may
+  // lower it without confusing a disappearing water gap with a lost sprite.
+  const island=shore===null?null:
+    islands.find(v=>v.left>shore+minIslandSeparationPx)??null;
   // Optional far bank requires physical edge connectivity AND clear water
   // separation from the moving island. Still an unverified candidate.
   const hasRight=banks.slice(-24).filter(n=>n>0).length>=12;
@@ -63,7 +72,7 @@ export function detectWaterTerrain({rgba,width=256,height=224,
     }
   }
   return {kind:'TERRAIN_CANDIDATE',
-    leftBank:shore===null?null:{right:shore},island,rightBank,
+    leftBank:shore===null?null:{right:shore},island,islandFragments,rightBank,
     hasWaterGap:!!(island&&shore!==null),verified:false};
 }
 export function createIslandVelocityTracker({maxGapFrames=20,

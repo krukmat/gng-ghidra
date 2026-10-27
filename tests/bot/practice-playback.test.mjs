@@ -18,15 +18,29 @@ test('practice playback uses only pre-handoff validated transitions',()=>{
   assert.ok(plan.every(e=>e.frame<2720));
   assert.equal(plan.at(-1).frame,2710);
 });
-test('events become due at the same live scheduling margin as B3',()=>{
+test('inputs wait for the snapshot immediately before their scheduled CPU cycle',()=>{
   const plan=buildPracticePlayback(events,C,2720);
   const first=playbackDue(plan,0,0,2720);
   assert.equal(first.status,'PLAYING');
   assert.equal(first.due[0].control,'coin1');
   const next=playbackDue(plan,first.index,1,2720);
-  assert.equal(next.due[0].control,'coin1');
-  assert.equal(next.due[0].pressed,false);
+  assert.deepEqual(next.due,[]);
+  assert.equal(next.index,first.index);
+  const release=playbackDue(plan,next.index,2,2720);
+  assert.equal(release.due[0].control,'coin1');
+  assert.equal(release.due[0].pressed,false);
+  assert.deepEqual(playbackDue(plan,release.index,4,2720).due,[]);
+  assert.equal(playbackDue(plan,release.index,5,2720).due[0].control,'start1');
   assert.equal(playbackDue(plan,6,2720,2720).status,'HANDOFF');
+});
+test('lag counts frames after the planned cycle, including its exact limit',()=>{
+  const plan=buildPracticePlayback(events,C,2720);
+  assert.equal(playbackDue(plan,2,10,2720,{maxLagFrames:5}).status,'PLAYING');
+  const late=playbackDue(plan,2,11,2720,{maxLagFrames:5});
+  assert.equal(late.status,'LAG_STOP');
+  assert.equal(late.lateEvent.frame,5);
+  assert.equal(late.lag,6);
+  assert.deepEqual(late.due,[]);
 });
 test('excessively late scheduled inputs fail closed',()=>{
   const plan=buildPracticePlayback(events,C,2720);

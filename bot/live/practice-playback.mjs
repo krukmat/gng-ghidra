@@ -21,7 +21,8 @@ export function buildPracticePlayback(events,cyclesPerFrame,targetFrame){
   }
   if(!plan.some(e=>e.control==='start1'&&e.pressed))
     throw Error('BOT_PRACTICE_NO_START');
-  // Atomic release-first transitions preserve 4-way joystick safety.
+  // Release first to preserve 4-way joystick safety. Separate live POSTs
+  // are not atomic; their effective CPU reads must be checked against /tape.
   plan.sort((a,b)=>a.frame-b.frame||
     Number(a.pressed)-Number(b.pressed)||a.control.localeCompare(b.control));
   return plan;
@@ -34,9 +35,11 @@ export function playbackDue(plan,index,currentFrame,targetFrame,
      !Number.isSafeInteger(maxLagFrames)||maxLagFrames<0)
     throw Error('BOT_PRACTICE_TICK');
   const due=[];
-  while(index<plan.length&&currentFrame>=plan[index].frame-1){
+  // Snapshot F is emitted at cycle F*cyclesPerFrame-1. Inputs scheduled
+  // for F*cyclesPerFrame belong AFTER snapshot F, never snapshot F-1.
+  while(index<plan.length&&currentFrame>=plan[index].frame){
     const event=plan[index];
-    const lag=Math.max(0,currentFrame-(event.frame-1));
+    const lag=currentFrame-event.frame;
     if(lag>maxLagFrames)
       return {status:'LAG_STOP',index,lateEvent:event,lag,due:[]};
     due.push(event);index++;

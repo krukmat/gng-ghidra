@@ -1,7 +1,52 @@
 # Plan BT-0→BT-6 — Bot que aprende a completar Ghosts ’n Goblins
 
-**Fecha:** 2026-10-27 · **Rama de referencia:** `main` · **Estado:** PROPUESTA, NO IMPLEMENTADO.
+**Fecha:** 2026-10-27 · **Rama de referencia:** `main` · **Estado:** IMPLEMENTACIÓN PARCIAL; ninguna fase completada demostrada.
 **Objetivo superior:** terminar el juego original con jugabilidad auténtica. **Objetivo del presente plan:** mejorar la habilidad del BOT hasta completar la fase 1 y generalizar al resto, **SIN CAMBIAR EL ENGINE**.
+
+**Dirección actual:** cerrar una habilidad de agua completa antes de ampliar la arquitectura o la búsqueda. La sincronización del prefijo está verificada en una ejecución; el controlador visual offline está conectado, pero aún no confirma embarque estable. Las [tareas inmediatas y sus criterios](#entregas-medibles-vigentes) prevalecen sobre el orden inicial BT-0→BT-6. La [evaluación y evidencia histórica](gng-bot-evaluacion-2026-10-27.md) conserva el diagnóstico; no se reproduce aquí.
+
+## Entregas medibles vigentes
+
+### Línea base y próximos hitos
+
+Base actual: `node bot/run-water.mjs`, fuente `out/bot/late-sweep/trial-6.json`, intervención visual desde 2672, horizonte 3100, bundle g4 congelado. Última ejecución: máximo x=1776, final x=1719, cero vidas perdidas, `NOT_CONFIRMED`, `STOP/BOARDING_NOT_CENTERED` en 2870. No hay denominador de condiciones independientes que permita afirmar una tasa de éxito. Los 112 tests verifican contratos; no cuentan como partidas ganadas.
+
+| Hito | Criterio de aprobación | Estado |
+| --- | --- | --- |
+| M0 — Controles reproducibles | Tape efectiva y prevista equivalentes; replay exacto del prefijo | PASS en la ejecución documentada: 214/214 transiciones, cero ciclos de diferencia |
+| M1 — Embarque estable | Llegar a la plataforma y conservar apoyo durante una ventana posterior de 120 frames, sin perder vidas; evidencia visual y replay verificables | PENDIENTE: contacto candidato; seguimiento perdido bajo el personaje |
+| M2 — Cruce completo | Salir de la plataforma, aterrizar en la orilla opuesta y mantener apoyo/avance en tierra durante 120 frames, sin pérdida de vida durante la habilidad | PENDIENTE; todavía no implementado |
+| M3 — Robustez y ejecución live | Comparación pareada: hasta tres condiciones de desarrollo y una reservada, fijadas antes de evaluar; publicar todos los resultados. Repetir el caso nominal con control reactivo live y verificar su tape efectiva | PENDIENTE; cuatro condiciones son una prueba exploratoria, no una tasa general |
+| M4 — Fase 1 | Partida desde reset hasta transición auténtica, tape reproducible y contraste externo previsto en BT-6 | PENDIENTE |
+| M5 — Juego completo | Incorporar y verificar los siguientes segmentos y transiciones hasta el final real del juego | PENDIENTE; M4 no acredita M5 |
+
+No promover M1 usando solo el estado `LANDED` del propio controlador: contrastar sus apoyos con las imágenes y evaluación independiente de lectura. Una oclusión breve puede recuperarse con incertidumbre explícita y límites temporales; una estimación sin evidencia no acredita apoyo. Una parada en la orilla tampoco acredita M1/M2.
+
+### Tareas del siguiente bloque: solo M1
+
+**Contexto para retomar en una sesión limpia:**
+- Repositorio: `/Users/matias/gng-ghidra`. Pedir los porcentajes restantes de 5 horas y semana y esperar antes de empezar; estimar el bloque y registrar su coste. Tras aceptación del trabajo, pedir cuotas finales y hacer la retrospectiva requerida por el operador.
+- Hay cambios locales sin commit, incluidos componentes nuevos no rastreados: conservarlos y revisar `git status` antes de editar. No tocar el directorio anidado ajeno `gng-ghidra/`; no hacer commit/push sin autorización.
+- Evidencia exacta del último ensayo: `out/bot/water-skill-2026-10-27T13-25-30-102Z/{report.json,tape.json,replay-check.json}` y capturas en ese directorio. `BOARDING` comienza en 2849; el fallo termina en 2870. El replay ya coincide; no repetir la auditoría general de sincronización.
+- Circuito conectado: `bot/visual-episode.mjs` → `bot/perception/water-observation.mjs` (usa `terrain-water.mjs`) → `bot/policy/water-skill.mjs`, orquestado por `bot/run-water.mjs`. Las etiquetas RAM quedan en evaluación separada. El observador no acredita derrota de enemigo ni vida y su apoyo sigue siendo experimental.
+- Causa candidata: los fragmentos verdes y el historial de anchura sostienen la geometría mientras hay un extremo visible; al quedar ambos extremos ocultos por Arthur se pierde la plataforma. `BOARDING` emite neutral ante esa pérdida y no confirma centrado. Revisar imágenes antes de decidir qué componente corregir.
+- Calibración causal existente: derecha+salto simultáneos desde reposo producen salto vertical; cuatro frames de carrera antes del salto producen avance horizontal. Configuración actual: `flightFrames=38`, `runSpeedPxPerFrame=1.085`, `takeoffBufferPx=16`, `runLeadFrames=4`. No recalibrar sin una contradicción observada.
+- `startFrame=2668` está propuesto como caso reservado aún no evaluado: no usarlo para ajustar. El caso nominal de desarrollo empieza en 2672.
+- Entorno previamente verificado: Node v22.23.0, Python 3.15, ffmpeg `/opt/homebrew/bin/ffmpeg`, sin PIL; ROM local `roms/gng.zip`, bundle `out/v3/b3/g4/frozen`. Comprobar compatibilidad antes de pruebas costosas. Última suite: `node --test tests/bot/*.test.mjs`, 112/112 PASS; repetir tras cambios relevantes, sin cobertura ni suites ajenas al bot.
+- Alcance de la próxima sesión: M1.1–M1.4. Dejar segundo salto, live, generalización y otras fases para entregas posteriores; mantener motor congelado y los límites de la sección 0.
+
+1. **M1.1 — Reproducir el fallo:** usar la tape y la secuencia alrededor de 2849–2870 del último ensayo. Etiquetar los intervalos de apoyo visible, oclusión e incertidumbre. Conservar casos de caída como controles negativos.
+2. **M1.2 — Una corrección causal:** mejorar continuidad de la geometría bajo oclusión o la decisión que depende de ella, según M1.1; añadir una regresión del fallo concreto y de un falso apoyo. Mantener separados observación, inferencia y evaluación.
+3. **M1.3 — Episodio real:** ejecutar baseline y candidata con idéntica fuente, horizonte y bundle desde reset; ampliar el horizonte de ambos si hace falta para observar 120 frames posteriores. Inspeccionar apoyo, vidas y tape. Reproducir independientemente cualquier candidata aprobada.
+4. **M1.4 — Decisión:** aprobar M1 con evidencia o informar por qué falla. Tras tres cambios dirigidos sin mejorar el criterio, detener el ajuste de parámetros y revisar la hipótesis con una demostración normal del tramo o análisis de sus imágenes. No sustituirlo por un barrido mayor.
+
+El runner actual produce las trazas necesarias para investigar M1, pero no certifica M2/M3. Sus criterios y el protocolo de condiciones deben implementarse antes de declarar esos hitos superados. No contar repeticiones de una tape determinista como condiciones independientes; si se ajusta sobre el caso reservado, deja de ser reservado.
+
+### Reporte obligatorio por bloque
+
+Informar **hito antes → después**, éxitos/episodios evaluables por condición, pérdidas de vida, paradas por percepción, mayor intervalo sin seguimiento y coste de ejecución. Separar HALT o evidencia insuficiente de los fallos jugables y publicar sus cantidades; no borrarlos del balance. Adjuntar hashes, configuración y rutas privadas de reporte/tape. Para la habilidad, priorizar hito confirmado y supervivencia; conservar x máximo como diagnóstico secundario. No declarar menor daño si esa métrica sigue sin calibrar.
+
+Cada bloque termina con una capacidad nueva demostrada o una hipótesis descartada con evidencia y la siguiente prueba concreta. No ampliar entrenamiento, planificación ni infraestructura antes de comprobar que resuelve el bloqueo medido. La validación amplia de BT-0/BT-5 sigue pendiente después de la prueba exploratoria.
 
 ## 0. Límite estricto de alcance
 

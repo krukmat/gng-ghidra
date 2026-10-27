@@ -219,7 +219,7 @@ async function completeRecorder(){
   if(!recorderFinished){try{recorder.kill('SIGTERM')}catch{}}
 }
 async function main(){
-  let outcome='NOT_STARTED',lastFrame=null,lateMax=0,eventsSent=0;
+  let outcome='NOT_STARTED',lastFrame=null,maxDispatchLagFrames=0,eventsSent=0;
   try{
     await boot();
     await startBrowserAndRecorder();
@@ -244,8 +244,18 @@ async function main(){
         'BOT_PRACTICE_INPUT_LAG_'+due.lag+'_FRAME_'+due.lateEvent.frame);
       for(const e of due.due){
         await post('/input',{control:e.control,pressed:e.pressed});
-        lateMax=Math.max(lateMax,Math.max(0,s.frame-(e.frame-1)));
         eventsSent++;
+      }
+      if(due.due.length){
+        // HTTP acceptance is not a CPU-read acknowledgement. Measure the
+        // dispatch boundary after the complete group; /tape remains the
+        // authority for effective input timing and simultaneous buttons.
+        const dispatched=await state();
+        if(dispatched.halt||dispatched.sessionId!==expectedSession)
+          throw Error('BOT_PRACTICE_STATE_CHANGED_DURING_INPUT');
+        const dispatchLag=Math.max(0,dispatched.frame-due.due[0].frame);
+        maxDispatchLagFrames=Math.max(maxDispatchLagFrames,dispatchLag);
+        if(dispatchLag>8)throw Error('BOT_PRACTICE_INPUT_DISPATCH_LAG_'+dispatchLag);
       }
       index=due.index;
       if(s.frame-lastReport>=400){
@@ -270,14 +280,14 @@ async function main(){
     process.kill(server.pid,'SIGSTOP');frozen=true;uiPhase='FROZEN';
     outcome='FROZEN_AT_VERIFIED_SCENE';
     save('handoff.json',{source,tapeHash:tape.sha256,targetFrame,
-      reachedFrame:s.frame,session:s.sessionId,eventsSent,maxInputLag:lateMax,
+      reachedFrame:s.frame,session:s.sessionId,eventsSent,maxDispatchLagFrames,
       witnessAgreement:witness.best.agreement,bossDefeated:'UNVERIFIED',
       lifeVerified:false,islandLanding:'UNVERIFIED',
       contract:'ORIGINAL_ENGINE_ORIGINAL_P1_NO_MEMORY_INJECTION'});
     console.log('BOT_PRACTICE_PAUSED='+JSON.stringify({
       status:'WAITING_FOR_BROWSER_CLICK',frame:s.frame,
       witnessAgreement:witness.best.agreement,
-      bossDefeated:'UNVERIFIED',inputLagFrames:lateMax}));
+      bossDefeated:'UNVERIFIED',maxDispatchLagFrames}));
     console.log('BOT_PRACTICE_CLICK=REANUDAR_Y_JUGAR_EN_NAVEGADOR');
     // Do not advance a single frame while the user locates the browser.
     // Resume is authorized only by the explicit browser click.
@@ -289,7 +299,7 @@ async function main(){
     handoff=true;outcome='HANDOFF_TO_HUMAN';
     console.log('BOT_PRACTICE_HANDOFF='+JSON.stringify({
       status:'LIVE_CONTROLS_RELEASED',frame:s.frame,
-      bossDefeated:'UNVERIFIED',inputLagFrames:lateMax}));
+      bossDefeated:'UNVERIFIED',maxDispatchLagFrames}));
     console.log('BOT_PRACTICE_PLAY=YA_PUEDES_CONTROLAR_A_ARTHUR');
     console.log('BOT_PRACTICE_END=Ctrl+C_guarda_video_y_cierra_motor');
     let lastStatus=Date.now();
@@ -318,7 +328,7 @@ async function main(){
     if(server&&handoff)await saveCurrentTape('final-input-tape.json');
     await completeRecorder();
     save('practice.json',{status:outcome,source,targetFrame,lastFrame,
-      session:expectedSession,handoff,eventsSent,lateMax,
+      session:expectedSession,handoff,eventsSent,maxDispatchLagFrames,
       recorderZip:recordZip,browserOpened});
     if(server&&!server.killed)server.kill('SIGTERM');
     if(handoffUI)await handoffUI.close();

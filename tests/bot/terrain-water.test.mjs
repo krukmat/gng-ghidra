@@ -25,6 +25,16 @@ test('blank pixels never invent land or island',()=>{
   assert.equal(r.leftBank,null);
   assert.equal(r.island,null);
 });
+test('boarding observation can retain a platform approaching the shore',()=>{
+  const sample=frame(169,173);
+  assert.equal(detectWaterTerrain(sample).island,null);
+  const close=detectWaterTerrain({...sample,minIslandSeparationPx:0});
+  assert.equal(close.island.left,173);
+  assert.equal(close.island.right,204);
+  assert.equal(close.verified,false);
+  assert.throws(()=>detectWaterTerrain({...sample,minIslandSeparationPx:-1}),
+    /TERRAIN_INPUT/);
+});
 test('camera-relative island velocity can be measured from three observations',()=>{
   const t=createIslandVelocityTracker();
   const sample=(n,s,i)=>t.observe({frame:n,session:'s',
