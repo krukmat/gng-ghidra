@@ -79,10 +79,10 @@ export function classifyZ80EdInstruction(second) {
   if([0xa3,0xab,0xb3,0xbb].includes(second))return 'ED_BLOCK_OUTPUT';
   if((second&0xc7)===0x40)return 'ED_IN_PORT';
   if((second&0xc7)===0x41)return 'ED_OUT_PORT';
-  if((second&0xc7)===0x42)return 'ED_SBC_HL_RR';
-  if((second&0xc7)===0x4a)return 'ED_ADC_HL_RR';
-  if((second&0xc7)===0x43)return 'ED_LD_DIRECT_RR';
-  if((second&0xc7)===0x4b)return 'ED_LD_RR_DIRECT';
+  if((second&0xcf)===0x42)return 'ED_SBC_HL_RR';
+  if((second&0xcf)===0x4a)return 'ED_ADC_HL_RR';
+  if((second&0xcf)===0x43)return 'ED_LD_DIRECT_RR';
+  if((second&0xcf)===0x4b)return 'ED_LD_RR_DIRECT';
   return 'ED_UNASSIGNED_OR_UNDOCUMENTED';
 }
 
