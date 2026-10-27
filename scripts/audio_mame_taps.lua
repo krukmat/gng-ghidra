@@ -13,16 +13,20 @@ local health_path = os.getenv("GNG_AUDIO_TAP_HEALTH_OUT")
 local health = { frames = 0, ym = 0, latch = 0, sound_read = 0,
                  reset = 0, disabled = 0, written = 0,
                  format_errors = 0, write_errors = 0, flush_errors = 0,
-                 clock_errors = 0, value_errors = 0, clock_fallbacks = 0 }
+                 clock_errors = 0, value_errors = 0, clock_fallbacks = 0,
+                 frame_errors = 0, address_errors = 0, data_errors = 0,
+                 frame_fallbacks = 0 }
 local function save_health(closed)
   if not health_path then return end
   local f = assert(io.open(health_path, "w"), "AUDIO_TAP_HEALTH_FILE_STOP")
   f:write(string.format(
-    '{"kind":"GNG_AUDIO_MAME_TAP_HEALTH_V1","tap_armed":true,"frames_observed":%d,"ym_callbacks":%d,"main_latch_callbacks":%d,"sound_latch_callbacks":%d,"reset_callbacks":%d,"disabled_side_effect_callbacks":%d,"written_events":%d,"format_errors":%d,"write_errors":%d,"flush_errors":%d,"clock_errors":%d,"value_errors":%d,"clock_fallbacks":%d,"capture_closed":%s}\n',
+    '{"kind":"GNG_AUDIO_MAME_TAP_HEALTH_V1","tap_armed":true,"frames_observed":%d,"ym_callbacks":%d,"main_latch_callbacks":%d,"sound_latch_callbacks":%d,"reset_callbacks":%d,"disabled_side_effect_callbacks":%d,"written_events":%d,"format_errors":%d,"write_errors":%d,"flush_errors":%d,"clock_errors":%d,"value_errors":%d,"clock_fallbacks":%d,"frame_errors":%d,"address_errors":%d,"data_errors":%d,"frame_fallbacks":%d,"capture_closed":%s}\n',
     health.frames, health.ym, health.latch, health.sound_read,
     health.reset, health.disabled, health.written, health.format_errors,
     health.write_errors, health.flush_errors, health.clock_errors,
-    health.value_errors, health.clock_fallbacks, tostring(closed)))
+    health.value_errors, health.clock_fallbacks, health.frame_errors,
+    health.address_errors, health.data_errors, health.frame_fallbacks,
+    tostring(closed)))
   f:close()
 end
 
@@ -76,11 +80,21 @@ local function capture(kind, address, data)
     end
     health.clock_fallbacks = health.clock_fallbacks + 1
   end
+  -- Keep a per-field error counter, never the failing raw value.
+  -- Some MAME builds expose frame_number as a non-convertible wrapper.
+  -- Frame heartbeat fallback is coarse and is NOT native frame parity.
   local frame = decimal(screen.frame_number, 1000000000)
+  if not frame then
+    health.frame_fallbacks = health.frame_fallbacks + 1
+    frame = decimal(health.frames, 1000000000)
+  end
   local addr = decimal(address, 65535)
   local value_number = tonumber(data)
   if value_number == nil then value_number = tonumber(tostring(data)) end
   local value = value_number and decimal(value_number % 256, 255) or nil
+  if not frame then health.frame_errors = health.frame_errors + 1 end
+  if not addr then health.address_errors = health.address_errors + 1 end
+  if not value then health.data_errors = health.data_errors + 1 end
   if not frame or not addr or not value then
     health.value_errors = health.value_errors + 1
     return
