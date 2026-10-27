@@ -43,3 +43,13 @@ test('session change and absent observations fail closed',()=>{
     terrain:detectWaterTerrain(frame(128,180))}).status,'UNKNOWN');
   assert.equal(t.observe({frame:3,session:'b',terrain:null}).status,'UNKNOWN');
 });
+
+test('right bank must be at right edge and separated from island',()=>{
+  const sample=frame(130,175);
+  for(let x=230;x<256;x++)for(let y=192;y<=206;y++)
+    sample.rgba.set([85,119,0,255],(y*256+x)*4);
+  const result=detectWaterTerrain(sample);
+  assert.ok(result.rightBank);
+  assert.ok(result.rightBank.left>result.island.right+12);
+  assert.equal(result.rightBank.verified,false);
+});
