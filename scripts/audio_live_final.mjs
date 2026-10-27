@@ -23,8 +23,10 @@ import {summarizeNativeYmRegisterWindow}
 
 const OUT=path.resolve('out/audio');
 const ROM_SHA1='7ef9ec5c2072e21c787a6bbf700033f50c759c1d';
-const TARGET_TSTATES=3_000_000;
-const MAX_STEPS=1_000_000;
+// A 1-second probe precedes the first real captured sound command.
+const POST_COMMAND_TSTATES=6_000_000;
+const MAX_TSTATES=36_000_000;
+const MAX_STEPS=5_000_000;
 const YM_EVENT_LIMIT=200_000;
 const RESULT_KIND='GNG_AUDIO_G5_FINAL_Z80_TO_PCM_V1';
 const EXPECTED_NATIVE_CONTROLS='GNG_AUDIO_B4_T3_PRIVATE_NATIVE_CONTROLS_V1';
@@ -101,10 +103,20 @@ async function run(){
     const controls=parseJsonInput(CONTROLS);
     if(controls?.kind!==EXPECTED_NATIVE_CONTROLS)
       fail('AUDIO_FINAL_NATIVE_CONTROLS_INVALID');
+    const firstCommandTick=controls.events?.[0]?.tick12m;
+    if(!Number.isSafeInteger(firstCommandTick)||firstCommandTick<0||
+       firstCommandTick%4!==0)
+      fail('AUDIO_FINAL_NO_CAPTURED_SOUND_COMMAND');
+    const firstCommandTState=firstCommandTick/4;
+    if(firstCommandTState+POST_COMMAND_TSTATES>MAX_TSTATES)
+      fail('AUDIO_FINAL_SOUND_COMMAND_OUTSIDE_SAFE_WINDOW');
+    // Crucial: the FIRST native command is not until ~19.8m Z80 T-states.
+    // No fake command, YM output replay or fresh CPU reset between chunks.
+    const targetTStates=firstCommandTState+POST_COMMAND_TSTATES;
     const capturedYm=[],liveHealth=new YmRegisterHealth();
     let lastTick=-1;
     const z80=await probeZ80SoundExecution(new Uint8Array(rom),roots,{
-      nativeControls:controls,targetTStates:TARGET_TSTATES,maxSteps:MAX_STEPS,
+      nativeControls:controls,targetTStates,maxSteps:MAX_STEPS,
       onYmWrite:e=>{
         if(capturedYm.length>=YM_EVENT_LIMIT)
           fail('AUDIO_FINAL_YM_EVENT_BUDGET_STOP');
@@ -119,7 +131,7 @@ async function run(){
     try {
       progress.nativeYmComparison=await summarizeNativeYmRegisterWindow(
         privateInput('mame-audio-events-heartbeat4.jsonl'),
-        {windowTStates:TARGET_TSTATES});
+        {windowTStates:targetTStates});
     } catch {
       progress.nativeYmComparison={
         kind:'GNG_AUDIO_G5_PRIVATE_NATIVE_YM_BASELINE_V1',
@@ -130,6 +142,8 @@ async function run(){
     progress.execution={
       status:z80.status,reason:z80.reason,
       steps:z80.executed_steps,reached_tstates:z80.reached_tstates,
+      target_tstates:targetTStates,
+      first_native_sound_command_tstate:firstCommandTState,
       irq_requests:z80.irq_requests,irq_acknowledgements:z80.irq_acknowledged_lab,
       native_commands_applied:z80.native_sound_controls_applied,
       ym_writes:z80.ym_port_writes_from_running_z80,
