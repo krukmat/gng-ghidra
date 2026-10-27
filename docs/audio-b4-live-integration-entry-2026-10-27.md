@@ -62,3 +62,35 @@ Expected: previous Node **54** plus **5** new test cases = **59**, Python **59**
 This is the **critical path to live gameplay sound**. The preexisting B3 WAV can remain the stable reference for later differential comparisons. No additional MAME recording is required merely to validate the T1 bridge.
 
 Privacy: keep `gg2.bin`, MAME event traces, native PCM/WAV, ROM-derived Z80 AOT exports and compiled YMFM binary inside ignored `out/audio/`. Never publish instruction bytes or game audio. Avoid touching main engine semantics, bot and GitHub Actions.
+
+## B4.T2-A — Native-backed executed-PC collection (2026-10-27)
+
+**Input checkpoint:** B4.T1 59/59 Node + 59/59 Python PASS; ROM SHA1_MATCH. Z80 AOT currently reaches only 22 PCs under RESET_VECTOR_ONLY, and dynamic Z80 execution/IRQ scheduling remains unimplemented.
+
+**Implementation now on main:** `scripts/audio_z80_native_trace.lua` configures MAME's debugger `trace` for only `audiocpu`, with `tracelog "AUDIOPC=%04X",pc` markers. It requires `-debug`, writes a fully private raw debugger trace and a counters-only heartbeat, and stops tracing after a bounded number of frames. `scripts/audio_z80_native_pc.py` provides opt-in capture, validates private trace closure, SHA1 sound ROM, and parses only marked PC addresses into a private `GNG_AUDIO_Z80_OPERATOR_PCS_V1` root file (up to 64 roots) compatible with `scripts/audio_z80_scan.mjs`. These are **executed PC observations**, not proof of complete sound ROM instruction reachability, ISA correctness or IRQ parity.
+
+Official MAME API contract: [Debugger trace syntax](https://docs.mamedev.org/debugger/execution.html#trace) and [Lua debugger interface](https://docs.mamedev.org/luascript/ref-debugger.html). The raw trace contains disassembly and possibly ROM instruction values; **never share, paste or commit it**. Trace/roots/health exist only under ignored `out/audio/`. Refuse existing IDs or oversized (128MiB) raw traces. MAME version other than 0.289 requires explicit laboratory opt-in. No changes to main engine or bot.
+
+### Next local checkpoint
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected 59 Node + **64 Python** (adds five synthetic PC profiler tests), not yet confirmed on Mac. Run a **new** debugger capture (not heartbeat4):
+
+    python3 scripts/audio_z80_native_pc.py --capture --id b4trace1 --frame-limit 360 --lab-allow-unpinned-mame
+
+MAME starts with the debugger; the Lua script attempts to issue `go`. If still halted, F5 resumes. You can trigger title/coin/start sound and quit MAME normally (Esc). The trace stops after 360 *emulated* frames, irrespective of wall time. MAME debugger APIs may vary on your locally installed version: a native failure is a STOP, not a certified PC trace.
+
+After `NATIVE_TRACE_CAPTURED_PRIVATE_PROFILE_PENDING`:
+
+    python3 scripts/audio_z80_native_pc.py --profile --id b4trace1
+
+After `PRIVATE_NATIVE_TRACE_PROFILE_NOT_CPU_PARITY`, compile frontiers from *observed* PC roots:
+
+    node scripts/audio_z80_scan.mjs --roots out/audio/z80-native-roots-b4trace1.json --out out/audio/z80-frontier-b4trace1.json
+
+The scanner may exit 2 for `PARTIAL_UNCERTIFIED` while still printing a safe JSON of grouped Z80 blocker families: this is expected and defines actual next compiler work. Never publish private trace, ROM, codegen, WAV or profiler root JSON. Only return the three sanitized stdout checkpoint JSONs.
+
+B4.T2-A is **IMPLEMENTED / NATIVE VALIDATION PENDING**. Subsequent B4.T2-B develops only instruction families proven necessary by the dynamic-backed roots; B4.T3 implements scheduler/240Hz IRQ, B4.T4 live YMFM PCM producer, B4.T5 Worklet + gameplay A/V sync.
