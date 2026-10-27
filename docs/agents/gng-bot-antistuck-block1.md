@@ -84,3 +84,19 @@ Todos los pares: mismo bundle g4, cinta de referencia y prefijo idéntico **dent
 **B1_RESEARCH_PARTIAL / BOT STOP.** Están documentados el inventario, las hipótesis, las métricas y un experimento condicional. **No** se cumple GO de ejecución porque faltan capturas privadas para B1.2, confianza de percepción, cuota 5h/7d y contraste final de Investigación avanzada.
 
 **Handoff local mínimo:** abrir `out/bot/late-sweep/trial-6.json`, `trial-67.json`, baseline y un HALT por PC; anotar frames inmediatamente anteriores a 2839/2881, presencia y posición de Arthur/Arremer/agua/plataforma, daño y respawn. Verificar que los informes suman 253 y 24 censurados. Validar o descartar H2 **antes** de implementar un detector o ejecutar P1–P3. Si las imágenes son insuficientes, dejar `UNKNOWN` y mantener STOP.
+
+## 7. Checkpoint de trabajo posterior (main, 27/10/2026)
+
+Se han añadido componentes **ROM-free** en `bot/diagnostics.mjs`,
+`bot/diagnose.mjs`, `bot/perception/progress.mjs` y
+`bot/perception/template.mjs`, con tres archivos de tests en `tests/bot/`.
+Los tests nuevos se comprobaron con un harness JavaScript V8 que ejecutó
+**18 aserciones, 18 PASS / 0 FAIL**, y el auditor CLI se verificó con 253
+entradas **sintéticas** (229 completas y 24 HALT). **No** se ha ejecutado
+`node --test` ni se han usado capturas privadas: estos resultados no son
+calibración visual ni progreso del juego.
+
+La guía operativa y el gate actualizado están en
+[**B1/B2 — Handoff local**](gng-bot-antistuck-block2.md).
+Las tareas B1.2 y BT-1 sobre imágenes reales siguen `BLOCKED_LOCAL`;
+el bot permanece `STOP` y el experimento H2 sigue sin ejecutar.
