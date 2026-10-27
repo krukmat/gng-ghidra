@@ -135,3 +135,36 @@ The new native output paths become out/audio/mame-audio-events-retry1.jsonl and 
 On a further no-YM STOP, the B3 checkpoint now automatically attaches the safe capture_diagnostics object. Share the JSON only, not ROM or audio files.
 
 Still missing: an actual native tape with YM writes, a real non-silent WAV, and eventual waveform parity. No engine, bot or gameplay changes were introduced.
+
+
+## B3 capture-health instrumentation and failed Python gate (27 October 2026)
+
+Operator checkpoint: Node 54/54 PASS; Python **32 executed, regression STOP**; previous MAME tape contains zero events of *all* tap kinds, not just YM. No evidence establishes whether the emulated game advanced, taps remained live, or Z80 wrote to the audio ports. Do not call this a Z80 or YM bug without further instrumentation.
+
+The native Lua recorder now creates a separate private heartbeat JSON (GNG_AUDIO_MAME_TAP_HEALTH_V1) with only tap-armed state, number of completed emulated frames, per-kind callback counts and suppressed side-effect callback count. A machine-frame notifier and machine-stop notifier update these counts. Neither ROM, RAM, sound commands, YM register values nor waveform data are included. The capture subprocess passes the controlled private output path in GNG_AUDIO_TAP_HEALTH_OUT, while existing event and WAV paths stay protected.
+
+The Python B3 diagnosis now reads this health file only after schema validation. The sanitized diagnosis distinguishes:
+- NOT_AVAILABLE_LEGACY_CAPTURE: an earlier tape has no heartbeat sidecar
+- TAPS_ARMED_BUT_NO_FRAMES_OBSERVED: Lua installed taps but no emulated frames observed
+- FRAMES_ADVANCED_NO_BUS_TAP_CALLBACKS: frames advanced yet no bus events observed; investigate callback lifetime/handler registration and input state, not opcodes yet
+- NO_TAP_BUS_EVENTS_OBSERVED: no events and insufficient heartbeat evidence to explain why
+
+The unified fast checkpoint now reports only failing Python unittest method names in python.failing_test_names on STOP_REGRESSION, without exposing tracebacks, local paths or private artifacts. This is a diagnosis aid, not a regression bypass.
+
+First synchronize then run **only**:
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected test count if all new tests are discovered: Node 54, Python **34** (11 prior + 23 B3 tests). Do not run native capture until regression passes. If failing_test_names is empty, run unittest -v for exact traceback; avoid including private ROM or tape content.
+
+Once the Python gate passes, capture a NEW session with a unique name while preserving the previous artifacts:
+
+    python3 scripts/audio_b3_checkpoint.py --capture --capture-id heartbeat1 --lab-allow-unpinned-mame --ymfm-src out/audio/ymfm --duration-ms 5000
+
+Start/coin/play/attack and leave MAME running until gameplay or title sound can reasonably occur; exit normally. On missing YM events, the STOP checkpoint includes capture_diagnostics.tap_health. No audio parity is claimed.
+
+An empty older tape can continue to be summarized safely:
+
+    python3 scripts/audio_b3_checkpoint.py --diagnose --tape out/audio/mame-audio-events.jsonl
