@@ -6,12 +6,12 @@ import {summarizeZ80Frontiers} from '../src/gngb_audio_frontier_report.mjs';
 import {stepZ80AotAtBoundary,canAcceptZ80MaskableIrq,AudioZ80BoundaryStop}
   from '../src/gngb_z80_irq_boundary.mjs';
 
-// Synthetic test ROMs only. 0xcb is explicitly unsupported and terminates
+// Synthetic test ROMs only. CB BIT remains unsupported and terminates
 // branches without ever loading or persisting private ROM-derived source.
 const blocks=async(bytes,{dest=null}={})=>{
   const rom=new Uint8Array(0x8000);
-  rom.set([...bytes,0xcb],0);
-  if(dest!==null)rom[dest]=0xcb;
+  rom.set([...bytes,0xcb,0x40],0);
+  if(dest!==null)rom.set([0xcb,0x40],dest);
   const compiled=compileZ80Prefix(rom);
   const module=await import('data:text/javascript,'+encodeURIComponent(compiled.source));
   return {compiled,map:module.z80AotBlocks};
@@ -135,7 +135,7 @@ test('B4.T2-B5 EI + HALT clears EI delay only after following instruction',async
 
 test('B4.T2-B5 CB trace diagnoses rotate/BIT/RES/SET with private-safe families only',()=>{
   for(const [second,kind] of [
-    [0x00,'CB_ROTATE_SHIFT'],[0x3f,'CB_ROTATE_SHIFT'],
+  // CB rotate/shift now compiles, so only unsupported CB groups are blockers.
     [0x40,'CB_BIT_TEST'],[0x7f,'CB_BIT_TEST'],
     [0x80,'CB_RESET_BIT'],[0xbf,'CB_RESET_BIT'],
     [0xc0,'CB_SET_BIT'],[0xff,'CB_SET_BIT']
