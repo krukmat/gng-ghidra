@@ -154,3 +154,97 @@ test('DJNZ negative displacement loops safely, including self-loop',async()=>{
   step(state,{});
   assert.deepEqual([state.pc,state.bc,state.t,state.f],[2,0x0001,21,0xa5]);
 });
+
+
+test('DEC r decrements all seven registers without collateral state changes',async()=>{
+  const cases=[
+    {opcode:0x05,key:'bc',expected:0x7f34},
+    {opcode:0x0d,key:'bc',expected:0x8033},
+    {opcode:0x15,key:'de',expected:0x7f34},
+    {opcode:0x1d,key:'de',expected:0x8033},
+    {opcode:0x25,key:'hl',expected:0x7f34},
+    {opcode:0x2d,key:'hl',expected:0x8033},
+    {opcode:0x3d,key:'a',expected:0x7f}
+  ];
+  for(const {opcode,key,expected} of cases){
+    const rom=new Uint8Array(0x8000);
+    rom.set([opcode,0xc9],0);
+    const compiled=compileZ80Prefix(rom);
+    assert.equal(compiled.status,'SUPPORTED_PREFIX_ONLY');
+    assert.equal(compiled.compiled,2);
+    const generated=await import('data:text/javascript,'+encodeURIComponent(compiled.source));
+    const state={pc:0,bc:0x8034,de:0x8034,hl:0x8034,a:0x80,f:1,t:100};
+    const prior={...state};
+    generated.z80AotBlocks.get(0)(state,{});
+    assert.equal(state[key],expected);
+    for(const other of ['bc','de','hl','a'])
+      if(other!==key)assert.equal(state[other],prior[other]);
+    assert.equal(state.pc,1);
+    assert.equal(state.t,104);
+    assert.equal(state.f,key==='a'||opcode===0x05||opcode===0x15||opcode===0x25?0x3f:0x2b);
+  }
+});
+
+test('DEC 8-bit Z80 flags handle borrow, overflow, zero, sign and carry preservation',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0x3d,0xc9],0);
+  const result=compileZ80Prefix(rom);
+  const module=await import('data:text/javascript,'+encodeURIComponent(result.source));
+  for(const [input,carry,output,flags] of [
+    [0x00,1,0xff,0xbb],
+    [0x01,1,0x00,0x43],
+    [0x80,1,0x7f,0x3f],
+    [0x10,1,0x0f,0x1b],
+    [0x7f,1,0x7e,0x2b],
+    [0x00,0,0xff,0xba],
+    [0x01,0,0x00,0x42]
+  ]){
+    const state={pc:0,a:input,f:carry,t:4};
+    module.z80AotBlocks.get(0)(state,{});
+    assert.deepEqual([state.a,state.f,state.pc,state.t],[output,flags,1,8]);
+  }
+});
+
+test('DEC (HL) and INC (HL) use read/modify/write bus timings, 11 T-states',async()=>{
+  for(const [opcode,readValue,written,flags] of [
+    [0x35,0x00,0xff,0xbb],
+    [0x34,0x7f,0x80,0x95]
+  ]){
+    const rom=new Uint8Array(0x8000);
+    rom.set([opcode,0xc9],0);
+    const result=compileZ80Prefix(rom);
+    assert.equal(result.status,'SUPPORTED_PREFIX_ONLY');
+    const module=await import('data:text/javascript,'+encodeURIComponent(result.source));
+    const calls=[];
+    const bus={
+      read8(addr,t){calls.push(['read',addr,t]);return readValue;},
+      write8(addr,value,t){calls.push(['write',addr,value,t]);}
+    };
+    const state={pc:0,bc:0x1234,de:0xabcd,hl:0xc012,a:0x91,f:1,t:20};
+    module.z80AotBlocks.get(0)(state,bus);
+    assert.deepEqual(calls,[['read',0xc012,24],['write',0xc012,written,28]]);
+    assert.deepEqual(
+      [state.pc,state.bc,state.de,state.hl,state.a,state.f,state.t],
+      [1,0x1234,0xabcd,0xc012,0x91,flags,31]
+    );
+  }
+});
+
+test('INC r handles overflow, halfcarry, sign and unchanged carry',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0x3c,0xc9],0);
+  const result=compileZ80Prefix(rom);
+  const module=await import('data:text/javascript,'+encodeURIComponent(result.source));
+  for(const [input,carry,output,flags] of [
+    [0x7f,1,0x80,0x95],
+    [0xff,1,0x00,0x51],
+    [0x0f,1,0x10,0x11],
+    [0x00,1,0x01,0x01],
+    [0x7f,0,0x80,0x94],
+    [0xff,0,0x00,0x50]
+  ]){
+    const state={pc:0,a:input,f:carry,t:0};
+    module.z80AotBlocks.get(0)(state,{});
+    assert.deepEqual([state.pc,state.a,state.f,state.t],[1,output,flags,4]);
+  }
+});
