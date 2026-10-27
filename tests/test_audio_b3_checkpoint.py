@@ -250,6 +250,91 @@ class B3CheckpointTests(unittest.TestCase):
                 b3.capture_tape("mame", "roms")
         self.assertEqual(b3.OUT_TAPE.read_bytes(), original)
 
+    def test_diagnosis_empty_capture_returns_safe_zero_counts(self):
+        path = self.tape([])
+        detail = b3.summarize_capture(path)
+        self.assertEqual(detail["kind"], "GNG_AUDIO_B3_CAPTURE_DIAG_V1")
+        self.assertEqual(detail["ym_writes"], 0)
+        self.assertEqual(detail["events_total"], 0)
+        self.assertEqual(detail["activity_hint"], "NO_TAP_BUS_EVENTS_OBSERVED")
+        self.assertNotIn(str(path), json.dumps(detail))
+
+    def test_diagnosis_splits_main_sound_commands_vs_sound_cpu_reads(self):
+        path = self.tape([self.event(1, "SOUNDLATCH_WRITE", 10, 0x3a00, 0x11)])
+        detail = b3.summarize_capture(path)
+        self.assertEqual(detail["activity_hint"],
+                         "MAIN_SOUND_COMMANDS_BUT_NO_Z80_LATCH_READS")
+        self.assertEqual(detail["sound_commands"], 1)
+        self.assertEqual(detail["latch_reads"], 0)
+        self.assertFalse(detail["z80_execution_verified"])
+        with self.assertRaisesRegex(b3.B3Stop, "TAPE_NO_YM_EVENTS"):
+            b3.inspect_tape(path)
+        path = self.tape([self.event(1, "Z80_LATCH_READ", 12, 0xc800, 0x11)])
+        self.assertEqual(b3.summarize_capture(path)["activity_hint"],
+                         "Z80_LATCH_READS_BUT_NO_YM_WRITES")
+
+    def test_diagnose_cli_needs_no_ymfm_or_private_rom(self):
+        self.tape([self.event(1, "AUDIO_RESET_WRITE", 1, 0x3d01, 0)])
+        output = io.StringIO()
+        with patch.object(b3, "verify_repository_privacy", return_value=True), \
+             redirect_stdout(output):
+            rc = b3.main(["--diagnose", "--tape", str(b3.OUT_TAPE)])
+        self.assertEqual(rc, 0)
+        summary = json.loads(output.getvalue())
+        self.assertEqual(summary["status"], "ACTIVITY_SUMMARY_NOT_NATIVE_PARITY")
+        self.assertEqual(summary["reset_asserted_writes"], 1)
+        self.assertEqual(summary["activity_hint"],
+                         "RESET_WRITE_ASSERTED_NO_RELEASE_OBSERVED")
+
+    def test_capture_id_preserves_previous_output_and_uses_unique_private_env(self):
+        from types import SimpleNamespace
+        self.tape([self.event(1, "YM2203_WRITE", 1, 0xe000, 0x44)])
+        original = b3.OUT_TAPE.read_bytes()
+        output = []
+        def mock_mame(argv, **kwargs):
+            output.append((argv, kwargs.get("env", {}).get("GNG_AUDIO_TAP_OUT")))
+            dest = self.base / "mame-audio-events-second_run.jsonl"
+            dest.write_text(json.dumps(self.event(1, "YM2203_WRITE",
+                                                  10, 0xe001, 9)) + "\\n")
+            return SimpleNamespace(returncode=0)
+        with patch.object(b3.shutil, "which", return_value="mame"), \
+             patch.object(b3, "call", return_value=SimpleNamespace(
+                 stdout="0.289", stderr="")), \
+             patch.object(b3.subprocess, "run", side_effect=mock_mame):
+            new_tape = b3.capture_tape("mame", "roms", capture_id="second_run")
+        self.assertEqual(new_tape, self.base / "mame-audio-events-second_run.jsonl")
+        self.assertEqual(output[0][1], str(new_tape))
+        self.assertIn(str(self.base / "mame-native-audio-second_run.wav"), output[0][0])
+        self.assertEqual(b3.OUT_TAPE.read_bytes(), original)
+
+    def test_capture_id_rejects_traversal_and_preexisting_named_output(self):
+        from types import SimpleNamespace
+        with patch.object(b3.shutil, "which", return_value="mame"), \
+             patch.object(b3, "call", return_value=SimpleNamespace(
+                 stdout="0.289", stderr="")):
+            with self.assertRaisesRegex(b3.B3Stop, "MAME_CAPTURE_ID_INVALID"):
+                b3.capture_tape("mame", "roms", capture_id="../outside")
+            prior = self.base / "mame-audio-events-retry2.jsonl"
+            prior.write_text("old")
+            with self.assertRaisesRegex(b3.B3Stop,
+                                        "MAME_CAPTURE_OUTPUT_ALREADY_EXISTS"):
+                b3.capture_tape("mame", "roms", capture_id="retry2")
+            self.assertEqual(prior.read_text(), "old")
+
+    def test_no_ym_stop_returns_diagnostic_without_file_contents(self):
+        path = self.tape([self.event(1, "SOUNDLATCH_WRITE", 20, 0x3a00, 55)])
+        output = io.StringIO()
+        with patch.object(b3, "verify_repository_privacy", return_value=True), \
+             patch.object(b3, "verify_rom_identity", return_value=True), \
+             redirect_stdout(output):
+            rc = b3.main(["--tape", str(path), "--ymfm-src",
+                          str(self.base)])
+        self.assertEqual(rc, 2)
+        result = json.loads(output.getvalue())
+        self.assertEqual(result["reason"], "TAPE_NO_YM_EVENTS")
+        self.assertEqual(result["capture_diagnostics"]["sound_commands"], 1)
+        self.assertNotIn(str(self.base), output.getvalue())
+
     def test_cli_fail_closed_and_no_private_path_in_stdout(self):
         output = io.StringIO()
         with redirect_stdout(output):
