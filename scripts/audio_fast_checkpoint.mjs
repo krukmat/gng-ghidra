@@ -5,6 +5,7 @@
  * Reports only allowlisted metadata. Z80 PARTIAL is EXPECTED and not a gate GO.
  */
 import {spawnSync} from 'node:child_process';
+import fs from 'node:fs';
 
 const tests=[
   'tests/test_gngb_z80_static_codegen.mjs',
@@ -39,6 +40,14 @@ function parseSafeJson(s) {
   const line=s.trim().split('\n').at(-1);
   try{return JSON.parse(line)}catch{return null}
 }
+function privateArtifactsGuard() {
+  // The only generated code, extracted ROM, and audio analysis must stay ignored.
+  const ignore=fs.readFileSync('.gitignore','utf8');
+  if(!/(?:^|\n)out\/(?:\r?\n|$)/.test(ignore))
+    return false;
+  const tracked=invoke('git',['ls-files','--','out']);
+  return tracked.exit_code===0 && tracked.stdout.trim()==='';
+}
 function run() {
   const rootsIndex=process.argv.indexOf('--roots');
   if(process.argv.length!==2 && !(process.argv.length===4 && rootsIndex===2)) {
@@ -54,12 +63,13 @@ function run() {
   const basic=node.exit_code===0 && python.exit_code===0 &&
     nodeCounts.ran!==null&&nodeCounts.failed===0&&
     pyCounts.ran!==null&&pyCounts.ok;
-  if(!basic){
+  const artifactsSafe=privateArtifactsGuard();
+  if(!basic || !artifactsSafe){
     console.log(JSON.stringify({kind:'GNG_AUDIO_G5_FAST_CHECKPOINT_V1',
-      status:'STOP_REGRESSION',
+      status:artifactsSafe?'STOP_REGRESSION':'STOP_PRIVATE_ARTIFACT_GUARD',
       node:{exit_code:node.exit_code,...nodeCounts},
       python:{exit_code:python.exit_code,...pyCounts},
-      rom_checked:false}));
+      rom_checked:false,private_artifacts_safe:artifactsSafe}));
     return 2;
   }
   const scanArgs=['scripts/audio_z80_scan.mjs'];
@@ -112,6 +122,7 @@ function run() {
     z80_build:{status:built.status,compiled:built.compiled,
       first_blocker:built.first_blocker??null},
     private_report_written:true,
+    private_artifacts_safe:true,
     rom_bytes_exported:false,
     audio_working:false,
     native_parity_verified:false
