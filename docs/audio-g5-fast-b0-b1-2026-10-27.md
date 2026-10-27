@@ -80,7 +80,7 @@ GNG_AUDIO_Z80_FRONTIER_SCAN_V1 exposes:
 - Existing Mac evidence before B0+B1: 18/18 Node tests PASS; previous private-ROM AOT: 12 static decoded PCs, one unsupported LD_R_IMMEDIATE at PC 248 (0x00F8).
 - Baseline implementation as of this block also includes AOT LD r,n (B,C,D,E,H,L,A and (HL)) with 7/10 T-state timing, but **that code was not yet run against the operator's ROM**.
 - New B0+B1 module tests: 30/30 synthetic tests PASS via an isolated JS harness across compiler and safe report, including 24 Z80 tests and 6 summary tests.
-- Three additional CLI tests are authored but require the actual Node process spawn runner for verification.
+- Four additional CLI tests (private paths, CLI flags, Git ignored/untracked out/) are authored but require the actual Node process spawn runner for verification.
 - Full command's Node/Python/ROM/CFG/build gates: **NOT YET EXECUTED ON MAC IN THIS BLOCK**.
 
 **Next checkpoint:** run the single command once, return GNG_AUDIO_G5_FAST_CHECKPOINT_V1 only. Use the grouped static blocker counts to implement batches of actually observed families, not sequential speculative opcode guessing. Parallel B3 YM2203 first WAV path remains an independent priority.
