@@ -86,3 +86,16 @@ GNG_AUDIO_Z80_FRONTIER_SCAN_V1 exposes:
 **Next checkpoint:** run the single command once, return GNG_AUDIO_G5_FAST_CHECKPOINT_V1 only. Use the grouped static blocker counts to implement batches of actually observed families, not sequential speculative opcode guessing. Parallel B3 YM2203 first WAV path remains an independent priority.
 
 No GitHub Actions, no cloud/local-network dependencies, no third-party ROM, no changes to engine or bot.
+
+
+## Operator acceptance: 2026-10-27
+
+The first real Mac execution of the unified checkpoint **passed**:
+- GNG_AUDIO_G5_FAST_CHECKPOINT_V1 status PASS_REGRESSION_STATIC_SCAN_Z80_NOT_CERTIFIED
+- Node 44/44 PASS, Python 11/11 PASS
+- ROM SHA1_MATCH, private_artifacts_safe=true, rom_bytes_exported=false, private_report_written=true
+- Z80 scanner partial: 13 statically compiled instructions, 1 blocker at PC 250 (0x00FA), family ED_EXTENDED_PREFIX, subtype ED_BLOCK_TRANSFER.
+- Operator provided no private ROM content. Engine/bot unchanged.
+- Audio still false; full native Z80, YM2203 integration and PCM parity not certified.
+
+**B0+B1 accepted;** implementation and Mac regression gates are green. The single remaining STATIC frontier is not proof that there is only one runtime obstacle. Further progress continues in [audio-g5-fast-b2-2026-10-27.md](audio-g5-fast-b2-2026-10-27.md).
