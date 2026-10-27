@@ -262,3 +262,31 @@ Expected **90 Node** and **68 Python**, *not yet verified by operator*. If PASS,
 `PARTIAL_UNCERTIFIED` and exit 2 are expected if newly exposed opcode families remain. Return **only** JSON stdout, especially `families`, `first_frontiers`, and `cb_instruction` if present. Do not send trace, ROM, generated code or any private files.
 
 **Follow-up B4.T2-B6 priority:** Implement only the real observed CB subfamily and other new scanner blockers; separately extend native-backed coverage beyond the first 64/194 observed PC seeds. Full hardware audio remains explicitly blocked on a real Z80 instruction/IRQ scheduler, YM2203 real-time synthesis and AudioWorklet integration. No main MC6809 engine or bot was modified.
+
+## B4.T2-B6 — 275-PC root scan, focused Z80 instruction batch
+
+**Mac operator entry checkpoint:** Node **90/90 PASS**, Python **68/68 PASS**, SHA1_MATCH. The private native-backed `b4trace1` 64-root scanner currently compiles **275 static PCs** with eight reported frontiers: `PUSH_RR` (2), `DD_IX_PREFIX/INDEX_DISPLACEMENT_STORE` (2), `JP_INDIRECT` (1), `CALL_CONDITIONAL` (1), `CB_BIT_ROTATE_PREFIX/CB_ROTATE_SHIFT` (1), and `OUTSIDE_SOUND_ROM` at 62729 (1). The outside-ROM address is 0xF509; no evidence yet that it is actually executed (static CFG is an overapproximation). An empty default RESET_VECTOR_ONLY scan remains only 22 PCs, not full CPU coverage.
+
+**B4.T2-B6 source implementation on main:**
+- `PUSH BC/DE/HL/AF`: push high then low byte through sound bus at +8/+11 T with wrapping SP, total 11T, no flag mutation.
+- All eight `CALL cc,nn` (NZ/Z/NC/C/PO/PE/P/M), two CFG successors. Conditional non-taken=10T with no stack write; taken=17T with call return address pushed on stack at +11/+14 T, preserving flags.
+- `JP (HL)`: 4T dynamic-PC assignment, **no invented static target**. Requires a separately validated runtime dispatch for the resulting PC, not proof it is ROM code.
+- `DD/FD LD (IX/IY+d),r`: seven register sources with signed displacement, 16-bit effective address wrap, 19T, flags unchanged. No support for other indexed families.
+- All eight `CB ROTATE/SHIFT` groups, both register and `(HL)`: RLC, RRC, RL, RR, SLA, SRA, undocumented SLL, SRL. Register=8T; memory read at +8, write at +15, total=15T. Z80 S/Z/PV/F3/F5/C flags recomputed; H and N reset. `CB BIT/RES/SET` remain **unsupported**, with fail-closed blocker and privacy-safe `cb_instruction` classification.
+- Static `OUTSIDE_SOUND_ROM` blockers now carry optional **`source_pc`**, the originating compiled ROM PC, whitelisted in the diagnostic layer exclusively for the outside-ROM reason. This is **not** ROM data, a branch-taken claim, evidence of RAM execution, or evidence that 0xF509 is valid Z80 memory.
+
+**Test migration:** prior tests used `CB 00` as an intentionally unsupported sentinel. Since CB rotate now compiles, these synthetic test terminators were changed to `CB 40` (BIT B; still unsupported). No private ROM test input changed. New `tests/test_gngb_z80_b6_frontiers.mjs` has **eight** ROM-free tests: PUSH x4, CALL cc x8 with both outcomes, JP(HL) dynamic target, DD/FD indexed stores, CB x8 register and (HL) flags/clocks, continued unsupported CB classes, and strictly validated static predecessor of synthetic 0xF509. Included in existing `scripts/audio_fast_checkpoint.mjs`. A separate local isolated V8 execution of the actual AOT emitted source passed **85 focused instruction cases**, plus independent report/provenance smoke. Full Node/Python regression remains to be executed by the operator on Mac.
+
+### Next operator gate — no MAME recapture or engine/bot changes
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected **98 Node + 68 Python** (unverified pending Mac run). If PASS, scan SAME 64 private native-backed roots but NEW output:
+
+    node scripts/audio_z80_scan.mjs --roots out/audio/z80-native-roots-b4trace1.json --out out/audio/z80-frontier-b4trace1-b7.json
+
+Return only sanitized stdout. A `PARTIAL_UNCERTIFIED` / code 2 may remain appropriate; look for `source_pc` if `OUTSIDE_SOUND_ROM` is still present, and identify any newly exposed instruction families.
+
+**Critical separation:** B4.T2 static block availability is not proof of dynamic Z80 scheduler, 240Hz IRQ acknowledgment, Z80 timing parity, same loaded ROM in MAME, or game audio. Full dynamic executed PC census in `b4trace1` contains **194 unique ROM PCs**, while the current scanner used only 64 selected entry roots; this coverage gap must be closed (by private multi-batch scan/differential checks) before claiming broadly reachable native code. Never reinterpret 0xF509 as a valid ROM instruction or guess code bytes there. Engine and bot untouched.
