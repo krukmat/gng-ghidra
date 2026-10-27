@@ -91,7 +91,7 @@ test('B4.T3-B3 native command windows share one global Z80 step budget',async()=
     nativeControls:controls([event(96,0x21),event(192,0x29)])
   });
   assert.equal(result.status,'STOP_BEFORE_TARGET');
-  assert.equal(result.reason,'AUDIO_T3_PROBE_STEP_BUDGET_STOP');
+  assert.equal(result.reason,'AUDIO_Z80_LAB_STEP_BUDGET_STOP');
   assert.equal(result.executed_steps,5);
   assert.equal(result.native_sound_controls_applied,2);
   assert.equal(result.ym_port_writes_from_running_z80,0);
