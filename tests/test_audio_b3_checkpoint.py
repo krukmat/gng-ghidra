@@ -142,6 +142,9 @@ class B3CheckpointTests(unittest.TestCase):
                          "LAB_NON_SILENT_FROM_MAME_YM_EVENTS_NOT_CERTIFIED")
         self.assertEqual(report["wav"]["peak"], 1000)
         self.assertEqual(report["reference_status"], "NOT_AVAILABLE")
+        self.assertIsNone(report["mame_capture_version"])
+        self.assertFalse(report["mame_capture_version_pinned"])
+        self.assertFalse(report["lab_unpinned_mame_used"])
         self.assertFalse(report["ym_waveform_parity_verified"])
         self.assertFalse(report["z80_native_parity_verified"])
         self.assertFalse(report["gameplay_audio_verified"])
@@ -198,6 +201,43 @@ class B3CheckpointTests(unittest.TestCase):
         self.assertIn("-autoboot_script", args_seen[0])
         self.assertIn("-wavwrite", args_seen[0])
         self.assertIn(str(self.base / "mame-native-audio.wav"), args_seen[0])
+
+    def test_unpinned_mame_lab_capture_is_opt_in_and_provenance_is_explicit(self):
+        from types import SimpleNamespace
+        metadata = {}
+        def mock_mame(argv, **kwargs):
+            self.tape([self.event(1, "YM2203_WRITE", 10, 0xe000, 7)])
+            return SimpleNamespace(returncode=0)
+        with patch.object(b3.shutil, "which", return_value="mame"), \
+             patch.object(b3, "call", return_value=SimpleNamespace(
+                 stdout="MAME 0.290 (mame0290)", stderr="")):
+            with self.assertRaisesRegex(b3.B3Stop, "MAME_VERSION_NOT_PINNED_0289"):
+                b3.capture_tape("mame", "roms")
+            with patch.object(b3.subprocess, "run", side_effect=mock_mame):
+                path = b3.capture_tape("mame", "roms",
+                                       allow_unpinned_lab=True,
+                                       metadata=metadata)
+        self.assertEqual(path, b3.OUT_TAPE)
+        self.assertEqual(metadata, {"mame_version": "0.290",
+                                    "mame_version_pinned": False})
+
+    def test_strict_version_requires_a_recognizable_mame_release(self):
+        from types import SimpleNamespace
+        with patch.object(b3.shutil, "which", return_value="mame"), \
+             patch.object(b3, "call", return_value=SimpleNamespace(
+                 stdout="mame unknown", stderr="")):
+            with self.assertRaisesRegex(b3.B3Stop, "MAME_VERSION_UNRECOGNIZED"):
+                b3.capture_tape("mame", "roms", allow_unpinned_lab=True)
+
+    def test_lab_override_cannot_be_used_for_replayed_tape(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            rc = b3.main(["--tape", str(b3.OUT_TAPE),
+                          "--ymfm-src", str(self.base),
+                          "--lab-allow-unpinned-mame"])
+        self.assertEqual(rc, 2)
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["reason"], "MAME_LAB_OVERRIDE_REQUIRES_CAPTURE")
 
     def test_native_capture_never_overwrites_existing_private_tape(self):
         from types import SimpleNamespace
