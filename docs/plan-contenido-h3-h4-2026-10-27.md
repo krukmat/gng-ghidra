@@ -2,6 +2,8 @@
 
 **Fecha:** 2026-10-27 · **Rama:** `main` · **Estado:** pasos 1–2 GO; paso 5 GO (g6); verificación de jefes por búsqueda diferida (§8); barrido de cobertura de jefes: 0 % UNCOMPILED en lo alcanzado, sin g7. En fase 2 hay una meseta de avance cerca de X=5464; no está demostrada su causa ni una señal de jefe o puerta funcional. Paso 3 (grabación del operador) pendiente: no bloquea la compilación, solo la certificación.
 
+**Siguiente acción del paso 5:** [H3-F2 — diagnosticar el primer impacto](agents/h3-phase2-first-hit-task.md), con traza causal corta antes de nuevas búsquedas; incluye límites, aceptación y prompt de continuación.
+
 > **Avance 27/10/2026.** Herramienta: [h3_tape.mjs](../scripts/h3_tape.mjs) + [h3_tape_recorder.lua](../scripts/h3_tape_recorder.lua) + [h3_tape_convert.mjs](../src/h3_tape_convert.mjs).
 > **Paso 1 GO:** `titleCoinStart` inyectada y convertida → 4/4 eventos idénticos; 2.012 lecturas reales de CPU iguales a lo anotado.
 > **Paso 2 GO:** guardar en 1300, camino descartado, cargar en 1400 → la cinta solo contiene el camino final; replay desde reset con hash de RAM idéntico en todos los frames; oráculo MAME vs AOT g4 `PASS_ALL_FRAMES_MATCH` en 1300–1500. MAME no restaura las entradas al cargar: el registrador entrega a la CPU lo anotado en el resto del frame guardado (verificado por la ida y vuelta).
