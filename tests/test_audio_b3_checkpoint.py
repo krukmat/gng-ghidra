@@ -321,6 +321,39 @@ class B3CheckpointTests(unittest.TestCase):
                 b3.capture_tape("mame", "roms", capture_id="retry2")
             self.assertEqual(prior.read_text(), "old")
 
+    def test_tap_heartbeat_reports_frames_even_with_zero_bus_events(self):
+        self.tape([])
+        health = self.base / "mame-audio-health.json"
+        health.write_text(json.dumps({
+            "kind": "GNG_AUDIO_MAME_TAP_HEALTH_V1",
+            "tap_armed": True,
+            "capture_closed": True,
+            "frames_observed": 320,
+            "ym_callbacks": 0,
+            "main_latch_callbacks": 0,
+            "sound_latch_callbacks": 0,
+            "reset_callbacks": 0,
+            "disabled_side_effect_callbacks": 0
+        }))
+        result = b3.summarize_capture(b3.OUT_TAPE)
+        self.assertEqual(result["activity_hint"],
+                         "FRAMES_ADVANCED_NO_BUS_TAP_CALLBACKS")
+        self.assertEqual(result["tap_health"]["frames_observed"], 320)
+        self.assertFalse(result["z80_execution_verified"])
+        self.assertNotIn(str(health), json.dumps(result))
+
+    def test_tap_heartbeat_rejects_forged_or_untrusted_values(self):
+        self.tape([])
+        health = self.base / "mame-audio-health.json"
+        health.write_text(json.dumps({
+            "kind": "GNG_AUDIO_MAME_TAP_HEALTH_V1",
+            "tap_armed": True,
+            "capture_closed": True,
+            "frames_observed": "1000"
+        }))
+        self.assertEqual(b3.summarize_capture(b3.OUT_TAPE)["tap_health"]["status"],
+                         "INVALID_TAP_HEALTH")
+
     def test_no_ym_stop_returns_diagnostic_without_file_contents(self):
         path = self.tape([self.event(1, "SOUNDLATCH_WRITE", 20, 0x3a00, 55)])
         output = io.StringIO()
