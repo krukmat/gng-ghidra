@@ -17,6 +17,9 @@ import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {parseZ80OperatorSeeds} from '../src/gngb_audio_frontier_report.mjs';
 import {probeZ80SoundExecution} from '../src/gngb_z80_sound_probe.mjs';
+import {YmRegisterHealth} from '../src/gngb_ym_register_health.mjs';
+import {summarizeNativeYmRegisterWindow}
+  from '../src/gngb_ym_native_baseline.mjs';
 
 const OUT=path.resolve('out/audio');
 const ROM_SHA1='7ef9ec5c2072e21c787a6bbf700033f50c759c1d';
@@ -81,7 +84,8 @@ function metricsWav(file){
   return {samples:count,nonzero,peak,rms:Math.round(Math.sqrt(sumSquares/count)*100)/100};
 }
 async function run(){
-  const progress={checkpoint:null,execution:null,renderer:null};
+  const progress={checkpoint:null,execution:null,renderer:null,
+    ymRegisterHealth:null,nativeYmComparison:null};
   let created=null;
   try {
     if(!fs.existsSync(OUT)||fs.realpathSync(OUT)!==OUT||
@@ -97,7 +101,7 @@ async function run(){
     const controls=parseJsonInput(CONTROLS);
     if(controls?.kind!==EXPECTED_NATIVE_CONTROLS)
       fail('AUDIO_FINAL_NATIVE_CONTROLS_INVALID');
-    const capturedYm=[];
+    const capturedYm=[],liveHealth=new YmRegisterHealth();
     let lastTick=-1;
     const z80=await probeZ80SoundExecution(new Uint8Array(rom),roots,{
       nativeControls:controls,targetTStates:TARGET_TSTATES,maxSteps:MAX_STEPS,
@@ -107,9 +111,22 @@ async function run(){
         if(e.tick12m<lastTick||e.addr<0xe000||e.addr>0xe003||
            !Number.isInteger(e.value)||e.value<0||e.value>255)
           fail('AUDIO_FINAL_YM_EVENT_TIME_STOP');
+        liveHealth.accept(e.addr,e.value);
         capturedYm.push([e.tick12m,e.addr,e.value]);lastTick=e.tick12m;
       }
     });
+    progress.ymRegisterHealth=liveHealth.snapshot();
+    try {
+      progress.nativeYmComparison=await summarizeNativeYmRegisterWindow(
+        privateInput('mame-audio-events-heartbeat4.jsonl'),
+        {windowTStates:TARGET_TSTATES});
+    } catch {
+      progress.nativeYmComparison={
+        kind:'GNG_AUDIO_G5_PRIVATE_NATIVE_YM_BASELINE_V1',
+        status:'UNAVAILABLE_NATIVE_BASELINE_NOT_SYNTH_INPUT',
+        usedAsSynthesizerInput:false,
+        rawYmDataExported:false};
+    }
     progress.execution={
       status:z80.status,reason:z80.reason,
       steps:z80.executed_steps,reached_tstates:z80.reached_tstates,
@@ -166,6 +183,8 @@ async function run(){
     console.log(JSON.stringify({
       kind:RESULT_KIND,status,checkpoint:progress.checkpoint,
       execution:progress.execution,renderer:progress.renderer,
+      ymRegisterHealth:progress.ymRegisterHealth,
+      nativeYmComparison:progress.nativeYmComparison,
       game_audio_live:false,native_irq_parity_verified:false,
       browser_worklet_connected:false,rom_bytes_exported:false,
       private_artifacts_safe:true
@@ -178,6 +197,8 @@ async function run(){
       kind:RESULT_KIND,status:'STOP',reason,
       checkpoint:progress.checkpoint,execution:progress.execution,
       renderer:progress.renderer,
+      ymRegisterHealth:progress.ymRegisterHealth,
+      nativeYmComparison:progress.nativeYmComparison,
       game_audio_live:false,native_irq_parity_verified:false,
       browser_worklet_connected:false,
       rom_bytes_exported:false,private_artifacts_safe:true
