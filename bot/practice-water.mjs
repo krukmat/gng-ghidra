@@ -19,6 +19,8 @@ import {readReplayContactPng,replayContactFrame}
   from './perception/png-contact.mjs';
 import {comparePracticeWitness}
   from './live/practice-witness.mjs';
+import {detectWaterTerrain}
+  from './perception/terrain-water.mjs';
 import {createPracticeHandoffUI}
   from './live/practice-handoff-ui.mjs';
 
@@ -120,13 +122,27 @@ async function verifyVisibleCheckpoint(){
     ...comparePracticeWitness(live,replayContactFrame(png,i).rgba)
   }));
   const best=checked.sort((a,b)=>b.agreement-a.agreement)[0];
+  // A matching color histogram alone is insufficient: require actual
+  // shoreline and moving-island candidates in both views.
+  const expectedTerrain=detectWaterTerrain(
+    replayContactFrame(png,Math.round((best.sourceFrame-2500)/10)));
+  const liveTerrain=detectWaterTerrain({rgba:live});
+  const alignedTerrain=expectedTerrain.hasWaterGap&&liveTerrain.hasWaterGap&&
+    Math.abs(expectedTerrain.leftBank.right-liveTerrain.leftBank.right)<=24&&
+    Math.abs(expectedTerrain.island.left-liveTerrain.island.left)<=32;
   const witness={liveFrame:frame,session,reference:referencePath,
-    best,variants:checked,lifeVerified:false,bossDefeated:'UNVERIFIED'};
+    best,variants:checked,alignedTerrain,
+    expectedBank:expectedTerrain.leftBank?.right??null,
+    actualBank:liveTerrain.leftBank?.right??null,
+    expectedIsland:expectedTerrain.island?.left??null,
+    actualIsland:liveTerrain.island?.left??null,
+    lifeVerified:false,bossDefeated:'UNVERIFIED'};
   save('visual-witness.json',witness);
   console.log('BOT_PRACTICE_VISUAL_WITNESS='+JSON.stringify({
     liveFrame:frame,referenceFrame:best.sourceFrame,
-    agreement:best.agreement,status:best.status}));
-  if(best.status!=='SCENE_MATCH_CANDIDATE')
+    agreement:best.agreement,status:best.status,
+    alignedTerrain}));
+  if(best.status!=='SCENE_MATCH_CANDIDATE'||!alignedTerrain)
     throw Error('BOT_PRACTICE_SCREEN_MISMATCH_NOT_SAFE_TO_HANDOFF');
   return witness;
 }
