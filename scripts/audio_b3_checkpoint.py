@@ -231,6 +231,83 @@ def inspect_tape(tape, *, require_ym=True):
             "last_observed_tick12m": prior_tick}
 
 
+def inspect_chronology_diagnostics(tape):
+    """Sanitized, read-only audit of recorded event ordering.
+
+    Never return raw tick/frame/sequence values, bus addresses or YM bytes.
+    This function is diagnostic only; it can NEVER certify or repair a tape.
+    """
+    tape = ensure_private(tape, must_exist=True)
+    if tape.stat().st_size > MAX_CAPTURE_BYTES:
+        raise B3Stop("TAPE_TOO_LARGE")
+    counters = {
+        "records_scanned": 0,
+        "bad_sequence": 0,
+        "sequence_gaps": 0,
+        "sequence_duplicates_or_backwards": 0,
+        "tick_regressions": 0,
+        "frame_regressions": 0,
+        "negative_clock_or_frame": 0,
+        "invalid_chronology_types": 0,
+        "invalid_rows": 0,
+    }
+    first_bad = None
+    last_seq, last_tick, last_frame = 0, -1, -1
+    with tape.open("r", encoding="utf8") as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            counters["records_scanned"] += 1
+            index = counters["records_scanned"]
+            if index > MAX_EVENTS:
+                raise B3Stop("TAPE_EVENT_LIMIT")
+            try:
+                row = json.loads(line)
+            except (ValueError, UnicodeError):
+                raise B3Stop("TAPE_BAD_JSON") from None
+            if not isinstance(row, dict) or row.get("kind") not in ALLOWED_KINDS:
+                counters["invalid_rows"] += 1
+                if first_bad is None:
+                    first_bad = index
+                continue
+            seq, tick, frame = row.get("seq"), row.get("tick12m"), row.get("frame")
+            if any(type(v) is not int for v in (seq, tick, frame)):
+                counters["invalid_chronology_types"] += 1
+                if first_bad is None:
+                    first_bad = index
+                continue
+            bad = False
+            if seq != last_seq + 1:
+                counters["bad_sequence"] += 1
+                if seq > last_seq + 1:
+                    counters["sequence_gaps"] += 1
+                else:
+                    counters["sequence_duplicates_or_backwards"] += 1
+                bad = True
+            if tick < last_tick:
+                counters["tick_regressions"] += 1
+                bad = True
+            if frame < last_frame:
+                counters["frame_regressions"] += 1
+                bad = True
+            if tick < 0 or frame < 0:
+                counters["negative_clock_or_frame"] += 1
+                bad = True
+            if bad and first_bad is None:
+                first_bad = index
+            last_seq, last_tick, last_frame = seq, tick, frame
+    return {
+        "kind": "GNG_AUDIO_B3_CHRONOLOGY_DIAG_V1",
+        "status": ("CHRONOLOGY_INVALID_NOT_RENDERABLE" if first_bad
+                   else "NO_CHRONOLOGY_ERROR_OBSERVED"),
+        "first_bad_event_index": first_bad,
+        **counters,
+        "capture_validated": False,
+        "native_parity_verified": False,
+        "rom_bytes_exported": False,
+    }
+
+
 def read_tap_health(tape):
     """Read allowlisted Lua instrumentation counters; never raw capture content."""
     tape = ensure_private(tape, must_exist=True)
