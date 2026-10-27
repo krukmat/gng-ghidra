@@ -6,7 +6,7 @@ import {summarizeZ80Frontiers,parseZ80OperatorSeeds} from '../src/gngb_audio_fro
 test('B1 report groups separate branch frontiers; family order is deterministic',()=>{
   const rom=new Uint8Array(0x8000);
   // Both branch targets stop on different unsupported families.
-  rom.set([0x20,0x02,0xcb,0x11,0xdd,0x22],0);
+  rom.set([0x20,0x02,0xcb,0x40,0xdd,0x22],0);
   const result=compileZ80Prefix(rom);
   const report=summarizeZ80Frontiers(result);
   assert.equal(report.kind,'GNG_AUDIO_Z80_FRONTIER_SCAN_V1');
@@ -19,7 +19,7 @@ test('B1 report groups separate branch frontiers; family order is deterministic'
   ]);
   assert.deepEqual(report.frontiers,[
     {pc:2,family:'CB_BIT_ROTATE_PREFIX',reason:'UNSUPPORTED_Z80_OPCODE',
-      cb_instruction:'CB_ROTATE_SHIFT'},
+      cb_instruction:'CB_BIT_TEST'},
     {pc:4,family:'DD_IX_PREFIX',reason:'UNSUPPORTED_Z80_OPCODE',
       indexed_instruction:'INDEX_LD_RR_ABSOLUTE'}
   ]);
@@ -32,8 +32,8 @@ test('B1 report groups separate branch frontiers; family order is deterministic'
 
 test('B1 multiple seeded roots deduplicate PC and rank frequent blocker family',()=>{
   const rom=new Uint8Array(0x8000);
-  rom.set([0xcb],0);
-  rom.set([0xcb],0x100);
+  rom.set([0xcb,0x40],0);
+  rom.set([0xcb,0x40],0x100);
   rom.set([0xed,0xb1],0x200);
   const result=compileZ80Prefix(rom,{entries:[0,0x100,0x200,0]});
   const report=summarizeZ80Frontiers(result,{
@@ -51,7 +51,7 @@ test('B1 multiple seeded roots deduplicate PC and rank frequent blocker family',
 
 test('B1 report caps output without hiding total blocked frontiers',()=>{
   const rom=new Uint8Array(0x8000);
-  for(let k=0;k<4;k++)rom[0x100*k]=0xcb;
+  for(let k=0;k<4;k++)rom.set([0xcb,0x40],0x100*k);
   const result=compileZ80Prefix(rom,{entries:[0,0x100,0x200,0x300]});
   const report=summarizeZ80Frontiers(result,{maxFrontiers:2});
   assert.equal(report.static_frontiers_total,4);
@@ -93,7 +93,7 @@ test('B1 strict operator-PC format cannot silently certify arbitrary ROM offsets
 
 test('B1 report uses positive allowlist for tags, reasons, PCs and never serializes source',()=>{
   const rom=new Uint8Array(0x8000);
-  rom[0]=0xcb;
+  rom.set([0xcb,0x40],0);
   const result=compileZ80Prefix(rom);
   result.source='private ROM-derived secret phrase';
   const report=summarizeZ80Frontiers(result);
