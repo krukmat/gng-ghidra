@@ -17,6 +17,7 @@ const tests=[
   'tests/test_gngb_z80_b6_frontiers.mjs',
   'tests/test_gngb_z80_irq_boundary.mjs',
   'tests/test_gngb_z80_scheduler_lab.mjs',
+  'tests/test_gngb_z80_sound_probe.mjs',
   'tests/test_gngb_audio_frontier_report.mjs',
   'tests/test_gngb_audio_fast_cli.mjs',
   'tests/test_gngb_audio_events.mjs',
