@@ -48,7 +48,7 @@ Option A: NEW NATIVE CAPTURE + RENDER (MAME 0.289 installed):
 
     python3 scripts/audio_b3_checkpoint.py --capture --ymfm-src out/audio/ymfm --duration-ms 5000
 
-Interact with MAME to trigger title or gameplay music/effects, then exit MAME normally to flush its capture. Runtime checks pinned MAME 0.289, SHA1 sound ROM, event and WAV validity. MAME native -wavwrite is private.
+Interact with MAME to trigger title or gameplay music/effects, then exit MAME normally to flush its capture. If out/audio/mame-audio-events.jsonl or out/audio/mame-native-audio.wav already exists, --capture deliberately returns MAME_CAPTURE_OUTPUT_ALREADY_EXISTS rather than overwriting historical evidence. Use --tape to replay an existing capture, or rename/archive both outputs within out/audio before making a new capture. Runtime checks pinned MAME 0.289, SHA1 sound ROM, event and WAV validity. MAME native -wavwrite is private.
 
 Option B: ALREADY RECORDED NATIVE TAPE:
 
