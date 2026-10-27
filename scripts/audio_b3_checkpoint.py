@@ -362,7 +362,21 @@ def read_tap_health(tape):
 
 def summarize_capture(tape):
     """Diagnostic metadata only; never emit raw ROM, YM register values, or audio."""
-    report = inspect_tape(tape, require_ym=False)
+    try:
+        report = inspect_tape(tape, require_ym=False)
+    except B3Stop as error:
+        if str(error) != "TAPE_BAD_CHRONOLOGY":
+            raise
+        chronology = inspect_chronology_diagnostics(tape)
+        return {
+            "kind": "GNG_AUDIO_B3_CAPTURE_DIAG_V1",
+            "status": "STOP_CHRONOLOGY_NOT_RENDERABLE",
+            "activity_hint": "CHRONOLOGY_INVALID_NEEDS_CLASSIFICATION",
+            "chronology": chronology,
+            "tap_health": read_tap_health(tape),
+            "native_parity_verified": False,
+            "rom_bytes_exported": False,
+        }
     tap_health = read_tap_health(tape)
     callbacks = sum(tap_health.get(k, 0) for k in (
         "ym_callbacks", "main_latch_callbacks",
@@ -613,7 +627,7 @@ def main(argv=None):
         result = {"kind": "GNG_AUDIO_B3_CHECKPOINT_V1",
                   "status": "STOP", "reason": str(e),
                   "audio_working": False, "rom_bytes_exported": False}
-        if str(e) == "TAPE_NO_YM_EVENTS" and "tape" in locals():
+        if str(e) in ("TAPE_NO_YM_EVENTS", "TAPE_BAD_CHRONOLOGY") and "tape" in locals():
             try:
                 result["capture_diagnostics"] = summarize_capture(tape)
             except (B3Stop, OSError, ValueError):
