@@ -103,3 +103,13 @@ test('unimplemented ED retains semantic label, no instruction bytes exported',()
     assert.equal(Object.keys(result.blockers[0]).includes('opcode'),false);
   }
 });
+
+
+test('ED 16-bit register-pair instruction classifier respects register selection',()=>{
+  for(const [second,kind] of [
+    [0x42,'ED_SBC_HL_RR'],[0x52,'ED_SBC_HL_RR'],
+    [0x4a,'ED_ADC_HL_RR'],[0x7a,'ED_ADC_HL_RR'],
+    [0x43,'ED_LD_DIRECT_RR'],[0x73,'ED_LD_DIRECT_RR'],
+    [0x4b,'ED_LD_RR_DIRECT'],[0x7b,'ED_LD_RR_DIRECT']
+  ]) assert.equal(classifyZ80EdInstruction(second),kind);
+});
