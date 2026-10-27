@@ -81,15 +81,31 @@ F-N:  MOTOR (cinta humana → residuo dinámico + certificación) → REGLAS →
     - **g6:** 10089 funciones y 38084 entradas, certificada; las 9 cintas son idénticas a g5.
     - **Paridad MAME:** valores 1–6 (fases 2–7), 4 frames cada uno (2600/3300/4500/5900): 24/24 MATCH, sin bytes omitidos.
     - **Límite:** prueba que cada fase carga y corre igual que MAME con Arthur casi inmóvil. No prueba jefes, vuelta 2 ni el final verdadero.
-  - **Vuelta 2 (27/10/2026): fases 1–6 GO; sala final con atajo no representable.**
+  - **Corrección de la vuelta (27/10/2026):** el arranque de `titleCoinStart` ya tiene `0x0071=1` (MAME y AOT); tras el atajo a fase 7 pasa a `2`. Por tanto, el ensayo anterior con `0x0071=1` no certificaba la segunda vuelta. `0x007F=1` también era una intervención adicional, no el valor de arranque (`0`). Quedan por probar los jefes y la vuelta 2 auténtica.
+  - **Ensayo anterior con `0x0071=1` y `0x007F=1` (27/10/2026):**
     - **Variables, leídas del código:**
       - `0x0071` es la vuelta: 0x7446 hace `LDB #1; STB $7F; STB $71; CLR $72`.
       - El avance de fase está en 0x754B y vuelve a 0 después de la 6.
       - En 0x7378 se decide según `$71`.
       - 0x7364 envía a la fase 5 (`LDB #4; STB $72`).
-    - **Paridad MAME con `0x0071=1` (+`0x007F=1`):** valores de fase 0–5, 24/24 MATCH.
+    - **Paridad MAME con `0x0071=1` (+`0x007F=1`):** valores de fase 0–5, 24/24 MATCH; son estados artificiales, no evidencia de vuelta 2.
     - **Valor 6 con `0x0071=1`:** salta a 0xCC08, a mitad de `LDB #$3F`, y ejecuta `SWI`, que el AOT no soporta. MAME coincide byte a byte hasta el frame 2538, así que el juego original toma el mismo camino. El estado fabricado es incoherente; no es un defecto del port.
     - **Pendiente:** la sala final de la vuelta 2 y el final verdadero solo se prueban por un camino legítimo (cinta o estado completo); `SWI` queda anotado para fidelidad total.
+  - **Barrido de jefes con g6 (27/10/2026): parcial; sin hueco AOT.**
+    - `0x00A0–A1` (X) y `0x00A2–A3` (Y) se reescriben cada frame desde el objeto de Arthur: `0x0506–07` y `0x0509–0A`. El poke útil para posicionarlo en el respawn (frames 2175–2200 de `titleCoinStart`) es sobre el objeto. En el cementerio, saltar solo X deja el cursor de apariciones `0x006A` en 0 y no activa al demonio; en la cinta que llega caminando a X=1606, sube a 21. Un poke de `0x006A=16` y `0x007E=16` junto con X=1300 sí muestra al demonio rojo, seguido de lanzas, movimiento y enemigos, con paridad MAME.
+    - Cinta privada de entrada `out/h3_boss_right.json`: `titleCoinStart` más derecha desde frame 2180, disparo 3 frames cada 12 y salto 8 cada 95. Solo los inputs son sintéticos; el AOT y MAME reciben idénticos pokes. La cinta de inputs del explorador `out/v3/b3/explorer/explorer-g4-2730-1606.json`, sin poke, aporta el encuentro por recorrido normal de la fase 1.
+
+      | Fase (`0x72`) | Escena observada con `v3_b3_witness` | Oráculo g6/MAME |
+      |---|---|---|
+      | 1 (`0`) | Demonio rojo con la cinta legítima; también aparece con X=1300 y cursores 16 durante disparos | 4/4 frames legítimos (2400–2730) y 6/6 con atajo (2300–2800), todos MATCH, 0 bytes omitidos |
+      | 2 (`1`) | X=3720, Y=500: torre, Arthur cae a plataforma inferior; jefe no localizado | 3/3 (2210/2300/2400) MATCH, 0 omitidos |
+      | 3 (`2`) | X=3300, Y=574, cursores 16: cueva con murciélagos; jefe no localizado | 3/3 MATCH, 0 omitidos |
+      | 4 (`3`) | X=6300, Y=591, cursores 16: cueva vertical; jefe no localizado | 3/3 MATCH, 0 omitidos |
+      | 5 (`4`) | X=7380, Y=1500, cursores 16: torre con enemigos; jefe no localizado | 3/3 MATCH, 0 omitidos |
+      | 6 (`5`) | X=7560, Y=2336: Arthur toca a un enemigo grande; no consta que sea el jefe ni su derrota | 5/5 (2210–2600) MATCH con disparos, 0 omitidos |
+      | Sala final (`6`) | Astaroth visible en 2350–2700; el atajo pasa a `0x71=2` sin acreditar una victoria | 7/7 (2200–2700) MATCH, 0 omitidos |
+
+    - **Límite:** 34/34 puntos de control de estas escenas coinciden, sin `UNCOMPILED`/`UNSUPPORTED`; no se modifica el cierre ni se crea g7. Solo hay combate visible del demonio de la fase 1. En la cueva de la fase 3, un barrido adicional de `0x006A`/`0x007E` por 0, 4, 8, 12, 16, 20, 24, 28, 32, 40, 48 y 64 con X=3300 tampoco mostró jefe. Falta encontrar estados coherentes junto a los jefes de las fases 2–6, derrotarlos y recorrer la segunda vuelta por una ruta legítima. Los saltos directos a X muy avanzada omiten el curso de apariciones; los saltos verticales pueden dejar a Arthur cayendo. La coincidencia de bytes en esos estados no certifica un jefe.
 - [ExportFunctionGraph.java](../ghidra_scripts/ExportFunctionGraph.java) solo analiza el banco 4: ampliar o recorrer con el decodificador del compilador AOT.
 - **GO:** alcanzable compilado, residuo listado, cintas previas idénticas. **STOP:** cambio de hash en una cinta certificada.
 
