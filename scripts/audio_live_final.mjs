@@ -146,6 +146,8 @@ async function run(){
       first_native_sound_command_tstate:firstCommandTState,
       irq_requests:z80.irq_requests,irq_acknowledgements:z80.irq_acknowledged_lab,
       native_commands_applied:z80.native_sound_controls_applied,
+      sound_latch_reads:z80.z80_sound_latch_reads,
+      sound_latch_reads_after_command:z80.z80_sound_latch_reads_after_command,
       ym_writes:z80.ym_port_writes_from_running_z80,
       ym1_writes:z80.ym1_writes,ym2_writes:z80.ym2_writes,
       non_tape_ym_events:capturedYm.length,
