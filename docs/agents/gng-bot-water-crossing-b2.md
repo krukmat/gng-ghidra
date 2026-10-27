@@ -125,3 +125,12 @@ Comando local tras actualizar main:
 calibrar sensores visuales, integrar al loop existente, comprobar
 cuotas 5h/7d y ejecutar un experimento pareado muy pequeño desde reset.
 Mantener BOT STOP hasta cubrir esas dependencias.
+
+
+## B3 — Actualización de sensores (27/10/2026)
+
+El análisis de las capturas de agua y la implementación del observador
+están documentados en [checkpoint visual B3](gng-bot-visual-b3-checkpoint.md).
+Se han obtenido velocidades relativas de Arthur e islote mediante píxeles,
+pero la derrota del jefe, los aterrizajes y el salto final continúan
+sin verificación. La política permanece STOP para el juego real.
