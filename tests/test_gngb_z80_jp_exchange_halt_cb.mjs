@@ -67,6 +67,18 @@ test('B4.T2-B5 EX AF,AF shadow and EXX three shadow register pairs round-trip',a
   }
 });
 
+test('B4.T2-B5 EX AF and EXX reject absent alternate register banks rather than injecting undefined',async()=>{
+  for(const [opcode,state] of [
+    [0x08,{pc:0,t:0,a:1,f:0x40}],
+    [0xd9,{pc:0,t:0,bc:1,de:2,hl:3}]
+  ]) {
+    const {map}=await blocks([opcode]);
+    const before={...state};
+    assert.throws(()=>map.get(0)(state,{}),/AUDIO_Z80_ALT_STATE_REQUIRED/);
+    assert.deepEqual(state,before);
+  }
+});
+
 test('B4.T2-B5 EX (SP),HL reads then writes stack in 19T, wraps SP and preserves flags',async()=>{
   const {map}=await blocks([0xe3]);
   for(const sp of [0xc100,0xffff]){
