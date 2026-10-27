@@ -122,10 +122,22 @@ async function verifyVisibleCheckpoint(){
     ...comparePracticeWitness(live,replayContactFrame(png,i).rgba)
   }));
   const best=checked.sort((a,b)=>b.agreement-a.agreement)[0];
+  // Local review artifacts even on mismatch: both screenshots are private.
+  // Existing ffmpeg dependency; failure to export is nonfatal.
+  const saveSnapshot=(name,bytes)=>{
+    const result=spawnSync('ffmpeg',['-hide_banner','-loglevel','error',
+      '-y','-f','rawvideo','-pixel_format','rgba',
+      '-video_size','256x224','-i','pipe:0','-frames:v','1',
+      join(directory,name)],{input:Buffer.from(bytes),stdio:['pipe','ignore','pipe']});
+    return result.status===0;
+  };
+  const expectedPixels=replayContactFrame(png,
+    Math.round((best.sourceFrame-2500)/10)).rgba;
+  saveSnapshot('live-witness.png',live);
+  saveSnapshot('reference-witness.png',expectedPixels);
   // A matching color histogram alone is insufficient: require actual
   // shoreline and moving-island candidates in both views.
-  const expectedTerrain=detectWaterTerrain(
-    replayContactFrame(png,Math.round((best.sourceFrame-2500)/10)));
+  const expectedTerrain=detectWaterTerrain({rgba:expectedPixels});
   const liveTerrain=detectWaterTerrain({rgba:live});
   const alignedTerrain=expectedTerrain.hasWaterGap&&liveTerrain.hasWaterGap&&
     Math.abs(expectedTerrain.leftBank.right-liveTerrain.leftBank.right)<=24&&
