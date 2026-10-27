@@ -121,20 +121,28 @@ export function classifyZ80EdInstruction(second) {
   return 'ED_UNASSIGNED_OR_UNDOCUMENTED';
 }
 
-export function compileZ80Prefix(rom, {entry=0, limit=512}={}) {
+export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
   if(!(rom instanceof Uint8Array) || rom.length!==0x8000)
     throw new Z80StaticError('AUDIO_Z80_ROM_IMAGE_INVALID');
   if(!Number.isInteger(entry)||entry<0||entry>=rom.length ||
      !Number.isInteger(limit)||limit<1||limit>16384)
     throw new Z80StaticError('AUDIO_Z80_COMPILE_ARGS_INVALID');
-  const pending=[entry], visited=new Map(), blockers=[];
+  // Multiple roots may ONLY come from operator-provided native evidence.
+  // This compiler does not assume arbitrary ROM offsets are code.
+  const roots=entries===null?[entry]:entries;
+  if(!Array.isArray(roots) || roots.length<1 || roots.length>64 ||
+     roots.some(pc=>!Number.isInteger(pc)||pc<0||pc>=rom.length))
+    throw new Z80StaticError('AUDIO_Z80_SEEDS_INVALID');
+  const entrypoints=[...new Set(roots)];
+  const pending=[...entrypoints], visited=new Map(), blockers=[], attempted=new Set();
   const read8=(pc,i)=>{
     if(pc+i>=rom.length)throw new Z80StaticError('AUDIO_Z80_ROM_BOUNDARY',{pc});
     return rom[pc+i];
   };
   while(pending.length && visited.size<limit) {
     const pc=pending.shift();
-    if(visited.has(pc))continue;
+    if(attempted.has(pc))continue;
+    attempted.add(pc);
     if(pc<0 || pc>=0x8000){
       blockers.push({pc,reason:'OUTSIDE_SOUND_ROM'});continue;
     }
@@ -278,5 +286,7 @@ export function compileZ80Prefix(rom, {entry=0, limit=512}={}) {
     'export const z80AotBlocks=new Map([\n'+
     [...visited.values()].sort((a,b)=>a.pc-b.pc).map(x=>'  ['+x.pc+','+x.source+']').join(',\n')+
     '\n]);\n';
-  return {status,source,compiled:visited.size,blockers,pending:pending.length};
+  return {status,source,compiled:visited.size,blockers,pending:pending.length,
+    entrypoints,visitedPcs:[...visited.keys()].sort((a,b)=>a-b),
+    truncated:pending.length>0};
 }
