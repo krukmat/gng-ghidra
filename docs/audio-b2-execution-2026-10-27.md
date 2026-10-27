@@ -120,3 +120,26 @@ Cambios actuales en main:
     node scripts/audio_z80_build.mjs out/audio/gg2.bin out/audio/z80-prefix.mjs
 
 No declarar audio, paridad Z80, ni G5 GO. El comando Z80 puede finalizar en PARTIAL_UNCERTIFIED con exit 2 al descubrir otra instrucción pendiente. Compartir únicamente JSON GNG_AUDIO_Z80_AOT_PREFIX_V1: status, compiled y first_blocker. No enviar ROM, volcados ni artefactos derivados desde out/audio.
+
+
+## Checkpoint A2.T2d — DEC_R en 0x00EC y ampliación INC/DEC (27/10/2026)
+
+Evidencia del Mac del operador: `11/11` Node tests PASS; compilador privado `compiled=7, unsupported=1, first_blocker.pc=236 (0x00EC), family=DEC_R`. No se compartieron bytes de `gg2.bin`.
+
+Implementación en `main`:
+- AOT estático de **DEC B/C/D/E/H/L/A y DEC (HL)**, con BC/DE/HL correctamente empaquetados. Preserva carry; ajusta S, Z, F5, H, F3, P/V, N con semántica Z80. **4 T-states** registros, **11 T-states** memoria.
+- AOT estático de **INC B/C/D/E/H/L/A y INC (HL)** de la misma familia, sin N, incluyendo overflow/half-carry/flags y 4/11 T-states.
+- Acceso bus observado para (HL): lectura en T+4, escritura en T+8; sin tocar engine MC6809, bot ni bundle privado.
+- Se añadieron cuatro tests Node: siete registros DEC sin daño colateral, vectores de flags DEC, lectura/escritura (HL) para ambos, y vectores de flags INC.
+- **15/15 pruebas sintéticas ejecutadas en un harness JS aislado PASS**, incluidas las 11 existentes; esta ejecución no equivale al runner completo `node --test` de Mac ni a un test MAME. El Mac debe ratificarlo.
+- Nueva frontera del ROM privado **desconocida** hasta recompilar en Mac; `compiled` no mide % total de CPU/audio.
+
+Próximo checkpoint exacto:
+
+    git checkout main && git pull --ff-only
+    node --test tests/test_gngb_z80_static_codegen.mjs
+    node scripts/audio_z80_build.mjs
+
+Un `PARTIAL_UNCERTIFIED` tras una nueva instrucción aún no implementada es STOP esperado. Enviar solo JSON `GNG_AUDIO_Z80_AOT_PREFIX_V1` (contadores y familia), no código ROM-derived, muestras, capturas MAME ni `out/audio`. El siguiente trabajo depende del nuevo `first_blocker`.
+
+G5/H5 siguen PENDING: falta Z80 completa/IRQ, dual YM2203 validado y audio navegable.
