@@ -227,6 +227,17 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
         const v=read8(pc,1);length=2;lines=['$.a='+v+';','$.pc='+next(2)+';','$.t+=7;'];targets=[next(2)];break;
       }
       case 0xaf: lines=['$.a=0;$.f=0x44;','$.pc='+next(1)+';','$.t+=4;'];targets=[next(1)];break;
+      case 0x02: case 0x0a: case 0x12: case 0x1a: {
+        // LD (BC),A / LD A,(BC) / LD (DE),A / LD A,(DE).
+        // One external 8-bit memory access, always 7 T; flags unchanged.
+        const addr=(opcode&0x10)?'$.de':'$.bc';
+        const load=(opcode&0x08)!==0;
+        lines=[load?'$.a=bus.read8('+addr+',$.t+7);':
+          'bus.write8('+addr+',$.a,$.t+7);',
+          '$.pc='+next(1)+';','$.t+=7;'];
+        targets=[next(1)];
+        break;
+      }
       case 0x23:case 0x2b: {
         const delta=opcode===0x23?1:-1;
         lines=['$.hl=($.hl+'+delta+')&65535;','$.pc='+next(1)+';','$.t+=6;'];
@@ -350,6 +361,45 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
             '}else{$.pc='+next(1)+';$.t+=5;}'
           ];
           targets=[next(1)];
+          break;
+        }
+        if((opcode&0xc7)===0xc6) {
+          // ADD/ADC/SUB/SBC/AND/XOR/OR/CP A,n, exactly 7 T-states.
+          // Immediate is decoded offline, never from ROM at runtime.
+          const alu=(opcode>>>3)&7;
+          const rhs=read8(pc,1);
+          length=2;
+          lines=['const rhs='+rhs+';','const a=$.a;'];
+          if(alu<=3 || alu===7) {
+            const sub=alu===2||alu===3||alu===7;
+            const carry=(alu===1||alu===3)?'($.f&1)':'0';
+            lines.push('const carry='+carry+';');
+            if(sub) lines.push(
+              'const raw=a-rhs-carry;const result=raw&255;',
+              'const h=(a&15)<((rhs&15)+carry);',
+              'const ov=(((a^rhs)&(a^result)&128)!==0);',
+              '$.f='+(alu===7?'(rhs&0xa8)':'(result&0xa8)')+
+                '|(result===0?64:0)|(h?16:0)|(ov?4:0)|2|(raw<0?1:0);'
+            );
+            else lines.push(
+              'const raw=a+rhs+carry;const result=raw&255;',
+              'const h=((a&15)+(rhs&15)+carry)>15;',
+              'const ov=(((~(a^rhs))&(a^result)&128)!==0);',
+              '$.f=(result&0xa8)|(result===0?64:0)|(h?16:0)|(ov?4:0)|(raw>255?1:0);'
+            );
+            if(alu!==7)lines.push('$.a=result;');
+          } else {
+            const expr=alu===4?'a&rhs':alu===5?'a^rhs':'a|rhs';
+            lines.push(
+              'const result=('+expr+')&255;',
+              'let parity=result;parity^=parity>>>4;parity^=parity>>>2;parity^=parity>>>1;',
+              '$.f=(result&0xa8)|(result===0?64:0)|'+(alu===4?'16':'0')+
+                '|((parity&1)===0?4:0);',
+              '$.a=result;'
+            );
+          }
+          lines.push('$.pc='+next(2)+';','$.t+=7;');
+          targets=[next(2)];
           break;
         }
         if((opcode&0xc7)===0x06) {
