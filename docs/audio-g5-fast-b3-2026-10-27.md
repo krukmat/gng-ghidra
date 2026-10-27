@@ -206,3 +206,33 @@ Then use an unused capture ID, preserving original and heartbeat1 evidence:
 On STOP TAPE_NO_YM_EVENTS, send only capture_diagnostics: it will contain tap_health written_events, format_errors, write_errors and flush_errors. This will pinpoint the stage where recording fails. If successful, open the private out/audio/b3-first-audio.wav locally and report audibility. Audio/parity remains NOT_CERTIFIED until real non-silent WAV is observed.
 
 B3 tape event count cap was increased from 250000 to 1000000 (while retaining the 64MiB file-size cap) after the real 243403 callback total nearly reached the previous bound. No ROM content, music samples or recorded event values have been added to the repository.
+
+
+## B3 heartbeat2: serialization failure isolated (2026-10-27)
+
+New real operator Mac evidence:
+- Fast gate: **54/54 Node and 37/37 Python PASS**; ROM SHA1_MATCH, 22 reset-root compiled static PCs, no static frontier. Audio still NOT_CERTIFIED.
+- MAME capture heartbeat2: **2102 frames**, **319462 YM callbacks**, **23 main command writes**, **7124 soundlatch reads**, **2 reset callbacks**.
+- **326611 format_errors**, **0 written_events**, **0 write_errors**, **0 flush_errors**, and an empty private JSONL.
+- Therefore the Z80/MAME audio bus is active, but the Lua callback failed before file output on every attempt. The exact subexpression that raised was not recorded, so do not assert that any single Lua value was the root cause without the next evidence.
+
+Recorder fix on main:
+- Avoid Lua string.format %d for MAME/Sol-bound numeric values in event records; validate bounded integers and format decimal strings via %s, keeping JSONL fields numeric and exact for the short capture window.
+- Normalize MAME frame/address/value types defensively and use machine.time:as_ticks(12000000) as preferred tick source. If a tick cannot be converted, a LAB-only as_double fallback is tracked in clock_fallbacks; no sample-accurate parity is claimed.
+- Separate new safe heartbeat counters clock_errors, value_errors, clock_fallbacks. The diagnostic differentiates LUA_CLOCK_ACCESS_FAILURES and LUA_NUMERIC_CONVERSION_FAILURES; backwards compatibility with heartbeat2's older health schema is preserved.
+- If heartbeat reports missing rows or serialization/write/clock/conversion errors, **STOP NATIVE_TAPE_INCOMPLETE_OR_LOSSY before synthesis**. Native tape provenance and timing accuracy remain unverified until MAME replay.
+- New tests cover heartbeat2 counters, old/new schemas and rejection of a lossy native tape. These tests are not a substitute for Mac native validation.
+
+Next operator checkpoint (after syncing; avoid overwriting heartbeat2):
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected if current test discovery is complete: **54 Node and 40 Python tests**, not yet certified on Mac.
+
+When green, record another unique private session:
+
+    python3 scripts/audio_b3_checkpoint.py --capture --capture-id heartbeat3 --lab-allow-unpinned-mame --ymfm-src out/audio/ymfm --duration-ms 5000
+
+Interact with MAME (coin 5, start 1, move/shoot) and exit normally. Return ONLY the sanitized GNG_AUDIO_B3_CHECKPOINT_V1 JSON. On native success, privately listen with afplay out/audio/b3-first-audio.wav; confirm actual audible music/effects. Existing heartbeat1 and heartbeat2 evidence must not be deleted or committed.
