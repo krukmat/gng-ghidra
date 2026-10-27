@@ -1,28 +1,55 @@
 # Plan BT-0→BT-6 — Bot que aprende a completar Ghosts ’n Goblins
 
-**Fecha:** 2026-10-27 · **Rama de referencia:** `main` · **Estado:** IMPLEMENTACIÓN PARCIAL; ninguna fase completada demostrada.
+**Fecha:** 2026-10-27 · **Rama de referencia:** `main` · **Estado:** IMPLEMENTACIÓN PARCIAL; M1 demostrado en el caso de desarrollo 2672; ninguna fase completada.
 **Objetivo superior:** terminar el juego original con jugabilidad auténtica. **Objetivo del presente plan:** mejorar la habilidad del BOT hasta completar la fase 1 y generalizar al resto, **SIN CAMBIAR EL ENGINE**.
 
-**Dirección actual:** cerrar una habilidad de agua completa antes de ampliar la arquitectura o la búsqueda. La sincronización del prefijo está verificada en una ejecución; el controlador visual offline está conectado, pero aún no confirma embarque estable. Las [tareas inmediatas y sus criterios](#entregas-medibles-vigentes) prevalecen sobre el orden inicial BT-0→BT-6. La [evaluación y evidencia histórica](gng-bot-evaluacion-2026-10-27.md) conserva el diagnóstico; no se reproduce aquí.
+**Dirección actual:** cerrar una habilidad de agua completa antes de ampliar la arquitectura o la búsqueda. La sincronización del prefijo está verificada en una ejecución; el controlador visual offline confirma embarque estable en el caso de desarrollo 2672 (M1); el segundo salto (M2) sigue pendiente. Las [tareas inmediatas y sus criterios](#entregas-medibles-vigentes) prevalecen sobre el orden inicial BT-0→BT-6. La [evaluación y evidencia histórica](gng-bot-evaluacion-2026-10-27.md) conserva el diagnóstico; no se reproduce aquí.
 
 ## Entregas medibles vigentes
 
 ### Línea base y próximos hitos
 
-Base actual: `node bot/run-water.mjs`, fuente `out/bot/late-sweep/trial-6.json`, intervención visual desde 2672, horizonte 3100, bundle g4 congelado. Última ejecución: máximo x=1776, final x=1719, cero vidas perdidas, `NOT_CONFIRMED`, `STOP/BOARDING_NOT_CENTERED` en 2870. No hay denominador de condiciones independientes que permita afirmar una tasa de éxito. Los 112 tests verifican contratos; no cuentan como partidas ganadas.
+Base actual: `node bot/run-water.mjs`, fuente `out/bot/late-sweep/trial-6.json`, intervención visual desde 2672, horizonte 3100, bundle g4 congelado. Baseline anterior: máximo x=1776, final x=1719, cero vidas, `NOT_CONFIRMED`, `STOP/BOARDING_NOT_CENTERED` en 2870. Candidata M1: `LANDED` en 2861, ventana 2861–2980 con 120/120 frames `LANDED` y 118 con apoyo visual, cero vidas en 3100 frames; `node bot/verify-boarding.mjs <report.json>` lo confirma por otra vía. Única condición evaluada: no es una tasa de éxito. Los 114 tests verifican contratos; no cuentan como partidas ganadas.
 
 | Hito | Criterio de aprobación | Estado |
 | --- | --- | --- |
 | M0 — Controles reproducibles | Tape efectiva y prevista equivalentes; replay exacto del prefijo | PASS en la ejecución documentada: 214/214 transiciones, cero ciclos de diferencia |
-| M1 — Embarque estable | Llegar a la plataforma y conservar apoyo durante una ventana posterior de 120 frames, sin perder vidas; evidencia visual y replay verificables | PENDIENTE: contacto candidato; seguimiento perdido bajo el personaje |
-| M2 — Cruce completo | Salir de la plataforma, aterrizar en la orilla opuesta y mantener apoyo/avance en tierra durante 120 frames, sin pérdida de vida durante la habilidad | PENDIENTE; todavía no implementado |
+| M1 — Embarque estable | Llegar a la plataforma y conservar apoyo durante una ventana posterior de 120 frames, sin perder vidas; evidencia visual y replay verificables | PASS en una condición (2672): replay independiente desde reset, y=60 constante, transporte 74 px sin dirección pulsada, imágenes revisadas. STOP posterior en 3035 |
+| M2 — Cruce completo | Salir de la plataforma, aterrizar en la orilla opuesta y mantener apoyo/avance en tierra durante 120 frames, sin pérdida de vida durante la habilidad | PENDIENTE; [tareas M2.1–M2.5](#tareas-del-bloque-m2-vigente) |
 | M3 — Robustez y ejecución live | Comparación pareada: hasta tres condiciones de desarrollo y una reservada, fijadas antes de evaluar; publicar todos los resultados. Repetir el caso nominal con control reactivo live y verificar su tape efectiva | PENDIENTE; cuatro condiciones son una prueba exploratoria, no una tasa general |
 | M4 — Fase 1 | Partida desde reset hasta transición auténtica, tape reproducible y contraste externo previsto en BT-6 | PENDIENTE |
 | M5 — Juego completo | Incorporar y verificar los siguientes segmentos y transiciones hasta el final real del juego | PENDIENTE; M4 no acredita M5 |
 
 No promover M1 usando solo el estado `LANDED` del propio controlador: contrastar sus apoyos con las imágenes y evaluación independiente de lectura. Una oclusión breve puede recuperarse con incertidumbre explícita y límites temporales; una estimación sin evidencia no acredita apoyo. Una parada en la orilla tampoco acredita M1/M2.
 
-### Tareas del siguiente bloque: solo M1
+### Resultado M1 (2026-10-27)
+
+- **Causa observada (M1.1):** Arthur estaba apoyado desde 2845–2846 hasta el final: y=60 en plataforma (orilla 62, agua 26), tres vidas y transporte horizontal con entrada neutra. Los dos extremos de la isla quedaban ocultos por Arthur y por un sprite dorado no identificado, dibujado bajo él en coordenadas de pantalla. Solo quedaba verde interior entre las piernas.
+- **Corrección (M1.2):** `water-observation.mjs` conserva la extensión relativa al cuerpo del último frame con borde visible. Exige verde actual dentro de ella y bajo el cuerpo, la cabeza a la misma altura (±4 px) y como máximo 240 frames (`HELD_BODY_RELATIVE_UNDER_OCCLUSION`). En la candidata solo cubrió 2856–2859; después el borde izquierdo volvió a verse. Hay regresiones del fallo, de caída, de verde ausente o externo y del límite temporal. Control negativo real: la caída de la tape fuente (vida perdida en 2881) no produce ningún frame de apoyo ISLAND.
+- **Criterio del runner:** ahora exige 120 frames `LANDED` desde el aterrizaje y cero vidas perdidas en todo el horizonte. Antes exigía `LANDED` en el último frame. La primera parada se publica en `stop`.
+- **Evidencia:** baseline `out/bot/water-skill-2026-10-27T14-04-05-800Z/`; candidata `out/bot/water-skill-2026-10-27T14-09-25-258Z/{report.json,tape.json,verify-boarding.json,verify-window.png}`. Hash de la tape `4eaf8d51…`; último registro `1eb3193b…`, idéntico en dos ejecuciones y en el replay.
+- **Próximo bloqueo (M2):** STOP `PLAYER_OR_BANK_LOST` en 3035. Durante el transporte, la orilla izquierda sale de pantalla. `detectWaterTerrain` y la habilidad necesitan esa orilla para ubicar la isla, así que el caso falla antes del segundo salto. El caso reservado 2668 sigue sin evaluar.
+
+### Tareas del bloque M2 (vigente)
+
+**Contexto para retomar en una sesión limpia:**
+- Repositorio: `/Users/matias/gng-ghidra`. Pedir los porcentajes restantes de 5 horas y semana y esperar antes de empezar; estimar el bloque y registrar su coste. Tras aceptación del trabajo, pedir cuotas finales y hacer la retrospectiva requerida por el operador.
+- Cambios locales de M1 sin commit: `bot/perception/water-observation.mjs`, `bot/run-water.mjs`, `tests/bot/water-observation.test.mjs`, este plan y `bot/verify-boarding.mjs` (no rastreado). Conservarlos y revisar `git status` antes de editar. No tocar el directorio anidado ajeno `gng-ghidra/`; no hacer commit/push sin autorización.
+- Punto de partida: candidata M1 (rutas en [Resultado M1](#resultado-m1-2026-10-27)). `node bot/run-water.mjs [fuente] [inicio] [fin]` admite hasta 1800 frames; el horizonte documentado es 3100. En 3035 la orilla izquierda ya no está en pantalla: `detectWaterTerrain` devuelve `island=null` sin ella y `water-skill.mjs` para tras 12 frames sin cuerpo u orilla.
+- Piezas existentes, sin validar en juego real: `terrain-water.mjs` ya emite `rightBank` (`verified:false`); `bot/policy/mainland-hop.mjs` implementa el segundo salto (espera, intercepción prevista, `LANDED` tras dos confirmaciones) y no está conectado al runner; `boss-water-journey.mjs` exige un gate de derrota que ningún detector produce: no convertirlo en requisito sin evidencia.
+- Etiquetas RAM solo para evaluación: x de mundo `0xa0:0xa1`, altura `0xa2:0xa3`, vidas `0x60`. Alturas medidas: orilla izquierda 62, plataforma 60, agua/caída 26; la orilla derecha está por medir.
+- Calibración del primer salto (`flightFrames=38`, `runSpeedPxPerFrame=1.085`, `takeoffBufferPx=16`, `runLeadFrames=4`): no recalibrar sin contradicción observada. El segundo salto parte de una plataforma en movimiento; medirlo antes de reutilizar esos valores.
+- `bot/verify-boarding.mjs` es el modelo de verificación independiente: replay desde reset sin política ni percepción, hashes, vidas, altura, transporte y hoja de imágenes. M2 necesita su propio criterio (altura de orilla y avance en tierra).
+- Coste medido: un episodio ~3 s y una verificación ~1 s. Suite `node --test tests/bot/*.test.mjs`: 114/114 PASS. El ffmpeg local no tiene `drawtext`.
+- Caso de desarrollo 2672; `startFrame=2668` sigue reservado y sin evaluar. Alcance: M2.1–M2.5; dejar live, otras condiciones, combate y el resto de la fase para entregas posteriores.
+
+1. **M2.1 — Viabilidad offline (primero; es lo más barato):** ampliar el horizonte de la candidata y medir con etiquetas e imágenes cuándo entra la orilla derecha, la trayectoria y velocidad de la plataforma (si se acerca, se aleja o invierte) y en qué frames un salto desde la plataforma aterriza en la orilla sin perder vida (variantes de la tape candidata con el salto en cada frame). Solo evaluación: la política no recibe estos datos. Si ningún salto es viable, informar y detener el bloque.
+2. **M2.2 — Percepción sin orilla izquierda:** una corrección causal que conserve la isla cuando la orilla izquierda sale de pantalla y valide `rightBank` con imágenes. Regresión del STOP de 3035 y control negativo de caída sin falso apoyo.
+3. **M2.3 — Segundo salto:** conectar `mainland-hop.mjs` o fases equivalentes tras `LANDED`, con parámetros medidos en M2.1; liberar botones al parar; regresiones sintéticas.
+4. **M2.4 — Episodio real y verificación:** baseline (código M1) y candidata con idéntica fuente, bundle y horizonte. Criterio del runner: aterrizaje en la orilla derecha y 120 frames de apoyo/avance en tierra, cero vidas perdidas. Verificador independiente desde reset (altura de orilla, avance de x, vidas, hashes) más hoja de imágenes; dos ejecuciones idénticas.
+5. **M2.5 — Decisión e informe:** aprobar M2 con evidencia o informar por qué falla, con la misma regla de tres cambios dirigidos que M1. Actualizar este plan con resultado, coste y próximo bloqueo.
+
+### Tareas del bloque M1 (cerrado; referencia)
 
 **Contexto para retomar en una sesión limpia:**
 - Repositorio: `/Users/matias/gng-ghidra`. Pedir los porcentajes restantes de 5 horas y semana y esperar antes de empezar; estimar el bloque y registrar su coste. Tras aceptación del trabajo, pedir cuotas finales y hacer la retrospectiva requerida por el operador.
