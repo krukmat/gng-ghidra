@@ -251,24 +251,43 @@ def read_tap_health(tape):
     fields = ("frames_observed", "ym_callbacks", "main_latch_callbacks",
               "sound_latch_callbacks", "reset_callbacks",
               "disabled_side_effect_callbacks")
+    extras = ("written_events", "format_errors", "write_errors", "flush_errors")
+    present = [k in obj for k in extras] if isinstance(obj, dict) else []
     if (not isinstance(obj, dict) or
         obj.get("kind") != "GNG_AUDIO_MAME_TAP_HEALTH_V1" or
         obj.get("tap_armed") is not True or
         type(obj.get("capture_closed")) is not bool or
-        any(type(obj.get(k)) is not int or obj.get(k) < 0 for k in fields)):
+        any(type(obj.get(k)) is not int or obj.get(k) < 0 for k in fields)
+        or (any(present) and not all(present))
+        or (all(present) and any(type(obj.get(k)) is not int or
+            obj.get(k) < 0 for k in extras))):
         return {"status": "INVALID_TAP_HEALTH"}
     return {"status": "ARMED_CAPTURE_CLOSED" if obj["capture_closed"]
             else "ARMED_CAPTURE_NOT_CLOSED",
             "tap_armed": True,
             "capture_closed": obj["capture_closed"],
-            **{k: obj[k] for k in fields}}
+            **{k: obj[k] for k in fields},
+            **({k: obj[k] for k in extras} if all(present) else {})}
 
 
 def summarize_capture(tape):
     """Diagnostic metadata only; never emit raw ROM, YM register values, or audio."""
     report = inspect_tape(tape, require_ym=False)
     tap_health = read_tap_health(tape)
-    if report["events"] == 0 and tap_health.get("status") == "ARMED_CAPTURE_CLOSED" \
+    callbacks = sum(tap_health.get(k, 0) for k in (
+        "ym_callbacks", "main_latch_callbacks",
+        "sound_latch_callbacks", "reset_callbacks"))
+    if report["events"] == 0 and tap_health.get("format_errors", 0) > 0:
+        hint = "LUA_EVENT_SERIALIZATION_FAILURES"
+    elif report["events"] == 0 and (
+            tap_health.get("write_errors", 0) > 0 or
+            tap_health.get("flush_errors", 0) > 0):
+        hint = "LUA_EVENT_FILE_WRITE_FAILURES"
+    elif report["events"] == 0 and tap_health.get("written_events", 0) > 0:
+        hint = "LUA_WROTE_ROWS_BUT_TAPE_IS_EMPTY"
+    elif report["events"] == 0 and callbacks > 0:
+        hint = "BUS_CALLBACKS_OBSERVED_BUT_NO_JSONL_ROWS"
+    elif report["events"] == 0 and tap_health.get("status") == "ARMED_CAPTURE_CLOSED" \
             and tap_health.get("frames_observed", 0) > 0:
         hint = "FRAMES_ADVANCED_NO_BUS_TAP_CALLBACKS"
     elif report["events"] == 0 and tap_health.get("tap_armed") is True \
