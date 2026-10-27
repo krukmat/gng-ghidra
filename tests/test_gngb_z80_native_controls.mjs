@@ -96,3 +96,44 @@ test('B4.T3-B3 native command windows share one global Z80 step budget',async()=
   assert.equal(result.native_sound_controls_applied,2);
   assert.equal(result.ym_port_writes_from_running_z80,0);
 });
+
+test('B4.T3-B4 long native capture timeline is accepted without future input injection',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0xfb,0x76,0xcb,0x40]);
+  const result=await probeZ80SoundExecution(rom,[0],{
+    targetTStates:100,maxSteps:100,
+    nativeControls:controls([event(160_000_000,0x31),
+      event(1_200_000_000,0x40)])
+  });
+  assert.equal(result.status,'LAB_ADVANCE_OK');
+  assert.equal(result.native_sound_controls_total,2);
+  assert.equal(result.native_sound_controls_applied,0);
+  assert.equal(result.first_sound_command_tstates_after_release,40_000_000);
+  assert.equal(result.ym_port_writes_from_running_z80,0);
+  assert.equal(result.native_ym_events_replayed,false);
+});
+
+test('B4.T3-B4 bounded IM1 IRQ probe crosses first HOLD_LINE approximation without commands',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0xed,0x56,0xfb,0x76,0x18,0xfe,0xcb,0x40],0);
+  rom.set([0xc9,0xcb,0x40],0x38);
+  const result=await probeZ80SoundExecution(rom,[0,0x38],{
+    targetTStates:12540,maxSteps:10000,
+    nativeControls:controls([event(160_000_000,0x31)])
+  });
+  assert.equal(result.status,'LAB_ADVANCE_OK');
+  assert.ok(result.irq_requests>=1);
+  assert.ok(result.irq_acknowledged_lab>=1);
+  assert.equal(result.native_sound_controls_applied,0);
+  assert.equal(result.native_instruction_parity_verified,false);
+  assert.equal(result.irq_phase_parity_verified,false);
+});
+
+test('B4.T3-B4 captive input time safety ceiling rejects out-of-range captures',async()=>{
+  const rom=new Uint8Array(0x8000);
+  const above=12_000_000*3600+8;
+  await assert.rejects(()=>probeZ80SoundExecution(rom,[0],{
+    nativeControls:controls([event(above,0x32)])
+  }),e=>e instanceof AudioZ80ProbeStop&&
+       e.code==='AUDIO_T3_PROBE_CONTROLS_INVALID');
+});
