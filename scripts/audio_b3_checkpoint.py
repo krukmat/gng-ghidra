@@ -159,7 +159,7 @@ def capture_tape(mame, rompath, *, allow_unpinned_lab=False,
     return ensure_private(tape_path, must_exist=True)
 
 
-def inspect_tape(tape, *, require_ym=True):
+def inspect_tape(tape, *, require_ym=True, allow_cross_cpu_skew_lab=False):
     tape = ensure_private(tape, must_exist=True)
     if tape.stat().st_size > MAX_CAPTURE_BYTES:
         raise B3Stop("TAPE_TOO_LARGE")
@@ -168,6 +168,11 @@ def inspect_tape(tape, *, require_ym=True):
     prior_tick = -1
     prior_frame = -1
     prior_seq = 0
+    prior_kind = None
+    last_main_tick = -1
+    last_audio_tick = -1
+    last_ym_tick = -1
+    cross_cpu_clock_skew_count = 0
     first_ym_tick = None
     reset_after_first_write = False
     resets_asserted = 0
@@ -190,11 +195,31 @@ def inspect_tape(tape, *, require_ym=True):
             addr, value = row.get("address"), row.get("value")
             if any(type(n) is not int for n in (seq, tick, frame, addr, value)):
                 raise B3Stop("TAPE_BAD_TYPES")
-            if seq != prior_seq + 1 or tick < prior_tick or frame < prior_frame or tick < 0 or frame < 0:
+            if seq != prior_seq + 1 or frame < prior_frame or tick < 0 or frame < 0:
                 raise B3Stop("TAPE_BAD_CHRONOLOGY")
+            k = row["kind"]
+            on_main_cpu = k in ("SOUNDLATCH_WRITE", "AUDIO_RESET_WRITE")
+            if on_main_cpu:
+                # Never allow internal reversals within either CPU stream.
+                if tick < last_main_tick:
+                    raise B3Stop("TAPE_BAD_CHRONOLOGY")
+                last_main_tick = tick
+            else:
+                if tick < last_audio_tick:
+                    raise B3Stop("TAPE_BAD_CHRONOLOGY")
+                last_audio_tick = tick
+            if k == "YM2203_WRITE":
+                if tick < last_ym_tick:
+                    raise B3Stop("TAPE_BAD_CHRONOLOGY")
+                last_ym_tick = tick
+            if tick < prior_tick:
+                previous_on_main = prior_kind in ("SOUNDLATCH_WRITE", "AUDIO_RESET_WRITE")
+                switched_cpu = prior_kind is not None and previous_on_main != on_main_cpu
+                if not allow_cross_cpu_skew_lab or not switched_cpu:
+                    raise B3Stop("TAPE_BAD_CHRONOLOGY")
+                cross_cpu_clock_skew_count += 1
             if not 0 <= value <= 255:
                 raise B3Stop("TAPE_BAD_VALUE")
-            k = row["kind"]
             if k == "YM2203_WRITE":
                 if not 0xe000 <= addr <= 0xe003:
                     raise B3Stop("TAPE_BAD_YM_PORT")
@@ -213,7 +238,7 @@ def inspect_tape(tape, *, require_ym=True):
             elif k == "Z80_LATCH_READ" and addr != 0xc800:
                 raise B3Stop("TAPE_BAD_LATCH")
             kinds[k] += 1
-            prior_tick, prior_frame, prior_seq = tick, frame, seq
+            prior_tick, prior_frame, prior_seq, prior_kind = tick, frame, seq, k
     if require_ym and not kinds["YM2203_WRITE"]:
         raise B3Stop("TAPE_NO_YM_EVENTS")
     if reset_after_first_write:
@@ -228,7 +253,9 @@ def inspect_tape(tape, *, require_ym=True):
             "reset_asserted_writes": resets_asserted,
             "reset_released_writes": resets_released,
             "last_observed_frame": prior_frame,
-            "last_observed_tick12m": prior_tick}
+            "last_observed_tick12m": prior_tick,
+            "lab_cross_cpu_clock_inversions": cross_cpu_clock_skew_count,
+            "global_timeline_strictly_monotonic": cross_cpu_clock_skew_count == 0}
 
 
 def inspect_chronology_diagnostics(tape):
