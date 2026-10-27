@@ -248,3 +248,58 @@ test('INC r handles overflow, halfcarry, sign and unchanged carry',async()=>{
     assert.deepEqual([state.pc,state.a,state.f,state.t],[1,output,flags,4]);
   }
 });
+
+
+test('JR NZ/Z/NC/C AOT: both outcomes, zero/carry flag combinations, 7/12 T-states',async()=>{
+  const conditions=[
+    {opcode:0x20,name:'NZ',bit:0x40,invert:true},
+    {opcode:0x28,name:'Z', bit:0x40,invert:false},
+    {opcode:0x30,name:'NC',bit:0x01,invert:true},
+    {opcode:0x38,name:'C', bit:0x01,invert:false}
+  ];
+  for(const {opcode,name,bit,invert} of conditions){
+    const rom=new Uint8Array(0x8000);
+    // JR cond,+2 => PC 4; not taken => PC 2. RET at each edge.
+    rom.set([opcode,0x02,0xc9,0x00,0xc9],0);
+    const result=compileZ80Prefix(rom);
+    assert.equal(result.status,'SUPPORTED_PREFIX_ONLY',name);
+    assert.equal(result.blockers.length,0,name);
+    const bundle=await import('data:text/javascript,'+encodeURIComponent(result.source));
+    assert.equal(bundle.z80AotBlocks.has(2),true,name+' fallthrough present');
+    assert.equal(bundle.z80AotBlocks.has(4),true,name+' branch target present');
+    assert.equal(bundle.z80AotBlocks.has(0),true,name+' branch source present');
+    for(const flags of [0,1,0x40,0x41,0xd7,0xff]){
+      const taken=((flags&bit)!==0)!==invert;
+      const state={pc:0,f:flags,bc:0x1234,de:0x5678,hl:0x9abc,a:0xde,t:30};
+      bundle.z80AotBlocks.get(0)(state,{});
+      assert.deepEqual([state.pc,state.f,state.bc,state.de,state.hl,state.a,state.t],
+        [taken?4:2,flags,0x1234,0x5678,0x9abc,0xde,30+(taken?12:7)],
+        name+' with flags 0x'+flags.toString(16));
+    }
+  }
+});
+
+test('JR conditional signed negative displacement creates a static self-loop and exit',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0x20,0xfe,0xc9],0); // JR NZ,-2 loops; JR NZ not-taken exits at 2
+  const result=compileZ80Prefix(rom);
+  assert.equal(result.status,'SUPPORTED_PREFIX_ONLY');
+  assert.equal(result.compiled,2);
+  const module=await import('data:text/javascript,'+encodeURIComponent(result.source));
+  const step=module.z80AotBlocks.get(0);
+  const state={pc:0,f:0x01,t:100};
+  step(state,{});
+  assert.deepEqual([state.pc,state.f,state.t],[0,0x01,112]);
+  state.f=0x41;
+  step(state,{});
+  assert.deepEqual([state.pc,state.f,state.t],[2,0x41,119]);
+});
+
+test('JR conditional target outside audio ROM is never silently certified',()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0x20,0xfc,0xc9],0); // negative target = 0xfffe, outside sound ROM
+  const result=compileZ80Prefix(rom);
+  assert.equal(result.status,'PARTIAL_UNCERTIFIED');
+  assert.deepEqual(result.blockers,[{pc:0xfffe,reason:'OUTSIDE_SOUND_ROM'}]);
+  assert.equal(result.compiled,2);
+});
