@@ -13,7 +13,7 @@ PRIVATE = ROOT / "out" / "audio"
 def safe_private_output(path):
     """Accept either cwd-relative or absolute out/audio path, never an escape."""
     provided = Path(path)
-    if ".." in provided.parts:
+    if ".." in provided.parts or PRIVATE.is_symlink() or PRIVATE.parent.is_symlink():
         raise ValueError("AUDIO_OUTPUT_MUST_BE_PRIVATE_OUT")
     candidate = (provided if provided.is_absolute()
                  else ROOT / provided).absolute()
