@@ -2,6 +2,7 @@
 /** Lab-only compiler from verified private gg2.bin. No runtime ROM decode. */
 import fs from 'node:fs';
 import path from 'node:path';
+import {createHash} from 'node:crypto';
 import {compileZ80Prefix,Z80StaticError} from '../src/gngb_z80_static_codegen.mjs';
 
 const romFile=process.argv[2]??'out/audio/gg2.bin';
@@ -11,6 +12,9 @@ if(!outFile.startsWith('out/audio/')) {
 }
 try{
   const rom=fs.readFileSync(romFile);
+  const sha1=createHash('sha1').update(rom).digest('hex');
+  if(rom.length!==0x8000||sha1!=='7ef9ec5c2072e21c787a6bbf700033f50c759c1d')
+    throw new Z80StaticError('AUDIO_Z80_ROM_IDENTITY_MISMATCH');
   const result=compileZ80Prefix(new Uint8Array(rom));
   fs.mkdirSync(path.dirname(outFile),{recursive:true});
   fs.writeFileSync(outFile,result.source);
