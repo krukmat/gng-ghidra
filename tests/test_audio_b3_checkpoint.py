@@ -435,6 +435,28 @@ class B3CheckpointTests(unittest.TestCase):
         health.write_text(json.dumps(obj))
         self.assertEqual(b3.read_tap_health(b3.OUT_TAPE)["status"], "INVALID_TAP_HEALTH")
 
+    def test_missing_native_tap_rows_fail_closed_before_synthesis(self):
+        tape = self.tape([self.event(1, "YM2203_WRITE", 10, 0xe000, 20)])
+        health = self.base / "mame-audio-health.json"
+        health.write_text(json.dumps({
+            "kind": "GNG_AUDIO_MAME_TAP_HEALTH_V1",
+            "tap_armed": True, "capture_closed": True,
+            "frames_observed": 300, "ym_callbacks": 10,
+            "main_latch_callbacks": 0, "sound_latch_callbacks": 0,
+            "reset_callbacks": 0, "disabled_side_effect_callbacks": 0,
+            "written_events": 1, "format_errors": 9,
+            "write_errors": 0, "flush_errors": 0,
+            "clock_errors": 0, "value_errors": 0, "clock_fallbacks": 0
+        }))
+        src = self.base / "ymfm"
+        src.mkdir()
+        with patch.object(b3, "verify_rom_identity", return_value=True), \
+             patch.object(b3, "call") as spawn:
+            with self.assertRaisesRegex(b3.B3Stop,
+                                        "NATIVE_TAPE_INCOMPLETE_OR_LOSSY"):
+                b3.run_b3(tape=tape, ymfm_source=src)
+        spawn.assert_not_called()
+
     def test_older_heartbeat_still_valid_after_numeric_normalization(self):
         self.tape([])
         health = self.base / "mame-audio-health.json"
