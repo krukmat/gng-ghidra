@@ -85,7 +85,7 @@ function metricsWav(file){
 }
 async function run(){
   const progress={checkpoint:null,execution:null,renderer:null,
-    ymRegisterHealth:null,nativeYmComparison:null};
+    ymRegisterHealth:null,nativeYmComparison:null,silenceDiagnosis:null};
   let created=null;
   try {
     if(!fs.existsSync(OUT)||fs.realpathSync(OUT)!==OUT||
@@ -180,7 +180,24 @@ async function run(){
       output_sample_rate:62500,
       ...stats,ym_native_event_tape_used:false
     };
-    if(!stats.nonzero)fail('AUDIO_FINAL_PCM_SILENT');
+    if(!stats.nonzero) {
+      // Register-class comparison is a diagnostic, NOT proof of why YM is
+      // silent. Never mask the original PCM failure with an optimistic status.
+      const live=progress.ymRegisterHealth;
+      const native=progress.nativeYmComparison?.registerActivity;
+      const sourceActive=live?.plausibleToneActivation===true;
+      const nativeActive=native?.plausibleToneActivation===true;
+      progress.silenceDiagnosis={
+        kind:'GNG_AUDIO_G5_SILENCE_TRIAGE_V1',
+        status:!sourceActive&&nativeActive?
+          'NATIVE_TONE_ACTIVATION_NOT_OBSERVED_IN_LAB':
+          !sourceActive?'LAB_YM_TONE_ACTIVATION_NOT_OBSERVED':
+          'LAB_TONE_ACTIVATION_PRESENT_BUT_PCM_ZERO',
+        referenceNativeAvailable:!!native,
+        provenRootCause:false
+      };
+      fail('AUDIO_FINAL_PCM_SILENT');
+    }
     const status=z80.status==='LAB_ADVANCE_OK'?
       'Z80_TO_DUAL_YM_TO_PCM_LAB_PASS_NOT_LIVE_GAME':
       'PARTIAL_Z80_TO_PCM_RUNTIME_STOP';
@@ -189,6 +206,7 @@ async function run(){
       execution:progress.execution,renderer:progress.renderer,
       ymRegisterHealth:progress.ymRegisterHealth,
       nativeYmComparison:progress.nativeYmComparison,
+      silenceDiagnosis:progress.silenceDiagnosis,
       game_audio_live:false,native_irq_parity_verified:false,
       browser_worklet_connected:false,rom_bytes_exported:false,
       private_artifacts_safe:true
@@ -203,6 +221,7 @@ async function run(){
       renderer:progress.renderer,
       ymRegisterHealth:progress.ymRegisterHealth,
       nativeYmComparison:progress.nativeYmComparison,
+      silenceDiagnosis:progress.silenceDiagnosis,
       game_audio_live:false,native_irq_parity_verified:false,
       browser_worklet_connected:false,
       rom_bytes_exported:false,private_artifacts_safe:true
