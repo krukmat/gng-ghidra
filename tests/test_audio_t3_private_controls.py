@@ -94,5 +94,33 @@ class NativeControlExtractionTests(unittest.TestCase):
         self.assertFalse((self.root/"z80-native-controls-missing.json").exists())
 
 
+    def test_long_capture_events_retained_while_one_hour_ceiling_is_enforced(self):
+        # First command well beyond the historical 120M master-tick cap.
+        self.write([
+            (0, "AUDIO_RESET_WRITE", 0x3d01, 0),
+            (16, "AUDIO_RESET_WRITE", 0x3d01, 1),
+            (200_000_016, "SOUNDLATCH_WRITE", 0x3a00, 0x20),
+            (200_000_024, "YM2203_WRITE", 0xe000, 0x42),
+        ])
+        result = controls.export("test", "longtimeline")
+        self.assertEqual(result["captured_sound_commands_after_reset_release"], 1)
+        private = json.loads((self.root / "z80-native-controls-longtimeline.json").read_text())
+        self.assertEqual(private["events"][0]["tick12m"], 200_000_000)
+        self.assertFalse(result["ym_events_replayed"])
+        self.write([
+            (0, "AUDIO_RESET_WRITE", 0x3d01, 0),
+            (16, "AUDIO_RESET_WRITE", 0x3d01, 1),
+            (controls.MAX_NATIVE_CONTROLS_TICK12M + 24,
+             "SOUNDLATCH_WRITE", 0x3a00, 0x20),
+            (controls.MAX_NATIVE_CONTROLS_TICK12M + 32,
+             "YM2203_WRITE", 0xe000, 0x42),
+        ])
+        with self.assertRaisesRegex(controls.ControlsStop,
+                                    "AUDIO_T3_CONTROLS_CLOCK_RANGE_STOP"):
+            controls.export("test", "excessivetimeline")
+        self.assertFalse((self.root / "z80-native-controls-excessivetimeline.json").exists())
+
+
+
 if __name__ == "__main__":
     unittest.main()
