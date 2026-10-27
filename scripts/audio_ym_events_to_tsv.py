@@ -7,6 +7,26 @@ from pathlib import Path
 
 MASTER_HZ = 12_000_000
 YM_ADDRESSES = frozenset(range(0xe000, 0xe004))
+ROOT = Path(__file__).resolve().parents[1]
+PRIVATE = ROOT / "out" / "audio"
+
+def safe_private_output(path):
+    """Accept either cwd-relative or absolute out/audio path, never an escape."""
+    provided = Path(path)
+    if ".." in provided.parts or PRIVATE.is_symlink() or PRIVATE.parent.is_symlink():
+        raise ValueError("AUDIO_OUTPUT_MUST_BE_PRIVATE_OUT")
+    candidate = (provided if provided.is_absolute()
+                 else ROOT / provided).absolute()
+    if not candidate.is_relative_to(PRIVATE) or candidate == PRIVATE:
+        raise ValueError("AUDIO_OUTPUT_MUST_BE_PRIVATE_OUT")
+    current = PRIVATE
+    for component in candidate.relative_to(PRIVATE).parts:
+        current = current / component
+        if current.is_symlink():
+            raise ValueError("AUDIO_OUTPUT_MUST_BE_PRIVATE_OUT")
+    if not candidate.resolve().is_relative_to(PRIVATE.resolve()):
+        raise ValueError("AUDIO_OUTPUT_MUST_BE_PRIVATE_OUT")
+    return candidate
 
 def convert(lines):
     last = -1
@@ -34,10 +54,8 @@ def main(argv=None):
     p.add_argument("--window-ms", type=int, default=0,
                    help="Optional first N milliseconds of YM events (up to 30000)")
     args=p.parse_args(argv)
-    if not args.out_tsv.as_posix().startswith("out/audio/"):
-        print("AUDIO_OUTPUT_MUST_BE_PRIVATE_OUT", file=sys.stderr)
-        return 2
     try:
+        dest = safe_private_output(args.out_tsv)
         if args.window_ms < 0 or args.window_ms > 30000:
             raise ValueError("AUDIO_INVALID_WINDOW")
         with args.in_jsonl.open(encoding="utf8") as stream:
@@ -46,8 +64,8 @@ def main(argv=None):
         origin=rows[0][0]
         if args.window_ms:
             rows=[r for r in rows if (r[0]-origin) < args.window_ms*12000]
-        args.out_tsv.parent.mkdir(parents=True,exist_ok=True)
-        with args.out_tsv.open("w",encoding="ascii") as output:
+        dest.parent.mkdir(parents=True,exist_ok=True)
+        with dest.open("w",encoding="ascii") as output:
             for tick,addr,value in rows:
                 output.write(f"{tick-origin} {addr} {value}\n")
     except (ValueError,OSError,json.JSONDecodeError) as error:

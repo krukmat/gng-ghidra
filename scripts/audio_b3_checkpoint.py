@@ -159,7 +159,7 @@ def capture_tape(mame, rompath, *, allow_unpinned_lab=False,
     return ensure_private(tape_path, must_exist=True)
 
 
-def inspect_tape(tape, *, require_ym=True):
+def inspect_tape(tape, *, require_ym=True, allow_cross_cpu_skew_lab=False):
     tape = ensure_private(tape, must_exist=True)
     if tape.stat().st_size > MAX_CAPTURE_BYTES:
         raise B3Stop("TAPE_TOO_LARGE")
@@ -168,6 +168,11 @@ def inspect_tape(tape, *, require_ym=True):
     prior_tick = -1
     prior_frame = -1
     prior_seq = 0
+    prior_kind = None
+    last_main_tick = -1
+    last_audio_tick = -1
+    last_ym_tick = -1
+    cross_cpu_clock_skew_count = 0
     first_ym_tick = None
     reset_after_first_write = False
     resets_asserted = 0
@@ -190,11 +195,31 @@ def inspect_tape(tape, *, require_ym=True):
             addr, value = row.get("address"), row.get("value")
             if any(type(n) is not int for n in (seq, tick, frame, addr, value)):
                 raise B3Stop("TAPE_BAD_TYPES")
-            if seq != prior_seq + 1 or tick < prior_tick or frame < prior_frame or tick < 0 or frame < 0:
+            if seq != prior_seq + 1 or frame < prior_frame or tick < 0 or frame < 0:
                 raise B3Stop("TAPE_BAD_CHRONOLOGY")
+            k = row["kind"]
+            on_main_cpu = k in ("SOUNDLATCH_WRITE", "AUDIO_RESET_WRITE")
+            if on_main_cpu:
+                # Never allow internal reversals within either CPU stream.
+                if tick < last_main_tick:
+                    raise B3Stop("TAPE_BAD_CHRONOLOGY")
+                last_main_tick = tick
+            else:
+                if tick < last_audio_tick:
+                    raise B3Stop("TAPE_BAD_CHRONOLOGY")
+                last_audio_tick = tick
+            if k == "YM2203_WRITE":
+                if tick < last_ym_tick:
+                    raise B3Stop("TAPE_BAD_CHRONOLOGY")
+                last_ym_tick = tick
+            if tick < prior_tick:
+                previous_on_main = prior_kind in ("SOUNDLATCH_WRITE", "AUDIO_RESET_WRITE")
+                switched_cpu = prior_kind is not None and previous_on_main != on_main_cpu
+                if not allow_cross_cpu_skew_lab or not switched_cpu:
+                    raise B3Stop("TAPE_BAD_CHRONOLOGY")
+                cross_cpu_clock_skew_count += 1
             if not 0 <= value <= 255:
                 raise B3Stop("TAPE_BAD_VALUE")
-            k = row["kind"]
             if k == "YM2203_WRITE":
                 if not 0xe000 <= addr <= 0xe003:
                     raise B3Stop("TAPE_BAD_YM_PORT")
@@ -213,7 +238,7 @@ def inspect_tape(tape, *, require_ym=True):
             elif k == "Z80_LATCH_READ" and addr != 0xc800:
                 raise B3Stop("TAPE_BAD_LATCH")
             kinds[k] += 1
-            prior_tick, prior_frame, prior_seq = tick, frame, seq
+            prior_tick, prior_frame, prior_seq, prior_kind = tick, frame, seq, k
     if require_ym and not kinds["YM2203_WRITE"]:
         raise B3Stop("TAPE_NO_YM_EVENTS")
     if reset_after_first_write:
@@ -228,7 +253,9 @@ def inspect_tape(tape, *, require_ym=True):
             "reset_asserted_writes": resets_asserted,
             "reset_released_writes": resets_released,
             "last_observed_frame": prior_frame,
-            "last_observed_tick12m": prior_tick}
+            "last_observed_tick12m": prior_tick,
+            "lab_cross_cpu_clock_inversions": cross_cpu_clock_skew_count,
+            "global_timeline_strictly_monotonic": cross_cpu_clock_skew_count == 0}
 
 
 def inspect_chronology_diagnostics(tape):
@@ -246,6 +273,15 @@ def inspect_chronology_diagnostics(tape):
         "sequence_gaps": 0,
         "sequence_duplicates_or_backwards": 0,
         "tick_regressions": 0,
+        "tick_regressions_cross_cpu_transition": 0,
+        "tick_regressions_same_cpu_transition": 0,
+        "tick_regressions_main_stream": 0,
+        "tick_regressions_audio_stream": 0,
+        "tick_regressions_ym_only": 0,
+        "tick_regression_size_1_tick": 0,
+        "tick_regression_size_2_to_191_ticks": 0,
+        "tick_regression_size_192_to_11999_ticks": 0,
+        "tick_regression_size_12000_or_more_ticks": 0,
         "frame_regressions": 0,
         "negative_clock_or_frame": 0,
         "invalid_chronology_types": 0,
@@ -253,6 +289,8 @@ def inspect_chronology_diagnostics(tape):
     }
     first_bad = None
     last_seq, last_tick, last_frame = 0, -1, -1
+    last_kind = None
+    last_main_tick, last_audio_tick, last_ym_tick = -1, -1, -1
     with tape.open("r", encoding="utf8") as stream:
         for line in stream:
             if not line.strip():
@@ -284,9 +322,40 @@ def inspect_chronology_diagnostics(tape):
                 else:
                     counters["sequence_duplicates_or_backwards"] += 1
                 bad = True
+            is_main = row["kind"] in ("SOUNDLATCH_WRITE", "AUDIO_RESET_WRITE")
+            is_ym = row["kind"] == "YM2203_WRITE"
             if tick < last_tick:
                 counters["tick_regressions"] += 1
+                prev_main = last_kind in ("SOUNDLATCH_WRITE", "AUDIO_RESET_WRITE")
+                switched = last_kind is not None and prev_main != is_main
+                counters["tick_regressions_cross_cpu_transition" if switched
+                         else "tick_regressions_same_cpu_transition"] += 1
+                difference = last_tick - tick
+                if difference == 1:
+                    bucket = "tick_regression_size_1_tick"
+                elif difference < 192:
+                    bucket = "tick_regression_size_2_to_191_ticks"
+                elif difference < 12000:
+                    bucket = "tick_regression_size_192_to_11999_ticks"
+                else:
+                    bucket = "tick_regression_size_12000_or_more_ticks"
+                counters[bucket] += 1
                 bad = True
+            if is_main:
+                if tick < last_main_tick:
+                    counters["tick_regressions_main_stream"] += 1
+                    bad = True
+                last_main_tick = tick
+            else:
+                if tick < last_audio_tick:
+                    counters["tick_regressions_audio_stream"] += 1
+                    bad = True
+                last_audio_tick = tick
+            if is_ym:
+                if tick < last_ym_tick:
+                    counters["tick_regressions_ym_only"] += 1
+                    bad = True
+                last_ym_tick = tick
             if frame < last_frame:
                 counters["frame_regressions"] += 1
                 bad = True
@@ -295,12 +364,25 @@ def inspect_chronology_diagnostics(tape):
                 bad = True
             if bad and first_bad is None:
                 first_bad = index
-            last_seq, last_tick, last_frame = seq, tick, frame
+            last_seq, last_tick, last_frame, last_kind = seq, tick, frame, row["kind"]
     return {
         "kind": "GNG_AUDIO_B3_CHRONOLOGY_DIAG_V1",
         "status": ("CHRONOLOGY_INVALID_NOT_RENDERABLE" if first_bad
                    else "NO_CHRONOLOGY_ERROR_OBSERVED"),
         "first_bad_event_index": first_bad,
+        "strict_lab_projection_possible": bool(first_bad) and (
+            counters["bad_sequence"] == 0 and
+            counters["tick_regressions"] > 0 and
+            counters["tick_regressions"] ==
+                counters["tick_regressions_cross_cpu_transition"] and
+            counters["tick_regressions_main_stream"] == 0 and
+            counters["tick_regressions_audio_stream"] == 0 and
+            counters["tick_regressions_ym_only"] == 0 and
+            counters["frame_regressions"] == 0 and
+            counters["negative_clock_or_frame"] == 0 and
+            counters["invalid_chronology_types"] == 0 and
+            counters["invalid_rows"] == 0
+        ),
         **counters,
         "capture_validated": False,
         "native_parity_verified": False,
@@ -479,14 +561,16 @@ def wav_metrics(source, *, expected_rate=None, max_ms=SAMPLE_LIMIT):
 
 
 def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None,
-           source_mode="OPERATOR_PROVIDED_TAPE", mame_metadata=None):
+           source_mode="OPERATOR_PROVIDED_TAPE", mame_metadata=None,
+           allow_cross_cpu_skew_lab=False):
     if type(duration_ms) is not int or not 1 <= duration_ms <= SAMPLE_LIMIT:
         raise B3Stop("DURATION_INVALID")
     if source_mode not in ("OPERATOR_PROVIDED_TAPE", "MAME_SESSION_CAPTURE"):
         raise B3Stop("CAPTURE_SOURCE_INVALID")
     # Regression / privacy guard is independent of partial Z80 reachability.
     verify_rom_identity()
-    integrity = inspect_tape(tape)
+    integrity = inspect_tape(tape,
+                             allow_cross_cpu_skew_lab=allow_cross_cpu_skew_lab)
     health = read_tap_health(tape)
     if health.get("status") == "ARMED_CAPTURE_CLOSED" and "written_events" in health:
         if (health["written_events"] != integrity["events"]
@@ -545,6 +629,10 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None,
         "mame_loaded_same_rom_verified": False,
         "events_total": integrity["events"],
         "ym_writes": integrity["ym_writes"],
+        "lab_cross_cpu_tick_regressions": integrity["lab_cross_cpu_clock_inversions"],
+        "global_timeline_strictly_monotonic": integrity["global_timeline_strictly_monotonic"],
+        "per_cpu_ym_order_verified_from_tape": True,
+        "cross_cpu_temporal_parity_verified": False,
         "ym_chip_0_writes": integrity["ym_chip_0_writes"],
         "ym_chip_1_writes": integrity["ym_chip_1_writes"],
         "sound_commands": integrity["sound_commands"],
@@ -580,6 +668,8 @@ def main(argv=None):
                    help="Only summarize private MAME bus activity; no ROM access or rendering")
     p.add_argument("--capture-id", type=str,
                    help="Unique 1-32 character [A-Za-z0-9_-] capture suffix; preserves previous captures")
+    p.add_argument("--lab-allow-cross-cpu-skew", action="store_true",
+                   help="Explicit replay-only LAB exception for clock regressions solely across CPUs; Z80/YM order remains strict")
     p.add_argument("--lab-allow-unpinned-mame", action="store_true",
                    help="Explicit laboratory exception for an installed MAME other than 0.289; never native parity")
     p.add_argument("--rompath", default="roms")
@@ -589,6 +679,8 @@ def main(argv=None):
     try:
         if args.lab_allow_unpinned_mame and not args.capture:
             raise B3Stop("MAME_LAB_OVERRIDE_REQUIRES_CAPTURE")
+        if args.lab_allow_cross_cpu_skew and (args.capture or args.diagnose):
+            raise B3Stop("LAB_SKEW_OVERRIDE_REQUIRES_TAPE_RENDER")
         if args.capture_id is not None and not args.capture:
             raise B3Stop("MAME_CAPTURE_ID_REQUIRES_CAPTURE")
         if args.diagnose and (args.capture or args.reference_wav is not None):
@@ -620,7 +712,8 @@ def main(argv=None):
                         duration_ms=args.duration_ms, native_wav=reference,
                         source_mode=("MAME_SESSION_CAPTURE" if args.capture
                                      else "OPERATOR_PROVIDED_TAPE"),
-                        mame_metadata=capture_meta)
+                        mame_metadata=capture_meta,
+                        allow_cross_cpu_skew_lab=args.lab_allow_cross_cpu_skew)
         print(json.dumps(report, separators=(",", ":")))
         return 0
     except B3Stop as e:
