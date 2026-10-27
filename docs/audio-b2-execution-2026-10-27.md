@@ -62,3 +62,20 @@ El tiempo de la cinta YM se normaliza al primer evento y conserva el intervalo r
 - Certificar música, disparos, daño/muerte, cambio de fase y sesiones largas junto a video/controles.
 
 **Gate actual:** B-AUDIO-2 PARTIAL. G5 y H5 no están completados. Ninguna ROM, sonido ni artefacto derivado se ha publicado.
+
+
+## Actualización tras el primer checkpoint local (27/10/2026)
+
+Operador, MacBook M5: 11 tests Python / 11 PASS; extracción privada de gg2.bin: IDENTITY_PASS, 32768 bytes. El compilador AOT registró PARTIAL_UNCERTIFIED, compiled=0, unsupported=1 y pending=0. **ROM ID GO, Z80 prefijo todavía STOP.** No se comunicó salida de Node ni ejecución MAME/ymfm. No equivale a audio.
+
+El compilador se amplió con clasificación ROM-private del primer bloqueo, sin exportar bytes de ROM. Las pruebas aisladas del clasificador sintético pasaron (12 familias); la suite del repositorio no se ejecutó en este entorno. La revisión tras git pull debe incluir el campo first_blocker (pc, family, reason), sin opcode ni dump.
+
+### Única acción local necesaria para identificar la ruta Z80
+
+    git checkout main && git pull --ff-only
+    node --test tests/test_gngb_z80_static_codegen.mjs
+    node scripts/audio_z80_build.mjs out/audio/gg2.bin out/audio/z80-prefix.mjs
+
+Es **normal** que el tercer comando termine con exit code 2 cuando aparece un opcode sin soporte. Compartir únicamente el JSON que empieza por GNG_AUDIO_Z80_AOT_PREFIX_V1, particularmente first_blocker. NO enviar out/audio, ROM, capturas de memoria ni código recompilado.
+
+**Siguiente tarea A2.T2a:** implementar solamente las familias de instrucciones identificadas (y sus flags/ciclos/interrupciones si procede), añadir pruebas sintéticas y reejecutar la misma ROM hasta una nueva frontera. STOP ante divergencia con MAME; no medir éxito por bloques arbitrarios. La síntesis YM independiente puede seguirse en paralelo según las instrucciones anteriores.
