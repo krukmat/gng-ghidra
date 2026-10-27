@@ -28,7 +28,7 @@ class AudioRomPreflightTests(unittest.TestCase):
     def test_missing_and_bad_archive_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.assertEqual(mod.check_archives([root / "missing.zip"]), "ARCHIVE_ERROR")
+            self.assertEqual(mod.check_archives([root / "missing.zip"]), "MISSING")
             with zipfile.ZipFile(root / "gngb.zip", "w") as archive:
                 archive.writestr("gg2.bin", b"fake")
             self.assertEqual(mod.check_archives([root / "gngb.zip"]), "MISMATCH")
