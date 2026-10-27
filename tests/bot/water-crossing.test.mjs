@@ -98,3 +98,17 @@ test('calibration must be explicit; no gameplay constants inferred',()=>{
   assert.throws(()=>createWaterCrossingPolicy({flightFrames:12,
     runSpeedPxPerFrame:-1}),/CALIBRATION_REQUIRED/);
 });
+
+
+test('camera scroll alone is not mistaken for island movement',()=>{
+  const p=policy();
+  const shifted=(f,dx)=>obs(f,{arthur:{x:89+dx,feetY:100,
+    grounded:true,confidence:1},water:{left:100+dx,right:200+dx,
+    confidence:1},platform:{left:118+dx,right:150+dx,topY:100,
+    confidence:1}});
+  assert.equal(p.observe(shifted(1,0)).phase,'WAIT');
+  assert.equal(p.observe(shifted(2,3)).phase,'WAIT');
+  const r=p.observe(shifted(3,6));
+  assert.equal(r.phase,'WAIT');
+  assert.equal(r.reason,'PLATFORM_MOTION_UNCONFIRMED');
+});
