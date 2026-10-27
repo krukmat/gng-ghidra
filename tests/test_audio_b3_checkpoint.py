@@ -597,6 +597,101 @@ class B3CheckpointTests(unittest.TestCase):
         self.assertEqual(result["capture_diagnostics"]["chronology"]["tick_regressions"], 1)
         self.assertFalse(result["audio_working"])
 
+    def test_cross_cpu_regressions_do_not_break_ym_timeline_in_opt_in_lab(self):
+        tape = self.tape([
+            self.event(1, "YM2203_WRITE", 100, 0xe000, 7, frame=1),
+            self.event(2, "YM2203_WRITE", 110, 0xe001, 30, frame=1),
+            self.event(3, "SOUNDLATCH_WRITE", 105, 0x3a00, 1, frame=1),
+            self.event(4, "Z80_LATCH_READ", 120, 0xc800, 1, frame=1),
+            self.event(5, "AUDIO_RESET_WRITE", 115, 0x3d01, 1, frame=1),
+            self.event(6, "YM2203_WRITE", 130, 0xe002, 14, frame=1),
+        ])
+        before = tape.read_bytes()
+        with self.assertRaisesRegex(b3.B3Stop, "TAPE_BAD_CHRONOLOGY"):
+            b3.inspect_tape(tape)
+        projection = b3.inspect_chronology_diagnostics(tape)
+        self.assertEqual(projection["tick_regressions"], 2)
+        self.assertEqual(projection["tick_regressions_cross_cpu_transition"], 2)
+        self.assertEqual(projection["tick_regressions_audio_stream"], 0)
+        self.assertEqual(projection["tick_regressions_main_stream"], 0)
+        self.assertTrue(projection["strict_lab_projection_possible"])
+        report = b3.inspect_tape(tape, allow_cross_cpu_skew_lab=True)
+        self.assertEqual(report["lab_cross_cpu_clock_inversions"], 2)
+        self.assertEqual(report["ym_writes"], 3)
+        self.assertFalse(report["global_timeline_strictly_monotonic"])
+        self.assertEqual(before, tape.read_bytes())
+
+    def test_even_lab_skew_optin_rejects_nonmonotonic_audio_cpu_ym_events(self):
+        tape = self.tape([
+            self.event(1, "YM2203_WRITE", 200, 0xe000, 7),
+            self.event(2, "SOUNDLATCH_WRITE", 250, 0x3a00, 2),
+            self.event(3, "YM2203_WRITE", 190, 0xe001, 30),
+        ])
+        audit = b3.inspect_chronology_diagnostics(tape)
+        self.assertEqual(audit["tick_regressions_cross_cpu_transition"], 1)
+        self.assertEqual(audit["tick_regressions_audio_stream"], 1)
+        self.assertEqual(audit["tick_regressions_ym_only"], 1)
+        self.assertFalse(audit["strict_lab_projection_possible"])
+        with self.assertRaisesRegex(b3.B3Stop, "TAPE_BAD_CHRONOLOGY"):
+            b3.inspect_tape(tape, allow_cross_cpu_skew_lab=True)
+
+    def test_even_lab_skew_optin_rejects_main_cpu_tick_regression(self):
+        tape = self.tape([
+            self.event(1, "SOUNDLATCH_WRITE", 140, 0x3a00, 2),
+            self.event(2, "YM2203_WRITE", 150, 0xe000, 7),
+            self.event(3, "SOUNDLATCH_WRITE", 130, 0x3a00, 3),
+        ])
+        audit = b3.inspect_chronology_diagnostics(tape)
+        self.assertEqual(audit["tick_regressions_main_stream"], 1)
+        self.assertFalse(audit["strict_lab_projection_possible"])
+        with self.assertRaisesRegex(b3.B3Stop, "TAPE_BAD_CHRONOLOGY"):
+            b3.inspect_tape(tape, allow_cross_cpu_skew_lab=True)
+
+    def test_lab_skew_optin_never_bypasses_frame_sequence_or_same_cpu_order(self):
+        cases = [
+            [self.event(1, "YM2203_WRITE", 100, 0xe000, 1, frame=3),
+             self.event(3, "YM2203_WRITE", 101, 0xe001, 2, frame=3)],
+            [self.event(1, "YM2203_WRITE", 100, 0xe000, 1, frame=3),
+             self.event(2, "YM2203_WRITE", 101, 0xe001, 2, frame=2)],
+            [self.event(1, "YM2203_WRITE", 100, 0xe000, 1),
+             self.event(2, "Z80_LATCH_READ", 99, 0xc800, 2)],
+        ]
+        for rows in cases:
+            with self.subTest(reason=str(rows[1]["kind"])):
+                with self.assertRaisesRegex(b3.B3Stop, "TAPE_BAD_CHRONOLOGY"):
+                    b3.inspect_tape(self.tape(rows), allow_cross_cpu_skew_lab=True)
+
+    def test_replay_optin_is_explicit_and_does_not_claim_parity(self):
+        tape = self.tape([
+            self.event(1, "YM2203_WRITE", 100, 0xe000, 33),
+            self.event(2, "SOUNDLATCH_WRITE", 90, 0x3a00, 1),
+            self.event(3, "YM2203_WRITE", 110, 0xe001, 32),
+        ])
+        source = self.base / "ymfm"
+        source.mkdir()
+        commands = []
+        def mock_call(argv, **kwargs):
+            commands.append(argv)
+            if len(commands) == 1:
+                (self.base / "ym2203_lab").write_bytes(b"test binary")
+            if len(commands) == 2:
+                b3.OUT_TSV.write_text("0 57344 33\n10 57345 32\n")
+            if len(commands) == 3:
+                self.make_wav([0, 10, -10, 50, -50] * 80, b3.OUT_WAV.name)
+        with patch.object(b3, "call", side_effect=mock_call), \
+             patch.object(b3, "verify_rom_identity", return_value=True):
+            with self.assertRaisesRegex(b3.B3Stop, "TAPE_BAD_CHRONOLOGY"):
+                b3.run_b3(tape=tape, ymfm_source=source)
+            report = b3.run_b3(tape=tape, ymfm_source=source,
+                               allow_cross_cpu_skew_lab=True)
+        self.assertEqual(report["lab_cross_cpu_tick_regressions"], 1)
+        self.assertFalse(report["global_timeline_strictly_monotonic"])
+        self.assertTrue(report["per_cpu_ym_order_verified_from_tape"])
+        self.assertFalse(report["cross_cpu_temporal_parity_verified"])
+        self.assertFalse(report["ym_waveform_parity_verified"])
+        self.assertFalse(report["gameplay_audio_verified"])
+        self.assertEqual(len(commands), 3)
+
     def test_chronology_audit_valid_sequence_does_not_certify_audio(self):
         tape = self.tape([
             self.event(1, "YM2203_WRITE", 500, 0xe000, 32, frame=10),
