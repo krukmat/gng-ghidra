@@ -16,7 +16,7 @@ export function createWaterCrossingPolicy({
   maxObservationGap=12,maxPlatformSpeedPxPerFrame=3,
   minPlatformDisplacementPx=1,maxWaitFrames=120,
 }={}){
-  if(!integer(flightFrames)||!finite(runSpeedPxPerFrame)||runSpeedPxPerFrame<=0||
+  if(!integer(flightFrames)||!finite(runSpeedPxPerFrame)||runSpeedPxPerFrame<0||
     !finite(minConfidence)||minConfidence<0||minConfidence>1||
     !finite(approachRangePx)||approachRangePx<=0||
     !finite(takeoffBufferPx)||takeoffBufferPx<=0||takeoffBufferPx>=approachRangePx||
