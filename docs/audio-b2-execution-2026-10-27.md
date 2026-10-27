@@ -143,3 +143,24 @@ Próximo checkpoint exacto:
 Un `PARTIAL_UNCERTIFIED` tras una nueva instrucción aún no implementada es STOP esperado. Enviar solo JSON `GNG_AUDIO_Z80_AOT_PREFIX_V1` (contadores y familia), no código ROM-derived, muestras, capturas MAME ni `out/audio`. El siguiente trabajo depende del nuevo `first_blocker`.
 
 G5/H5 siguen PENDING: falta Z80 completa/IRQ, dual YM2203 validado y audio navegable.
+
+
+## Checkpoint A2.T2e — JR condicional desde PC=0x00ED (27/10/2026)
+
+Evidencia Mac del operador: 15/15 tests Node PASS, compilador de gg2.bin PARTIAL_UNCERTIFIED, 8 instrucciones compiladas, primer bloqueo en PC 237 (0x00ED), familia JR_CONDITIONAL. La ROM previamente verificada sigue privada y local.
+
+Implementación en main:
+- JR NZ,e (0x20), JR Z,e (0x28), JR NC,e (0x30), JR C,e (0x38).
+- Condiciones basadas solamente en F.Zero (0x40) y F.Carry (0x01). No altera flags ni registros.
+- PC destino = PC+2 + desplazamiento firmado modulo 65536; PC sin salto = PC+2. Grafo AOT visita ambos destinos estáticos.
+- 12 T-states cuando salta, 7 cuando no salta. Direcciones fuera de la ROM de sonido bloquean la certificación sin publicar bytes.
+- Tres pruebas sintéticas nuevas: 4 condiciones x 6 flags, temporización, salto negativo/autobucle, presencia de ambos destinos y rechazo de direcciones fuera de ROM.
+- 18/18 pruebas sintéticas ejecutadas en harness JS aislado PASS. El runner Node de Mac, MAME nativo y audio aún no están certificados.
+
+### Siguiente gate local
+
+    git checkout main && git pull --ff-only
+    node --test tests/test_gngb_z80_static_codegen.mjs
+    node scripts/audio_z80_build.mjs
+
+El JSON de compilación puede seguir reportando PARTIAL_UNCERTIFIED por otra familia Z80. Devolver solo estado/contadores/first_blocker, no datos de ROM ni archivos de out/audio. G5 y H5 siguen PENDING.
