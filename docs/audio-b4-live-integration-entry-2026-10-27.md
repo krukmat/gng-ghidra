@@ -406,3 +406,38 @@ Return **only three sanitized JSON stdout messages**. STOP from the probe is leg
 ### Remaining B4.T3-B3 — actual native differential, still NOT VERIFIED
 
 The MAME audio tape has YM writes, latch reads and resets, **not** IRQ ACKs, register snapshots or synchronized emulator CPU state. To assert CPU/IRQ/YM parity will require MAME-side private IRQ/HALT/PC instrumentation, matching board inputs/initial conditions and safe local comparison of real execution traces. Until that succeeds, do not claim 240Hz IRQ **service** parity or runtime audio playback. Future real-time dual YM synthesizer must reset *both* chips when LS259 bit1 asserts reset, as MAME 0.288 does.
+
+## B4.T3-B3 — First IRQ boundary and true native-command stimuli (2026-10-27)
+
+**Verified Mac entry results:**
+- Full checkpoint **110/110 Node + 74/74 Python PASS**, ROM SHA1_MATCH.
+- MAME 0.288 private `heartbeat4` tape audit: **23 soundlatch writes**, **6810/6810 matching soundlatch reads** (by 12MHz clock), **305698 YM port writes across both chips**, one sound reset assertion and one release; **11 cross-CPU clock inversions** remain lab-only. No IRQ ACK/register snapshots were captured; never claim native timing parity.
+- Native ROM live-execution lab probe: 64 native-backed roots, 3609 compiled ROM PCs, **969 AOT executed instructions**, T state **12502** after target 12500 (overshoot 2), CPU in **IM1**, 0 YM writes, 0 observed lab IRQ requests/ACK. Since the probe stopped immediately after crossing 12500, the IRQ due condition had not been evaluated by the *next* scheduler step; 0 IRQ requests at this boundary does **not** prove IRQ is broken.
+- In that probe the Z80 sound latch was not supplied with the **23 native MAME command inputs**. The missing sound stimulus prevents equating its zero YM writes with the much longer 305698 YM events from MAME.
+
+**New B4.T3-B3 source work on `main`:**
+1. `scripts/audio_t3_private_controls.py` checks existing native `heartbeat4` tape using the B3 strict verifier. Requires exactly one reset assert/release, a single clock epoch, main sound ticks aligned to the 12MHz clock (8 master ticks per main cycle), and bounded events. Creates a **mode 0600, never-overwritten** file `out/audio/z80-native-controls-<id>.json` containing ONLY native sound-latch commands (and the pre-release latch if actually observed), reset-release-relative master ticks. Does NOT include, emit, play or copy native YM outputs or any ROM. Console summary contains only counts and first sound-command / native YM event offsets in T-states.
+2. `src/gngb_z80_sound_probe.mjs` accepts optional `nativeControls` and applies real captured main-CPU sound-command *inputs* after completing the current bounded compiled Z80 instruction; it does not replay recorded YM registers. Tracks each event's instruction-boundary lateness and stops on lateness exceeding 64 T states; applies one **global** execution step budget across all segments. Phase and sound CPU parity explicitly remain unverified. No guessed sound command allowed simultaneously with native controls.
+3. `scripts/audio_t3_sound_probe.mjs` accepts optional `--native-controls out/audio/z80-native-controls-<id>.json` input. Checks private-only location, bounded 1MB JSON and validates the schema in the runtime. Public stdout contains only command counts, lateness metrics, lab IRQ requests/ACK and YM writes newly emitted by running Z80. No private bytes, YM tape, PC contents or generated JS.
+4. `tests/test_audio_t3_private_controls.py`: 3 synthetic ROM-free tests for actual capture extraction, reset-relative timing, absence of YM in exported controls, invalid clock phase, multi-reset/invalid-ID rejection, and no overwrite.
+5. `tests/test_gngb_z80_native_controls.mjs`: 5 synthetic ROM-free tests for actual AOT YM MMIO after native **inputs**, deferred future inputs, 16T event boundary skew, command validation, and a shared global execution budget. Included in `scripts/audio_fast_checkpoint.mjs`. New Node tests were exercised in isolation with **5/5 PASS**; full Mac regression pending. No main 6809 engine, bot or UI/audio synthesizer changes.
+
+**Critical distinction:** MAME's 240Hz `HOLD_LINE` proves nominal IRQ cadence and signal mode, but it does not prove that the lab's first IRQ phase matches MAME reset timing. Captured inputs are experimental stimuli, **not a native differential certificate**, and no YM tape events feed the Z80 probe.
+
+### Next operator Mac checkpoint
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected **115 Node + 77 Python**, unverified on Mac. If PASS:
+
+    python3 scripts/audio_t3_private_controls.py --id heartbeat4 --out-id heartbeat4-t3b3
+
+This writes `out/audio/z80-native-controls-heartbeat4-t3b3.json` **privately**. Avoid rerunning with the same out-id: the tool rejects overwriting capture evidence. Then:
+
+    node scripts/audio_t3_sound_probe.mjs --roots out/audio/z80-native-roots-b4trace1.json --native-controls out/audio/z80-native-controls-heartbeat4-t3b3.json --target-tstates 12540 --max-steps 100000
+
+At 12540 T states the runner should cross the first lab IRQ boundary; it may discover an IM1 vector/stack/runtime STOP. The command count applied by then depends on the **real** first command offset printed by extraction; no fabricated values should be introduced. Both tools return safe count-only JSON. Share only the 3 JSON results. `audio_working`, native Z80 parity and live YM PCM remain false until further independent gates.
+
+**Next decision after results:** if IM1 IRQ service is valid, extend a bounded native-control window toward the first observed YM event offset; if stopped, fix only the actual runtime opcode/vector/bus discrepancy. Then obtain private synchronized MAME IRQ ACK/register evidence before asserting differential parity.
