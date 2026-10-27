@@ -73,3 +73,34 @@ Stops: wrong ROM identity, unpinned MAME or ymfm, tracked output, malformed or u
 - No changes to MC6809 engine, bot, core runtime, or GitHub Actions; source privacy is preserved.
 
 Next: after real MAME capture and first non-silent WAV, add aligned native PCM verification and real-time Z80/YM/AudioWorklet scheduling.
+
+
+## B3 MAC gate — unexpected installed MAME version (2026-10-27)
+
+Operator successfully cloned public ymfm into ignored out/audio/ymfm and checked out the required commit 81aec25ccbb98f4873a255f7551ac4dadac59b4a. The informational detached-HEAD warning is normal; the pinned source is correct.
+
+The first capture command stopped with MAME_VERSION_NOT_PINNED_0289 **before launching the emulation session**, because installed "mame -version" did not identify MAME 0.289. No native audio or PCM has been certified.
+
+The default B3 gate stays strict about MAME **0.289**. To discover the actual installed MAME version locally:
+
+    mame -version
+
+To reach the first non-silent WAV despite another MAME release, an **explicit laboratory-only override** is now available:
+
+    python3 scripts/audio_b3_checkpoint.py --capture --lab-allow-unpinned-mame --ymfm-src out/audio/ymfm --duration-ms 5000
+
+This opt-in is only for recording an exploratory native YM register tape and synthesizing a private WAV. It cannot certify MAME waveform parity, audio scheduling parity, or a frozen reference. The safe report includes mame_capture_version, mame_capture_version_pinned, lab_unpinned_mame_used, and all pre-existing parity=false fields. Version strings outside conventional numeric MAME 0.NNN fail closed. The option cannot be used with --tape. ROM identity check, ignored outputs, pinned ymfm hash, typed native-event validation and non-silent WAV checks are unchanged.
+
+A prior operator Mac run reported 54/54 Node PASS and 23 Python tests run with a failure. The probable macOS /var -> /private/var canonical-path mismatch has been fixed, but no post-fix Mac green regression has been received. After adding three new MAME-version tests, the Python suite expects 26 test cases, not a confirmed result.
+
+Before a new capture, synchronize and validate:
+
+    git fetch origin main
+    git merge origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+If Python still fails, use full test output (no private ROM or tape needed):
+
+    python3 -m unittest discover -s tests -p 'test_audio_*.py' -v
+
+Do not claim native success until the checkpoint returns LAB_NON_SILENT_FROM_MAME_YM_EVENTS_NOT_CERTIFIED, and the operator confirms the private WAV can actually be heard.
