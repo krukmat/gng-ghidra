@@ -322,14 +322,18 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
       }
       case 0x08: {
         // EX AF,AF' - alternate registers are explicit, never copied from A.
-        lines=['const a=$.a,f=$.f;$.a=$.aAlt;$.f=$.fAlt;',
+        lines=['if(!Number.isInteger($.aAlt)||!Number.isInteger($.fAlt))',
+          'throw Error("AUDIO_Z80_ALT_STATE_REQUIRED");',
+          'const a=$.a,f=$.f;$.a=$.aAlt;$.f=$.fAlt;',
           '$.aAlt=a;$.fAlt=f;',
           '$.pc='+next(1)+';','$.t+=4;'];
         targets=[next(1)];break;
       }
       case 0xd9: {
         // EXX - three independent main/alternate register pair swaps.
-        lines=['const bc=$.bc,de=$.de,hl=$.hl;',
+        lines=['if(!Number.isInteger($.bcAlt)||!Number.isInteger($.deAlt)||',
+          '!Number.isInteger($.hlAlt))throw Error("AUDIO_Z80_ALT_STATE_REQUIRED");',
+          'const bc=$.bc,de=$.de,hl=$.hl;',
           '$.bc=$.bcAlt;$.de=$.deAlt;$.hl=$.hlAlt;',
           '$.bcAlt=bc;$.deAlt=de;$.hlAlt=hl;',
           '$.pc='+next(1)+';','$.t+=4;'];
