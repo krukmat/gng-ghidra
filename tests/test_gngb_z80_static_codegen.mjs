@@ -300,7 +300,7 @@ test('JR conditional target outside audio ROM is never silently certified',()=>{
   rom.set([0x20,0xfc,0xc9],0); // negative target = 0xfffe, outside sound ROM
   const result=compileZ80Prefix(rom);
   assert.equal(result.status,'PARTIAL_UNCERTIFIED');
-  assert.deepEqual(result.blockers,[{pc:0xfffe,reason:'OUTSIDE_SOUND_ROM'}]);
+  assert.deepEqual(result.blockers,[{pc:0xfffe,reason:'OUTSIDE_SOUND_ROM',source_pc:0}]);
   assert.equal(result.compiled,2);
 });
 
