@@ -197,6 +197,17 @@ class B3CheckpointTests(unittest.TestCase):
         self.assertIn("-wavwrite", args_seen[0])
         self.assertIn(str(self.base / "mame-native-audio.wav"), args_seen[0])
 
+    def test_native_capture_never_overwrites_existing_private_tape(self):
+        from types import SimpleNamespace
+        self.tape([self.event(1, "YM2203_WRITE", 1, 0xe000, 3)])
+        original = b3.OUT_TAPE.read_bytes()
+        with patch.object(b3.shutil, "which", return_value="mame"), \
+             patch.object(b3, "call",
+                          return_value=SimpleNamespace(stdout="0.289", stderr="")):
+            with self.assertRaisesRegex(b3.B3Stop, "MAME_CAPTURE_OUTPUT_ALREADY_EXISTS"):
+                b3.capture_tape("mame", "roms")
+        self.assertEqual(b3.OUT_TAPE.read_bytes(), original)
+
     def test_cli_fail_closed_and_no_private_path_in_stdout(self):
         output = io.StringIO()
         with redirect_stdout(output):
