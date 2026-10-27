@@ -15,7 +15,7 @@ test('compiled instructions are static JavaScript with private ROM provenance',(
 });
 test('unsupported opcode is an explicit blocked frontier',()=>{
   const rom=new Uint8Array(0x8000);
-  rom[0]=0xcb; // Z80 CB-prefixed family intentionally not yet implemented
+  rom.set([0xcb,0x40],0); // CB BIT intentionally not yet implemented
   const x=compileZ80Prefix(rom);
   assert.equal(x.status,'PARTIAL_UNCERTIFIED');
   assert.equal(x.compiled,0);
@@ -369,7 +369,7 @@ test('B0 LD r,n respects immediate 0x00 / 0xff and refuses truncated ROM instruc
 
 test('B1 multiple independent roots expose multiple true frontiers, not blind resync',()=>{
   const rom=new Uint8Array(0x8000);
-  rom.set([0xcb,0x11],0x0000);
+  rom.set([0xcb,0x40],0x0000);
   rom.set([0xdd,0x22],0x0100);
   rom.set([0xed,0xb1],0x0200);
   const result=compileZ80Prefix(rom,{entries:[0,0x100,0x200,0x100]});
@@ -379,7 +379,7 @@ test('B1 multiple independent roots expose multiple true frontiers, not blind re
   assert.deepEqual(result.entrypoints,[0,0x100,0x200]);
   assert.deepEqual(result.blockers,[
     {pc:0,reason:'UNSUPPORTED_Z80_OPCODE',family:'CB_BIT_ROTATE_PREFIX',
-      cb_instruction:'CB_ROTATE_SHIFT'},
+      cb_instruction:'CB_BIT_TEST'},
     {pc:0x100,reason:'UNSUPPORTED_Z80_OPCODE',family:'DD_IX_PREFIX',
       indexed_instruction:'INDEX_LD_RR_ABSOLUTE'},
     {pc:0x200,reason:'UNSUPPORTED_Z80_ED_INSTRUCTION',
@@ -391,7 +391,7 @@ test('B1 multiple independent roots expose multiple true frontiers, not blind re
 test('B1 reached static branches reveal multiple blockers; convergence de-duplicates',()=>{
   const rom=new Uint8Array(0x8000);
   // JR NZ,+2 to PC 4; fallthrough PC 2; CB and DD unknown families.
-  rom.set([0x20,0x02,0xcb,0x00,0xdd,0x22],0);
+  rom.set([0x20,0x02,0xcb,0x40,0xdd,0x22],0);
   const result=compileZ80Prefix(rom);
   assert.equal(result.compiled,1);
   assert.deepEqual(result.visitedPcs,[0]);
