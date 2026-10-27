@@ -303,3 +303,110 @@ test('JR conditional target outside audio ROM is never silently certified',()=>{
   assert.deepEqual(result.blockers,[{pc:0xfffe,reason:'OUTSIDE_SOUND_ROM'}]);
   assert.equal(result.compiled,2);
 });
+
+
+test('B0 LD r,n compiles all seven register destinations, immediate byte, 7T, no flags',async()=>{
+  const cases=[
+    [0x06,'bc',0xa534],[0x0e,'bc',0x12a5],
+    [0x16,'de',0xa578],[0x1e,'de',0x56a5],
+    [0x26,'hl',0xa5bc],[0x2e,'hl',0x9aa5],
+    [0x3e,'a',0xa5]
+  ];
+  for(const [opcode,register,expected] of cases){
+    const rom=new Uint8Array(0x8000);
+    rom.set([opcode,0xa5,0xc9],0);
+    const result=compileZ80Prefix(rom);
+    assert.equal(result.status,'SUPPORTED_PREFIX_ONLY');
+    assert.equal(result.compiled,2);
+    const generated=await import('data:text/javascript,'+encodeURIComponent(result.source));
+    const before={pc:0,bc:0x1234,de:0x5678,hl:0x9abc,a:0xfe,
+      f:0xd7,t:123,sp:0xc7ff};
+    const state={...before};
+    const bus={read8(){throw Error('LD_R_IMMEDIATE_READ')},
+      write8(){throw Error('LD_R_IMMEDIATE_WRITE')}};
+    generated.z80AotBlocks.get(0)(state,bus);
+    for(const key of ['bc','de','hl','a'])
+      assert.equal(state[key],key===register?expected:before[key],opcode.toString(16));
+    assert.equal(state.pc,2);
+    assert.equal(state.t,130);
+    assert.equal(state.f,0xd7);
+    assert.equal(state.sp,0xc7ff);
+  }
+});
+
+test('B0 LD (HL),n emits a single bus write, 10T, no flag or register change',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0x36,0xe3,0xc9],0);
+  const result=compileZ80Prefix(rom);
+  assert.equal(result.compiled,2);
+  assert.equal(result.status,'SUPPORTED_PREFIX_ONLY');
+  const generated=await import('data:text/javascript,'+encodeURIComponent(result.source));
+  const state={pc:0,hl:0xc123,bc:0x1111,de:0x2222,a:0x75,f:0x93,t:50};
+  const calls=[];
+  generated.z80AotBlocks.get(0)(state,{
+    read8(){throw Error('UNEXPECTED_READ')},
+    write8(addr,val,t){calls.push({addr,val,t})}
+  });
+  assert.deepEqual(calls,[{addr:0xc123,val:0xe3,t:60}]);
+  assert.deepEqual(state,{pc:2,hl:0xc123,bc:0x1111,de:0x2222,a:0x75,f:0x93,t:60});
+});
+
+test('B0 LD r,n respects immediate 0x00 / 0xff and refuses truncated ROM instruction',async()=>{
+  for(const imm of [0,255]){
+    const rom=new Uint8Array(0x8000);
+    rom.set([0x3e,imm,0xc9],0);
+    const built=compileZ80Prefix(rom);
+    const result=await import('data:text/javascript,'+encodeURIComponent(built.source));
+    const state={pc:0,a:17,f:0xff,t:0};
+    result.z80AotBlocks.get(0)(state,{});
+    assert.deepEqual(state,{pc:2,a:imm,f:0xff,t:7});
+  }
+  const rom=new Uint8Array(0x8000);
+  rom[0x7fff]=0x06;
+  assert.throws(()=>compileZ80Prefix(rom,{entry:0x7fff}),
+    e=>e instanceof Z80StaticError&&e.code==='AUDIO_Z80_ROM_BOUNDARY');
+});
+
+test('B1 multiple independent roots expose multiple true frontiers, not blind resync',()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0xcb,0x11],0x0000);
+  rom.set([0xdd,0x21],0x0100);
+  rom.set([0xed,0xb0],0x0200);
+  const result=compileZ80Prefix(rom,{entries:[0,0x100,0x200,0x100]});
+  assert.equal(result.status,'PARTIAL_UNCERTIFIED');
+  assert.equal(result.compiled,0);
+  assert.equal(result.pending,0);
+  assert.deepEqual(result.entrypoints,[0,0x100,0x200]);
+  assert.deepEqual(result.blockers,[
+    {pc:0,reason:'UNSUPPORTED_Z80_OPCODE',family:'CB_BIT_ROTATE_PREFIX'},
+    {pc:0x100,reason:'UNSUPPORTED_Z80_OPCODE',family:'DD_IX_PREFIX'},
+    {pc:0x200,reason:'UNSUPPORTED_Z80_ED_INSTRUCTION',
+      family:'ED_EXTENDED_PREFIX',ed_instruction:'ED_BLOCK_TRANSFER'}
+  ]);
+  assert.deepEqual(result.visitedPcs,[]);
+});
+
+test('B1 reached static branches reveal multiple blockers; convergence de-duplicates',()=>{
+  const rom=new Uint8Array(0x8000);
+  // JR NZ,+2 to PC 4; fallthrough PC 2; CB and DD unknown families.
+  rom.set([0x20,0x02,0xcb,0x00,0xdd,0x21],0);
+  const result=compileZ80Prefix(rom);
+  assert.equal(result.compiled,1);
+  assert.deepEqual(result.visitedPcs,[0]);
+  assert.deepEqual(result.blockers.map(b=>[b.pc,b.family]),[
+    [2,'CB_BIT_ROTATE_PREFIX'],[4,'DD_IX_PREFIX']]);
+  const merged=compileZ80Prefix(rom,{entries:[0,2,4,2]});
+  assert.deepEqual(merged.blockers,result.blockers);
+});
+
+test('B1 seed validation, safety cap and no unsupported fallthrough',()=>{
+  const rom=new Uint8Array(0x8000);
+  for(const entries of [[],Array(65).fill(0),[-1],[0x8000],[0,1.5],['0']])
+    assert.throws(()=>compileZ80Prefix(rom,{entries}),Z80StaticError);
+  rom.set([0x00,0x00,0x00,0xc9],0);
+  const capped=compileZ80Prefix(rom,{entries:[0],limit:2});
+  assert.equal(capped.status,'PARTIAL_UNCERTIFIED');
+  assert.equal(capped.truncated,true);
+  assert.deepEqual(capped.visitedPcs,[0,1]);
+  assert.equal(capped.pending,1);
+});
