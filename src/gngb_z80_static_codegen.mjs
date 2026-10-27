@@ -193,12 +193,40 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
     // Only DD/FD 21 (LD IX/IY,nn) is admitted by this narrowly
     // native-backed batch. All other indexed instructions remain blocked.
     if(opcode===0xcb) {
-      blockers.push({pc,reason:'UNSUPPORTED_Z80_OPCODE',
-        family:'CB_BIT_ROTATE_PREFIX',
-        cb_instruction:classifyZ80CbInstruction(read8(pc,1))});
-      continue;
-    }
-    if(opcode===0xdd||opcode===0xfd) {
+      const second=read8(pc,1);
+      if(second<0x40) {
+        // Z80 CB rotate/shift group: eight operations; 8T register / 15T RAM.
+        const kind=second>>>3,idx=second&7,memory=idx===6;
+        const old=memory?'bus.read8($.hl,$.t+8)':r8ReadSource[idx];
+        const results=[
+          '((old<<1)|(old>>>7))&255',      // RLC
+          '((old>>>1)|((old&1)<<7))&255',   // RRC
+          '((old<<1)|($.f&1))&255',        // RL
+          '((old>>>1)|(($.f&1)<<7))&255', // RR
+          '(old<<1)&255',                 // SLA
+          '((old>>>1)|(old&128))&255',    // SRA
+          '((old<<1)|1)&255',             // SLL, undocumented
+          '(old>>>1)&255'                // SRL
+        ];
+        const carry=(kind%2===0)?'(old>>>7)':'(old&1)';
+        length=2;
+        lines=[
+          'const old='+old+';',
+          'const result='+results[kind]+';',
+          'let p=result;p^=p>>>4;p^=p>>>2;p^=p>>>1;',
+          '$.f=(result&0xa8)|(result===0?64:0)|((p&1)===0?4:0)|'+carry+';',
+          memory?'bus.write8($.hl,result,$.t+15);':
+            'const value=result;'+r8WriteSource[idx],
+          '$.pc='+next(2)+';','$.t+='+String(memory?15:8)+';'
+        ];
+        targets=[next(2)];
+      } else {
+        blockers.push({pc,reason:'UNSUPPORTED_Z80_OPCODE',
+          family:'CB_BIT_ROTATE_PREFIX',
+          cb_instruction:classifyZ80CbInstruction(second)});
+        continue;
+      }
+    } else if(opcode===0xdd||opcode===0xfd) {
       const second=read8(pc,1);
       if(second===0x21) {
         const nn=read8(pc,2)|(read8(pc,3)<<8);
@@ -217,6 +245,18 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
           'const effective=($.'+index+'+('+displacement+'))&65535;',
           'const value=bus.read8(effective,$.t+19);',
           r8WriteSource[dst],
+          '$.pc='+next(3)+';','$.t+=19;'
+        ];
+        targets=[next(3)];
+      } else if((second&0xf8)===0x70 && second!==0x76) {
+        // LD (IX/IY+d),r: signed displacement and normal H/L sources, 19T.
+        const base=opcode===0xdd?'ix':'iy';
+        const disp=sign8(read8(pc,2));
+        const value=r8ReadSource[second&7];
+        length=3;
+        lines=[
+          'const addr=($.'+base+'+('+disp+'))&65535;',
+          'bus.write8(addr,'+value+',$.t+19);',
           '$.pc='+next(3)+';','$.t+=19;'
         ];
         targets=[next(3)];
@@ -398,6 +438,10 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
       case 0xc3: {
         const addr=w16();length=3;lines=['$.pc='+addr+';','$.t+=10;'];targets=[addr];break;
       }
+      case 0xe9: {
+        // JP (HL) has an unknown runtime target, not a static fallthrough.
+        lines=['$.pc=$.hl;','$.t+=4;'];targets=[];break;
+      }
       case 0xc2: case 0xca: case 0xd2: case 0xda:
       case 0xe2: case 0xea: case 0xf2: case 0xfa: {
         // JP cc,nn; both taken and not-taken cost 10 T-states.
@@ -451,6 +495,23 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
           '$.sp=($.sp-1)&65535;bus.write8($.sp,'+(ret&255)+',$.t+14);',
           '$.pc='+dest+';','$.t+=17;'];targets=[dest,ret];break;
       }
+      case 0xc4: case 0xcc: case 0xd4: case 0xdc:
+      case 0xe4: case 0xec: case 0xf4: case 0xfc: {
+        // CALL NZ/Z/NC/C/PO/PE/P/M,nn: 10T miss, 17T taken.
+        const addr=w16(),ret=next(3),condition=(opcode>>>3)&7;
+        const mask=[64,64,1,1,4,4,128,128][condition];
+        const sense=(condition&1)===1;
+        length=3;
+        lines=[
+          'const take=(($.f&'+mask+')!==0)==='+String(sense)+';',
+          'if(take){',
+          '$.sp=($.sp-1)&65535;bus.write8($.sp,'+(ret>>>8)+',$.t+11);',
+          '$.sp=($.sp-1)&65535;bus.write8($.sp,'+(ret&255)+',$.t+14);',
+          '$.pc='+addr+';$.t+=17;',
+          '}else{$.pc='+ret+';$.t+=10;}'
+        ];
+        targets=[ret,addr];break;
+      }
       case 0xc9:
         lines=['const lo=bus.read8($.sp,$.t+4);$.sp=($.sp+1)&65535;',
           'const hi=bus.read8($.sp,$.t+7);$.sp=($.sp+1)&65535;',
@@ -470,6 +531,19 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
         break;
       }
       default:
+        if((opcode&0xcf)===0xc5) {
+          // PUSH BC/DE/HL/AF: high byte first then low, 11 T total.
+          const pair=opcode===0xc5?'$.bc':opcode===0xd5?'$.de':'$.hl';
+          lines=opcode===0xf5?
+            ['const hi=$.a,lo=$.f;']:
+            ['const pair='+pair+';','const hi=(pair>>>8)&255,lo=pair&255;'];
+          lines.push(
+            '$.sp=($.sp-1)&65535;bus.write8($.sp,hi,$.t+8);',
+            '$.sp=($.sp-1)&65535;bus.write8($.sp,lo,$.t+11);',
+            '$.pc='+next(1)+';','$.t+=11;'
+          );
+          targets=[next(1)];break;
+        }
         if(opcode>=0x40 && opcode<=0x7f && opcode!==0x76) {
           // LD r,r'; HALT remains unsupported. 4T reg, 7T memory.
           const dst=(opcode>>>3)&7,src=opcode&7;
