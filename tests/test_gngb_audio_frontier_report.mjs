@@ -6,7 +6,7 @@ import {summarizeZ80Frontiers,parseZ80OperatorSeeds} from '../src/gngb_audio_fro
 test('B1 report groups separate branch frontiers; family order is deterministic',()=>{
   const rom=new Uint8Array(0x8000);
   // Both branch targets stop on different unsupported families.
-  rom.set([0x20,0x02,0xcb,0x11,0xdd,0x21],0);
+  rom.set([0x20,0x02,0xcb,0x11,0xdd,0x22],0);
   const result=compileZ80Prefix(rom);
   const report=summarizeZ80Frontiers(result);
   assert.equal(report.kind,'GNG_AUDIO_Z80_FRONTIER_SCAN_V1');
@@ -20,7 +20,7 @@ test('B1 report groups separate branch frontiers; family order is deterministic'
   assert.deepEqual(report.frontiers,[
     {pc:2,family:'CB_BIT_ROTATE_PREFIX',reason:'UNSUPPORTED_Z80_OPCODE'},
     {pc:4,family:'DD_IX_PREFIX',reason:'UNSUPPORTED_Z80_OPCODE',
-      indexed_instruction:'INDEX_LD_RR_IMMEDIATE'}
+      indexed_instruction:'INDEX_LD_RR_ABSOLUTE'}
   ]);
   assert.equal(report.native_trace_parity_verified,false);
   assert.equal(report.ym_pcm_verified,false);
