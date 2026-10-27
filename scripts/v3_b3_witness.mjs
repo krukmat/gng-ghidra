@@ -15,6 +15,7 @@ import {rendererUnknownCount} from '../src/v2_b1_observable.mjs';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
 import {gngbGraphics,rendererInputs} from './r35_t5_render_check.mjs';
 import {resolveB3LabTape} from '../src/v3_b3_external_tape.mjs';
+import {parseLabPokes,applyLabPokes} from '../src/h3_lab_poke.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const SELECTED=selectB3Bundle(ROOT);
@@ -25,6 +26,8 @@ const [profile,list]=process.argv.slice(2);
 const want=(list??'').split(',').map(Number);
 if(!profile)throw Error('V3_B3_WITNESS_USAGE');
 const tape=resolveB3LabTape(profile);
+const POKES=parseLabPokes();
+if(POKES.length)console.log('H3_LAB_POKE='+process.env.H3_POKE);
 if(!want.length||want.some(f=>!Number.isInteger(f)||f<1||
    f>tape.frames))throw Error('V3_B3_WITNESS_USAGE');
 const {code}=loadFrozen(DIR);
@@ -54,6 +57,7 @@ const board=createBoard(code,blocks,{frames:last,
   onFrame:r=>{
     const i=board.state.records.length;
     board.state.records[i-1]=null;
+    applyLabPokes(POKES,board.state,i);
     if(!targets.has(i)||rendererUnknownCount(r))return;
     shots.set(i,Uint8Array.from(renderGngbRgba(rendererInputs(r.record,
       {scroll:r.scroll,latch:r.latch},gfx)).rgba));

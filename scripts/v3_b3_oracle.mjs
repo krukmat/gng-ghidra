@@ -13,6 +13,7 @@ import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
 import {resolveB3LabTape} from '../src/v3_b3_external_tape.mjs';
+import {parseLabPokes,applyLabPokes} from '../src/h3_lab_poke.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const SELECTED=selectB3Bundle(ROOT);
@@ -23,6 +24,8 @@ const [profile,list]=process.argv.slice(2);
 const frames=[...new Set((list??'').split(',').map(Number))].sort((a,b)=>a-b);
 if(!profile)throw Error('V3_B3_ORACLE_USAGE');
 const tape=resolveB3LabTape(profile);
+const POKES=parseLabPokes();
+if(POKES.length)console.log('H3_LAB_POKE='+process.env.H3_POKE);
 if(!frames.length||frames.some(f=>!Number.isInteger(f)||f<2||
    f>tape.frames))throw Error('V3_B3_ORACLE_USAGE');
 const spec=tape.events.map(e=>{
@@ -39,7 +42,7 @@ const log=execFileSync('mame',['gngb','-rompath',join(ROOT,'roms'),
   '-seconds_to_run',String(Math.ceil(frames.at(-1)/50)+30),
   '-keyboardprovider','none','-mouseprovider','none',
   '-joystickprovider','none','-lightgunprovider','none'],
-  {env:{...process.env,SDL_VIDEODRIVER:'dummy',SDL_AUDIODRIVER:'dummy',GNG_B3_ORACLE_DIR:work,GNG_B3_ORACLE_TAPE:spec,
+  {env:{...process.env,SDL_VIDEODRIVER:'dummy',SDL_AUDIODRIVER:'dummy',GNG_B3_ORACLE_DIR:work,GNG_B3_ORACLE_POKE:process.env.H3_POKE??'',GNG_B3_ORACLE_TAPE:spec,
     GNG_B3_ORACLE_FRAMES:frames.join(',')},stdio:['ignore','pipe','pipe'],
   encoding:'utf8'});
 if(!log.includes('V3_B3_ORACLE_LUA=RECORDED')){
@@ -61,6 +64,7 @@ const board=createBoard(code,blocks,{frames:frames.at(-1),
   onFrame:r=>{
     const i=board.state.records.length;
     board.state.records[i-1]=null;
+    applyLabPokes(POKES,board.state,i);
     if(want.has(i))ours.set(i,{record:r.record,known:r.known});
   }});
 const run=board.run();

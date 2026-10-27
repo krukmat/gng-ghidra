@@ -1,7 +1,8 @@
 -- V3.B3 oracle: replay a B3 input tape in MAME's gngb and dump the frame
 -- records (same layout as R3.5.B2.T4.3 / the AOT runtime snapshot) for the
 -- requested record indices. Only the tape's ioport fields are written;
--- CPU state and memory are never touched. Output is private (out/).
+-- CPU state and memory are never touched, except the opt-in lab override
+-- GNG_B3_ORACLE_POKE (src/h3_lab_poke.mjs), mirrored in the AOT board. Output is private (out/).
 -- Record index i = i-th machine frame notifier (VBLANK start, IRQ of that
 -- frame not yet delivered), matching AOT record i. An input event at AOT
 -- cycle i*25152 is applied at notifier i-1: calibrated on titleCoinStart
@@ -11,6 +12,10 @@ local tape = os.getenv("GNG_B3_ORACLE_TAPE") or ""
 -- Calibration override only; -1 is the measured alignment (see above).
 local shift = tonumber(os.getenv("GNG_B3_ORACLE_SHIFT") or "-1")
 local want_s = assert(os.getenv("GNG_B3_ORACLE_FRAMES"), "V3_B3_ORACLE_FRAMES_MISSING")
+local pokes = {}
+for a, b, addr, v in (os.getenv("GNG_B3_ORACLE_POKE") or ""):gmatch("(%d+):(%d+):(%d+):(%d+)") do
+    pokes[#pokes + 1] = {tonumber(a), tonumber(b), tonumber(addr), tonumber(v)}
+end
 local machine = manager.machine
 assert(machine.system and machine.system.name == "gngb", "V3_B3_ORACLE_NOT_GNGB")
 local screen = assert(machine.screens[":screen"], "V3_B3_ORACLE_SCREEN")
@@ -73,6 +78,9 @@ gng_b3_sub = emu.add_machine_frame_notifier(function()
         assert(#blob == 0x3800, "V3_B3_ORACLE_RECORD_SIZE")
         out:write(blob)
         index_file:write(count .. "\n")
+    end
+    for _, p in ipairs(pokes) do
+        if count >= p[1] and count <= p[2] then space:write_u8(p[3], p[4]) end
     end
     for _, ev in ipairs(events[count] or {}) do ev[1]:set_value(ev[2]) end
     if count >= last then

@@ -17,7 +17,7 @@ const c=staticClosure(code,{table:+(process.env.H3_TAB??64)});
 const known=k=>c.reached.has(k)||c.covered.has(k);
 const have=new Set([...readFileSync(join(dir,'program.mjs'),'utf8')
   .matchAll(/^blocks\.set\((0x[0-9a-f]+),function/gm)].map(m=>Number(m[1])));
-const targets={'bank3:519d':blockKey(3,0x519d),ec83:0xec83,affc:0xaffc,e79e:0xe79e,c3a3:0xc3a3};
+const targets={dfc7:0xdfc7,'bank3:519d':blockKey(3,0x519d),ec83:0xec83,affc:0xaffc,e79e:0xe79e,c3a3:0xc3a3};
 for(const [n,k] of Object.entries(targets))
   console.log('H3_STATIC_TARGET_'+n+'='+(known(k)?'FOUND':'MISSING'));
 const perBank=Array.from({length:c.banks},(_,k)=>[...c.reached].filter(x=>(x>>16)===k+1).length);

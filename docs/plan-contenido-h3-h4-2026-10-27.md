@@ -73,6 +73,14 @@ F-N:  MOTOR (cinta humana → residuo dinámico + certificación) → REGLAS →
     - **Certificación:** B2-D sin cambios, las 9 cintas B3 con doble replay idénticas a g4 y MAME `sustainB` coincide en los frames 2000/12000/23990.
     - **Runtime:** g5 empaqueta el runtime certificado de B2-D. El tap de audio de `src/gngb_runtime.mjs` necesita su propia certificación.
     - **Siguiente:** atajo de laboratorio para empezar en la fase N (escritura en la RAM igual en MAME y AOT) y avanzar F-2…F-6 sin cinta humana.
+  - **Atajo de fase (27/10/2026): GO.**
+    - **Variable:** la fase es el byte `0x0072` (empieza en 0; 6 = sala de Astaroth). `0x0052` queda descartado: es una copia de un DIP, vale 1 desde el arranque.
+    - **Cómo se encontró:** barrido de 723 bytes, sumando 1 durante la muerte (frames 1830–2700 de `titleCoinStart`) y midiendo el cambio en la VRAM de fondo.
+    - **Herramienta:** [src/h3_lab_poke.mjs](../src/h3_lab_poke.mjs) con `H3_POKE=from:to:addr:value`. Es solo de laboratorio y se aplica igual en el oráculo MAME y en el AOT (`v3_b3_oracle`, `v3_b3_witness`).
+    - **Hueco encontrado:** la fase 3 paraba en `UNCOMPILED 0xDFC7`. Venía de una tabla del banco 4 que empieza con un puntero nulo; ahora el cierre salta los nulos y cubre el 100 % de las funciones de ROM de g5.
+    - **g6:** 10089 funciones y 38084 entradas, certificada; las 9 cintas son idénticas a g5.
+    - **Paridad MAME:** valores 1–6 (fases 2–7), 4 frames cada uno (2600/3300/4500/5900): 24/24 MATCH, sin bytes omitidos.
+    - **Límite:** prueba que cada fase carga y corre igual que MAME con Arthur casi inmóvil. No prueba jefes, vuelta 2 ni el final verdadero.
 - [ExportFunctionGraph.java](../ghidra_scripts/ExportFunctionGraph.java) solo analiza el banco 4: ampliar o recorrer con el decodificador del compilador AOT.
 - **GO:** alcanzable compilado, residuo listado, cintas previas idénticas. **STOP:** cambio de hash en una cinta certificada.
 

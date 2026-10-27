@@ -4,8 +4,8 @@
  *  - load-immediate continuations (LDX/LDY/LDU/LDD #addr), e.g.
  *    `LDY #$607D; JMP $54FF` returning through `JMP ,Y`;
  *  - pointer tables at such an immediate (`LDU #table; JMP [B,U]`), up to
- *    `table` consecutive words; a window table read from fixed code is
- *    tried in every bank.
+ *    `table` consecutive words (null words skipped); a window table read
+ *    from fixed code is tried in every bank.
  * Fixed code jumping into the bank window is followed in every bank.
  * Over-approximates on purpose: data decoded as code is compiled but never
  * reached at run time.
@@ -54,6 +54,7 @@ export function staticClosure(code,{table=64}={}){
         const x=imm+2*i;
         if(x+1>0xffff||(imm<FIXED_START&&x+1>=FIXED_START))break;
         const w=byteAt(tb,x)<<8|byteAt(tb,x+1);
+        if(w===0)continue;
         if(w<BANK_START)break;
         push(w>=FIXED_START?null:tb,w);
       }
