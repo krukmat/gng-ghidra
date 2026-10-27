@@ -6,7 +6,7 @@ import {compileZ80Prefix,classifyZ80Family}
 // Synthetic ROM only; every test intentionally stops at CB (unsupported).
 const load=async(opcode)=>{
   const bytes=new Uint8Array(0x8000);
-  bytes.set([opcode,0xcb],0);
+  bytes.set([opcode,0xcb,0x40],0);
   const build=compileZ80Prefix(bytes);
   assert.equal(build.compiled,1);
   const module=await import('data:text/javascript,'+encodeURIComponent(build.source));
@@ -100,7 +100,7 @@ test('B4 classification refines the 22 generic OTHER frontiers safely',()=>{
 
 test('B4 HALT has a dedicated compiled terminal step, not disguised LD (HL),(HL)',async()=>{
   const rom=new Uint8Array(0x8000);
-  rom.set([0x76,0xcb,0x00],0);
+  rom.set([0x76,0xcb,0x40],0);
   const r=compileZ80Prefix(rom);
   assert.equal(r.compiled,1);
   assert.equal(r.blockers[0].family,'CB_BIT_ROTATE_PREFIX');
