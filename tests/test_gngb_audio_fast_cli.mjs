@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {dirname,resolve} from 'node:path';
 
@@ -35,4 +36,15 @@ test('B0+B1 single-command checkpoint rejects unknown flags and never scans',()=
   assert.equal(r.exit,2);
   assert.equal(r.row.kind,'GNG_AUDIO_G5_FAST_CHECKPOINT_V1');
   assert.equal(r.row.status,'STOP_BAD_ARGUMENTS');
+});
+
+
+test('B0 private ROM and AOT artifacts are ignored and untracked',()=>{
+  const ignore=readFileSync(resolve(ROOT,'.gitignore'),'utf8');
+  assert.match(ignore,/(?:^|\n)out\/(?:\r?\n|$)/);
+  const tracked=spawnSync('git',['ls-files','--','out'],{
+    cwd:ROOT,encoding:'utf8',timeout:10000
+  });
+  assert.equal(tracked.status,0);
+  assert.equal(tracked.stdout.trim(),'');
 });
