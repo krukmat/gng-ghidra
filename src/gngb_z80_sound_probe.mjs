@@ -18,7 +18,8 @@ export class AudioZ80ProbeStop extends Error {
   constructor(code){super(code);this.code=code;}
 }
 export async function probeZ80SoundExecution(rom,roots,{
-  targetTStates=12500,maxSteps=100000,latchValue=null,nativeControls=null
+  targetTStates=12500,maxSteps=100000,latchValue=null,nativeControls=null,
+  onYmWrite=null
 }={}) {
   if(!(rom instanceof Uint8Array)||rom.length!==0x8000||
      !Array.isArray(roots)||roots.length<1||roots.length>64||
@@ -28,7 +29,8 @@ export async function probeZ80SoundExecution(rom,roots,{
      !Number.isInteger(maxSteps)||maxSteps<1||maxSteps>1000000||
      (latchValue!==null&&(!Number.isInteger(latchValue)||latchValue<0||
                           latchValue>255))||
-     (nativeControls!==null&&latchValue!==null))
+     (nativeControls!==null&&latchValue!==null)||
+     (onYmWrite!==null&&typeof onYmWrite!=='function'))
     throw new AudioZ80ProbeStop('AUDIO_T3_PROBE_INVALID_CONFIGURATION');
   if(nativeControls!==null) {
     if(!nativeControls||typeof nativeControls!=='object'||
@@ -59,6 +61,7 @@ export async function probeZ80SoundExecution(rom,roots,{
                                encodeURIComponent(compiled.source));
   let ymWrites=0,ymChip1Writes=0,ymChip2Writes=0;
   const bus=createZ80SoundBus(rom,{onYmWrite:e=>{
+    if(onYmWrite)onYmWrite(e);
     ymWrites++;
     if(e.addr<=0xe001)ymChip1Writes++;
     else ymChip2Writes++;
