@@ -79,3 +79,25 @@ El compilador se amplió con clasificación ROM-private del primer bloqueo, sin 
 Es **normal** que el tercer comando termine con exit code 2 cuando aparece un opcode sin soporte. Compartir únicamente el JSON que empieza por GNG_AUDIO_Z80_AOT_PREFIX_V1, particularmente first_blocker. NO enviar out/audio, ROM, capturas de memoria ni código recompilado.
 
 **Siguiente tarea A2.T2a:** implementar solamente las familias de instrucciones identificadas (y sus flags/ciclos/interrupciones si procede), añadir pruebas sintéticas y reejecutar la misma ROM hasta una nueva frontera. STOP ante divergencia con MAME; no medir éxito por bloques arbitrarios. La síntesis YM independiente puede seguirse en paralelo según las instrucciones anteriores.
+
+
+## Checkpoint A2.T2b — ED detectada en la ROM original (27/10/2026)
+
+Resultado del operador: 4/4 tests Node PASS; ROM sonora autenticada en la validación anterior. El compilador anterior se bloqueó en PC 0, familia ED_EXTENDED_PREFIX, compiled=0, unsupported=1. Es una instrucción no implementada, no una ROM defectuosa.
+
+Cambios realizados en main:
+- Compilación AOT de ED IM 0/1/2 (incluidas aliases), dos bytes, ocho T-states, flags inalterados.
+- Compilación AOT de ED NEG (incluidas aliases), dos bytes, ocho T-states, flags S/Z/F5/H/F3/PV/N/C.
+- Compilación AOT de ED LD I,A, dos bytes, nueve T-states, sin alterar flags.
+- Diagnóstico detallado de ED no soportado: first_blocker.ed_instruction contiene una categoría de instrucción, nunca el byte, operando o contenido de ROM.
+- Tests sintéticos de ED y verificación aislada de ejecución de bloques generados. Los tests Node de la rama actual aún deben ejecutarse en Mac.
+
+La subinstrucción ED inicial concreta es desconocida en este hilo: no asumir que sea IM. No añadir opcodes por especulación.
+
+### Próximo gate en Mac
+
+    git checkout main && git pull --ff-only
+    node --test tests/test_gngb_z80_static_codegen.mjs
+    node scripts/audio_z80_build.mjs out/audio/gg2.bin out/audio/z80-prefix.mjs
+
+El tercer comando puede acabar en exit 2 por una nueva instrucción no soportada: STOP esperado. Compartir solamente el JSON GNG_AUDIO_Z80_AOT_PREFIX_V1 y first_blocker (pc/family/ed_instruction si lo hay). No enviar gg2.bin, compilación derivada, trazas, out/audio ni bytes de ROM. Ninguna paridad de Z80 o audio se certifica por tests sintéticos.
