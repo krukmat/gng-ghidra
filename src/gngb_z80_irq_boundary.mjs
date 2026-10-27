@@ -18,6 +18,7 @@ function requireState(state){
   if(!state||typeof state!=='object'||!Number.isInteger(state.pc)||
     state.pc<0||state.pc>65535||
     !Number.isSafeInteger(state.t)||state.t<0 ||
+    ![undefined,false,true].includes(state.halted) ||
     ![undefined,0,1].includes(state.eiDelay))
     throw new AudioZ80BoundaryStop('AUDIO_Z80_IRQ_BOUNDARY_BAD_STATE');
 }
@@ -29,6 +30,10 @@ export function canAcceptZ80MaskableIrq(state){
 }
 export function stepZ80AotAtBoundary(blocks,state,bus){
   requireState(state);
+  // A halted Z80 cannot fetch or execute the next compiled instruction.
+  // IRQ/NMI/reset service is EXTERNAL and not modeled by this helper.
+  if(state.halted===true)
+    throw new AudioZ80BoundaryStop('AUDIO_Z80_IRQ_HALTED_AWAITING_SERVICE');
   if(!(blocks instanceof Map))throw new AudioZ80BoundaryStop('AUDIO_Z80_IRQ_BAD_BLOCKS');
   const block=blocks.get(state.pc);
   if(typeof block!=='function')
