@@ -124,3 +124,19 @@ geométricamente, esto no demuestra por sí solo que el demonio haya
 muerto ni acredita la vida de Arthur. Continúa como checkpoint
 visual candidato, no como post-boss certificado. La sincronización
 y la pausa necesitan una ejecución real de validación en el Mac.
+
+
+### Evidencias nuevas ante un mismatch
+
+El runner también guarda dos imágenes PNG privadas bajo
+BOT_PRACTICE_DIR: live-witness.png (pantalla real) y
+reference-witness.png (captura offline del mismo tramo), si ffmpeg
+está disponible. visual-witness.json recoge frame, sesión,
+porcentaje de píxeles coincidentes y posiciones de orilla e islote.
+Esto permite identificar divergencias live sin pedir al usuario
+más sesiones manuales ni asumir que el replay conserva el mismo estado.
+
+**Revisión obligatoria:** la validez de SIGSTOP/SIGCONT y la atención
+del botón en el Mac todavía deben probarse en ejecución real. Las
+pruebas sintéticas no demuestran que Arthur esté vivo, ni el jefe
+derrotado.
