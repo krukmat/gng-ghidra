@@ -59,10 +59,10 @@ export function createVisualProgressTracker({minConfidence=0.9,
       const positions=history.map(x=>x.x);
       const spread=Math.max(...positions)-Math.min(...positions);
       const net=relativeX-history[0].x;
-      if(spread<=plateauTolerancePx){
-        label='PLATEAU_CANDIDATE';reason='VISUAL_WINDOW_STATIONARY';
-      }else if(net>=minAdvancePx&&relativeX>previousMax){
+      if(net>=minAdvancePx&&relativeX>previousMax){
         label='ADVANCE_CANDIDATE';reason='VISUAL_NET_NEW_PROGRESS';
+      }else if(spread<=plateauTolerancePx){
+        label='PLATEAU_CANDIDATE';reason='VISUAL_WINDOW_STATIONARY';
       }else reason='NO_CONFIRMED_NEW_PROGRESS';
     }
     return {frame,label,reason,relativeX,maxRelativeX,
