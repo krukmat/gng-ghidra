@@ -121,6 +121,7 @@ def inspect_tape(tape):
     if tape.stat().st_size > MAX_CAPTURE_BYTES:
         raise B3Stop("TAPE_TOO_LARGE")
     kinds = {k: 0 for k in ALLOWED_KINDS}
+    ym_chip_writes = [0, 0]
     prior_tick = -1
     prior_frame = -1
     prior_seq = 0
@@ -152,6 +153,7 @@ def inspect_tape(tape):
             if k == "YM2203_WRITE":
                 if not 0xe000 <= addr <= 0xe003:
                     raise B3Stop("TAPE_BAD_YM_PORT")
+                ym_chip_writes[int(addr >= 0xe002)] += 1
                 if first_ym_tick is None:
                     first_ym_tick = tick
             elif k == "AUDIO_RESET_WRITE":
@@ -171,7 +173,9 @@ def inspect_tape(tape):
         # Current ymfm offline renderer has no timed reset event support.
         raise B3Stop("TAPE_MID_STREAM_RESET_UNSUPPORTED")
     return {"events": lines, "ym_writes": kinds["YM2203_WRITE"],
-            "ym_chip_0_writes": None, "sound_commands": kinds["SOUNDLATCH_WRITE"],
+            "ym_chip_0_writes": ym_chip_writes[0],
+            "ym_chip_1_writes": ym_chip_writes[1],
+            "sound_commands": kinds["SOUNDLATCH_WRITE"],
             "latch_reads": kinds["Z80_LATCH_READ"],
             "first_ym_tick": first_ym_tick}
 
@@ -267,6 +271,8 @@ def run_b3(*, tape, ymfm_source, duration_ms=5000, native_wav=None,
         "mame_loaded_same_rom_verified": False,
         "events_total": integrity["events"],
         "ym_writes": integrity["ym_writes"],
+        "ym_chip_0_writes": integrity["ym_chip_0_writes"],
+        "ym_chip_1_writes": integrity["ym_chip_1_writes"],
         "sound_commands": integrity["sound_commands"],
         "latch_reads": integrity["latch_reads"],
         "wav": signal,
