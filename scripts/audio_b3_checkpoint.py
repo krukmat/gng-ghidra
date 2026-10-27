@@ -95,6 +95,9 @@ def verify_rom_identity():
 def capture_tape(mame, rompath):
     if not shutil.which(mame) and not Path(mame).is_file():
         raise B3Stop("MAME_NOT_FOUND")
+    version = call([mame, "-version"], timeout=10)
+    if "0.289" not in (version.stdout + version.stderr):
+        raise B3Stop("MAME_VERSION_NOT_PINNED_0289")
     if OUT_TAPE.exists():
         # Never silently reuse a prior capture as a new real MAME session.
         OUT_TAPE.unlink()
