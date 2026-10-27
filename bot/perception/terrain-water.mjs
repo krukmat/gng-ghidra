@@ -49,10 +49,21 @@ export function detectWaterTerrain({rgba,width=256,height=224,
     .map(([left,right])=>({left,right,topY:grassTop,
       pixelEvidence:greens.slice(left,right+1).reduce((a,b)=>a+b,0)}));
   const island=shore===null?null:islands.find(v=>v.left>shore+12)??null;
-  // The right bank was not observed in the supplied witness. NEVER
-  // manufacture it from the island candidate or water pixels.
+  // Optional far bank requires physical edge connectivity AND clear water
+  // separation from the moving island. Still an unverified candidate.
+  const hasRight=banks.slice(-24).filter(n=>n>0).length>=12;
+  let rightBank=null;
+  if(hasRight&&island&&shore!==null){
+    for(let x=width-20;x>=12;x--){
+      if(banks.slice(x-12,x).filter(n=>n>1).length<2){
+        if(x>island.right+12)
+          rightBank={left:x,topY:bankTop,verified:false};
+        break;
+      }
+    }
+  }
   return {kind:'TERRAIN_CANDIDATE',
-    leftBank:shore===null?null:{right:shore},island,rightBank:null,
+    leftBank:shore===null?null:{right:shore},island,rightBank,
     hasWaterGap:!!(island&&shore!==null),verified:false};
 }
 export function createIslandVelocityTracker({maxGapFrames=20,
