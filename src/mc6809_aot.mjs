@@ -536,7 +536,7 @@ function genInsn(byte,pc,stopsTable){
 /** Compiles one basic block starting at (bank, pc). With `entries`, every
  * instruction boundary is also a `case` entry, placed after the time-slice
  * check so entering at pc_i runs exactly what a fresh block at pc_i would. */
-function compileBlock(code,bank,pc,stopsTable,overlay=null,entries=false,maxInsns=256){
+export function compileBlock(code,bank,pc,stopsTable,overlay=null,entries=false,maxInsns=256){
   const ov=overlay===null?null:code.ramOverlays[overlay];
   const byte=a=>{
     if(ov){

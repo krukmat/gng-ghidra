@@ -63,6 +63,7 @@ F-N:  MOTOR (cinta humana → residuo dinámico + certificación) → REGLAS →
 
 **Paso 5 — Cobertura estática del ROM completo (activo; no necesita cintas)**
 - **5.0** Validación barata primero: comprobar si el recorrido estático habría encontrado los PCs que ya provocaron HALT (`bank 3:0x519D`, `0xEC83`, `0xAFFC`, `0xE79E`, `0xC3A3`). Si no encuentra la mayoría (saltos calculados), se replanifica antes de seguir.
+  - **Resultado (27/10/2026): GO.** El flujo directo puro solo encuentra 1 de 5. [scripts/h3_static_cover.mjs](../scripts/h3_static_cover.mjs) añade dos patrones: los inmediatos `LDX/LDY/LDU/LDD #` de los bloques alcanzados como semillas (continuaciones tipo `LDY #$607D; JMP $54FF`) y hasta 64 punteros consecutivos en la dirección del inmediato (tablas `LDU #tabla; JMP [B,U]`). Si la tabla está en la ventana de banco y se lee desde código fijo, se prueba en los 5 bancos. Con eso encuentra **5/5** y cubre 4786 de las 4805 funciones de g4 (faltan 3 fijas; el resto son overlays de RAM). Coste: unos 9965 bloques, el doble que g4, por la sobreaproximación.
 - **5.1** Medir: código alcanzable estáticamente por banco (vectores reset/IRQ, semillas de g4, las 241 tablas de [v3_b3_jump_tables.mjs](../src/v3_b3_jump_tables.mjs), código copiado a RAM) frente a bloques compilados. Da el dato real de código traducido.
 - **5.2** Compilar todo lo alcanzable en una generación nueva; listar cada salto indirecto no resuelto con su ubicación.
 - **5.3** Certificar con las reglas habituales (cintas previas idénticas, doble replay, sin fallback).
