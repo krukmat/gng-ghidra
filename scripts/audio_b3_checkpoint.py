@@ -66,6 +66,20 @@ def call(argv, *, timeout=120):
     return result
 
 
+def verify_repository_privacy():
+    # A private path alone does not stop accidental git-add -f; refuse tracked outputs.
+    try:
+        ignore = (ROOT / ".gitignore").read_text(encoding="utf8").splitlines()
+        tracked = subprocess.run(["git", "ls-files", "--", "out"],
+                                 cwd=ROOT, capture_output=True, text=True,
+                                 timeout=10, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        raise B3Stop("GIT_PRIVACY_GUARD_STOP") from None
+    if "out/" not in ignore or tracked.returncode != 0 or tracked.stdout.strip():
+        raise B3Stop("GIT_PRIVACY_GUARD_STOP")
+    return True
+
+
 def verify_rom_identity():
     rom = ensure_private(PRIVATE / "gg2.bin", must_exist=True)
     if rom.stat().st_size != 32768:
@@ -287,6 +301,7 @@ def main(argv=None):
         PRIVATE.mkdir(parents=True, exist_ok=True)
         if PRIVATE.resolve() != PRIVATE:
             raise B3Stop("PRIVATE_ROOT_SYMLINK")
+        verify_repository_privacy()
         tape = capture_tape(args.mame, args.rompath) if args.capture else args.tape
         reference = args.reference_wav
         if args.capture and reference is None and OUT_MAME_WAV.exists():
