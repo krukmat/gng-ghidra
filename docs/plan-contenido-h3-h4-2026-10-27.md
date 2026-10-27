@@ -115,7 +115,7 @@ F-N:  MOTOR (cinta humana → residuo dinámico + certificación) → REGLAS →
   - **Barrido de cobertura de jefes con g6 (27/10/2026): 0 % UNCOMPILED en todo lo alcanzado; sin g7.**
     - **Método:** [scripts/h3_boss_search.mjs](../scripts/h3_boss_search.mjs) desde `titleCoinStart` + atajo; haz de 8, 32 y 96 hasta el frame 9000. Se añadieron `cp` (`$81`) al estado, contadores `branches`/`halts` y el peso de subida `H3_WU`.
     - **Inicio de fase validado:** `H3_POKE=1840:2120:114:N` da `$72`=N y `$81`=0 para N=0–5. La X difiere de la de mitad de fase, salvo en N=4 (6736 frente a 6784) y en N=5, donde inicio y mitad son idénticos (X=7472, Y=1615).
-    - **Métrica:** % de ramas evaluadas que acaban en `H3_BOSS_HALT`. Infla el volumen, porque casi todas las ramas reejecutan el mismo código; no mide bloques nuevos (pendiente, ver «Siguiente»).
+    - **Métrica:** % de ramas evaluadas que acaban en `H3_BOSS_HALT`. Infla el volumen, porque casi todas las ramas reejecutan el mismo código; no mide bloques nuevos (ver «Cobertura real»).
 
       | Fase (`0x72`) | Arranques | Ramas | HALT | Alcance real |
       |---|---|---|---|---|
@@ -129,7 +129,18 @@ F-N:  MOTOR (cinta humana → residuo dinámico + certificación) → REGLAS →
 
     - **Total:** 300 190 ramas, 0 `UNCOMPILED`/`UNSUPPORTED`. No hay residuo, así que no se crea g7. Ningún jefe consta como derrotado ni comparado con MAME.
     - **Límite:** el resultado esperado ya era 0, porque g6 cubre el 100 % de las funciones de ROM más el modo multientrada. Ensanchar el haz (8→96) no cambió el alcance en las fases 5–6: el cuello de botella es la poda por muerte, no el ancho. Faltan los jefes de las fases 2, 5 y 6 y el combate con Astaroth.
-    - **Siguiente:** medir los bloques compilados distintos que ejecutan las cintas de este barrido frente a las cintas certificadas (instrumentación de laboratorio sobre `blocks`, sin tocar el bundle). Recomendación para los jefes: una cinta humana por tramo.
+    - **Cobertura real (27/10/2026):** [scripts/h3_boss_coverage.mjs](../scripts/h3_boss_coverage.mjs) envuelve en memoria `blocks.get` de `program.mjs` (cuenta claves distintas con función) antes de `labCreateBoard`; bundle y runtime intactos. Validación barata con B2-D `lateStart` (1500 frames): 897 bloques en dos ejecuciones con el mismo conjunto, hash de frames estable e idéntico al de la ejecución sin envolver. Las cintas certificadas (5 B2-D + 9 B3) ejecutan 1491 bloques de 38 084 en g6 (3,92 %). Resultado en `out/h3/boss/coverage.json` (sin commit).
+
+      | Cinta | Fin (fase, scroll) | Bloques | Nuevos vs certificadas | % de g6 | Banco |
+      |---|---|---|---|---|---|
+      | `search-p0-4840` (cíclope) | 0, 3073 | 1535 | 297 | 0,78 % | fijo 297 |
+      | `search-p2-5680` (`$72` 2→3) | 3, 3584 | 1800 | 551 | 1,45 % | fijo 550, b3 1 |
+      | `search-p3-4720` (fase 4) | 3, 6144 | 1633 | 402 | 1,06 % | fijo 399, b3 3 |
+      | `search-p6-7000` (Astaroth) | 6, 7936 | 1283 | 136 | 0,36 % | fijo 136 |
+      | **Unión** | — | — | **981** | **2,58 %** | fijo 978, b3 3 |
+
+    - **Rutinas de jefe:** no se pueden atribuir. El repo no tiene un mapa de rutinas de jefe (ni nombres de funciones fuera del banco 4). Dato sin interpretar: `0xAFFC` (candidata M2.4) está entre los bloques nuevos de `search-p0-4840`. `0xE79E` y `0xC3A3` no aparecen.
+    - **Siguiente:** recomendación para los jefes: una cinta humana por tramo. Para atribuir bloques a jefes hace falta antes un mapa de rutinas del banco fijo.
 - [ExportFunctionGraph.java](../ghidra_scripts/ExportFunctionGraph.java) solo analiza el banco 4: ampliar o recorrer con el decodificador del compilador AOT.
 - **GO:** alcanzable compilado, residuo listado, cintas previas idénticas. **STOP:** cambio de hash en una cinta certificada.
 
