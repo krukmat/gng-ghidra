@@ -47,7 +47,7 @@ test('ROM-private frontier gives instruction family but never opcode bytes',()=>
 });
 
 
-test('ED interrupt modes (documented and alias) advance two bytes in eight T-states',()=>{
+test('ED interrupt modes (documented and alias) advance two bytes in eight T-states',async()=>{
   for(const [second,im] of [[0x46,0],[0x4e,0],[0x66,0],[0x6e,0],
                              [0x56,1],[0x76,1],[0x5e,2],[0x7e,2]]) {
     const rom=new Uint8Array(0x8000);
