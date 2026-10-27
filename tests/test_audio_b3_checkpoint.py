@@ -348,6 +348,67 @@ class B3CheckpointTests(unittest.TestCase):
         self.assertFalse(result["z80_execution_verified"])
         self.assertNotIn(str(health), json.dumps(result))
 
+    def test_legacy_heartbeat_with_callbacks_and_empty_tape_is_not_classified_as_no_callbacks(self):
+        self.tape([])
+        (self.base / "mame-audio-health.json").write_text(json.dumps({
+            "kind": "GNG_AUDIO_MAME_TAP_HEALTH_V1",
+            "tap_armed": True, "capture_closed": True,
+            "frames_observed": 1653, "ym_callbacks": 238062,
+            "main_latch_callbacks": 17, "sound_latch_callbacks": 5322,
+            "reset_callbacks": 2, "disabled_side_effect_callbacks": 0
+        }))
+        report = b3.summarize_capture(b3.OUT_TAPE)
+        self.assertEqual(report["activity_hint"],
+                         "BUS_CALLBACKS_OBSERVED_BUT_NO_JSONL_ROWS")
+        self.assertEqual(report["tap_health"]["ym_callbacks"], 238062)
+
+    def test_new_heartbeat_distinguishes_serialization_and_write_errors(self):
+        self.tape([])
+        baseline = {
+            "kind": "GNG_AUDIO_MAME_TAP_HEALTH_V1",
+            "tap_armed": True, "capture_closed": True,
+            "frames_observed": 128, "ym_callbacks": 30,
+            "main_latch_callbacks": 0, "sound_latch_callbacks": 5,
+            "reset_callbacks": 1, "disabled_side_effect_callbacks": 0,
+            "written_events": 0, "format_errors": 30,
+            "write_errors": 0, "flush_errors": 0
+        }
+        health = self.base / "mame-audio-health.json"
+        health.write_text(json.dumps(baseline))
+        self.assertEqual(b3.summarize_capture(b3.OUT_TAPE)["activity_hint"],
+                         "LUA_EVENT_SERIALIZATION_FAILURES")
+        baseline["format_errors"] = 0
+        baseline["write_errors"] = 30
+        health.write_text(json.dumps(baseline))
+        self.assertEqual(b3.summarize_capture(b3.OUT_TAPE)["activity_hint"],
+                         "LUA_EVENT_FILE_WRITE_FAILURES")
+        baseline["write_errors"] = 0
+        baseline["written_events"] = 30
+        health.write_text(json.dumps(baseline))
+        self.assertEqual(b3.summarize_capture(b3.OUT_TAPE)["activity_hint"],
+                         "LUA_WROTE_ROWS_BUT_TAPE_IS_EMPTY")
+
+    def test_new_heartbeat_requires_complete_numeric_error_counters(self):
+        self.tape([])
+        health = self.base / "mame-audio-health.json"
+        baseline = {
+            "kind": "GNG_AUDIO_MAME_TAP_HEALTH_V1",
+            "tap_armed": True, "capture_closed": True,
+            "frames_observed": 1, "ym_callbacks": 2,
+            "main_latch_callbacks": 0, "sound_latch_callbacks": 0,
+            "reset_callbacks": 0, "disabled_side_effect_callbacks": 0,
+            "written_events": 0, "format_errors": 0,
+            "write_errors": 0, "flush_errors": 0
+        }
+        del baseline["flush_errors"]
+        health.write_text(json.dumps(baseline))
+        self.assertEqual(b3.read_tap_health(b3.OUT_TAPE)["status"],
+                         "INVALID_TAP_HEALTH")
+        baseline["flush_errors"] = 0
+        health.write_text(json.dumps(baseline))
+        self.assertEqual(b3.read_tap_health(b3.OUT_TAPE)["status"],
+                         "ARMED_CAPTURE_CLOSED")
+
     def test_tap_heartbeat_rejects_forged_or_untrusted_values(self):
         self.tape([])
         health = self.base / "mame-audio-health.json"
