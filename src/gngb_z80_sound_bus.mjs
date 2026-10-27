@@ -13,11 +13,12 @@ export class SoundBusStop extends Error {
   constructor(code,detail={}) {super(code);this.code=code;this.detail=detail;}
 }
 export function createZ80SoundBus(rom,{onYmWrite=null,onReset=null,
-    mainCycleAnchor=0,masterTickAnchor=0}={}) {
+    onLatchRead=null,mainCycleAnchor=0,masterTickAnchor=0}={}) {
   if(!(rom instanceof Uint8Array)||rom.length!==0x8000)
     throw new SoundBusStop('AUDIO_Z80_BAD_ROM_SHAPE');
   if((onYmWrite!==null&&typeof onYmWrite!=='function')||
-     (onReset!==null&&typeof onReset!=='function'))
+     (onReset!==null&&typeof onReset!=='function')||
+     (onLatchRead!==null&&typeof onLatchRead!=='function'))
     throw new SoundBusStop('AUDIO_Z80_BAD_OBSERVER');
   for(const n of [mainCycleAnchor,masterTickAnchor])
     if(!Number.isSafeInteger(n)||n<0)
@@ -42,7 +43,11 @@ export function createZ80SoundBus(rom,{onYmWrite=null,onReset=null,
     if(!validAddr(addr))throw new SoundBusStop('AUDIO_Z80_ADDRESS_INVALID');
     if(addr<0x8000)return rom[addr];
     if(addr>=0xc000&&addr<0xc800)return ram[addr-0xc000];
-    if(addr===0xc800)return latch;
+    if(addr===0xc800){
+      // Observer receives *time only*, never the private command byte.
+      if(onLatchRead)onLatchRead(Object.freeze({z80TState:tState}));
+      return latch;
+    }
     throw new SoundBusStop('AUDIO_Z80_UNMAPPED_READ',{addr});
   };
   const write8=(addr,value,tState)=>{
