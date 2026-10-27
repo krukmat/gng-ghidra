@@ -135,6 +135,10 @@ async function run(){
       ym_writes:z80.ym_port_writes_from_running_z80,
       ym1_writes:z80.ym1_writes,ym2_writes:z80.ym2_writes,
       non_tape_ym_events:capturedYm.length,
+      first_generated_ym_tstate:capturedYm.length?
+        Math.floor(capturedYm[0][0]/4):null,
+      last_generated_ym_tstate:capturedYm.length?
+        Math.floor(capturedYm.at(-1)[0]/4):null,
       native_timing_parity_verified:false
     };
     // Any rejected producer event is a hard stop. Never render a partially
