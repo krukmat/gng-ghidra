@@ -33,9 +33,13 @@ All inputs are already available **only on the operator's Mac**:
 
 The script automatically runs the full regression first, then advances
 the real private ROM via precompiled Z80 AOT and the sound-bus scheduler,
-for at most **3 million Z80 T-states** (one sound-CPU second). The run
-applies only actual captured **main-CPU sound-latch INPUTS** that occur
-within that window; future inputs are not injected early. It uses the
+until **6,000,000 T-states after the first real post-reset MAME sound command**
+(approximately 25,782,194 T-states / 8.6 seconds for the existing
+`heartbeat4` capture, bounded by 36 million T-states and 5 million
+instruction steps). The execution remains one continuous Z80 CPU/bus session,
+chunked for bounded CPU and memory usage; there is **no fabricated music
+command or YM register playback**. Future commands beyond the target are not
+injected early. It uses the
 pre-release latch if one was observed. The runner counts newly executed
 Z80 `YM2203_WRITE` events through the sound-bus observer.
 
@@ -93,7 +97,7 @@ The operator ran the real private end-to-end command:
 - **323,564** Z80 AOT instructions, **3,000,002** T-states, runtime `LAB_ADVANCE_OK`.
 - Periodic IRQ: **239 requested, 169 IM1 acknowledged** in the current unverified lab model.
 - **7,440 freshly generated YM writes**, split 3,720 per chip. The event stream came directly from running the private Z80 ROM, **not** recorded MAME YM events.
-- No post-reset commands applied in this 1s interval (native first command occurs ~19.78m T-states after release, although a pre-release latch value was available).
+- The one-second probe was **too short to test native sound commands**: first post-reset command occurs ~19.78m T-states (~6.59s). The final command is now extended beyond that event, and reports actual sound-latch reads after it; only then can a silence verdict describe an input-stimulated sound program.
 - Pinned dual-YM renderer generated **63,187** PCM frames, **all zero**. Status `STOP/AUDIO_FINAL_PCM_SILENT`. Therefore **the goal has NOT been met**. Valid YM bus writes do not prove that meaningful tone/volume/key-on register operations occurred.
 - This result makes random static opcode expansion inappropriate. Audio engine and bot remain untouched.
 
@@ -116,3 +120,35 @@ New `src/gngb_ym_register_health.mjs` and `src/gngb_ym_native_baseline.mjs`. New
     node scripts/audio_live_final.mjs
 
 Return **only its JSON**. The evidence will identify the silent **register activation** boundary; no need to rerun MAME captures, repeat scanner batches or pass any `out/audio` files. If still silent without a clear source-vs-renderer diagnosis, report **BLOCKED: native Z80/IRQ and YM output parity unproven** and stop declaring progress. Do not claim browser sound without a continuous MC6809/Z80/dual YM PCM/AudioWorklet path.
+
+### Closing change — extended authentic-input window (2026-10-28)
+
+The previous final command conclusively proved execution and transport but
+reported a 1s **silent output** with 7,440 YM writes. We identified a
+fundamental test-design limitation: it stopped at 3 million T-states whereas
+the first **captured** main-to-sound command occurred 19,782,194 T-states
+after release. The source therefore was not exercised by a genuine live
+post-reset command in that one-second window.
+
+The command now extends the **same** Z80 CPU/bus execution until six million
+T-states after that first authentic command, with a hard 36m-T / 5m-step
+budget, chunked internal `advanceTo` calls, 200k bounded live YM events,
+and 30s maximum WAV. It never replays the native YM tape. `onLatchRead`
+records only aggregated real Z80 C800-read counts (including reads after
+the first command), not sound-command values; PCM must still be non-silent
+to pass. The native YM comparison uses the **same extended reset-relative
+window** for aggregate register activation statistics.
+
+One ROM-free synthetic delayed-command test executes past the previous
+3m-T cutoff and verifies the **newly delivered** sound command is polled
+by Z80 and produces new YM register writes. Isolated runtime tests
+**15/15 PASS** across sound probe and native control suites; full operator
+regression still awaits the single final local run.
+
+**Run:** `git pull --ff-only && node scripts/audio_live_final.mjs`.
+If the output remains `AUDIO_FINAL_PCM_SILENT`, the returned same-window
+native-vs-generated register activation and post-command latch-read counts
+are the terminal investigation result, not permission for more speculative
+static opcode or frame-sized iteration. The PCM audio of *running gameplay*
+remains uncoupled from MC6809 and browser AudioWorklet until explicitly
+integrated and audibly validated.
