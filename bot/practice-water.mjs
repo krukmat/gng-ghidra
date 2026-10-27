@@ -97,6 +97,39 @@ async function saveCurrentTape(name){
     return false;
   }
 }
+async function verifyVisibleCheckpoint(){
+  const referencePath=join(ROOT,'out/bot/b2-water-peak/frames.png');
+  if(source!=='out/bot/late-sweep/trial-6.json')
+    throw Error('BOT_PRACTICE_REFERENCE_FOR_CUSTOM_TAPE_NOT_AVAILABLE');
+  if(!existsSync(referencePath))
+    throw Error('BOT_PRACTICE_REFERENCE_MISSING_RUN_CAPTURE_WATER');
+  const png=readReplayContactPng(readFileSync(referencePath));
+  const res=await fetch(BASE+'/pixels',{cache:'no-store',
+    signal:AbortSignal.timeout(3000)});
+  if(!res.ok)throw Error('BOT_PRACTICE_NO_LIVE_PIXELS_'+res.status);
+  const frame=Number(res.headers.get('X-GnG-Frame'));
+  const session=Number(res.headers.get('X-GnG-Session'));
+  if(!Number.isSafeInteger(frame)||frame<targetFrame-8||
+     frame>targetFrame+8||session!==expectedSession)
+    throw Error('BOT_PRACTICE_LIVE_FRAME_IDENTITY_MISMATCH_'+frame);
+  const live=new Uint8Array(await res.arrayBuffer());
+  const index=Math.round((frame-2500)/10);
+  const variants=[index-1,index,index+1].filter(i=>i>=0&&i<31);
+  const checked=variants.map(i=>({
+    sourceFrame:2500+10*i,
+    ...comparePracticeWitness(live,replayContactFrame(png,i).rgba)
+  }));
+  const best=checked.sort((a,b)=>b.agreement-a.agreement)[0];
+  const witness={liveFrame:frame,session,reference:referencePath,
+    best,variants:checked,lifeVerified:false,bossDefeated:'UNVERIFIED'};
+  save('visual-witness.json',witness);
+  console.log('BOT_PRACTICE_VISUAL_WITNESS='+JSON.stringify({
+    liveFrame:frame,referenceFrame:best.sourceFrame,
+    agreement:best.agreement,status:best.status}));
+  if(best.status!=='SCENE_MATCH_CANDIDATE')
+    throw Error('BOT_PRACTICE_SCREEN_MISMATCH_NOT_SAFE_TO_HANDOFF');
+  return witness;
+}
 async function boot(){
   try{await state();
     throw Error('BOT_PRACTICE_PORT_OCCUPIED_CLOSE_EXISTING_GAME');
@@ -195,23 +228,41 @@ async function main(){
       await sleep(4);
     }
     if(stopRequested)throw Error('BOT_PRACTICE_CANCELLED_BEFORE_HANDOFF');
-    // Release the machine's scheduled controls atomically. Do NOT stop
-    // the original running engine or tamper with its memory.
+    // Release scheduled controls, then compare REAL live pixels to the
+    // pre-existing offline contact-sheet witness. Frame alone is not a
+    // guarantee of scene identity or that Arthur has survived.
     await post('/release');
     const s=await state();
     if(s.halt||s.sessionId!==expectedSession)
       throw Error('BOT_PRACTICE_HANDOFF_STATE_NOT_VALID');
-    handoff=true;outcome='HANDOFF_TO_HUMAN';
+    const witness=await verifyVisibleCheckpoint();
+    await saveCurrentTape('handoff-input-tape.json');
+    // Stop the entire child process, including its CPU worker, without
+    // patching its game code. The separate UI remains responsive.
+    process.kill(server.pid,'SIGSTOP');frozen=true;uiPhase='FROZEN';
+    outcome='FROZEN_AT_VERIFIED_SCENE';
     save('handoff.json',{source,tapeHash:tape.sha256,targetFrame,
       reachedFrame:s.frame,session:s.sessionId,eventsSent,maxInputLag:lateMax,
-      bossDefeated:'UNVERIFIED',islandLanding:'UNVERIFIED',
+      witnessAgreement:witness.best.agreement,bossDefeated:'UNVERIFIED',
+      lifeVerified:false,islandLanding:'UNVERIFIED',
       contract:'ORIGINAL_ENGINE_ORIGINAL_P1_NO_MEMORY_INJECTION'});
-    await saveCurrentTape('handoff-input-tape.json');
+    console.log('BOT_PRACTICE_PAUSED='+JSON.stringify({
+      status:'WAITING_FOR_BROWSER_CLICK',frame:s.frame,
+      witnessAgreement:witness.best.agreement,
+      bossDefeated:'UNVERIFIED',inputLagFrames:lateMax}));
+    console.log('BOT_PRACTICE_CLICK=REANUDAR_Y_JUGAR_EN_NAVEGADOR');
+    // Do not advance a single frame while the user locates the browser.
+    // Resume is authorized only by the explicit browser click.
+    const pauseStarted=Date.now();
+    while(!stopRequested&&!resumed&&Date.now()-pauseStarted<600000)
+      await sleep(100);
+    if(stopRequested)throw Error('BOT_PRACTICE_CANCELLED_WHILE_FROZEN');
+    if(!resumed)throw Error('BOT_PRACTICE_RESUME_TIMEOUT');
+    handoff=true;outcome='HANDOFF_TO_HUMAN';
     console.log('BOT_PRACTICE_HANDOFF='+JSON.stringify({
-      status:'AT_WATER_CANDIDATE',frame:s.frame,source,
+      status:'LIVE_CONTROLS_RELEASED',frame:s.frame,
       bossDefeated:'UNVERIFIED',inputLagFrames:lateMax}));
     console.log('BOT_PRACTICE_PLAY=YA_PUEDES_CONTROLAR_A_ARTHUR');
-    console.log('BOT_PRACTICE_KEYS=flechas_mover_Z_ataque_X_salto');
     console.log('BOT_PRACTICE_END=Ctrl+C_guarda_video_y_cierra_motor');
     let lastStatus=Date.now();
     while(!stopRequested){
@@ -221,21 +272,28 @@ async function main(){
       const current=await state();
       if(current.halt){
         console.log('BOT_PRACTICE_HALT='+JSON.stringify(current.halt));
-        outcome='HALT_AFTER_HANDOFF';
-        break;
+        outcome='HALT_AFTER_HANDOFF';break;
       }
     }
   }catch(error){
     outcome='STOP_'+String(error.message??error);
+    uiReason=outcome;uiPhase='STOP';
     console.error('BOT_PRACTICE_ERROR='+String(error.stack??error));
     process.exitCode=2;
   }finally{
+    // SIGCONT must precede every network request and termination; otherwise
+    // an aborted practice would leave the original engine process stopped.
+    if(frozen&&server?.pid){
+      try{process.kill(server.pid,'SIGCONT')}catch{}
+      frozen=false;
+    }
     if(server&&handoff)await saveCurrentTape('final-input-tape.json');
     await completeRecorder();
     save('practice.json',{status:outcome,source,targetFrame,lastFrame,
       session:expectedSession,handoff,eventsSent,lateMax,
       recorderZip:recordZip,browserOpened});
     if(server&&!server.killed)server.kill('SIGTERM');
+    if(handoffUI)await handoffUI.close();
     console.log('BOT_PRACTICE_STATUS='+outcome);
     if(recordZip)console.log('BOT_PRACTICE_REVIEW_ZIP='+recordZip);
     console.log('BOT_PRACTICE_DIR='+directory);
