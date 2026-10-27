@@ -32,7 +32,7 @@ test('B1 multiple seeded roots deduplicate PC and rank frequent blocker family',
   const rom=new Uint8Array(0x8000);
   rom.set([0xcb],0);
   rom.set([0xcb],0x100);
-  rom.set([0xed,0xb0],0x200);
+  rom.set([0xed,0xb1],0x200);
   const result=compileZ80Prefix(rom,{entries:[0,0x100,0x200,0]});
   const report=summarizeZ80Frontiers(result,{
     seedSource:'OPERATOR_SUPPLIED_PCS'
