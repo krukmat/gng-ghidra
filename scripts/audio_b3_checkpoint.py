@@ -310,6 +310,7 @@ def main(argv=None):
         if PRIVATE.resolve() != PRIVATE:
             raise B3Stop("PRIVATE_ROOT_SYMLINK")
         verify_repository_privacy()
+        verify_rom_identity()
         tape = capture_tape(args.mame, args.rompath) if args.capture else args.tape
         reference = args.reference_wav
         if args.capture and reference is None and OUT_MAME_WAV.exists():
