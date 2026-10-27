@@ -6,6 +6,7 @@
  * Usage: node scripts/v3_b3_live_bot.mjs <profile> [lastFrame]
  */
 import {spawn,execFileSync} from 'node:child_process';
+import {mkdirSync,writeFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
@@ -67,6 +68,13 @@ try{
   console.log('V3_B3_LIVE_BOT_READS='+JSON.stringify(s.reads));
   console.log('V3_B3_LIVE_BOT_RSS_MIB='+memory.map(m=>m.join(':')).join(','));
   console.log('V3_B3_LIVE_BOT_HALT='+JSON.stringify(s.halt));
+  // Exact replayable record of what the CPU read (private, out/).
+  const tape=await (await fetch(BASE+'/tape',{cache:'no-store'})).text();
+  const dir=join(ROOT,'out/v3/b3/live-tapes');
+  mkdirSync(dir,{recursive:true,mode:0o700});
+  const file=join(dir,'bot-'+profile+'-'+last+'.json');
+  writeFileSync(file,tape,{mode:0o600});
+  console.log('V3_B3_LIVE_BOT_TAPE='+file);
   console.log('V3_B3_LIVE_BOT='+(s.halt?'BLOCKED_HALT':'PASS_'+s.frame+'_LIVE_FRAMES'));
   if(s.halt)process.exitCode=2;
 }finally{server.kill();}

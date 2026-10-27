@@ -7,10 +7,12 @@ import {existsSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {loadFrozen} from './v2_b1_frozen.mjs';
 import {b3Certified} from './v3_b3_selection.mjs';
-export const B3_GENERATION=3;
+export const B3_GENERATION=4;
 /** From g3 on, every instruction boundary is a block entry, so an IRQ
  * return into the middle of a block (live timing) always has code. */
 export const B3_MULTI_ENTRY_FROM=3;
+/** From g4 on, every statically recovered jump-table target is a seed. */
+export const B3_STATIC_TABLES_FROM=4;
 export function b3GenerationDir(root,generation=B3_GENERATION){
   if(!Number.isInteger(generation)||generation<1)
     throw Error('V3_B3_GENERATION_INVALID');

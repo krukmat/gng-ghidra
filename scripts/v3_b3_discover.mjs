@@ -26,7 +26,9 @@ import {b2dTape,b2dCoverageFrames,B2D_PROFILES} from '../src/v3_b2d_tapes.mjs';
 import {b2dCertified} from '../src/v3_b2d_selection.mjs';
 import {B3_PROFILES,B3_HORIZONS,b3Tape} from '../src/v3_b3_tapes.mjs';
 import {createOnDemandBlocks} from '../src/v3_b3_ondemand.mjs';
-import {B3_GENERATION,B3_MULTI_ENTRY_FROM,b3GenerationDir} from '../src/v3_b3_bundle.mjs';
+import {B3_GENERATION,B3_MULTI_ENTRY_FROM,B3_STATIC_TABLES_FROM,b3GenerationDir}
+  from '../src/v3_b3_bundle.mjs';
+import {findJumpTables,jumpTableSeeds} from '../src/v3_b3_jump_tables.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const B2D=join(ROOT,'out/v3/b2d/frozen');
@@ -37,6 +39,7 @@ const REPORT=join(OUT,'discovery-report.json');
 export const B3_LIVE_FRAMES=6000;
 const fail=s=>{throw Error('V3_B3_'+s);};
 const ENTRIES=B3_GENERATION>=B3_MULTI_ENTRY_FROM;
+const TABLES=B3_GENERATION>=B3_STATIC_TABLES_FROM;
 const keyOf=s=>blockKey(s.overlay==null?s.bank:null,s.pc,s.overlay??null);
 const hashFrame=r=>{
   const h=createHash('sha256');
@@ -122,6 +125,14 @@ async function main(){
     const k=keyOf(s);
     if(!known.has(k)){known.add(k);seeds.push(s);}
   }
+  const tableSeeds=TABLES?jumpTableSeeds(code):[];
+  let tableNew=0;
+  for(const s of tableSeeds){
+    const k=keyOf(s);
+    if(!known.has(k)){known.add(k);seeds.push(s);tableNew++;}
+  }
+  if(TABLES)console.log('V3_B3_JUMP_TABLES='+findJumpTables(code).length+
+    '_TARGETS_'+tableSeeds.length+'_NEW_'+tableNew);
   const built=compileProgram(code,seeds,{libUrl,entries:ENTRIES});
   console.log('V3_B3_FUNCTIONS='+built.functions+'_ENTRIES_'+ENTRIES);
   console.log('V3_B3_BLOCKS='+built.blockCount+'_NEW_SEEDS_'+
@@ -200,7 +211,8 @@ async function main(){
     generation:B3_GENERATION,
     parent_program_sha256:parent.files['program.mjs'],parent_blocks:parent.blocks,
     blocks:built.blockCount,functions:built.functions,
-    block_entries:ENTRIES?'ALL_INSTRUCTION_BOUNDARIES':'BLOCK_START_ONLY',seeds,
+    block_entries:ENTRIES?'ALL_INSTRUCTION_BOUNDARIES':'BLOCK_START_ONLY',
+    static_jump_table_seeds:tableSeeds.length,seeds,
     extra_overlays:code.ramOverlays.slice(parentOverlays).map(ov=>
       ({start:ov.start,hex:Buffer.from(ov.bytes).toString('hex')})),
     no_input:'PASS_600_FRAMES_IDENTICAL_B2D',

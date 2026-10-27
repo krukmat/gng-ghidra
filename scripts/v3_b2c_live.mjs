@@ -6,7 +6,7 @@
 import {createServer} from 'node:http';
 import {Worker} from 'node:worker_threads';
 import {resolve,join} from 'node:path';
-import {existsSync,readFileSync} from 'node:fs';
+import {existsSync,readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createLiveControls} from '../src/v3_b2c_live_controls.mjs';
 import {LIVE_FRAMES} from '../src/v3_b2c_session_policy.mjs';
@@ -15,6 +15,7 @@ import {b2dCertified} from '../src/v3_b2d_selection.mjs';
 import {b2eCertified} from '../src/v3_b2e_selection.mjs';
 import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {createVisibleFrameGate} from '../src/v3_b2c_visible_gate.mjs';
+import {LIVE_TAPE_SCHEMA} from '../src/v3_b3_live_tape.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 // Use the offline-discovered gameplay bundle when available. Otherwise
@@ -76,6 +77,20 @@ let frame=null,latest=0,known=false,cycle=0,unknownBytes=null,source=null;
 let pixelProbe=null,displayedServerFrame=0;
 let lastGood=0,blocks=0,halt=null;
 let reads={all:0,coin:0,start:0,p1:0},busWitness=null;
+// Exact port values the CPU read this session (replayable offline).
+let portChanges=[],checkFrame=null;
+const PROGRAM_SHA256=loadFrozen(BUNDLE).manifest.files['program.mjs'];
+const liveTape=()=>({schema:LIVE_TAPE_SCHEMA,bundle:BUNDLE,
+  generation:B3_SELECTED?.generation??null,program_sha256:PROGRAM_SHA256,
+  session:generation,frame:latest,check:checkFrame,halt,changes:portChanges});
+const saveLiveTape=()=>{
+  const dir=join(ROOT,'out/v3/b3/live-tapes');
+  mkdirSync(dir,{recursive:true,mode:0o700});
+  const file=join(dir,new Date().toISOString().replace(/[:.]/g,'-')+'-'+
+    String(halt?.status??halt?.code??'RUNNING')+'.json');
+  writeFileSync(file,JSON.stringify(liveTape())+'\n',{mode:0o600});
+  return file;
+};
 const state=()=>({schema:'gng.v3.live-engine.v1',mode:'REAL_AOT',
   frame:latest,lastRenderedFrame:lastGood,frameKnown:known,
   unknownBytes,cycle,blocks,reads,busWitness,pixelProbe,
@@ -243,6 +258,7 @@ async function main(){
     pixelProbe=null;displayedServerFrame=0;
     source=null;lastGood=0;blocks=0;halt=null;
     reads={all:0,coin:0,start:0,p1:0};busWitness=null;
+    portChanges=[];checkFrame=null;
     advance=new Int32Array(new SharedArrayBuffer(4));
     const ack=advance;
     const gate=createVisibleFrameGate();
@@ -263,6 +279,8 @@ async function main(){
       }
       if(m.type==='frame'){
         latest=m.index;cycle=m.cycle;known=m.known;unknownBytes=m.unknownBytes;
+        for(const c of m.ports)portChanges.push(c);
+        checkFrame={frame:m.index,record_sha256:m.recordSha256};
         lastGood=m.lastGoodFrame;
         reads={all:m.reads,coin:m.coinReads,start:m.startReads,p1:m.p1Reads};
         busWitness=m.witness;
@@ -307,6 +325,8 @@ async function main(){
       if(m.type==='halt'||m.type==='error'){
         halt=m;
         if(m.type==='halt'&&m.witness)busWitness=m.witness;
+        for(const c of m.ports??[])portChanges.push(c);
+        console.log('V3_B3_LIVE_TAPE='+saveLiveTape());
         console.error('V3_B2C_ENGINE='+m.type.toUpperCase()+'_'+
           (m.status??m.code));
         if(m.type==='halt'){
@@ -354,6 +374,9 @@ async function main(){
       }
       if(req.method==='GET'&&u.pathname==='/state'){
         respond(res,200,JSON.stringify(state()));return;
+      }
+      if(req.method==='GET'&&u.pathname==='/tape'){
+        respond(res,200,JSON.stringify(liveTape()));return;
       }
       if(req.method==='GET'&&u.pathname==='/pixels'){
         if(!frame){respond(res,204,'');return;}

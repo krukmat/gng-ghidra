@@ -5,6 +5,7 @@
  */
 import {parentPort,workerData} from 'node:worker_threads';
 import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
@@ -13,12 +14,15 @@ import {validateLiveFrames} from '../src/v3_b2c_session_policy.mjs';
 import {createPortReadWitness} from '../src/v3_b2c_port_witness.mjs';
 import {inspectRealFrame} from '../src/v3_b2c_pixel_probe.mjs';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
+import {createPortRecorder} from '../src/v3_b3_live_tape.mjs';
 import {gngbGraphics,rendererInputs} from './r35_t5_render_check.mjs';
 
 const inputs=new Int32Array(workerData.inputs);
 const advance=new Int32Array(workerData.advance);
 const send=(message,transfer=[])=>parentPort.postMessage(message,transfer);
 const witness=createPortReadWitness();
+// Exact replayable record of every value the CPU read from SYSTEM/P1/DSW.
+const recorder=createPortRecorder();
 let lastGood=0;
 let cpu;
 try{
@@ -41,7 +45,11 @@ try{
     certifiedFrames:manifest.frames,sessionFrames:requestedFrames});
 
   cpu=createBoard(code,blocks,{frames:requestedFrames,
-    portRead:(addr,cycle)=>Atomics.load(inputs,addr-0x3000),
+    portRead:(addr,cycle)=>{
+      const value=Atomics.load(inputs,addr-0x3000);
+      recorder.observe(addr,cycle,value);
+      return value;
+    },
     onPortRead:read=>witness.observe(read),
     onFrame:frame=>{
       // Snapshot is emitted by the ACTUAL runtime. Never infer the
@@ -52,7 +60,9 @@ try{
         unknownBytes:unknown,cycle:cpu.state.C,
         reads:io.busReads,coinReads:io.activeSamples.coin1,
         startReads:io.activeSamples.start1,p1Reads:io.p1Reads,
-        witness:io,lastGoodFrame:lastGood};
+        witness:io,lastGoodFrame:lastGood,ports:recorder.drain(),
+        recordSha256:createHash('sha256').update(frame.record)
+          .update(frame.known).digest('hex')};
       let transfer=[];
       if(unknown===0){
         const image=renderGngbRgba(rendererInputs(frame.record,
@@ -85,7 +95,7 @@ try{
       bank:result.bank,pc:result.pc,overlay:result.overlay}:null,
     reads:finalIO.busReads,coinReads:finalIO.activeSamples.coin1,
     startReads:finalIO.activeSamples.start1,p1Reads:finalIO.p1Reads,
-    witness:finalIO});
+    witness:finalIO,ports:recorder.drain()});
 }catch(e){
   send({type:'error',code:e?.code??e?.message??'UNEXPECTED',
     frame:cpu?.state.records?.length??0});
