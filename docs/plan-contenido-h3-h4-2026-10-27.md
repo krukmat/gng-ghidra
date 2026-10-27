@@ -81,6 +81,15 @@ F-N:  MOTOR (cinta humana → residuo dinámico + certificación) → REGLAS →
     - **g6:** 10089 funciones y 38084 entradas, certificada; las 9 cintas son idénticas a g5.
     - **Paridad MAME:** valores 1–6 (fases 2–7), 4 frames cada uno (2600/3300/4500/5900): 24/24 MATCH, sin bytes omitidos.
     - **Límite:** prueba que cada fase carga y corre igual que MAME con Arthur casi inmóvil. No prueba jefes, vuelta 2 ni el final verdadero.
+  - **Vuelta 2 (27/10/2026): fases 1–6 GO; sala final con atajo no representable.**
+    - **Variables, leídas del código:**
+      - `0x0071` es la vuelta: 0x7446 hace `LDB #1; STB $7F; STB $71; CLR $72`.
+      - El avance de fase está en 0x754B y vuelve a 0 después de la 6.
+      - En 0x7378 se decide según `$71`.
+      - 0x7364 envía a la fase 5 (`LDB #4; STB $72`).
+    - **Paridad MAME con `0x0071=1` (+`0x007F=1`):** valores de fase 0–5, 24/24 MATCH.
+    - **Valor 6 con `0x0071=1`:** salta a 0xCC08, a mitad de `LDB #$3F`, y ejecuta `SWI`, que el AOT no soporta. MAME coincide byte a byte hasta el frame 2538, así que el juego original toma el mismo camino. El estado fabricado es incoherente; no es un defecto del port.
+    - **Pendiente:** la sala final de la vuelta 2 y el final verdadero solo se prueban por un camino legítimo (cinta o estado completo); `SWI` queda anotado para fidelidad total.
 - [ExportFunctionGraph.java](../ghidra_scripts/ExportFunctionGraph.java) solo analiza el banco 4: ampliar o recorrer con el decodificador del compilador AOT.
 - **GO:** alcanzable compilado, residuo listado, cintas previas idénticas. **STOP:** cambio de hash en una cinta certificada.
 
