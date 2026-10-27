@@ -218,8 +218,14 @@ class B3CheckpointTests(unittest.TestCase):
                                        allow_unpinned_lab=True,
                                        metadata=metadata)
         self.assertEqual(path, b3.OUT_TAPE)
-        self.assertEqual(metadata, {"mame_version": "0.290",
-                                    "mame_version_pinned": False})
+        self.assertEqual(metadata["mame_version"], "0.290")
+        self.assertFalse(metadata["mame_version_pinned"])
+        # Capture metadata intentionally also records private artifact paths;
+        # adding them must not break the version-provenance contract test.
+        self.assertEqual(metadata["reference_wav_path"],
+                         self.base / "mame-native-audio.wav")
+        self.assertEqual(metadata["tap_health_path"],
+                         self.base / "mame-audio-health.json")
 
     def test_strict_version_requires_a_recognizable_mame_release(self):
         from types import SimpleNamespace
