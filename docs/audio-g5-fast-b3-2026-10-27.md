@@ -321,3 +321,40 @@ The validator checks strict eligibility even with the opt-in; if a real Z80/YM c
     afplay out/audio/b3-first-audio.wav
 
 Report only stdout JSON and whether audio is recognizable. Never upload ROM, raw trace, native WAV or generated TSV.
+
+
+## B3: heartbeat4 finally reaches YMFM, first 5 seconds silent (27 October 2026)
+
+Operator Mac verified **54/54 Node + 53/53 Python PASS**, ROM SHA1_MATCH, main Z80 static prefix only. The private heartbeat4 tape passed the explicit cross-CPU interleave exception and native build/event conversion/render progressed to a WAV. The gate returned **STOP/PCM_SILENT_STOP**: in the first 5 seconds from the **first YM write**, the native lab renderer's PCM16 samples had peak=0. This is NOT proof that the source MAME game is silent, nor proof that the ymfm core is defective. No audible B3 result or native parity is verified.
+
+Pinned upstream YMFM documentation describes address/data port writes and sample-by-sample generation, consistent with this lab's basic call shape. A deeper check is needed to separate early silence, missing key-on/PSG volume commands, YMFM signal-path failure and source playback misalignment.
+
+New ROM-free diagnostic utilities, with tests and *no need to recapture MAME*:
+
+1. Verify native YMFM chip→PCM plumbing independently using a synthetic PSG channel-A tone (no ROM/audio data used). This builds pinned ymfm and writes only ignored out/audio/b3-probe-psg.{tsv,wav}:
+
+    python3 scripts/audio_ym_lab_probe.py out/audio/ymfm
+
+   Success status NON_SILENT_PSG_SYNTHETIC_ONLY proves the basic YMFM/PSG WAV signal path can emit non-zero PCM samples, **not** music fidelity. A SYNTHETIC_PSG_SILENT STOP instead points to renderer/mixer/core integration before investigating private game timing. Probe refuses to overwrite previous synthetic artifacts.
+
+2. Summarize the existing private heartbeat4 tape, counting aggregate writes and voice-trigger register commands in 5-second bins (0–5, 5–10, ..., 25–30 seconds) relative to the first YM write:
+
+    python3 scripts/audio_ym_activity.py --tape out/audio/mame-audio-events-heartbeat4.jsonl
+
+   Only per-bin counts (ym_port_writes, fm_key_on_commands, psg_positive_volume_writes) are output. No raw register values, addresses, ROM, audio bytes, timestamps or event tape contents are exported. These are **possible** voice activity markers, not proof of audible music, sound envelope or native parity.
+
+3. Optionally listen to the original, private MAME reference WAV, if present:
+
+    afplay out/audio/mame-native-audio-heartbeat4.wav
+
+   The native reference and rendered tape use different time origins. A valid MAME WAV does not, by itself, prove alignment or ymfm parity. If the beginning is silent and markers appear after 5 seconds, longer *state-preserving* rendering is the next gate, not artificial reordering of YM bus writes.
+
+When both utilities are published, synchronize and run regression before running the probes:
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected Node **54** and Python **59** (53 prior + 6 new tests), not yet verified on the Mac.
+
+Only report their **sanitized JSON** and whether the private MAME reference audio is audible. Do not send any WAV, ROM, input tape, TSV, register payload or local filesystem paths. The source event tape is never modified; the prior cross-CPU timestamp exception does not certify global CPU temporal parity.
