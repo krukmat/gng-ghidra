@@ -410,3 +410,85 @@ test('B1 seed validation, safety cap and no unsupported fallthrough',()=>{
   assert.deepEqual(capped.visitedPcs,[0,1]);
   assert.equal(capped.pending,1);
 });
+
+
+test('B2 ED LDI and LDD copy one memory byte with 16T and accurate Z80 flags',async()=>{
+  for(const [ed,delta] of [[0xa0,1],[0xa8,-1]]) {
+    const rom=new Uint8Array(0x8000);
+    rom.set([0xed,ed,0xc9]);
+    const c=compileZ80Prefix(rom);
+    assert.equal(c.status,'SUPPORTED_PREFIX_ONLY');
+    assert.equal(c.compiled,2);
+    const {z80AotBlocks}=await import('data:text/javascript,'+encodeURIComponent(c.source));
+    const state={pc:0,hl:delta===1?0xffff:0,de:delta===1?0xffff:0,
+      bc:2,a:0x11,f:0xc1,t:50};
+    const reads=[],writes=[];
+    const bus={
+      read8(addr,t){reads.push({addr,t});return 0x25},
+      write8(addr,value,t){writes.push({addr,value,t})}
+    };
+    z80AotBlocks.get(0)(state,bus);
+    assert.deepEqual(reads,[{addr:delta===1?0xffff:0,t:58}]);
+    assert.deepEqual(writes,[{addr:delta===1?0xffff:0,value:0x25,t:61}]);
+    assert.deepEqual(state,{pc:2,hl:delta===1?0:0xffff,de:delta===1?0:0xffff,
+      bc:1,a:0x11,f:0xe5,t:66});
+    assert.equal(z80AotBlocks.has(2),true);
+  }
+});
+
+test('B2 ED LDIR repeats one transfer per CPU step (21T), then exits (16T)',async()=>{
+  const rom=new Uint8Array(0x8000);rom.set([0xed,0xb0,0xc9]);
+  const c=compileZ80Prefix(rom);
+  assert.equal(c.status,'SUPPORTED_PREFIX_ONLY');
+  assert.equal(c.compiled,2);
+  const {z80AotBlocks}=await import('data:text/javascript,'+encodeURIComponent(c.source));
+  const buffer=new Map([[0xc000,0x25],[0xc001,0x10]]);
+  const calls=[];
+  const bus={
+    read8(addr,t){calls.push(['r',addr,t]);return buffer.get(addr)??0},
+    write8(addr,value,t){calls.push(['w',addr,value,t]);buffer.set(addr,value)}
+  };
+  const s={pc:0,hl:0xc000,de:0xc100,bc:2,a:0x11,f:0x41,t:0};
+  z80AotBlocks.get(0)(s,bus);
+  assert.deepEqual(s,{pc:0,hl:0xc001,de:0xc101,bc:1,a:0x11,f:0x65,t:21});
+  z80AotBlocks.get(0)(s,bus);
+  assert.deepEqual(s,{pc:2,hl:0xc002,de:0xc102,bc:0,a:0x11,f:0x41,t:37});
+  assert.deepEqual(calls,[
+    ['r',0xc000,8],['w',0xc100,0x25,11],
+    ['r',0xc001,29],['w',0xc101,0x10,32]
+  ]);
+  assert.equal(buffer.get(0xc100),0x25);
+  assert.equal(buffer.get(0xc101),0x10);
+});
+
+test('B2 ED LDDR decrements pointers, wraps BC=0 to 0xffff, and stays repeatable',async()=>{
+  const rom=new Uint8Array(0x8000);rom.set([0xed,0xb8,0xc9]);
+  const c=compileZ80Prefix(rom);
+  assert.equal(c.status,'SUPPORTED_PREFIX_ONLY');
+  const {z80AotBlocks}=await import('data:text/javascript,'+encodeURIComponent(c.source));
+  const calls=[];
+  const state={pc:0,hl:0,de:0,bc:0,a:0,f:0xff,t:9};
+  z80AotBlocks.get(0)(state,{
+    read8(addr,t){calls.push(['r',addr,t]);return 0},
+    write8(addr,value,t){calls.push(['w',addr,value,t])}
+  });
+  assert.deepEqual(state,{pc:0,hl:0xffff,de:0xffff,bc:0xffff,a:0,f:0xc5,t:30});
+  assert.deepEqual(calls,[['r',0,17],['w',0,0,20]]);
+});
+
+test('B2 ED block transfer undocumented F3/F5 derive from A+byte, not the byte alone',async()=>{
+  const rom=new Uint8Array(0x8000);rom.set([0xed,0xa0,0xc9]);
+  const c=compileZ80Prefix(rom);
+  const {z80AotBlocks}=await import('data:text/javascript,'+encodeURIComponent(c.source));
+  for(const [a,byte,bc,f,expected] of [
+    [0x00,0x00,1,0xff,0xc1],
+    [0x01,0x01,2,0x00,0x24],
+    [0x06,0x02,1,0xff,0xc9],
+    [0xfd,0x05,2,0x00,0x24]
+  ]) {
+    const s={pc:0,a,bc,hl:0xc000,de:0xc001,f,t:0};
+    z80AotBlocks.get(0)(s,{read8(){return byte},write8(){}});
+    assert.equal(s.f,expected);
+    assert.equal(s.f&0xc1,f&0xc1);
+  }
+});
