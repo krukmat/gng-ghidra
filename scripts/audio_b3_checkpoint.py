@@ -384,9 +384,13 @@ def main(argv=None):
                          help="Launch interactive MAME and record native YM bus writes")
     sources.add_argument("--tape", type=Path,
                          help="Existing private MAME audio JSONL (out/audio only)")
-    p.add_argument("--ymfm-src", type=Path, required=True, help="Pinned ymfm git checkout")
+    p.add_argument("--ymfm-src", type=Path, help="Pinned ymfm git checkout (required for render)")
     p.add_argument("--duration-ms", type=int, default=5000)
     p.add_argument("--mame", default="mame")
+    p.add_argument("--diagnose", action="store_true",
+                   help="Only summarize private MAME bus activity; no ROM access or rendering")
+    p.add_argument("--capture-id", type=str,
+                   help="Unique 1-32 character [A-Za-z0-9_-] capture suffix; preserves previous captures")
     p.add_argument("--lab-allow-unpinned-mame", action="store_true",
                    help="Explicit laboratory exception for an installed MAME other than 0.289; never native parity")
     p.add_argument("--rompath", default="roms")
@@ -396,19 +400,31 @@ def main(argv=None):
     try:
         if args.lab_allow_unpinned_mame and not args.capture:
             raise B3Stop("MAME_LAB_OVERRIDE_REQUIRES_CAPTURE")
+        if args.capture_id is not None and not args.capture:
+            raise B3Stop("MAME_CAPTURE_ID_REQUIRES_CAPTURE")
+        if args.diagnose and (args.capture or args.reference_wav is not None):
+            raise B3Stop("MAME_DIAGNOSE_REQUIRES_EXISTING_TAPE")
+        if not args.diagnose and args.ymfm_src is None:
+            raise B3Stop("YMFM_SOURCE_REQUIRED")
         PRIVATE.mkdir(parents=True, exist_ok=True)
         if PRIVATE.resolve() != PRIVATE:
             raise B3Stop("PRIVATE_ROOT_SYMLINK")
         verify_repository_privacy()
+        if args.diagnose:
+            report = summarize_capture(args.tape)
+            print(json.dumps(report, separators=(",", ":")))
+            return 0
         verify_rom_identity()
         capture_meta = {}
         tape = (capture_tape(args.mame, args.rompath,
                              allow_unpinned_lab=args.lab_allow_unpinned_mame,
-                             metadata=capture_meta)
+                             metadata=capture_meta,
+                             capture_id=args.capture_id)
                 if args.capture else args.tape)
         reference = args.reference_wav
-        if args.capture and reference is None and OUT_MAME_WAV.exists():
-            reference = OUT_MAME_WAV
+        capture_reference = capture_meta.get("reference_wav_path")
+        if args.capture and reference is None and capture_reference is not None and capture_reference.exists():
+            reference = capture_reference
         report = run_b3(tape=tape, ymfm_source=args.ymfm_src,
                         duration_ms=args.duration_ms, native_wav=reference,
                         source_mode=("MAME_SESSION_CAPTURE" if args.capture
@@ -417,9 +433,15 @@ def main(argv=None):
         print(json.dumps(report, separators=(",", ":")))
         return 0
     except B3Stop as e:
-        print(json.dumps({"kind": "GNG_AUDIO_B3_CHECKPOINT_V1",
-                          "status": "STOP", "reason": str(e),
-                          "audio_working": False, "rom_bytes_exported": False}))
+        result = {"kind": "GNG_AUDIO_B3_CHECKPOINT_V1",
+                  "status": "STOP", "reason": str(e),
+                  "audio_working": False, "rom_bytes_exported": False}
+        if str(e) == "TAPE_NO_YM_EVENTS" and "tape" in locals():
+            try:
+                result["capture_diagnostics"] = summarize_capture(tape)
+            except (B3Stop, OSError, ValueError):
+                result["capture_diagnostics"] = {"status": "UNAVAILABLE"}
+        print(json.dumps(result, separators=(",", ":")))
         return 2
     except (OSError, ValueError, OverflowError):
         print(json.dumps({"kind": "GNG_AUDIO_B3_CHECKPOINT_V1",
