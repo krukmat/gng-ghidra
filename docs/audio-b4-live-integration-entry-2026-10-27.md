@@ -152,3 +152,29 @@ Expected **65 Node, 68 Python tests**, pending Mac validation. Once PASS, use th
 Do not send the private roots/report file or any raw trace. Return only the sanitized scanner JSON, especially `families` and `first_frontiers`. A `PARTIAL_UNCERTIFIED` stop/exit 2 remains expected until all native-backed frontiers are addressed.
 
 **Then B4.T2-B2**: implement only the remaining observed families; `DD_IX_PREFIX` demands indexed-register and displacement semantics with native validation, not a blanket substitution. Do not mark B4.T2 or runtime audio completed until dynamic Z80/240Hz IRQ scheduling and live YM events pass their own gates.
+
+## B4.T2-B2 — BC/DE accumulator indirect + immediate ALU + typed DD frontier
+
+**Operator checkpoint at entry:** Node **65/65**, Python **68/68**, SHA1_MATCH. With 64 native-profiled roots from the existing MAME 0.288 `b4trace1`, scanner reports `PARTIAL_UNCERTIFIED`: **67 static decoded PCs**, **28 unsupported frontiers** (22 `LD_ACCUMULATOR_INDIRECT`, 5 `DD_IX_PREFIX`, 1 `ALU_IMMEDIATE`). The frontier PCs are statically derived from executed roots, **not all 28 individually proven executed PCs**.
+
+New compiler changes, keeping generated source private:
+- All four unprefixed `LD (BC),A`, `LD A,(BC)`, `LD (DE),A`, `LD A,(DE)` with 7 T-states, bus accesses through the existing sound bus, flags unaffected.
+- All eight unprefixed `ADD/ADC/SUB/SBC/AND/XOR/OR/CP A,n` families, 7 T-states, 2-byte instructions, with arithmetic carry/overflow/half-carry and undocumented F3/F5 flags matching corresponding register-operand semantics.
+- DD/FD prefixes **remain unsupported for execution**. Offline compiler now reads only the following byte to assign an enum-like `indexed_instruction` family (e.g. `INDEX_LD_RR_IMMEDIATE`, `INDEX_DISPLACEMENT_LOAD`, `INDEX_BIT_ROTATE_DISPLACEMENT`), without leaking operand bytes to GitHub or stdout.
+- `src/gngb_audio_frontier_report.mjs` explicitly validates that `indexed_instruction` is a safe uppercase tag and belongs only to `DD_IX_PREFIX`/`FD_IY_PREFIX`. Original DD report test updated.
+- `tests/test_gngb_z80_indirect_immediate.mjs` contains **five ROM-free tests** covering all four BC/DE accesses, all eight immediate ALU opcodes, flag edge cases, full classifier family matrix, and malicious tag rejection. Included in `scripts/audio_fast_checkpoint.mjs`. A local isolated V8 validation against the GitHub source verified **43 synthetic cases**, no failures. Not a substitute for operator Node suite or MAME differential.
+- No main MC6809 engine, bot, private ROM artifacts, MAME trace, or browser audio producer changed.
+
+### Next operator checkpoint, NO MAME recapture
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected **70 Node + 68 Python**, not yet confirmed on operator Mac. Once PASS:
+
+    node scripts/audio_z80_scan.mjs --roots out/audio/z80-native-roots-b4trace1.json --out out/audio/z80-frontier-b4trace1-b3.json
+
+The report may remain `PARTIAL_UNCERTIFIED` and return exit 2; this is an expected *coverage* STOP, not a regression. Return its stdout JSON with `families`, `first_frontiers` and `static_decoded_pcs`. The DD `indexed_instruction` values specify what IX handling is actually needed in **B4.T2-B3**, rather than implementing the entire index-prefix ISA speculatively.
+
+**Critical remaining dependencies:** Z80 IRQ servicing at 240 Hz, EI/HALT semantics, sound ROM dynamic branches, reset/latch parity, real-time ymfm/WASM PCM producer, AudioWorklet synchronization. Neither an empty *static* frontier report nor a 15-second recognizable **offline** WAV certifies live game audio.
