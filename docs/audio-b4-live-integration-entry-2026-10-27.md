@@ -121,3 +121,34 @@ Only if profile `status=PRIVATE_NATIVE_TRACE_PROFILE_NOT_CPU_PARITY` generates p
     node scripts/audio_z80_scan.mjs --roots out/audio/z80-native-roots-b4trace1.json --out out/audio/z80-frontier-b4trace1.json
 
 If `NO_RECOGNIZED_PC_LINES` (possibly zero-byte trace), STOP and share **only inspector JSON**. The next task would then instrument whether debugger `trace` returned an error and whether MAME's audiocpu actually executed with tracing enabled. Do not guess PC roots, alter files in `out/audio/`, or send raw tracer text.
+
+## B4.T2-B1 — Dynamic-root scanner and first Z80 opcode-family batch (2026-10-27)
+
+Verified operator evidence after recovering the saved MAME 0.288 native trace:
+- Python/Node fast gate **68/68 Python, 59/59 Node PASS**; private ROM SHA1_MATCH.
+- `b4trace1`: 28,345 standard MAME Z80 disassembly PC lines parsed into **194 distinct ROM PCs** (0 outside sound ROM); 64 most frequent native-backed PC roots selected under the existing seed cap. Note: `source_cpu_independently_verified=false`, `mame_loaded_same_rom_verified=false`, and trace loops may be condensed. Do not equate observed PCs to instruction-correctness or complete runtime coverage.
+- Multi-root Z80 scan returned `PARTIAL_UNCERTIFIED`, `static_decoded_pcs=63`, **30 blocked static frontiers**; families: `Z80_OTHER` 22, `DD_IX_PREFIX` 5, `LD_R_R` 1, `ALU_REGISTER` 1, `RET_CONDITIONAL` 1. These are aggregated static frontiers, not a percentage of dynamic trace coverage.
+- All original raw debugger traces, ROM and native-backed roots remain private in ignored `out/audio/`.
+
+**Implementation B4.T2-B1 on `main`:**
+- `src/gngb_z80_static_codegen.mjs` now statically compiles unprefixed `LD r,r'` including `(HL)` memory operands (4/7 T-states), **except HALT** (still fail-closed).
+- Compiles `ADD/ADC/SUB/SBC/AND/XOR/OR/CP A,r` including `(HL)`, preserving Z80 arithmetic S/Z/H/PV/N/C and undocumented F3/F5 behavior (CP uses operand F3/F5); uses 4/7 T-states.
+- Compiles `RET cc` for all NZ/Z/NC/C/PO/PE/P/M conditions (5T not taken / 11T taken), using the stack for an actual return address; never fabricates a compile-time target.
+- Refines diagnostic families previously lumped under `Z80_OTHER`: `ADD_HL_RR`, `LD_ACCUMULATOR_INDIRECT`, `ROTATE_ACCUMULATOR`, `JP_INDIRECT`, `LD_SP_HL`. These classifications **are not implementations**.
+- New ROM-free tests `tests/test_gngb_z80_live_families.mjs`, added to `scripts/audio_fast_checkpoint.mjs`: six tests cover register/memory moves, arithmetic and undocumented flags, every conditional return and branch, HALT rejection and family classifications.
+- The updated JavaScript compiler and emitted instructions were exercised against **27 synthetic execution cases** in an isolated V8 check and passed. This is not an independent native MAME differential or the complete regression on operator Mac.
+- No edits to the MC6809 game engine, bot, audio MAME capture, browser AudioWorklet or private ROM code.
+
+**Next Mac checkpoint**, no new MAME capture necessary:
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected **65 Node, 68 Python tests**, pending Mac validation. Once PASS, use the previously captured `b4trace1` roots and a NEW private report filename:
+
+    node scripts/audio_z80_scan.mjs --roots out/audio/z80-native-roots-b4trace1.json --out out/audio/z80-frontier-b4trace1-b2.json
+
+Do not send the private roots/report file or any raw trace. Return only the sanitized scanner JSON, especially `families` and `first_frontiers`. A `PARTIAL_UNCERTIFIED` stop/exit 2 remains expected until all native-backed frontiers are addressed.
+
+**Then B4.T2-B2**: implement only the remaining observed families; `DD_IX_PREFIX` demands indexed-register and displacement semantics with native validation, not a blanket substitution. Do not mark B4.T2 or runtime audio completed until dynamic Z80/240Hz IRQ scheduling and live YM events pass their own gates.
