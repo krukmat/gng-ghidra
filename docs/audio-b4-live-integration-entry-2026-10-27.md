@@ -235,3 +235,30 @@ No main MC6809 engine, bot, audio tape, private ROM, MAME debugger capture, YM s
     node scripts/audio_z80_scan.mjs --roots out/audio/z80-native-roots-b4trace1.json --out out/audio/z80-frontier-b4trace1-b5.json
 
 Return only the sanitized JSON report, particularly family counts and indexed subfamily tags. A `PARTIAL_UNCERTIFIED` scanner exit 2 remains an expected coverage gate and must not be confused with test failure. Further supported instructions can expose more blockers, particularly during IRQ/latch processing. **Even zero static blockers from 64 roots cannot certify all 194 executed PCs or full sound hardware timing.** Live audio still requires dynamic Z80 scheduling/IRQ, YM PCM generation, and AudioWorklet integration.
+
+## B4.T2-B5 — JP conditional, Z80 EX family, HALT boundary and CB subfamily diagnosis
+
+**Operator entry checkpoint:** full Mac regression **81/81 Node PASS**, **68/68 Python PASS**, SHA1_MATCH. With the same private MAME 0.288 native-PC roots (`b4trace1`) the static scanner reports **186 compiled PCs** and **6 blocked frontiers**: 3 `JP_CONDITIONAL`, 1 `EXCHANGE`, 1 `HALT`, 1 `CB_BIT_ROTATE_PREFIX`. These are *static* code paths reached from 64 execution-backed roots, not full 194-PC dynamic coverage or sound CPU timing parity. Raw native MAME trace and AOT compiled output remain private.
+
+**Implemented in `src/gngb_z80_static_codegen.mjs`:**
+- All eight `JP cc,nn` (NZ/Z/NC/C/PO/PE/P/M) using compiler-resolved direct address and both CFG edges, 10 T whether taken or not; flags preserved.
+- `EX DE,HL`, `EX AF,AF'`, `EXX`, and `EX (SP),HL`. All except `EX (SP),HL` take 4 T; stack-exchange uses 19 T and reads both stack bytes before writing previous HL, handling SP=FFFF wrap. Alternate register banks require explicit initialized *A/F'* or *BC/DE/HL'* fields; missing banks fail closed instead of injecting undefined into CPU state. Full 16-bit main/alternate state initialization remains a future scheduler responsibility.
+- `HALT` sets `halted=true`, advances PC to the post-HALT address and charges 4 T for the initial HALT instruction. `stepZ80AotAtBoundary` rejects subsequent CPU execution while halted with `AUDIO_Z80_IRQ_HALTED_AWAITING_SERVICE`. This is a **safety boundary**, not an implementation of halted wait cycles, real IRQ/NMI acceptance, post-IRQ resume or 240Hz scheduling. `canAcceptZ80MaskableIrq` remains a readiness predicate only.
+- `CB` instruction execution remains **unsupported**. Newly added `classifyZ80CbInstruction` recognizes `CB_ROTATE_SHIFT`, `CB_BIT_TEST`, `CB_RESET_BIT`, `CB_SET_BIT` by second-byte family and publishes only uppercase, validated tags `cb_instruction` in `src/gngb_audio_frontier_report.mjs`. No CB operands or ROM bytes are shared.
+- Legacy HALT test updated from 'unsupported opcode' to the new distinct `halted` AOT state. Existing exact CB frontier expectations updated for privacy-safe diagnostic metadata.
+
+**Synthetic tests:** new `tests/test_gngb_z80_jp_exchange_halt_cb.mjs` has **9 ROM-free Node tests**, covering all JP flags/outcomes, register exchanges, stack exchange and rollover, reject missing alternate banks, HALT stop boundary, EI+HALT eligibility timing, CB categorization and metadata allowlist. Added to the single Mac regression gate. A separate isolated V8 check on the actual emitted compiler code verified 71 targeted paths with zero failures (before the additional shadow-state guard; the guard has its own fixture). No full Mac test execution or native differential completed for this commit.
+
+**Next checkpoint on operator Mac, NO new MAME capture:**
+
+    git fetch origin main
+    git merge --no-edit origin/main
+    node scripts/audio_fast_checkpoint.mjs
+
+Expected **90 Node** and **68 Python**, *not yet verified by operator*. If PASS, reuse existing native roots and choose a NEW private report name:
+
+    node scripts/audio_z80_scan.mjs --roots out/audio/z80-native-roots-b4trace1.json --out out/audio/z80-frontier-b4trace1-b6.json
+
+`PARTIAL_UNCERTIFIED` and exit 2 are expected if newly exposed opcode families remain. Return **only** JSON stdout, especially `families`, `first_frontiers`, and `cb_instruction` if present. Do not send trace, ROM, generated code or any private files.
+
+**Follow-up B4.T2-B6 priority:** Implement only the real observed CB subfamily and other new scanner blockers; separately extend native-backed coverage beyond the first 64/194 observed PC seeds. Full hardware audio remains explicitly blocked on a real Z80 instruction/IRQ scheduler, YM2203 real-time synthesis and AudioWorklet integration. No main MC6809 engine or bot was modified.
