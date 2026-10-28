@@ -127,3 +127,52 @@ test('G5 final authentic late command crosses old 3M ceiling and creates Z80-ori
   assert.equal(result.native_ym_events_replayed,false);
   assert.equal(result.irq_phase_parity_verified,false);
 });
+
+test('G5 runtime AOT compiles real indirect JP(HL) destination only when executed',async()=>{
+  const rom=new Uint8Array(0x8000);
+  // Main code is fully compiled, but JP(HL) has no static destination.
+  rom.set([0x21,0x00,0x01,0xe9,0xcb,0x40],0);
+  // A different ROM address is only discovered once the CPU jumps there.
+  rom.set([0x3e,0x08,0x32,0x00,0xe0,
+    0x3e,0x0f,0x32,0x01,0xe0,0x76,0xcb,0x40],0x100);
+  const writes=[];
+  const result=await probeZ80SoundExecution(rom,[0],{
+    targetTStates:120,maxSteps:60,
+    onYmWrite:e=>writes.push([e.addr,e.value])
+  });
+  assert.equal(result.status,'LAB_ADVANCE_OK');
+  assert.equal(result.compiled_static_rom_pcs,2);
+  assert.ok(result.runtime_resolved_rom_blocks>=4);
+  assert.equal(result.runtime_first_unsupported_family,null);
+  assert.equal(result.ym_port_writes_from_running_z80,2);
+  assert.deepEqual(writes,[[0xe000,0x08],[0xe001,0x0f]]);
+  assert.equal(result.native_ym_events_replayed,false);
+});
+
+test('G5 runtime AOT rejects actual unknown indirect target without inventing opcode',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0x21,0x00,0x01,0xe9,0xcb,0x40],0);
+  rom.set([0xed,0x00,0xcb,0x40],0x100);
+  const result=await probeZ80SoundExecution(rom,[0],{
+    targetTStates:120,maxSteps:60
+  });
+  assert.equal(result.status,'STOP_BEFORE_TARGET');
+  assert.equal(result.reason,'AUDIO_T3_DYNAMIC_OPCODE_UNSUPPORTED');
+  assert.equal(result.runtime_resolution_attempts,1);
+  assert.equal(result.runtime_resolved_rom_blocks,0);
+  assert.equal(result.rom_bytes_exported,false);
+  assert.equal(result.native_instruction_parity_verified,false);
+  assert.doesNotMatch(JSON.stringify(result),/z80AotBlocks|generatedSource/);
+});
+
+test('G5 runtime AOT rejects PC outside sound ROM without emulating RAM code',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0x21,0x00,0xc0,0xe9,0xcb,0x40],0);
+  const result=await probeZ80SoundExecution(rom,[0],{
+    targetTStates:120,maxSteps:60
+  });
+  assert.equal(result.status,'STOP_BEFORE_TARGET');
+  assert.equal(result.reason,'AUDIO_T3_DYNAMIC_PC_OUTSIDE_SOUND_ROM');
+  assert.equal(result.runtime_first_unsupported_family,'OUTSIDE_SOUND_ROM');
+  assert.equal(result.ym_port_writes_from_running_z80,0);
+});
