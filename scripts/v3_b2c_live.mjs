@@ -373,11 +373,13 @@ document.addEventListener('keyup',e=>{
 // Direct human-initiated button presses, not scripted gameplay.
  // The browser holds the active-low hardware bit briefly, then releases it.
  // Only a real MC6809 bus read can generate a PASS marker.
-// The GnG ROM filters coin pulses by length: measured on this engine, a
-// 400 ms (24-frame) hold is ignored (CREDIT 0) while 100-200 ms holds are
-// credited, like the lab tapes' 12-frame Coin/Start. Clicks queue so each
-// one is a separate press with a released gap before the next.
-const PULSE_MS=200,PULSE_GAP_MS=200;
+// The GnG ROM credits a Coin only if the CPU reads it active on at most 12
+// frames, like the lab tapes' 12-frame Coin/Start: measured on this engine,
+// 13 or more reads are never credited, and a 200 ms hold (11.9 frames) lands
+// on 12 or 13 depending on phase. 100 ms lands on 6-7 reads and is always
+// credited, also from the paused first VBlank. Clicks queue so each one is a
+// separate press with a released gap before the next.
+const PULSE_MS=100,PULSE_GAP_MS=200;
 const pulses={};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function pulse(control){

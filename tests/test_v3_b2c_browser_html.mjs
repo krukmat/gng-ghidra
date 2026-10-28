@@ -60,13 +60,14 @@ test('the operator controls pause only at real VBlank and resume CPU',()=>{
   assert.match(source,/gate\.shouldAdvance\(\{index:m\.index,known:m\.known,coinHeld\}\)/);
 });
 test('button pulses stay inside the hold the GnG ROM credits',()=>{
-  // Measured on the live engine: a 400 ms (24-frame) Coin hold leaves
-  // CREDIT 0, while 100 ms and 200 ms holds give CREDIT 2 and Start
-  // begins the game. Keep button pulses inside that credited window.
+  // Measured on the live engine: the ROM credits a Coin only when the CPU
+  // reads it active on at most 12 frames (12 reads: 10/10 credited; 13 or
+  // more: 0/13). A 200 ms hold (11.9 frames) lands on 12 or 13 reads by
+  // phase; 100 ms lands on 6-7 and was credited 11/11, also at frame 311.
   const html=new Function('return '+fixture[1])();
   const js=html.match(/<script>([\s\S]*?)<\/script>/)[1];
   const hold=Number(js.match(/PULSE_MS=(\d+)/)?.[1]);
-  assert.ok(hold>=100&&hold<=200,'pulse hold '+hold+' ms outside credited window');
+  assert.ok(hold>=100&&hold<=150,'pulse hold '+hold+' ms outside credited window');
   assert.match(js,/PULSE_GAP_MS=\d+/);
 });
 test('an early coin credit cannot survive into the next reset session',()=>{
