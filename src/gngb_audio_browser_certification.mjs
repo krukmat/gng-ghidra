@@ -11,7 +11,9 @@ export function browserAudioSnapshot(raw){
   return {
     id:raw.sessionId,paused:raw.operatorPause===true,
     halted:raw.halt!==null&&raw.halt!==undefined,
-    active:a.active===true,stop:sanitizedCode(a.stop),
+    active:a.active===true,
+    stop:a.stop===null||a.stop===undefined?null:
+      sanitizedCode(a.stop)??'AUDIO_BROWSER_REDACTED_STOP',
     queued:a.queuedSamples,delivered:a.deliveredSamples,
     produced:a.producedSamples,nonzero:a.nonzeroSamples,
     frame:raw.frame,wstate:w.state??null,
