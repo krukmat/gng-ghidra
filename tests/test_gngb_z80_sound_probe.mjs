@@ -176,3 +176,44 @@ test('G5 runtime AOT rejects PC outside sound ROM without emulating RAM code',as
   assert.equal(result.runtime_first_unsupported_family,'OUTSIDE_SOUND_ROM');
   assert.equal(result.ym_port_writes_from_running_z80,0);
 });
+
+test('G5 real failure contract: late latch command plus indirect ROM jump dynamically reaches YM writes',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([
+    0x3a,0x00,0xc8, // read command
+    0xfe,0x28,      // CP 28
+    0x20,0xf9,      // wait until 28
+    0x21,0x00,0x01, // HL := new sound routine 0x0100
+    0xe9,           // JP (HL) unknown to static roots
+    0xcb,0x40
+  ],0);
+  rom.set([
+    0x3e,0x08,0x32,0x00,0xe0,
+    0x3e,0x0f,0x32,0x01,0xe0,
+    0x76,0xcb,0x40
+  ],0x100);
+  const events=[];
+  const result=await probeZ80SoundExecution(rom,[0],{
+    targetTStates:3_000_250,maxSteps:500_000,
+    nativeControls:{
+      kind:'GNG_AUDIO_B4_T3_PRIVATE_NATIVE_CONTROLS_V1',
+      clock:'RESET_RELEASE_RELATIVE_MASTER_12MHZ',
+      irq_phase_native_verified:false,
+      main_sound_controls_only:true,
+      pre_release_latch:null,
+      events:[{kind:'SOUNDLATCH_WRITE',tick12m:4*3_000_012,value:0x28}]
+    },
+    onYmWrite:e=>events.push([e.addr,e.value,e.z80TState])
+  });
+  assert.equal(result.status,'LAB_ADVANCE_OK');
+  assert.equal(result.native_sound_controls_applied,1);
+  assert.ok(result.z80_sound_latch_reads_after_command>0);
+  assert.ok(result.runtime_resolved_rom_blocks>=4);
+  assert.equal(result.ym_port_writes_from_running_z80,2);
+  assert.deepEqual(events.map(e=>e.slice(0,2)),[
+    [0xe000,0x08],[0xe001,0x0f]
+  ]);
+  assert.ok(events[0][2]>3_000_012);
+  assert.equal(result.native_instruction_parity_verified,false);
+  assert.equal(result.native_ym_events_replayed,false);
+});
