@@ -1,10 +1,10 @@
 # G5-AUDIO-RECOVERY — Resolver bloqueo real de audio Z80 → YM2203 → PCM
 
-**Estado:** T0–T2 PASS / T3 PENDIENTE DE IMPLEMENTACIÓN, engine autorizado · **Prioridad:** P0 · **Repo:** `krukmat/gng-ghidra` · **Rama:** `main` · **Fecha:** 2026-10-28
+**Estado:** T0–T2 PASS / T3 cadena local implementada y medida, aceptación de AudioWorklet/audición BLOCKED · **Prioridad:** P0 · **Repo:** `krukmat/gng-ghidra` · **Rama:** `main` · **Fecha:** 2026-10-28
 
-**Resultado actual:** audio auténtico Z80 → dual YM2203 → PCM demostrado en el laboratorio privado y reconocido por el operador. La partida sigue sin AudioWorklet conectado. El cierre verificable y el contrato mínimo de integración están al final de este documento; las evidencias de partida siguientes son históricas.
+**Resultado actual:** audio auténtico Z80 → dual YM2203 → PCM demostrado en el laboratorio privado y reconocido por el operador. La partida ahora produce PCM continuo desde sus propios eventos MC6809 y lo entrega por loopback; el AudioWorklet real y la audición durante gameplay siguen sin verificarse. La evidencia T3 al final de este documento reemplaza el estado técnico histórico anterior.
 
-**Dirección vigente:** el operador autorizó conectar el audio al engine («pues conectalo... cual es el problema?») y después pidió estas tareas y un prompt de continuación. Se permite modificar la conexión de audio en el worker, servidor/UI y bundle privado necesario. El bot continúa excluido y la semántica MC6809 no forma parte de esta autorización. No queda un bloqueo de permisos: falta implementar y verificar T3.0–T3.7, detalladas abajo. Los commits `51780ba`, `e5b6fdb` y `1b4805b` contienen T0–T2; no repetir su investigación sin una regresión nueva.
+**Dirección vigente:** el operador autorizó conectar el audio al engine («pues conectalo... cual es el problema?») y después pidió estas tareas y un prompt de continuación. Se permite modificar la conexión de audio en el worker, servidor/UI y bundle privado necesario. El bot continúa excluido y la semántica MC6809 no forma parte de esta autorización. La cadena local de T3 está implementada; faltan la verificación del AudioWorklet real, sincronía de presentación y audición humana. Los commits `51780ba`, `e5b6fdb` y `1b4805b` contienen T0–T2; no repetir su investigación sin una regresión nueva.
 
 ## Objetivo y definición de terminado
 
@@ -86,7 +86,7 @@ Ejecución continua final: **3.052.981 pasos**, **T=25.782.197** frente a objeti
 - WAV privado mono 62.500 Hz: **537.812 muestras**, **125.347 no nulas**, **peak 15.820**, **RMS 1.868,80**. Solo entraron al renderer escrituras producidas por la Z80 de esta ejecución. MAME se leyó únicamente como oráculo diferencial; no alimentó la síntesis.
 - `afplay` local terminó con **exit 0**. El operador respondió **«Sí, se reconoce»**. Tras reconstruir el renderer, el WAV definitivo es idéntico byte a byte al oído. WAV, ROM, controles, diagnóstico y resultados detallados permanecen en `out/audio/`; no se adjuntaron ni publicaron. El TSV intermedio se elimina automáticamente.
 
-### T3 — Pendiente: estado técnico y autorización vigente
+### T3 — Estado técnico histórico al cierre de T2
 
 La inspección de fuentes prueba que `src/gngb_runtime.mjs:createBoard` ya admite `onAudioEvent`, y `createGngbMainZ80Bridge` traduce latch/reset. Sin embargo, **`scripts/v3_b2c_engine_worker.mjs` no conecta el callback**, carga un runtime del bundle privado cuya capacidad debe verificarse y transmite solamente frames/inputs. **`scripts/v3_b2c_live.mjs` no conecta PCM ni crea/resume AudioContext**. El renderer C++ actual es un proceso offline, sin productor incremental de PCM. Al cerrar T0–T2 no se habían modificado esos archivos, el runtime MC6809 ni el bot. La posterior autorización del operador permite implementar la conexión; no aporta por sí misma evidencia de audio durante gameplay.
 
@@ -102,6 +102,8 @@ Contrato pendiente, todavía no implementado ni presentado como audio jugable:
 El pacing actual del servidor (intervalo mínimo 17 ms y pausas posibles) no acredita el reloj hardware de ~16,768 ms/frame. **No hay medición ni audición durante gameplay**. La autorización concedida queda acotada a la conexión de audio en los dos scripts del engine anteriores y su bundle; no incluye modificar semántica MC6809 ni bot. Hasta validar ese contrato, `game_audio_live=false`, `browser_worklet_connected=false` y las declaraciones de paridad nativa siguen siendo falsas.
 
 ## Continuación ejecutable — T3.0–T3.7
+
+Contrato original de la continuación; los resultados ejecutados y el bloqueo actual figuran en “Ejecución T3 en Mac” abajo.
 
 **Precedencia:** T0 → T1 → T2 ya están completadas. Revalidar el gate sobre el HEAD de reanudación y después ejecutar este grafo. Las cuatro tareas T3.1, T3.2, T3.3 y T3.5 pueden avanzar en paralelo tras T3.0; no pasar a aceptación integrada hasta completar sus dependencias. Los agentes auxiliares solo reciben fuentes/tests públicos, nunca ROM, bundle derivado, capturas, WAV ni contenido de `out/`.
 
@@ -127,7 +129,32 @@ El pacing actual del servidor (intervalo mínimo 17 ms y pausas posibles) no acr
 - Coin/Start/acción y reset deben responder en la misma partida con audio; no basta la audición del WAV de T2. Si falta audición humana, la aceptación queda pendiente aunque pasen las métricas.
 - Cada unidad revisable incluye commit claro y evidencia de sus pruebas. No incluir cambios ajenos del árbol de trabajo ni artefactos privados. No extender la autorización al bot o a cambios de semántica MC6809.
 
-### Prompt para retomar en una nueva sesión
+## Ejecución T3 en Mac — 2026-10-28
+
+**Commit de implementación:** `53fb482` (`feat(audio): stream live MC6809 sound through Z80 and dual YM`). **Estado integrado:** `BLOCKED_BROWSER_WORKLET_AND_HUMAN_AUDITION`, no `AUDIO_WORKING`. El productor y el transporte HTTP local están medidos; la salida real por AudioWorklet no está certificada. No se modificaron el bot ni las reglas de ejecución MC6809. Los cambios H3 y los directorios ajenos sin seguimiento del árbol quedaron fuera del commit.
+
+### T3.0 — preflight y reloj
+
+- El servidor seleccionó **B3 G6 certificado**, 38.084 bloques. Su runtime congelado original no tenía `onAudioEvent`. Se generó una copia local bajo `out/audio/live-bundles/`, con el programa AOT idéntico (SHA-256 `a1618b9100230e1d97669f92826440fbe3c8e3f2fb5f341c33a937c268032566`) y solo el runtime público con observadores (SHA-256 `1a4add01ed42654b9fca8750f37b5f2c85d1887a723afe711a96b56007e3c5d3`). `loadFrozen` validó todos los assets; dos frames de la copia y el original dieron la misma secuencia. El bundle certificado original permanece intacto. El límite obsoleto de 30.000 bloques de la política live, que rechazaba G6 antes de ejecutar, se corrigió a 40.000 con prueba de aceptación/rechazo; esto no altera la selección certificada.
+- Contrato: 8 ticks de 12 MHz por ciclo MC6809, 2 T-states Z80 por ciclo, 192 ticks por muestra PCM de 62.500 Hz. Una frontera de frame confirma todas las escrituras **solo después** de que termina la instrucción MC6809 que tomó el snapshot. El reset de línea conserva época e índice de muestra; el reset frío crea sesión nueva. El servidor usa reloj monotónico a 25.152 ciclos/frame (**16,768 ms**), cola PCM máxima de 12.500 muestras (**200 ms**) y hasta 8 lotes internos pendientes. La ventana HTTP de 125 s entregó 7.460 paquetes de 1.048 muestras, unos **125,09 s emulados en 125 s de pared** después del arranque; el productor alcanzó el ritmo de esa ejecución local. Esto no mide la latencia real del dispositivo de audio.
+
+### T3.1–T3.4 — cadena actual y pruebas
+
+- La MC6809 entrega `{kind,value,cycle}` únicamente al worker local de audio. La sesión Z80 conserva CPU, RAM, AOT privado en memoria, IRQ y reloj; avanza antes de aplicar latch/reset. Las escrituras Z80 a ambos YM y los resets fechados llegan a un proceso ymfm persistente. Éste sintetiza PCM incremental sin MAME ni tape YM y conserva chips/fase entre chunks. El servidor entrega solo `{sessionId,sampleRate,firstSample,pcm}` por loopback, con controles de orden, huecos, duplicados, sesión antigua, cola y STOP.
+- Se corrigieron únicamente instrucciones alcanzadas durante Coin/Start/acción: `RRCA`, `SBC HL,BC`, `RES b,(IX+d)` de memoria (primero b=0 y luego b=1), `PUSH IY`, `BIT 7,A` e `INC (IX/IY+d)`. Cada forma tiene fixture ROM-free de tiempo, flags, wrap/memoria y rechazo de formas vecinas. Los STOPs previos revelaron esas formas; la ventana final no tuvo STOP de opcode. La fase IRQ nativa y la paridad de CPU completa siguen sin certificarse.
+- Prueba sintética del renderer: **12.500 muestras** idénticas en render único y por chunks, incluidos cortes no alineados y reset intermedio; **6.326 no nulas**. El modo offline anterior sigue disponible. El renderer se reconstruyó con el pin ymfm existente; warnings del proveedor sobre parámetros sin usar, build PASS. Pruebas ROM-free cubren observer con/sin callback, mismo frame y mismas lecturas, latch tardío, reset con reloj global, sesiones AOT aisladas, STOP ante PC fuera de ROM, continuidad y rechazo de PCM duplicado/desordenado.
+- Partida local real, sesión 1: la MC6809 leyó Coin **25** veces, Start **24** y P1 **7.576**; la acción también apareció como lectura activa. En **125 s** de transporte HTTP local: **254 comandos MC6809**, **30.370 lecturas Z80 del latch**, **1.355.974 escrituras YM originadas por Z80**, **8.263.480 muestras producidas** desde el reset y **5.437.341 no nulas**. Se recibieron **7.460 paquetes consecutivos**, **0 huecos/duplicados**, cola máxima observada **1.048 muestras** (~16,8 ms), sin STOP. Los contadores provienen de esta sesión, no de MAME. La cifra de muestras producidas incluye el prefijo anterior al gesto; el descarte preactivación se contabiliza aparte y no se confunde con una ventana de playback válida.
+- Reset frío local: sesión **1 → 2**, `audioStop=null`, cero lotes/PCM antiguos en el nuevo estado; después de Coin/Start se recibieron **303 paquetes** nuevos sin huecos. Un smoke posterior con el límite nuevo de lotes, 15 s, terminó sin STOP, con **899 paquetes**, cero huecos y cola máxima de 1.048 muestras. Al dejar de drenar HTTP deliberadamente, el servidor declaró `AUDIO_LIVE_BACKPRESSURE_STOP`; el reset frío limpió ese STOP. No se silenció el error.
+
+### T3.5–T3.7 — límite de aceptación actual
+
+- El servidor sirve por loopback el sink, processor y resampler (`200`, MIME JavaScript). El gesto de “Activar audio” crea/reanuda `AudioContext`; el worklet valida sesión/índice, mantiene fase al convertir 62.500 Hz a la frecuencia efectiva, espera prebuffer de 50 ms y emite STOP ante underrun. Pruebas sintéticas pasan a **44.100 y 48.000 Hz**; un test del processor comprueba prebuffer, salida, underrun, STOP y reset. La UI coordina pausa, reanudación y reset frío y publica telemetría de cola, muestras, underruns y estimación A/V con latencia explícita.
+- **Bloqueo externo observado:** el control de navegador disponible devolvió `Browser is not available: iab`; la selección de Chrome devolvió `Computer Use permissions are not granted`. Por ello no se pudo cargar un AudioWorklet **real**, confirmar `AudioContext.state === running`, medir underruns/desfase A/V durante 120 s ni obtener audición humana de esta partida. Las pruebas Node y HTTP no sustituyen esas verificaciones. `browser_worklet_connected=false`, `game_audio_live=false`; objetivo ≤100 ms A/V y deriva ≤20 ms/min permanecen **sin medir**. La condición de cierre es habilitar una sesión de navegador local y confirmar al oído Coin/Start/acción y reset durante la misma partida, con su telemetría de 120 s.
+- Gate final después de los cambios: **156/156 Node y 78/78 Python PASS**, ROM `SHA1_MATCH`; regresión indicada de controles/vídeo **27/27 PASS**. Ningún ROM, bundle, captura, control privado, YM crudo o WAV entró en Git. MAME no fue fuente de playback ni del productor T3.
+
+### Prompt histórico usado para esta sesión
+
+Este prompt ya se ejecutó; la dirección vigente y el bloqueo real están arriba en “Ejecución T3 en Mac”.
 
 ```text
 Trabaja en krukmat/gng-ghidra, rama main. Antes de empezar esta nueva sesión,
