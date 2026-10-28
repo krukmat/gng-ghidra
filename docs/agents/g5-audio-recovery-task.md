@@ -1,6 +1,8 @@
 # G5-AUDIO-RECOVERY — Resolver bloqueo real de audio Z80 → YM2203 → PCM
 
-**Estado:** OPEN · **Prioridad:** P0 · **Repo:** `krukmat/gng-ghidra` · **Rama:** `main` · **Fecha:** 2026-10-28
+**Estado:** T0–T2 PASS / T3 BLOCKED (conexión del engine requiere autorización) · **Prioridad:** P0 · **Repo:** `krukmat/gng-ghidra` · **Rama:** `main` · **Fecha:** 2026-10-28
+
+**Resultado actual:** audio auténtico Z80 → dual YM2203 → PCM demostrado en el laboratorio privado y reconocido por el operador. La partida sigue sin AudioWorklet conectado. El cierre verificable y el contrato mínimo de integración están al final de este documento; las evidencias de partida siguientes son históricas.
 
 ## Objetivo y definición de terminado
 
@@ -56,3 +58,43 @@ Verificar si el bridge MC6809→Z80 y la cadena PCM→AudioWorklet pueden conect
 - **C:** el YM escrito por Z80 produce **PCM no silencioso**, comprobado mediante muestras/RMS y oído; comparación MAME suficiente para identificar discrepancias críticas sin declarar paridad no probada.
 - **D:** si se pide audio durante partida, validar conexión MC6809/Z80/dual YM/AudioWorklet, audible y sincronizada; o señalar exactamente el contrato/modificación de engine que requiere autorización.
 - **Salida final al usuario:** commit(s), **PASS/BLOCKED**, primera causa real y evidencia, lo que funciona, lo que falta. **No** una cadena de próximos microcheckpoints.
+
+## Cierre ejecutado en Mac — 2026-10-28
+
+### T0 — PASS: regresión diagnosticada y corregida
+
+Node v22.23.0, Python 3.15.0, arm64 macOS. El primer checkpoint reprodujo **129/130 Node y 78/78 Python**. Falló exactamente `G5 runtime AOT rejects actual unknown indirect target without inventing opcode`: `assert.equal(result.status,'STOP_BEFORE_TARGET')` recibió `LAB_ADVANCE_OK`.
+
+Causa probada: `import(data:)` reutilizaba el módulo estático y su `Map`; la resolución dinámica mutaba ese mapa compartido. Una ROM sintética posterior con el mismo prefijo estático ejecutaba bloques de la ROM anterior. Cada sesión recibe ahora `new Map(generated.z80AotBlocks)`. La prueba nueva ejecuta tres ROM sintéticas con prefijo idéntico y comprueba resultados diferentes, sin reutilizar bloques dinámicos. El test original permanece y pasa.
+
+El gate final conserva en STOP el estado secundario, exits, contadores, nombres de tests públicos y causa scan/build. Tres pruebas sintéticas comprueban que no filtra assertions, rutas ni payloads privados, también cuando el hijo escribe su error en stderr.
+
+### T1 — PASS: primer comando superado sin inventar ejecución
+
+Tras T0 se ejecutó `node scripts/audio_live_final.mjs` con el comando capturado original, su reloj relativo al reset y los límites originales de **36m T-states / 5m pasos / 200k escrituras YM**. La resolución dinámica superó el antiguo `UNCOMPILED_PC` y reveló sucesivamente cinco formas realmente ejecutadas: `DEC (IX/IY+d)`, `ADD IX/IY,DE`, `LD (IX/IY+d),n`, `RLCA` y `SET b,(IX/IY+d)` de memoria. Se añadieron exclusivamente esas formas y pruebas ROM-free de flags, tiempos, desplazamientos, wrap y límites; las demás formas siguen fallando de forma explícita. Fixtures antiguas que usaban el ahora soportado LD indexado como sentinel se cambiaron al INC indexado todavía no soportado. Se contrastaron ciclos y flags con el [manual oficial Zilog UM0080](https://www.zilog.com/docs/z80/um0080.pdf).
+
+Ejecución continua final: **3.052.981 pasos**, **T=25.782.197** frente a objetivo **25.782.194** (overshoot 3T), **67 resoluciones dinámicas**, ningún STOP ni familia pendiente. Primer comando en **T=19.782.194**; **4 comandos aplicados**, **477 lecturas del latch posteriores al primero**. IRQ de laboratorio: **2.062 solicitudes / 1.989 ACK**; esto no certifica la fase IRQ nativa.
+
+### T2 — PASS: YM generado por Z80, PCM medido y oído
+
+`node scripts/audio_live_final.mjs` devuelve **`Z80_TO_DUAL_YM_TO_PCM_LAB_PASS_NOT_LIVE_GAME`**. Regresión completa final: **144/144 Node y 78/78 Python PASS**, ROM `SHA1_MATCH`. Renderer reconstruido mediante `bash scripts/audio_ym_native_build.sh out/audio/ymfm`, con Apple clang 21 y ymfm fijado a `81aec25ccbb98f4873a255f7551ac4dadac59b4a`; build PASS (warnings de parámetros sin usar del proveedor).
+
+- **88.610 escrituras YM** nuevas: 44.372 al primer chip y 44.238 al segundo; **63 FM key-ons**, **146 escrituras de frecuencia**, **240 de operadores**, sin volumen PSG no nulo. Los conteos coinciden con MAME en la misma ventana.
+- Comparación privada estricta, sin realinear: **88.610/88.610 pares puerto/valor iguales y en el mismo orden**; ningún ordinal difiere. Primera diferencia temporal en el ordinal 1: desfase constante **+12 ticks de 12 MHz = +3 T-states Z80** en todos los pares. No se aplicó una corrección artificial de fase. Esto acredita esa secuencia observada, no paridad completa de CPU/IRQ ni de otras partidas.
+- WAV privado mono 62.500 Hz: **537.812 muestras**, **125.347 no nulas**, **peak 15.820**, **RMS 1.868,80**. Solo entraron al renderer escrituras producidas por la Z80 de esta ejecución. MAME se leyó únicamente como oráculo diferencial; no alimentó la síntesis.
+- `afplay` local terminó con **exit 0**. El operador respondió **«Sí, se reconoce»**. Tras reconstruir el renderer, el WAV definitivo es idéntico byte a byte al oído. WAV, ROM, controles, diagnóstico y resultados detallados permanecen en `out/audio/`; no se adjuntaron ni publicaron. El TSV intermedio se elimina automáticamente.
+
+### T3 — BLOCKED: contrato mínimo revisable, engine y bot intactos
+
+La inspección de fuentes prueba que `src/gngb_runtime.mjs:createBoard` ya admite `onAudioEvent`, y `createGngbMainZ80Bridge` traduce latch/reset. Sin embargo, **`scripts/v3_b2c_engine_worker.mjs` no conecta el callback**, carga un runtime del bundle privado cuya capacidad debe verificarse y transmite solamente frames/inputs. **`scripts/v3_b2c_live.mjs` no conecta PCM ni crea/resume AudioContext**. El renderer C++ actual es un proceso offline, sin productor incremental de PCM. Por ello no se puede acreditar audio en esa partida sin cambiar su conexión en el engine. No se modificaron esos archivos, el runtime MC6809 ni el bot.
+
+Contrato propuesto, no implementado ni presentado como audio jugable:
+
+| Punto autorizado pendiente | Interfaz mínima y requisito verificable |
+|---|---|
+| Worker: `createBoard(...,{onAudioEvent})` | Entregar `{kind,value,cycle}` a un adaptador persistente. Avanzar Z80 hasta la frontera del evento **antes** de cambiar latch/reset, medir overshoot, preservar anclas del reloj y resetear Z80 y ambos YM cuando corresponda. Verificar/regenerar el bundle privado con el observer existente. |
+| Productor dual YM continuo | Operaciones `write(tick,addr,value)`, `reset(tick)` y `renderUntil(tick)` que preserven estado entre chunks. El CLI que genera WAV no satisface este contrato. |
+| Worker → UI | PCM `{sessionId,sampleRate,firstSample,samples}`, con orden y continuidad de muestras; sin transportar ROM, PCs ni YM crudo. |
+| UI + AudioWorklet | Gesto real para `AudioContext.resume()`, resampling de 62.500 Hz al sample rate efectivo, reset/pausa de la misma sesión y telemetría acumulada de cola, muestras, underruns y desfase A/V. |
+
+El pacing actual del UI (intervalo mínimo 17 ms y pausas posibles) no acredita el reloj hardware de ~16,768 ms/frame. **No hay medición ni audición durante gameplay**. La autorización necesaria queda acotada a la conexión de audio en los dos scripts del engine anteriores y su bundle; no se solicita modificar semántica MC6809 ni bot. Hasta validar ese contrato, `game_audio_live=false`, `browser_worklet_connected=false` y las declaraciones de paridad nativa siguen siendo falsas.

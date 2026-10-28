@@ -1,5 +1,5 @@
 // G5 lab-only YM2203 renderer: event-driven FM+PSG, not recorded audio.
-// Reads private, timestamped MAME YM register writes via a converted TSV.
+// Reads private, timestamped YM writes; the caller supplies their provenance.
 // Z80 and AudioWorklet integration are deliberately NOT implemented here.
 #include "ymfm_opn.h"
 #include <algorithm>
@@ -92,7 +92,7 @@ int main(int argc,char **argv) {
     }
     if(!out || pos!=rows.size())
       throw std::runtime_error("AUDIO_WAV_UNCONSUMED_OR_IO_ERROR");
-    std::cout<<"GNG_AUDIO_YM_LAB=PCM_FROM_NATIVE_YM_EVENTS_ONLY"
+    std::cout<<"GNG_AUDIO_YM_LAB=PCM_FROM_TIMESTAMPED_YM_WRITES"
              <<" sample_hz="<<sample_hz<<" samples="<<samples
              <<" consumed="<<pos<<"\n";
     return 0;
