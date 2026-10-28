@@ -10,7 +10,7 @@ import {createZ80SoundBus,Z80_SOUND_HARDWARE} from './gngb_z80_sound_bus.mjs';
 import {createZ80SchedulerLab} from './gngb_z80_scheduler_lab.mjs';
 
 // A captured MAME session may contain real main-CPU commands many seconds
-// after reset. The runner still advances for at most 3,000,000 Z80 T-states;
+// after reset. The runner advances for at most 36,000,000 Z80 T-states;
 // do NOT mistake an input capture's full timestamp range for a run budget.
 // One hour of 12MHz board time is the explicit input safety ceiling.
 export const MAX_NATIVE_CONTROLS_TICK12M=12_000_000*3600;
@@ -88,7 +88,7 @@ export async function probeZ80SoundExecution(rom,roots,{
     const single=compileZ80Prefix(rom,{entry:pc,limit:1});
     if(single.compiled!==1) {
       const first=single.blockers[0];
-      const tag=first?.indexed_instruction??first?.cb_instruction??
+      const tag=first?.indexed_instruction??first?.cb_instruction??first?.ed_instruction??
         first?.family??first?.reason??'UNKNOWN';
       dynamicFirstBlockedFamily=/^[A-Z0-9_]{1,60}$/.test(tag)?
         tag:'UNKNOWN';
@@ -112,7 +112,9 @@ export async function probeZ80SoundExecution(rom,roots,{
     blocks.set(pc,instruction);
     dynamicResolvedBlocks++;
   };
-  const z80=createZ80SchedulerLab(generated.z80AotBlocks,bus,{
+  // data: modules are cached by source. Runtime-resolved blocks belong only
+  // to this ROM/session, never to the cached static module's shared Map.
+  const z80=createZ80SchedulerLab(new Map(generated.z80AotBlocks),bus,{
     maxStepsPerAdvance:Math.min(1000000,maxSteps),
     resolveUncompiledPc
   });

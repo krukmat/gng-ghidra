@@ -160,9 +160,25 @@ test('G5 runtime AOT rejects actual unknown indirect target without inventing op
   assert.equal(result.reason,'AUDIO_T3_DYNAMIC_OPCODE_UNSUPPORTED');
   assert.equal(result.runtime_resolution_attempts,1);
   assert.equal(result.runtime_resolved_rom_blocks,0);
+  assert.equal(result.runtime_first_unsupported_family,'ED_UNASSIGNED_OR_UNDOCUMENTED');
   assert.equal(result.rom_bytes_exported,false);
   assert.equal(result.native_instruction_parity_verified,false);
   assert.doesNotMatch(JSON.stringify(result),/z80AotBlocks|generatedSource/);
+});
+
+test('G5 runtime blocks remain isolated across ROMs with identical static prefixes',async()=>{
+  for(const volume of [3,11,3]) {
+    const rom=new Uint8Array(0x8000);
+    rom.set([0x21,0x00,0x02,0xe9]);
+    rom.set([0x3e,volume,0x32,0x01,0xe0,0x76],0x200);
+    const writes=[];
+    const result=await probeZ80SoundExecution(rom,[0],{
+      targetTStates:80,maxSteps:30,onYmWrite:e=>writes.push(e.value)
+    });
+    assert.equal(result.status,'LAB_ADVANCE_OK');
+    assert.deepEqual(writes,[volume]);
+    assert.equal(result.runtime_resolved_rom_blocks,3);
+  }
 });
 
 test('G5 runtime AOT rejects PC outside sound ROM without emulating RAM code',async()=>{

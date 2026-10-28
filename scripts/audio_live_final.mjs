@@ -48,22 +48,61 @@ function parseJsonInput(basename,max=1024*1024){
   if(fs.statSync(file).size>max)fail('AUDIO_FINAL_PRIVATE_JSON_OVERSIZE');
   return JSON.parse(fs.readFileSync(file,'utf8'));
 }
+// This is deliberately a separate allowlist from the raw child JSON. A failed
+// child may contain exception text or private paths; retain only safe metadata.
+function safeGateFailure(gate,exitCode){
+  const count=x=>Number.isSafeInteger(x)&&x>=0?x:null;
+  const publicNodeNames=new Set();
+  try {
+    const source=fs.readFileSync(new URL('./audio_fast_checkpoint.mjs',import.meta.url),'utf8');
+    for(const match of source.matchAll(/'(tests\/[^']+\.mjs)'/g)){
+      const tests=fs.readFileSync(new URL('../'+match[1],import.meta.url),'utf8');
+      for(const title of tests.matchAll(/\btest\(\s*(['"])(.*?)\1/g))
+        publicNodeNames.add(title[2]);
+    }
+  } catch {} // Counts and safe stage remain useful if public sources are absent.
+  const names=(list,python)=>Array.isArray(list)?list.filter(x=>
+    typeof x==='string'&&(python?/^[A-Za-z0-9_]{1,180}$/.test(x):
+      publicNodeNames.has(x))).slice(0,12):[];
+  const status=['STOP_BAD_ARGUMENTS','STOP_REGRESSION',
+    'STOP_PRIVATE_ARTIFACT_GUARD','STOP_ROM_OR_SCAN','STOP_AOT_BUILD',
+    'PASS_REGRESSION_SCAN_TRUNCATED',
+    'PASS_REGRESSION_STATIC_SCAN_Z80_NOT_CERTIFIED'].includes(gate?.status)?
+    gate.status:'INVALID_CHECKPOINT_REPORT';
+  const suites={};
+  for(const name of ['node','python']){
+    const suite=gate?.[name];
+    suites[name]={exit_code:count(suite?.exit_code),ran:count(suite?.ran),
+      ...(name==='node'?{passed:count(suite?.passed),failed:count(suite?.failed)}:
+        {ok:suite?.ok===true,failed:suite?.failed===true}),
+      failing_test_names:names(suite?.failing_test_names,name==='python')};
+  }
+  const code=x=>/^AUDIO_[A-Z0-9_]{3,80}$/.test(x)?x:null;
+  return {status,gate_exit_code:count(exitCode),...suites,
+    z80_scan_exit_code:count(gate?.z80_scan_exit_code),
+    z80_scan_reason:code(gate?.z80_scan_reason),
+    z80_build_exit_code:count(gate?.z80_build_exit_code),
+    z80_build_reason:code(gate?.z80_build_reason)};
+}
 function checkGate(){
   const proc=spawnSync(process.execPath,['scripts/audio_fast_checkpoint.mjs'],{
     encoding:'utf8',timeout:180000,maxBuffer:4*1024*1024,
     stdio:['ignore','pipe','pipe']
   });
-  if(proc.error||proc.status!==0)fail('AUDIO_FINAL_REGRESSION_GATE_STOP');
-  const records=proc.stdout.trim().split(/\n/).filter(Boolean);
+  const records=(proc.stdout||'').trim().split(/\n/).filter(Boolean);
   let gate=null;
-  try {gate=JSON.parse(records[records.length-1]);}catch{
-    fail('AUDIO_FINAL_REGRESSION_FORMAT_STOP');
-  }
-  if(gate?.kind!=='GNG_AUDIO_G5_FAST_CHECKPOINT_V1'||
+  try {gate=JSON.parse(records[records.length-1]);}catch{}
+  if(proc.error||proc.status!==0||
+     gate?.kind!=='GNG_AUDIO_G5_FAST_CHECKPOINT_V1'||
      gate.status!=='PASS_REGRESSION_STATIC_SCAN_Z80_NOT_CERTIFIED'||
      gate.node?.failed!==0||gate.python?.failed!==false||
-     gate.rom_identity!=='SHA1_MATCH'||gate.private_artifacts_safe!==true)
-    fail('AUDIO_FINAL_REGRESSION_GATE_STOP');
+     gate.rom_identity!=='SHA1_MATCH'||gate.private_artifacts_safe!==true){
+    const err=new Error('AUDIO_FINAL_REGRESSION_GATE_STOP');
+    err.code=gate===null&&proc.status===0?
+      'AUDIO_FINAL_REGRESSION_FORMAT_STOP':'AUDIO_FINAL_REGRESSION_GATE_STOP';
+    err.checkpoint=safeGateFailure(gate,proc.status);
+    throw err;
+  }
   return {node:gate.node.passed,python:gate.python.ran};
 }
 function metricsWav(file){
@@ -131,7 +170,7 @@ async function run(){
     try {
       progress.nativeYmComparison=await summarizeNativeYmRegisterWindow(
         privateInput('mame-audio-events-heartbeat4.jsonl'),
-        {windowTStates:targetTStates});
+        {windowTStates:targetTStates,generatedYm:capturedYm});
     } catch {
       progress.nativeYmComparison={
         kind:'GNG_AUDIO_G5_PRIVATE_NATIVE_YM_BASELINE_V1',
@@ -235,6 +274,7 @@ async function run(){
     }));
     process.exitCode=z80.status==='LAB_ADVANCE_OK'?0:2;
   } catch(err) {
+    if(err?.checkpoint)progress.checkpoint=err.checkpoint;
     const reason=/^AUDIO_[A-Z0-9_]{3,80}$/.test(err?.code)?err.code:
       'AUDIO_FINAL_UNEXPECTED_STOP';
     console.log(JSON.stringify({

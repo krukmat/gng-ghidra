@@ -78,6 +78,17 @@ function run() {
     nodeCounts.ran!==null&&nodeCounts.failed===0&&
     pyCounts.ran!==null&&pyCounts.ok;
   const artifactsSafe=privateArtifactsGuard();
+  // Match failing TAP titles against literal names in the declared public
+  // test files. Never expose assertion payloads, stacks or arbitrary TAP text.
+  const publicNodeNames=new Set(tests.flatMap(file=>{
+    try {
+      return [...fs.readFileSync(file,'utf8').matchAll(/\btest\(\s*(['"])(.*?)\1/g)]
+        .map(match=>match[2]);
+    } catch {return [];}
+  }));
+  const failingNodeTests=[...(node.stdout+'\n'+node.stderr)
+    .matchAll(/(?:^|\n)not ok \d+ - ([^\r\n]+)/g)]
+    .map(match=>match[1]).filter(name=>publicNodeNames.has(name)).slice(0,12);
   // Only allowlisted unittest method names, never Python tracebacks,
   // local filesystem paths, ROM content or native event payloads.
   const failingPythonTests=[...((python.stdout||'')+'\n'+(python.stderr||''))
@@ -86,7 +97,8 @@ function run() {
   if(!basic || !artifactsSafe){
     console.log(JSON.stringify({kind:'GNG_AUDIO_G5_FAST_CHECKPOINT_V1',
       status:artifactsSafe?'STOP_REGRESSION':'STOP_PRIVATE_ARTIFACT_GUARD',
-      node:{exit_code:node.exit_code,...nodeCounts},
+      node:{exit_code:node.exit_code,...nodeCounts,
+        failing_test_names:failingNodeTests},
       python:{exit_code:python.exit_code,...pyCounts,
         failing_test_names:failingPythonTests},
       rom_checked:false,private_artifacts_safe:artifactsSafe}));
@@ -95,7 +107,7 @@ function run() {
   const scanArgs=['scripts/audio_z80_scan.mjs'];
   if(rootsIndex===2)scanArgs.push('--roots',process.argv[3]);
   const scan=invoke(process.execPath,scanArgs);
-  const scanOut=parseSafeJson(scan.stdout);
+  const scanOut=parseSafeJson(scan.stdout)??parseSafeJson(scan.stderr);
   const discovered=scanOut?.kind==='GNG_AUDIO_Z80_FRONTIER_SCAN_V1' &&
     scanOut?.rom_identity==='SHA1_MATCH' &&
     ['PARTIAL_UNCERTIFIED','TRUNCATED','NO_STATIC_BLOCKER_NOT_CERTIFIED']
@@ -106,11 +118,14 @@ function run() {
       node:{exit_code:node.exit_code,...nodeCounts},
       python:{exit_code:python.exit_code,...pyCounts},
       rom_checked:false,
-      z80_scan_status:'STOP'}));
+      z80_scan_status:'STOP',
+      z80_scan_exit_code:scan.exit_code,
+      z80_scan_reason:/^AUDIO_[A-Z0-9_]{3,80}$/.test(scanOut?.error)?
+        scanOut.error:null}));
     return 2;
   }
   const build=invoke(process.execPath,['scripts/audio_z80_build.mjs']);
-  const built=parseSafeJson(build.stdout);
+  const built=parseSafeJson(build.stdout)??parseSafeJson(build.stderr);
   const compileCheck=built?.kind==='GNG_AUDIO_Z80_AOT_PREFIX_V1' &&
     ['PARTIAL_UNCERTIFIED','SUPPORTED_PREFIX_ONLY'].includes(built?.status) &&
     built?.instruction_bytes_exported===false &&
@@ -121,7 +136,11 @@ function run() {
       node:{exit_code:node.exit_code,...nodeCounts},
       python:{exit_code:python.exit_code,...pyCounts},
       rom_identity:'SHA1_MATCH',
-      z80_scan_status:scanOut.status}));
+      z80_scan_status:scanOut.status,
+      z80_build_exit_code:build.exit_code,
+      z80_build_reason:/^AUDIO_[A-Z0-9_]{3,80}$/.test(built?.error)?
+        built.error:built?.error==='READ_OR_BUILD_FAILED'?
+          'AUDIO_Z80_READ_OR_BUILD_FAILED':null}));
     return 2;
   }
   console.log(JSON.stringify({
