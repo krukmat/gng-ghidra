@@ -152,3 +152,72 @@ are the terminal investigation result, not permission for more speculative
 static opcode or frame-sized iteration. The PCM audio of *running gameplay*
 remains uncoupled from MC6809 and browser AudioWorklet until explicitly
 integrated and audibly validated.
+
+## 2026-10-28 — Authenticated post-command blocker: runtime indirect ROM AOT
+
+**Latest operator one-shot results** (not a pass):
+- Mac regression **126/126 Node + 78/78 Python**, ROM hash verified.
+- Z80 stopped after **2,362,941 steps / T=19,787,763** with
+  `AUDIO_Z80_IRQ_UNCOMPILED_PC`, **one native captured sound command
+  applied**, and **one genuine C800 latch read after that command**.
+- MAME first YM write relative to reset was at **T=898,884**; our
+  compiled Z80 first YM write was at **T=898,887**. This small
+  initial offset is encouraging but **NOT** full parity.
+- Z80 before runtime STOP emitted **66,532 YM port writes**, 33,266
+  per chip, but **zero FM key-ons, zero nonzero PSG volumes and silent PCM**.
+  Native MAME in the compared window recorded **63 FM key-ons**, 146 FM
+  frequency writes and 240 FM operator writes, which never appeared in
+  the lab prefix. No captured native YM writes were used as audio source.
+- Thus the immediate blocker is **the first control-flow path actually
+  taken after a genuine sound command**, not the renderer gain or missing
+  command stimulus. Static 64-root AOT cannot enumerate computed JP(HL)
+  targets or all return addresses. Its 194/194 observed PC overlap
+  only applies to the earlier native sample and does not certify this
+  new branch.
+
+**Implemented fix** (no engine/bot changes):
+- The isolated sound scheduler accepts an optional fail-closed
+  `resolveUncompiledPc(pc,blocks)` callback; its default behavior is
+  unchanged. It is called ONLY when the executing CPU actually reaches
+  an unmapped AOT block.
+- The Node sound probe can JIT exactly **one supported ROM instruction
+  at that runtime PC**, using `compileZ80Prefix(rom,{entry:pc,limit:1})`.
+  Generated function stays exclusively in process memory; it is
+  attached to the current compiled block Map, never saved, uploaded
+  or printed. No generic unknown-opcode interpreter is added.
+- Strict bounds: must lie within **0x0000..0x7fff**; no execution
+  invented for RAM/IO, max **4096 dynamic resolutions**, unsupported
+  opcodes fail closed with a privacy-safe uppercase family label
+  rather than bytes, PC addresses or JS source.
+- Existing full-session native command timing, 36m T-state / 5m step
+  bounds, YM synthesizer and sound bus are unchanged.
+- New tests cover indirect JP(HL) with genuine dynamic YM output, actual
+  late captured sound command followed by an indirect routine,
+  unsupported instruction family, and an outside-ROM target.
+  **19/19 isolated sound-probe + native-control tests PASS**.
+- The final CLI now reports `runtime_rom_blocks_resolved`,
+  `runtime_resolution_attempts`,
+  `runtime_first_unsupported_family`. If the runtime stops and PCM is
+  silent, the top-level reason is
+  `AUDIO_FINAL_RUNTIME_STOP_AND_PCM_SILENT` and the nested
+  `execution.reason` identifies the real instruction/IRQ/bus stop,
+  instead of masking it with a generic silence-only diagnosis.
+
+### Definitive next operator check
+
+Run **one** command after updating main:
+
+    git pull --ff-only
+    node scripts/audio_live_final.mjs
+
+Expected full regression **130 Node + 78 Python**, still awaiting Mac
+verification. Return its one sanitized JSON only. If real Z80 processing
+now reaches FM key-ons and creates nonzero PCM, the *private lab*
+Z80→YM→PCM dependency is cleared. That does **not** establish engine
+MC6809→sound Z80 scheduling, browser AudioWorklet delivery, or native
+IRQ/CPU timing parity; those remain explicit release requirements.
+
+If a dynamic opcode is truly unsupported, the report supplies the
+family needed to make a bounded, evidence-based decision. Do not
+interpret an unsupported opcode as license to fabricate sound or
+replay MAME YM tape, and do not claim live gameplay audio.
