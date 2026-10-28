@@ -11,7 +11,8 @@
  */
 import {performance} from 'node:perf_hooks';
 import {browserAudioSnapshot,browserAudioReady,
-  browserAudioContinuityStop,browserAudioSafeStopReason}
+  browserAudioContinuityStop,browserAudioSafeStopReason,
+  browserAudioStartBlock,browserAudioSafeStartupState}
   from '../src/gngb_audio_browser_certification.mjs';
 
 const URI='http://127.0.0.1:18609/state';
@@ -26,6 +27,30 @@ async function getState(){
   if(!response.ok)throw Error('AUDIO_BROWSER_HTTP_STATE_STOP');
   return browserAudioSnapshot(await response.json());
 }
+// Two live, read-only samples reveal both the missing startup condition
+// and whether the browser is actually consuming audio right now.
+async function statusOnly(){
+  const result={kind:'GNG_AUDIO_G5_BROWSER_START_STATUS_V1',
+    status:'NOT_READY',reason:null,workletOutputAdvancing:false,
+    browserAudioAudible:false,gameAudioFullyCertified:false};
+  try{
+    const before=await getState();
+    await sleep(1200);
+    const after=await getState();
+    const block=browserAudioStartBlock(after);
+    const advancing=after.id===before.id&&
+      Number.isSafeInteger(after.out)&&Number.isSafeInteger(before.out)&&
+      after.out>before.out;
+    result.state=browserAudioSafeStartupState(after);
+    result.workletOutputAdvancing=advancing;
+    result.reason=block??(advancing?null:'AUDIO_BROWSER_WORKLET_OUTPUT_STALLED');
+    result.status=result.reason===null?'READY':'NOT_READY';
+  }catch(e){
+    result.reason=browserAudioSafeStopReason(e);
+  }
+  console.log(JSON.stringify(result));
+  if(result.status!=='READY')process.exitCode=2;
+}
 async function main(){
   const report={kind:'GNG_AUDIO_G5_BROWSER_T37_CERT_V1',
     status:'STOP',reason:null,windowSeconds:120,
@@ -37,7 +62,8 @@ async function main(){
   let samples=0,maxQueued=0,maxAbsAv=null,firstAv=null,lastAv=null;
   let avMeasurements=0;
   let maxGapMs=0,lastResponseAt=null;
-  let response=null;
+  let lastStartupBlock=null,lastStartupState=null,lastPrintedBlock=null;
+  let lastPrintedAt=-15000;
   try{
     for(;;){
       const now=performance.now();
@@ -56,6 +82,22 @@ async function main(){
         maxGapMs=Math.max(maxGapMs,now-lastResponseAt);
       lastResponseAt=now;
       if(stage==='WAIT'){
+        lastStartupBlock=browserAudioStartBlock(s);
+        lastStartupState=browserAudioSafeStartupState(s);
+        if(lastStartupBlock!==null&&
+           (lastStartupBlock!==lastPrintedBlock||now-lastPrintedAt>=15000)){
+          console.error('GNG_AUDIO_CERT=WAITING '+lastStartupBlock+
+            ' session='+s.id);
+          lastPrintedBlock=lastStartupBlock;
+          lastPrintedAt=now;
+        }
+        // An already-terminal producer/worklet/engine cannot recover
+        // without operator action; do not consume the whole timeout.
+        if(s.stop||s.halted||s.wstate==='STOP'){
+          const err=new Error(lastStartupBlock??
+            'AUDIO_BROWSER_WORKLET_STOPPED');
+          throw err;
+        }
         if(browserAudioReady(s)){
           stage='WINDOW';from=now;origin=s;prev=s;
           maxQueued=s.queued;oldSession=s.id;
@@ -119,6 +161,10 @@ async function main(){
   }catch(e){
     report.reason=browserAudioSafeStopReason(e);
   }
+  if(stage==='WAIT'){
+    report.startBlockedBy=lastStartupBlock;
+    report.startState=lastStartupState;
+  }
   report.maxHttpObservationGapMs=Math.round(maxGapMs);
   report.humanAuditionConfirmed=false; // never infer this from PCM telemetry
   report.audioNativeTimingParityVerified=false;
@@ -128,4 +174,11 @@ async function main(){
   if(report.status!=='BROWSER_TRANSPORT_PASS_AUDITION_PRESENTATION_PENDING')
     process.exitCode=2;
 }
-await main();
+if(process.argv.length===3&&process.argv[2]==='--status')
+  await statusOnly();
+else if(process.argv.length===2)await main();
+else {
+  console.log(JSON.stringify({kind:'GNG_AUDIO_G5_BROWSER_T37_CERT_V1',
+    status:'STOP',reason:'AUDIO_BROWSER_BAD_ARGUMENTS'}));
+  process.exitCode=2;
+}
