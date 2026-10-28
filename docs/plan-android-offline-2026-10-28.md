@@ -1,10 +1,18 @@
 # Plan Android offline — GnG en el teléfono, sin servidor ni red
 
-**Fecha:** 2026-10-28 · **Rama:** `main` · **Estado:** AO-0, AO-1 y AO-2 GO; AO-3 compilado y validado en emulador, pendiente del teléfono.
+**Fecha:** 2026-10-28 · **Rama:** `main` · **Estado:** AO-0, AO-1 y AO-2 GO; AO-3 instalado en el teléfono con 50–60 fps observados por el operador; AO-4 validado con Playwright. CPU y arranque del teléfono siguen pendientes de medición automática.
 
-**Siguiente acción:** medir AO-3 durante 2 min en el teléfono. Antes, el operador activa la depuración USB.
+**Siguiente acción:** instalar el APK de AO-4 y probar los controles en el teléfono. La medición automática de AO-3 se retoma cuando haya conexión ADB.
 
-> **AO-3 emulador (28/10/2026; aún sin GO del teléfono).** El shell Kotlin carga los assets privados con `WebViewAssetLoader`, incluidas las extensiones `.mjs` como `text/javascript`. El APK de debug se compiló con Gradle 8.9, AGP 8.7.3, Kotlin 1.9.25 y JDK 17; `aapt dump permissions` no muestra permisos, incluido `INTERNET`. En el emulador Android 36 sin ventana ni audio, Playwright leyó `AO_READY` y 122 `AO_STATS` de la WebView durante 120,83 s: 7205 frames de CPU frente a 7205,99 esperados, 0 deslizamientos, 54,94 fps de render promedio y 41,96 fps mínimos por ventana, 7,58 ms de render por frame y arranque frío de 1,60 s; sin cierres. Informe y captura privados: `out/android/check/ao3-emulator-5554-report.json` y `ao3-emulator-device.png`. Estos números no sustituyen la medida en el teléfono.
+**UI vigente (operador, 28/10):** pantalla centrada; Disparo y Salto apilados abajo a la izquierda, con fondo transparente y botones translúcidos. Cruceta abajo a la derecha; opciones arriba a la derecha. Moneda y Start vuelven en Game Over; Start cambia a Continuar cuando la ROM abre la continuación. Sonido OFF queda preparado y deshabilitado, por decisión del operador, hasta integrar el audio offline en AO-5/AO-6. Implementación: [AO-4](#ao-4--controles-y-ui-como-la-web).
+
+> **AO-4 (28/10/2026).** [ao_touch_controls.mjs](../src/ao_touch_controls.mjs) envía puertos activos en bajo por mensajes, con una dirección a la vez y dedos independientes. Moneda y Start duran 100 ms; los pulsos repetidos tienen 200 ms de separación y se cancelan al salir o reiniciar. Start se habilita cuando la RAM real del juego indica crédito y espera de inicio o continuación. En la continuación se manda Start + Disparo; la ROM ignora un Start aislado. [ao_controls_check.mjs](../scripts/ao_controls_check.mjs), con Chromium headless y eventos táctiles reales, verificó crédito y arranque 5/5 veces (6 lecturas activas de Moneda en cada intento), lecturas de los seis controles, dirección + ataque + salto simultáneos y retorno a reposo tras soltar, cancelar o perder foco. Todos los botones y el canvas caben en 640×360. Tests Node: 14/14. Regresión de video: 290/290 frames dibujables de 600 idénticos a Node; 15 s de ritmo sin deslizamientos, render 56,99 fps de promedio y 52,63 mínimos. Informe de los cinco arranques: `out/android/check/ao4-5-starts-report.json`; última comprobación del diseño y vistas privadas: `ao4-report.json`, `ao4-menu.png`, `ao4-controls.png` y `ao4-controls-compact.png` en ese directorio. Falta la comprobación táctil por el operador en el móvil; audio corresponde a AO-5 y AO-6.
+
+> **Corrección Game Over (APK 0.4.1).** La condición anterior `mode >= 2` ocultaba Moneda/Start durante Game Over y la continuación. `node scripts/ao_controls_check.mjs 1 --gameover` perdió una partida real (frame 3420), insertó una moneda y la continuó (frame 3720), conservando el modo principal 2: 6 lecturas activas de Moneda, 6 de Start y 6 de Disparo; crédito consumido y controles de sistema ocultos al reanudar, sin Reiniciar ni cambios de RAM. Node: 14/14. Informe y capturas privados: `out/android/check/ao4-gameover-report.json`, `ao4-game-over.png` y `ao4-continue.png`. Falta comprobar esta actualización en el móvil.
+
+> **AO-3 emulador (28/10/2026; aún sin GO del teléfono).** El shell Kotlin carga los assets privados con `WebViewAssetLoader`, incluidas las extensiones `.mjs` como `text/javascript`. El APK de debug se compiló con Gradle 8.9, AGP 8.7.3, Kotlin 1.9.25 y JDK 17; `aapt dump permissions` no muestra permisos, incluido `INTERNET`. En el emulador Android 36 sin ventana ni audio, Playwright leyó `AO_READY` y 122 `AO_STATS` de la WebView durante 120,83 s: 7205 frames de CPU frente a 7205,99 esperados, 0 deslizamientos, 54,94 fps de render promedio y 41,96 fps mínimos por ventana, 7,58 ms de render por frame y arranque frío de 1,60 s; sin cierres. Informe privado archivado: `out/android/check/ao3-emulator-5554-120s-report.json`. Estos números no sustituyen la medida en el teléfono.
+
+> **Humo del APK AO-4:** compilación correcta y WebView conectada con Playwright durante 45,48 s, 2711 frames frente a 2712,01 esperados, 0 deslizamientos, arranque frío de 2,56 s y sin cierres. Render del emulador SwiftShader: 33,95 fps de promedio, 26,95 mínimos; esta corrida no valida el umbral de 30 fps y requiere comprobar el APK actualizado en el teléfono. Informe, logcat y captura privados: `out/android/check/ao3-emulator-5554-report.json`, `ao3-emulator-5554-logcat.txt` y `ao3-emulator-5554-device.png`.
 
 > **AO-1 GO (28/10/2026).** [ao_resumable_runtime.mjs](../src/ao_resumable_runtime.mjs) aplica dos anclas exactas al runtime de audio y falla cerrado si alguna no aparece exactamente una vez. [test_ao_resumable_runtime.mjs](../tests/test_ao_resumable_runtime.mjs) compara g6 + overlay de audio, en una copia completa del bundle con solo el runtime parcheado: 600 llamadas `run(k)` contra un `run()`. Salen idénticos los 600 hashes de frame (los de `runFrozen` más el ciclo de CPU), los eventos y marcas de audio, el log de eventos y el ciclo final; tarda ~1 s. Control negativo: con `reset()` en cada llamada, el test falla.
 
@@ -100,12 +108,16 @@ out/android/                 assets privados, APK y clave de firma (ignorado por
 - Cruceta de 4 direcciones: el motor acepta una sola a la vez, como en [v3_b2c_live_controls.mjs](../src/v3_b2c_live_controls.mjs).
 - Ataque y Salto se mantienen mientras se tocan. Moneda y Start mandan un pulso de 100 ms, porque la ROM solo acredita una moneda leída activa en ≤ 12 frames.
 - Reiniciar (arranque en frío) y aviso de detención (`UNCOMPILED`).
+- Botón Sonido OFF junto a las opciones, visible durante la partida pero deshabilitado hasta AO-5/AO-6, por decisión del operador. El audio que ya funciona en la web depende del productor nativo del Mac.
 - Entradas según [gngb_input_contract.mjs](../src/gngb_input_contract.mjs), sin `SharedArrayBuffer`.
-- Diseño horizontal multitáctil: pantalla al centro y controles a los costados.
+- Diseño horizontal multitáctil: pantalla centrada, Disparo y Salto apilados abajo a la izquierda sin panel opaco, cruceta abajo a la derecha y opciones arriba a la derecha, por indicación del operador. Moneda y Start se ocultan y deshabilitan durante la partida según el estado observado de la ROM; vuelven al salir de ella.
+- Game Over conserva el modo principal 2: [ao_game_state.mjs](../src/ao_game_state.mjs) reconoce el texto conocido de la capa FG y las fases de cierre/continuación para volver a mostrar las opciones. La fase 4 acepta continuar con crédito, Start y Disparo simultáneos; el botón **Continuar** manda ambos puertos durante 100 ms. Los pulsos de Start solo se usan en la pantalla de inicio. Toda detección observa snapshots; no escribe RAM ni reinicia la CPU.
 - El contador de estado de AO-2 tapa la línea CREDIT en pantallas angostas: pasa a una franja lateral o se oculta.
 - Prueba con Playwright (Chromium headless, pantalla táctil emulada) con toques simulados.
 - **GO:** cada control llega a una lectura real de la CPU (testigo de puerto), y Moneda + Start acreditan y empiezan partida 5/5 veces. **STOP:** entradas perdidas o trabadas.
 - Costo: 6–10% de la ventana de 5 h.
+
+Para jugar con el APK de AO-4: esperar a que Moneda se habilite, tocar **Moneda**, esperar a que se habilite **Start** y tocarlo. Moneda y Start desaparecen durante la partida y vuelven en **Game Over**. Para seguir: tocar **Moneda** y luego **Continuar** cuando se habilite durante la cuenta atrás. Mantener los controles de movimiento, Disparo y Salto mientras se quiera accionarlos; admiten varios dedos. **Reiniciar** hace un arranque en frío y vuelve a mostrar Moneda/Start. Instalar la actualización privada sobre el APK anterior conserva la firma local de desarrollo.
 
 ### AO-5 — YM2203 en WASM
 
@@ -172,6 +184,7 @@ iOS, React Native, modo LAN, mando Bluetooth, partidas guardadas y publicar el A
 
 ## 7. Pendiente del operador
 
-1. Activar la depuración USB del teléfono antes de AO-3.
+1. Instalar la actualización de AO-4 y comprobar el tacto en el teléfono.
+2. Para completar la medición automática de AO-3, conectar ADB por USB o depuración inalámbrica. La instalación manual ya está comprobada; el operador observó 50–60 fps, sin una medida automática de CPU ni de arranque.
 
 Resuelto el 28/10: shell Kotlin, descargas de Gradle y emsdk autorizadas, y Playwright para todo uso de navegador.

@@ -20,7 +20,7 @@ const seconds=Number(process.argv[2]??15);
 const selected=process.argv[3]??process.env.AO_ADB_SERIAL;
 if(!Number.isFinite(seconds)||seconds<5)throw Error('AO3_SECONDS_INVALID');
 const adb=(serial,...args)=>execFileSync(ADB,['-s',serial,...args],
-  {encoding:'utf8',timeout:120000});
+  {encoding:'utf8',timeout:120000,maxBuffer:16*1024*1024});
 const matchLine=text=>{
   const m=/^(AO_[A-Z]+) (.*)$/s.exec(text);
   if(!m)return null;

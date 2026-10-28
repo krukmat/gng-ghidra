@@ -23,11 +23,12 @@ async function start(){
   const t0=performance.now();
   const [{blocks},{createBoard,CYCLES_PER_FRAME},{renderGngbRgba},
     {rendererInputs},{rendererUnknownCount},{INPUT_DEFAULTS},
-    {frozenCode,unpackGfx}]=await Promise.all([
+    {frozenCode,unpackGfx},{createPortReadWitness},{observeGameState}]=await Promise.all([
     import('./bundle/program.mjs'),import('./bundle/gngb_runtime.mjs'),
     import('./lib/gngb_frame_renderer.mjs'),import('./lib/gngb_render_inputs.mjs'),
     import('./lib/v2_b1_observable.mjs'),import('./lib/gngb_input_contract.mjs'),
-    import('./lib/ao_web_assets.mjs')]);
+    import('./lib/ao_web_assets.mjs'),import('./lib/v3_b2c_port_witness.mjs'),
+    import('./lib/ao_game_state.mjs')]);
   const res=await fetch('bundle/manifest.json');
   if(!res.ok)throw Error('AO_FETCH_'+res.status+' manifest');
   const manifest=await res.json();
@@ -37,13 +38,26 @@ async function start(){
     ['bundle/code.bin','bundle/overlays.bin','gfx.bin'].map(bytes));
   const code=frozenCode(manifest,codeBin,overlays),gfx=unpackGfx(gfxBin);
   ports.set(INPUT_DEFAULTS);
-  let last=null,latest=null;
+  const witness=createPortReadWitness();
+  const readPorts=new Uint8Array(3).fill(255);
+  const inputCheck=new URLSearchParams(location.search).has('inputCheck');
+  let last=null,latest=null,stateKey=null,gameState=null;
   const cpu=createBoard(code,blocks,{frames:Number.MAX_SAFE_INTEGER,
     portRead:addr=>ports[addr-0x3000],
+    onPortRead:read=>{witness.observe(read);readPorts[read.addr-0x3000]=read.value;},
     onFrame:frame=>{
       last=frame;
       // Same rule as the live wrapper: never draw a frame with unknown bytes.
       if(rendererUnknownCount(frame)===0)latest=frame;
+      const state=observeGameState(frame);
+      if(state){
+        gameState=state;
+        const key=JSON.stringify(state);
+        if(key!==stateKey){
+          stateKey=key;
+          post({type:'game-state',...state});
+        }
+      }
       // Only the frame object is kept; the runtime never reads either log.
       cpu.state.records[frame.index-1]=null;
       cpu.state.events.length=0;
@@ -102,6 +116,10 @@ async function start(){
         windowMs:Math.round(c1-win.since),windowFrames:win.frames,
         rendered:win.rendered,cpuMs:+win.cpuMs.toFixed(2),
         renderMs:+win.renderMs.toFixed(2),lateMs:+win.lateMs.toFixed(2)});
+      // Test-only observation of real CPU snapshots, never a state write.
+      if(inputCheck)post({type:'input-probe',frame:done,
+        witness:witness.snapshot(),ports:[...ports],reads:[...readPorts],
+        ram2:last?.record[2],ram5:last?.record[5],ram23:last?.record[0x23],gameState});
       win={since:c1,frames:0,rendered:0,cpuMs:0,renderMs:0,lateMs:0};
     }
     setTimeout(guarded,Math.max(0,anchor+(done+1)*frameMs-performance.now()));

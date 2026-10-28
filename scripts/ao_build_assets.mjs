@@ -23,7 +23,8 @@ const BUNDLE_FILES=['program.mjs','mc6809_aot_lib.mjs','gngb_block_key.mjs',
   'code.bin','overlays.bin','manifest.json'];
 // Worker entry points in src/; their relative imports are copied too.
 const LIB_ENTRIES=['gngb_frame_renderer.mjs','gngb_render_inputs.mjs',
-  'v2_b1_observable.mjs','gngb_input_contract.mjs','ao_web_assets.mjs'];
+  'v2_b1_observable.mjs','gngb_input_contract.mjs','ao_web_assets.mjs',
+  'ao_touch_controls.mjs','ao_game_state.mjs','v3_b2c_port_witness.mjs'];
 const sha256=b=>createHash('sha256').update(b).digest('hex');
 
 // A browser module may only import sibling modules: no node:, no packages.
