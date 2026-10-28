@@ -13,6 +13,16 @@ const load=async(opcode)=>{
   return module.z80AotBlocks.get(0);
 };
 
+test('G5 observed RLCA rotates A circularly in 4T and preserves SZPV rather than recomputing parity',async()=>{
+  const fn=await load(0x07);
+  for(const [a,flags,value,want] of [[0x80,0,1,1],[0,0xff,0,0xc4],
+    [0x14,0,0x28,0x28],[0xff,0,0xff,0x29],[1,0xc4,2,0xc4]]) {
+    const s={pc:0,t:30,a,f:flags,hl:0xc100,bc:0x1234};
+    fn(s,{});
+    assert.deepEqual(s,{pc:1,t:34,a:value,f:want,hl:0xc100,bc:0x1234});
+  }
+});
+
 test('B4 LD r,r register/register and r/(HL) transfer without flag mutation',async()=>{
   const moves=[
     {opcode:0x78,bc:0x4268,hl:0xc041,expectA:0x42,clock:4}, // LD A,B

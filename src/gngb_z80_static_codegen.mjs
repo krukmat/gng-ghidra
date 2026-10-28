@@ -195,8 +195,7 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
     const opcode=rom[pc],next=n=>(pc+n)&0xffff;
     let lines=[],targets=[],length=1;
     const w16=()=>read8(pc,1)|(read8(pc,2)<<8);
-    // Only DD/FD 21 (LD IX/IY,nn) is admitted by this narrowly
-    // native-backed batch. All other indexed instructions remain blocked.
+    // Admit only the explicit indexed forms below; other forms fail closed.
     if(opcode===0xcb) {
       const second=read8(pc,1);
       if(second<0x40) {
@@ -239,6 +238,55 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
         length=4;
         lines=['$.'+reg+'='+nn+';','$.pc='+next(4)+';','$.t+=14;'];
         targets=[next(4)];
+      } else if(second===0xcb && (read8(pc,3)&0xc7)===0xc6) {
+        // Observed documented SET b,(IX/IY+d), memory-only. No flag changes.
+        const index=opcode===0xdd?'ix':'iy';
+        const displacement=sign8(read8(pc,2)),mask=1<<((read8(pc,3)>>>3)&7);
+        length=4;
+        lines=[
+          'const addr=($.'+index+'+('+displacement+'))&65535;',
+          'const value=bus.read8(addr,$.t+19)|'+mask+';',
+          'bus.write8(addr,value,$.t+23);',
+          '$.pc='+next(4)+';$.t+=23;'
+        ];
+        targets=[next(4)];
+      } else if(second===0x19) {
+        // Observed ADD IX/IY,DE only; other indexed ADD forms still gate.
+        const index=opcode===0xdd?'ix':'iy';
+        length=2;
+        lines=[
+          'const left=$.'+index+';const right=$.de;',
+          'const sum=left+right;const result=sum&65535;',
+          '$.f=($.f&0xc4)|((result>>>8)&0x28)|',
+          '(((left&4095)+(right&4095)>4095)?16:0)|(sum>65535?1:0);',
+          '$.'+index+'=result;$.pc='+next(2)+';$.t+=15;'
+        ];
+        targets=[next(2)];
+      } else if(second===0x36) {
+        // Observed LD (IX/IY+d),n: no flags, 19T, one bus write.
+        const index=opcode===0xdd?'ix':'iy';
+        const displacement=sign8(read8(pc,2)),value=read8(pc,3);
+        length=4;
+        lines=[
+          'bus.write8(($.'+index+'+('+displacement+'))&65535,'+value+',$.t+19);',
+          '$.pc='+next(4)+';$.t+=19;'
+        ];
+        targets=[next(4)];
+      } else if(second===0x35) {
+        // Runtime-observed DEC (IX/IY+d). Zilog UM0080: 23T, signed
+        // displacement, carry preserved; all other indexed updates gate.
+        const index=opcode===0xdd?'ix':'iy';
+        const displacement=sign8(read8(pc,2));
+        length=3;
+        lines=[
+          'const addr=($.'+index+'+('+displacement+'))&65535;',
+          'const old=bus.read8(addr,$.t+19);const value=(old-1)&255;',
+          '$.f=($.f&1)|(value&0xa8)|(value===0?64:0)|',
+          '((old&15)===0?16:0)|(old===128?4:0)|2;',
+          'bus.write8(addr,value,$.t+23);',
+          '$.pc='+next(3)+';$.t+=23;'
+        ];
+        targets=[next(3)];
       } else if((second&0xc7)===0x46 && second!==0x76) {
         // DD/FD LD r,(IX/IY+d): only the seven destination registers,
         // never the invalid HALT-form. H/L target regular H/L, not IXH/IXL.
@@ -323,6 +371,13 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
         break;
       }
       case 0x00: lines=['$.pc='+next(1)+';','$.t+=4;'];targets=[next(1)];break;
+      case 0x07: {
+        // Observed RLCA: unlike CB RLC, preserve S/Z/PV, reset H/N.
+        lines=['const old=$.a;$.a=((old<<1)|(old>>>7))&255;',
+          '$.f=($.f&0xc4)|($.a&0x28)|(old>>>7);',
+          '$.pc='+next(1)+';$.t+=4;'];
+        targets=[next(1)];break;
+      }
       case 0xfb: {
         // Zilog Z80 EI: IFF1/IFF2 set immediately, maskable INT cannot be
         // acknowledged until AFTER the following instruction completes.
