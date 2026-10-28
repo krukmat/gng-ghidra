@@ -71,8 +71,45 @@ export async function probeZ80SoundExecution(rom,roots,{
     if(e.addr<=0xe001)ymChip1Writes++;
     else ymChip2Writes++;
   }});
+  // Follow only PCs reached by *actual* Z80 execution. Static ROM-root
+  // discovery cannot see a computed JP(HL) or indirect return target.
+  // Compile exactly ONE runtime instruction, in memory, on demand.
+  // This is a Node-local lab and NEVER publishes the generated ROM code.
+  let dynamicResolvedBlocks=0,dynamicResolutionAttempts=0;
+  let dynamicFirstBlockedFamily=null;
+  const resolveUncompiledPc=(pc,blocks)=>{
+    dynamicResolutionAttempts++;
+    if(dynamicResolutionAttempts>4096)
+      throw new AudioZ80ProbeStop('AUDIO_T3_DYNAMIC_COMPILE_BUDGET_STOP');
+    if(!Number.isInteger(pc)||pc<0||pc>=rom.length){
+      dynamicFirstBlockedFamily='OUTSIDE_SOUND_ROM';
+      throw new AudioZ80ProbeStop('AUDIO_T3_DYNAMIC_PC_OUTSIDE_SOUND_ROM');
+    }
+    const single=compileZ80Prefix(rom,{entry:pc,limit:1});
+    if(single.compiled!==1) {
+      const first=single.blockers[0];
+      const tag=first?.indexed_instruction??first?.cb_instruction??
+        first?.family??first?.reason??'UNKNOWN';
+      dynamicFirstBlockedFamily=/^[A-Z0-9_]{1,60}$/.test(tag)?
+        tag:'UNKNOWN';
+      throw new AudioZ80ProbeStop('AUDIO_T3_DYNAMIC_OPCODE_UNSUPPORTED');
+    }
+    // The compiler emits only fixed-format, escaped and numeric machine
+    // code translations. This expression is generated locally from the
+    // SHA1-checked private ROM and is never saved or exposed.
+    const prefix='export const z80AotBlocks=';
+    if(!single.source.includes(prefix))
+      throw new AudioZ80ProbeStop('AUDIO_T3_DYNAMIC_CODE_FORMAT_STOP');
+    const one=new Function(single.source.replace(prefix,'return '))();
+    const instruction=one.get(pc);
+    if(typeof instruction!=='function')
+      throw new AudioZ80ProbeStop('AUDIO_T3_DYNAMIC_CODE_FORMAT_STOP');
+    blocks.set(pc,instruction);
+    dynamicResolvedBlocks++;
+  };
   const z80=createZ80SchedulerLab(generated.z80AotBlocks,bus,{
-    maxStepsPerAdvance:Math.min(1000000,maxSteps)
+    maxStepsPerAdvance:Math.min(1000000,maxSteps),
+    resolveUncompiledPc
   });
   bus.applyMainEvent({kind:'AUDIO_RESET_LINE',value:1,cycle:0});
   z80.syncBoardReset();
@@ -136,6 +173,9 @@ export async function probeZ80SoundExecution(rom,roots,{
     reason:runtimeStopCode,
     sound_rom_shape_verified:true,
     compiled_static_rom_pcs:compiled.compiled,
+    runtime_resolved_rom_blocks:dynamicResolvedBlocks,
+    runtime_resolution_attempts:dynamicResolutionAttempts,
+    runtime_first_unsupported_family:dynamicFirstBlockedFamily,
     initial_native_root_count:compiled.entrypoints.length,
     compiler_pending_static_edges:compiled.pending,
     compiler_blocked_static_frontiers:compiled.blockers.length,
