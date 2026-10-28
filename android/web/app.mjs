@@ -1,5 +1,6 @@
 /** Offline display and multitouch controls. No keyboard listeners. */
-import {createTouchControls,isDirection} from './lib/ao_touch_controls.mjs';
+import {createTouchControls} from './lib/ao_touch_controls.mjs';
+import {followBase,knobOffset,stickSector} from './lib/ao_stick.mjs';
 
 const canvas=document.getElementById('screen');
 const ctx2d=canvas.getContext('2d',{alpha:false});
@@ -15,10 +16,12 @@ let worker=null,pending=null,drawn=0,playable=false;
 // AO-6 sound: the producer runs from boot; output sessions come and go.
 let audioWorker=null,audioReady=false,audioDead=null,producerStats=null;
 let ctx=null,node=null,gain=null,soundOn=false,session=null,sessionSeq=0;
-let worklet=null,audioNote='',av=[],latencyMs=0;
+let worklet=null,audioNote='',av=[],latencyMs=0,recoveries=[];
+// Operator (28/10): after an underrun, reopen a session instead of turning
+// sound off, at most RECOVER_MAX times per minute.
+const RECOVER_MAX=5;
 const AUDIO_SAMPLES_PER_FRAME=1048;
 let game={credits:0,readyToStart:false,inGame:false};
-const fingers=new Map();
 const controls=createTouchControls((ports,held)=>{
   worker?.postMessage({type:'ports',ports});
   for(const button of buttons){
@@ -27,8 +30,59 @@ const controls=createTouchControls((ports,held)=>{
     button.setAttribute('aria-pressed',String(active));
   }
 });
+const zone=document.getElementById('stick-zone');
+const stickBase=document.getElementById('stick-base');
+const stickKnob=document.getElementById('stick-knob');
+let stick=null; // {id, base:{x,y}, sector}, zone coordinates
+const STICK_JUMP='stick:jump'; // the upper diagonals hold Jump as a second source
+const stickRadius=()=>stickBase.offsetWidth/2;
+function drawStick(base,knob={x:0,y:0}){
+  const r=stickRadius(),k=stickKnob.offsetWidth/2;
+  stickBase.style.transform=`translate(${base.x-r}px,${base.y-r}px)`;
+  stickKnob.style.transform=`translate(${base.x+knob.x-k}px,${base.y+knob.y-k}px)`;
+}
+// At rest the stick waits at the bottom right corner of the zone.
+function restStick(){
+  if(stick){controls.release(stick.id);controls.release(STICK_JUMP);}
+  stick=null;zone.classList.remove('active');delete zone.dataset.dir;
+  const r=stickRadius();
+  drawStick({x:zone.clientWidth-r-16,y:zone.clientHeight-r-16});
+}
+function moveStick(e){
+  const z=zone.getBoundingClientRect(),r=stickRadius();
+  const point={x:e.clientX-z.left,y:e.clientY-z.top};
+  stick.base=followBase(stick.base,point,r);
+  const sector=stickSector(point.x-stick.base.x,point.y-stick.base.y,r,
+    stick.sector?.name);
+  if(sector!==stick.sector){
+    stick.sector=sector;
+    if(sector)controls.hold(stick.id,sector.dir);else controls.release(stick.id);
+    if(sector?.jump)controls.hold(STICK_JUMP,'p1.button2');
+    else controls.release(STICK_JUMP);
+    if(sector)zone.dataset.dir=sector.name;else delete zone.dataset.dir;
+  }
+  drawStick(stick.base,knobOffset(stick.base,point,r));
+}
+zone.addEventListener('pointerdown',e=>{
+  if(!playable||stick||e.button!==0)return;
+  e.preventDefault();
+  zone.setPointerCapture(e.pointerId);
+  const z=zone.getBoundingClientRect(),r=stickRadius();
+  const clamp=(v,lo,hi)=>Math.min(Math.max(v,lo),hi);
+  // The base starts under the thumb, kept whole inside the zone.
+  stick={id:e.pointerId,sector:null,base:{
+    x:clamp(e.clientX-z.left,r,z.width-r),y:clamp(e.clientY-z.top,r,z.height-r)}};
+  zone.classList.add('active');
+  moveStick(e);
+});
+zone.addEventListener('pointermove',e=>{if(e.pointerId===stick?.id)moveStick(e);});
+for(const event of ['pointerup','pointercancel','lostpointercapture'])
+  zone.addEventListener(event,e=>{if(e.pointerId===stick?.id)restStick();});
+window.addEventListener('resize',()=>{if(!stick)restStick();});
 function enable(value){
   playable=value;controls.setEnabled(value);
+  zone.classList.toggle('disabled',!value);
+  if(!value)restStick();
   for(const button of buttons)button.disabled=!value||
     (button.dataset.pulse&&game.inGame)||
     (button.dataset.pulse==='start1'&&!game.readyToStart);
@@ -43,7 +97,7 @@ function updateHint(){
     game.credits>0?'Moneda lista · un momento…':'1 · Moneda     2 · Start';
 }
 function stop(message){
-  enable(false);fingers.clear();halt.textContent=message;halt.hidden=false;
+  enable(false);halt.textContent=message;halt.hidden=false;
   hint.hidden=false;
   hint.textContent='Tocá Reiniciar para volver a empezar.';
 }
@@ -93,7 +147,17 @@ async function toggleSound(){
       node.port.onmessage=({data})=>{
         if(data?.kind==='STATS'){
           worklet={...data,at:performance.now()};
-        }else if(data?.kind==='STOP')audioStop(data.code,data);
+        }else if(data?.kind==='STOP'){
+          if(data.sessionId!==session)return; // an older session ended
+          const now=performance.now();
+          recoveries=recoveries.filter(t=>now-t<60000);
+          if(data.code==='AUDIO_WORKLET_UNDERRUN'&&soundOn&&
+             recoveries.length<RECOVER_MAX){
+            recoveries.push(now);
+            log('AO_AUDIO_RECOVER',{count:recoveries.length,...data});
+            closeSession();openSession();
+          }else audioStop(data.code,data);
+        }
       };
       await resumed;
     }else await ctx.resume();
@@ -125,7 +189,8 @@ function audioStats(){
     worklet:worklet&&{state:worklet.state,queued:worklet.queuedSourceSamples,
       missing:worklet.missingOutputSamples,stale:worklet.stale,
       outputNonzero:worklet.outputNonzero,sample:worklet.lastInputSample},
-    producer:producerStats,avMs,latencyMs:Math.round(latencyMs),dead:audioDead});
+    producer:producerStats,avMs,latencyMs:Math.round(latencyMs),
+    recoveries:recoveries.length,dead:audioDead});
   av=[];
   // Closed loop: the reported output latency can be far from what
   // getOutputTimestamp says is heard; the engine shows frames that much later.
@@ -154,7 +219,7 @@ function startAudio(){
   };
 }
 function start(){
-  enable(false);fingers.clear();closeSession();worker?.terminate();
+  enable(false);closeSession();worker?.terminate();
   game={credits:0,readyToStart:false,inGame:false};
   pending=null;drawn=0;ctx2d.clearRect(0,0,256,224);halt.hidden=true;
   updateHint();status.textContent='cargando…';
@@ -200,21 +265,13 @@ document.getElementById('layout').addEventListener('pointerdown',e=>{
       'continue1':button.dataset.pulse);
     return;
   }
-  fingers.set(e.pointerId,isDirection(button.dataset.hold));
   button.setPointerCapture(e.pointerId);
   controls.hold(e.pointerId,button.dataset.hold);
 });
-document.addEventListener('pointermove',e=>{
-  if(!fingers.get(e.pointerId))return;
-  const key=document.elementFromPoint(e.clientX,e.clientY)
-    ?.closest('[data-hold]')?.dataset.hold;
-  if(isDirection(key))controls.hold(e.pointerId,key);
-  else controls.release(e.pointerId);
-});
-const release=e=>{fingers.delete(e.pointerId);controls.release(e.pointerId);};
+const release=e=>{if(e.pointerId!==stick?.id)controls.release(e.pointerId);};
 for(const event of ['pointerup','pointercancel','lostpointercapture'])
   document.addEventListener(event,release);
-const releaseAll=()=>{fingers.clear();controls.releaseAll();};
+const releaseAll=()=>{restStick();controls.releaseAll();};
 window.addEventListener('blur',releaseAll);
 window.addEventListener('pagehide',releaseAll);
 document.addEventListener('visibilitychange',()=>{
@@ -231,6 +288,8 @@ document.addEventListener('visibilitychange',()=>{
 document.addEventListener('contextmenu',e=>e.preventDefault());
 document.getElementById('restart').addEventListener('click',start);
 soundButton.addEventListener('click',toggleSound);
+if(new URLSearchParams(location.search).has('audioTest'))
+  window.aoTestStall=ms=>worker.postMessage({type:'test-stall',ms});
 function draw(){
   if(pending){
     ctx2d.putImageData(new ImageData(new Uint8ClampedArray(pending.rgba),256,224),0,0);

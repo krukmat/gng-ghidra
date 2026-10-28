@@ -13,9 +13,12 @@ const post=(msg,transfer=[])=>postMessage(msg,transfer);
 const ports=new Uint8Array(5);
 const SAMPLES_PER_FRAME=1048; // 25152 cycles x 8 ticks / 192 ticks per sample
 const SAMPLE_MS=1000/62500;
-const LEAD=5*SAMPLES_PER_FRAME; // queued source samples kept ahead of playback
+// Queued source samples kept ahead of playback. Operator (28/10): 8 frames
+// (134 ms, within the 200 ms capacity) after 5 frames lost audio on the phone.
+const LEAD=8*SAMPLES_PER_FRAME;
 const MAX_AUDIO_BACKLOG=120; // frames sent but not yet synthesized
 const CLOCK_LOST_MS=250;
+const START_WAIT_MS=1000; // a new output may take this long to start consuming
 let audioPort=null,audioAcked=0,audioDead=false;
 // Output clock: {sessionId, latency (samples), port, last:{sample,at}}.
 let clock=null,fillLead=false;
@@ -23,7 +26,11 @@ let clock=null,fillLead=false;
 onmessage=({data})=>{
   // AO-4 sends the five input port bytes (SYSTEM, P1, P2, DSW1, DSW2).
   if(data?.type==='ports'&&data.ports?.length===5)ports.set(data.ports);
-  else if(data?.type==='audio-port'){
+  // Test only (?audioTest): block this worker, as a slow phone frame would.
+  else if(data?.type==='test-stall'&&new URLSearchParams(location.search).has('audioTest')){
+    const end=performance.now()+Math.min(2000,data.ms);
+    while(performance.now()<end);
+  }else if(data?.type==='audio-port'){
     audioPort=data.port;
     audioPort.onmessage=({data:m})=>{if(m?.type==='ack')audioAcked=m.frame;};
   }else if(data?.type==='audio-latency'){
@@ -31,7 +38,8 @@ onmessage=({data})=>{
   }else if(data?.type==='audio-clock'){
     clock?.port?.close();
     clock=data.sessionId==null?null:{sessionId:data.sessionId,
-      latency:data.latencyMs/SAMPLE_MS,port:data.port,last:null};
+      latency:data.latencyMs/SAMPLE_MS,port:data.port,last:null,
+      startFrame:null,openedAt:null};
     // A new output starts with the whole LEAD queued, not just the prebuffer.
     fillLead=clock!==null;
     if(clock)clock.port.onmessage=({data:m})=>{
@@ -170,6 +178,13 @@ async function start(){
       win.lateMs=Math.max(win.lateMs,now-(anchor+(done+1)*frameMs));
       due=Math.floor((now-anchor)/frameMs);
       if(due-done>MAX_BEHIND){anchor=now-done*frameMs;due=done+1;slips++;}
+      // Until the new output plays, queue LEAD and no more: real-time frames
+      // on top of it would overflow the 200 ms worklet capacity.
+      if(clock&&!audioDead&&clock.openedAt===null){
+        clock.startFrame=done;clock.openedAt=now;
+      }
+      if(clock&&!audioDead&&now-clock.openedAt<START_WAIT_MS)
+        due=Math.min(due,clock.startFrame+LEAD/SAMPLES_PER_FRAME);
     }
     const c0=performance.now();
     for(;done<due;done++){

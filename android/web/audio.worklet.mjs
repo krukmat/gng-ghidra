@@ -28,7 +28,7 @@ class AoPCMProcessor extends AudioWorkletProcessor {
     this.stream.state='STOP';
     if(this.stopSent)return;
     this.stopSent=true;
-    this.port.postMessage({kind:'STOP',code,...report});
+    this.port.postMessage({kind:'STOP',code,sessionId:this.stream.sessionId,...report});
     this.clock?.postMessage({type:'clock',sessionId:this.stream.sessionId,
       state:'STOP'});
   }

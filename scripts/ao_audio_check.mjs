@@ -71,7 +71,7 @@ function judge(list,{playing=true}={}){
     producer:audio.at(-1)?.producer??null,
     av:av.length?{mean:+(av.reduce((a,b)=>a+b.mean,0)/av.length).toFixed(1),
       maxAbs:Math.max(...av.map(a=>a.maxAbs))}:null,
-    stops:of('AO_AUDIO_STOP',list),
+    stops:of('AO_AUDIO_STOP',list),recoveries:of('AO_AUDIO_RECOVER',list),
   };
   if(av.length>=10){
     // Drift: least-squares slope of the per-second mean, in ms per minute.
@@ -81,6 +81,7 @@ function judge(list,{playing=true}={}){
       t.reduce((a,x)=>a+(x-mt)**2,0)).toFixed(2);
   }
   assert.equal(out.stops.length,0,'audio STOP '+JSON.stringify(out.stops));
+  assert.equal(out.recoveries.length,0,'underrun '+JSON.stringify(out.recoveries));
   assert.ok(out.cpuHz.min>=58.5&&out.cpuHz.max<=61,'CPU pace '+JSON.stringify(out.cpuHz));
   assert.ok(out.renderFps.min>=30,'render '+JSON.stringify(out.renderFps));
   if(playing){
@@ -110,7 +111,7 @@ try{
   });
   page.on('pageerror',e=>bad.push(String(e)));
   const t0=Date.now();
-  await page.goto('http://127.0.0.1:'+server.address().port+'/index.html');
+  await page.goto('http://127.0.0.1:'+server.address().port+'/index.html?audioTest');
   const ready=await until(l=>l.tag==='AO_AUDIO_READY','audio ready');
   report.audioReadyMs=ready.at-t0;report.audioLoadMs=ready.data.loadMs;
   assert.equal(await soundLabel(),'Sonido OFF');
@@ -164,6 +165,19 @@ try{
   report.background={hiddenStats:hidden,newSession:back.data.sessionId};
   await page.waitForTimeout(2000);
   await phase('afterBackground',10);
+
+  // A 400 ms engine stall (test hook) empties the queue: the page must
+  // reopen a session by itself, never turn sound off.
+  mark=logs.length;
+  await page.evaluate(()=>window.aoTestStall(400));
+  const recovered=await until(l=>l.tag==='AO_AUDIO_RECOVER'&&logs.indexOf(l)>=mark,
+    'recovery after stall',15000);
+  assert.equal(of('AO_AUDIO_STOP',since(mark)).length,0,'stall turned sound off');
+  await page.waitForTimeout(4000);
+  assert.equal(await soundLabel(),'Sonido ON');
+  const afterStall=of('AO_AUDIO_STATS',since(mark)).at(-1);
+  assert.equal(afterStall.worklet?.state,'PLAYING');
+  report.stall={recover:recovered.data,after:afterStall};
 
   // Reiniciar: new engine, Z80 session and chips; Sound stays ON.
   mark=logs.length;

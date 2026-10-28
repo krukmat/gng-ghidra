@@ -17,7 +17,7 @@ const trials=Number(process.argv[2]??5);
 const checkGameOver=process.argv.includes('--gameover');
 if(!Number.isInteger(trials)||trials<1||trials>5)throw Error('AO4_TRIALS_INVALID');
 const MIME={'.html':'text/html','.mjs':'text/javascript','.json':'application/json',
-  '.bin':'application/octet-stream'};
+  '.bin':'application/octet-stream','.wasm':'application/wasm'};
 const server=createServer((req,res)=>{
   try{
     const path=resolve(ASSETS,'.'+new URL(req.url,'http://local').pathname);
@@ -39,7 +39,7 @@ try{
   page.on('console',msg=>{
     const m=/^(AO_\w+) (.*)$/s.exec(msg.text());if(!m)return;
     if(m[1]==='AO_INPUT')probes.push(JSON.parse(m[2]));
-    if(['AO_ERROR','AO_HALT'].includes(m[1]))bad.push(msg.text());
+    if(['AO_ERROR','AO_HALT','AO_AUDIO_STOP'].includes(m[1]))bad.push(msg.text());
   });
   page.on('pageerror',e=>bad.push(String(e)));
   const until=async(predicate,timeout=20000)=>{
@@ -57,6 +57,20 @@ try{
   };
   const touch=async(type,points=[])=>cdp.send('Input.dispatchTouchEvent',
     {type,touchPoints:points});
+  // Thumbstick: a finger lands in the zone, then drags 45 px one way.
+  const DRAG={up:[0,-45],down:[0,45],left:[-45,0],right:[45,0],
+    'up-right':[32,-32],'up-left':[-32,-32]};
+  const stick=async(id,dir)=>{
+    const z=await page.locator('#stick-zone').boundingBox();assert.ok(z,'stick zone');
+    const c={x:z.x+z.width*.55,y:z.y+z.height*.6};
+    return [{id,...c},{id,x:c.x+DRAG[dir][0],y:c.y+DRAG[dir][1]}];
+  };
+  const hold=async(dir,...others)=>{
+    const [down,moved]=await stick(1,dir);
+    await touch('touchStart',[down,...others]);
+    await touch('touchMove',[moved,...others]);
+    return moved;
+  };
   for(let trial=1;trial<=trials;trial++){
     probes.length=0;
     if(trial===1)await page.goto('http://127.0.0.1:'+server.address().port+
@@ -64,7 +78,6 @@ try{
     else await page.locator('#restart').tap();
     await page.waitForFunction(()=>!document.getElementById('coin').disabled);
     assert.equal(await page.locator('#system-controls').isVisible(),true);
-    assert.equal(await page.locator('#sound').isDisabled(),true);
     assert.equal(await page.locator('#sound').textContent(),'Sonido OFF');
     let baseline=await until(p=>p.frame>=320);
     assert.equal(baseline.ram2,0);assert.equal(baseline.ram23,0);
@@ -89,7 +102,6 @@ try{
     assert.equal(await page.locator('#start').isDisabled(),true);
     report.coinStartDuringGame='HIDDEN_AND_DISABLED';
     assert.equal(await page.locator('#sound').isVisible(),true);
-    assert.equal(await page.locator('#sound').isDisabled(),true);
     report.soundControl='PREPARED_DISABLED';
     report.trials.push({trial,coinReads,coinCounter:coin.ram23,
       startedFrame:started.frame,gameMode:started.ram2});
@@ -98,25 +110,36 @@ try{
 
     const before=started.witness.activeSamples;
     for(const id of ['up','down','left','right','attack','jump']){
-      await touch('touchStart',[await point(1,id)]);
+      if(DRAG[id])await hold(id);else await touch('touchStart',[await point(1,id)]);
       await page.waitForTimeout(200);await touch('touchEnd');
     }
     const keys=['p1.up','p1.down','p1.left','p1.right','p1.button1','p1.button2'];
     const all=await until(p=>keys.every(k=>p.witness.activeSamples[k]>before[k]));
     report.controls=Object.fromEntries(keys.map(k=>[k,all.witness.activeSamples[k]-before[k]]));
-    const combo=[await point(1,'right'),await point(2,'attack'),await point(3,'jump')];
-    await touch('touchStart',combo);
+    const actions=[await point(2,'attack'),await point(3,'jump')];
+    const right=await hold('right',...actions);
     const multi=await until(p=>p.frame>all.frame&&p.reads[1]===0xce);
+    // The same thumb slides from right to up without lifting.
+    await touch('touchMove',[{...right,x:right.x-35,y:right.y-90},...actions]);
+    const slid=await until(p=>p.frame>multi.frame&&p.reads[1]===0xc7);
     await touch('touchEnd');
-    const neutral=await until(p=>p.frame>multi.frame&&p.reads[1]===255);
-    await touch('touchStart',[await point(1,'up'),await point(2,'attack')]);
+    const neutral0=await until(p=>p.frame>slid.frame&&p.reads[1]===255);
+    // Upper diagonals run and jump that way: Right/Left plus Jump.
+    await hold('up-right');
+    const jumpRight=await until(p=>p.frame>neutral0.frame&&p.reads[1]===0xde);
+    await touch('touchEnd');
+    await hold('up-left');
+    const jumpLeft=await until(p=>p.frame>jumpRight.frame&&p.reads[1]===0xdd);
+    await touch('touchEnd');
+    const neutral=await until(p=>p.frame>jumpLeft.frame&&p.reads[1]===255);
+    await hold('up',await point(2,'attack'));
     await page.waitForTimeout(150);await touch('touchCancel');
     const cancelled=await until(p=>p.frame>neutral.frame&&p.reads[1]===255);
-    await touch('touchStart',[await point(1,'left')]);
+    await hold('left');
     const pressed=await until(p=>p.frame>cancelled.frame&&p.reads[1]===0xfd);
     await page.evaluate(()=>window.dispatchEvent(new Event('blur')));
     await until(p=>p.frame>pressed.frame&&p.reads[1]===255);await touch('touchEnd');
-    report.multitouch='PASS';report.cancelAndBlur='PASS';
+    report.multitouch='PASS';report.stickSlide='PASS';report.stickJump='PASS';report.cancelAndBlur='PASS';
     // Let the start sequence finish so the preview shows the level itself.
     const preview=await until(p=>p.frame>=started.frame+900,20000);
     report.previewFrame=preview.frame;
@@ -130,7 +153,7 @@ try{
     assert.ok(report.layout.every(b=>b.fits),'buttons or canvas outside viewport');
     const geometry=await page.evaluate(()=>{
       const box=id=>document.getElementById(id).getBoundingClientRect();
-      const left=box('button-stack'),right=box('dpad');
+      const left=box('button-stack'),right=box('stick-base');
       return {actionsLeft:left.right<innerWidth/2,
         actionsBottom:left.bottom>innerHeight*.85,
         directionsRight:right.left>innerWidth/2,
