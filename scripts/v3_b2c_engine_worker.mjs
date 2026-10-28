@@ -14,6 +14,7 @@ import {validateLiveFrames} from '../src/v3_b2c_session_policy.mjs';
 import {createPortReadWitness} from '../src/v3_b2c_port_witness.mjs';
 import {inspectRealFrame} from '../src/v3_b2c_pixel_probe.mjs';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
+import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
 import {createPortRecorder} from '../src/v3_b3_live_tape.mjs';
 import {gngbGraphics,rendererInputs} from './r35_t5_render_check.mjs';
 
@@ -25,6 +26,7 @@ const witness=createPortReadWitness();
 const recorder=createPortRecorder();
 let lastGood=0;
 let cpu;
+let audioEvents=[],audioCompletedFrames=0;
 try{
   const dir=resolve(workerData.bundle);
   const {manifest,code}=loadFrozen(dir);
@@ -51,6 +53,19 @@ try{
       return value;
     },
     onPortRead:read=>witness.observe(read),
+    onAudioEvent:e=>{
+      // Internal transport only. Never send PC or ROM-derived data to HTTP.
+      audioEvents.push({kind:e.kind,value:e.value,cycle:e.cycle});
+      if(audioEvents.length>5000)throw Error('AUDIO_LIVE_EVENT_OVERFLOW');
+    },
+    onAudioComplete:mark=>{
+      if(mark.frames<=audioCompletedFrames)return;
+      audioCompletedFrames=mark.frames;
+      send({type:'audio-batch',sessionId:workerData.sessionId,
+        throughCycle:mark.frames*CYCLES_PER_FRAME,
+        events:audioEvents});
+      audioEvents=[];
+    },
     onFrame:frame=>{
       // Snapshot is emitted by the ACTUAL runtime. Never infer the
       // uninitialized sprite DMA buffer from zeros or MAME captures.

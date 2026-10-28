@@ -5,11 +5,13 @@
  */
 export const LIVE_FRAMES=36000;
 export const MAX_LIVE_FRAMES=216000;
+// B3 G6 is certified with 38,084 blocks; the old 30,000 ceiling rejected it.
+export const MAX_CERTIFIED_BUNDLE_BLOCKS=40000;
 export function validateLiveFrames(manifest,requested=LIVE_FRAMES){
   if(!manifest||!Number.isSafeInteger(manifest.frames)||
      manifest.frames<600||manifest.frames>MAX_LIVE_FRAMES||
      !Number.isSafeInteger(manifest.blocks)||
-     manifest.blocks<1||manifest.blocks>30000)
+     manifest.blocks<1||manifest.blocks>MAX_CERTIFIED_BUNDLE_BLOCKS)
     throw Error('V3_B2C_UNVERIFIED_BUNDLE');
   if(!Number.isSafeInteger(requested)||requested<manifest.frames||
      requested>MAX_LIVE_FRAMES)

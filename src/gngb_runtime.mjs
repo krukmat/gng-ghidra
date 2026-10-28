@@ -23,7 +23,7 @@ export class GngbRuntimeError extends Error{
 }
 
 export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PER_FRAME,
-  portRead=null,onPortRead=null,onAudioEvent=null}={}){
+  portRead=null,onPortRead=null,onAudioEvent=null,onAudioComplete=null}={}){
   if(!Number.isInteger(cyclesPerFrame)||cyclesPerFrame<1)
     throw Error('V2_B1_INVALID_IRQ_PERIOD');
   if(portRead!==null&&typeof portRead!=='function')
@@ -32,6 +32,8 @@ export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PE
     throw Error('V3_B2A_INVALID_PORT_OBSERVER');
   if(onAudioEvent!==null&&typeof onAudioEvent!=='function')
     throw Error('AUDIO_EVENT_HANDLER_INVALID');
+  if(onAudioComplete!==null&&typeof onAudioComplete!=='function')
+    throw Error('AUDIO_COMPLETE_HANDLER_INVALID');
   const mem=new Uint8Array(0x3000),km=new Uint8Array(0x3000);
   const palExt=new Uint8Array(0x100),pal=new Uint8Array(0x100);
   // machine_reset: palette RAM filled with 00/55/aa/ff, scroll zeroed.
@@ -206,6 +208,8 @@ export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PE
     for(;;){
       if($.C>=$.T){
         boundary();
+        if(onAudioComplete)onAudioComplete(Object.freeze({
+          cycle:$.C,frames:$.records.length}));
         if($.records.length>=frames)return {status:'FRAMES_DONE'};
       }
       if($.sync){
@@ -235,6 +239,10 @@ export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PE
           overlay:$.PC<0x3000?overlayAt($.PC):null};
       }
       fn($);
+      // An onFrame snapshot may be taken inside fn before its remaining bus
+      // writes. This callback runs only after the whole instruction returned.
+      if(onAudioComplete)onAudioComplete(Object.freeze({
+        cycle:$.C,frames:$.records.length}));
     }
   };
   return {state:$,run};

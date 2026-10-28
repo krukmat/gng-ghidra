@@ -26,7 +26,9 @@ const tests=[
   'tests/test_gngb_audio_events.mjs',
   'tests/test_gngb_z80_sound_bus.mjs',
   'tests/test_gngb_audio_main_z80_bridge.mjs',
-  'tests/test_gngb_audio_pcm_queue.mjs'
+  'tests/test_gngb_audio_pcm_queue.mjs',
+  'tests/test_gngb_audio_live_stream.mjs',
+  'tests/test_gngb_audio_worklet_processor.mjs'
 ];
 function invoke(cmd,args){
   const r=spawnSync(cmd,args,{

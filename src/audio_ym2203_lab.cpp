@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -26,6 +27,10 @@ void le16(std::ostream &out, uint16_t x) {
 }
 void le32(std::ostream &out, uint32_t x) {
   le16(out,static_cast<uint16_t>(x));le16(out,static_cast<uint16_t>(x>>16));
+}
+void le64(std::ostream &out, uint64_t x) {
+  le32(out,static_cast<uint32_t>(x));
+  le32(out,static_cast<uint32_t>(x>>32));
 }
 std::vector<write> read_events(const char *file) {
   std::ifstream in(file);
@@ -54,8 +59,68 @@ int16_t mix(ymfm::ym2203 &a,ymfm::ym2203 &b) {
   return static_cast<int16_t>(
     std::clamp(static_cast<int32_t>(signal),-32768,32767));
 }
+int stream() {
+  lab_interface intf0,intf1;
+  ymfm::ym2203 ym0(intf0),ym1(intf1);
+  ym0.set_fidelity(ymfm::OPN_FIDELITY_MIN);
+  ym1.set_fidelity(ymfm::OPN_FIDELITY_MIN);
+  ym0.reset();ym1.reset();
+  uint64_t first=0,next=0,frontier=0,lastEvent=0;
+  std::vector<int16_t> pending;
+  const auto advance=[&](uint64_t tick){
+    const uint64_t end=(tick+ticks_per_sample-1)/ticks_per_sample;
+    if(end<next || end-first>12500)
+      throw std::runtime_error("AUDIO_STREAM_CHUNK_TOO_LARGE");
+    for(;next<end;next++)pending.push_back(mix(ym0,ym1));
+  };
+  std::string line;
+  while(std::getline(std::cin,line)) {
+    std::istringstream in(line);
+    char op=0,extra=0;
+    uint64_t tick=0;
+    in>>op;
+    if(op=='Q' && !(in>>extra))return 0;
+    if(!(in>>tick) || tick<frontier || tick<lastEvent ||
+       tick>master_hz*3600)
+      throw std::runtime_error("AUDIO_STREAM_CLOCK_INVALID");
+    if(op=='W') {
+      uint32_t addr=0,value=0;
+      if(!(in>>addr>>value) || (in>>extra) ||
+         addr<0xe000 || addr>0xe003 || value>255)
+        throw std::runtime_error("AUDIO_STREAM_WRITE_INVALID");
+      advance(tick);
+      const uint32_t offset=addr-0xe000;
+      (offset<2 ? ym0 : ym1).write(offset&1,value);
+    } else if(op=='R') {
+      if(in>>extra)throw std::runtime_error("AUDIO_STREAM_RESET_INVALID");
+      advance(tick);
+      ym0.reset();ym1.reset();
+    } else if(op=='U') {
+      if(in>>extra)throw std::runtime_error("AUDIO_STREAM_RENDER_INVALID");
+      // Exclusive frontier: events exactly on tick are accepted by the
+      // following request, before its first sample is synthesized.
+      advance(tick);
+      std::cout.put('P');le64(std::cout,first);
+      le32(std::cout,static_cast<uint32_t>(pending.size()));
+      for(const auto sample:pending)
+        le16(std::cout,static_cast<uint16_t>(sample));
+      if(!std::cout.flush())
+        throw std::runtime_error("AUDIO_STREAM_OUTPUT_FAILED");
+      first=next;frontier=tick;pending.clear();
+    } else throw std::runtime_error("AUDIO_STREAM_COMMAND_INVALID");
+    lastEvent=tick;
+  }
+  return 0;
+}
 }
 int main(int argc,char **argv) {
+  if(argc==2 && std::string(argv[1])=="--stream") {
+    try{return stream();}
+    catch(const std::exception &e){
+      std::cerr<<"GNG_AUDIO_YM_STREAM=STOP "<<e.what()<<"\n";
+      return 2;
+    }
+  }
   if(argc!=4) {
     std::cerr<<"Usage: audio_ym2203_lab <events.tsv> <private.wav> <duration_ms 1..30000>\n";
     return 2;

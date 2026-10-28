@@ -1,7 +1,4 @@
-/**
- * Browser-only PCM transport. Call resume() from a USER GESTURE due to autoplay.
- * No source is connected until Z80 AOT + YM2203 synthesis are native-validated.
- */
+/** Browser PCM transport. Caller creates/resumes context from a gesture. */
 export async function createGngPCMOutput(context,{
   workletUrl='./gngb_audio_pcm_processor.mjs',onDiagnostic=()=>{}
 }={}) {
@@ -14,12 +11,13 @@ export async function createGngPCMOutput(context,{
   node.connect(context.destination);
   return {
     node,
-    push(samples) {
-      if(!(samples instanceof Float32Array))
+    push(packet) {
+      if(!packet||!(packet.samples instanceof Int16Array))
         throw Error('AUDIO_PCM_INPUT_INVALID');
-      node.port.postMessage({kind:'PCM',samples});
+      node.port.postMessage({kind:'PCM',...packet},[packet.samples.buffer]);
     },
-    reset(){node.port.postMessage({kind:'RESET'});},
+    reset(sessionId){node.port.postMessage({kind:'RESET',sessionId});},
+    stop(){node.port.postMessage({kind:'STOP'});},
     disconnect(){node.disconnect();}
   };
 }

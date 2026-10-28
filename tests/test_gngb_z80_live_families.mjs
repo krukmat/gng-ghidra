@@ -23,6 +23,118 @@ test('G5 observed RLCA rotates A circularly in 4T and preserves SZPV rather than
   }
 });
 
+test('T3 observed RRCA rotates bit zero into carry and bit seven in 4T',async()=>{
+  const fn=await load(0x0f);
+  for(const [a,flags,value,want] of [
+    [0x01,0,0x80,0x01],[0x50,0xff,0x28,0xec],
+    [0x81,0,0xc0,0x01],[0x00,0xc4,0,0xc4]]){
+    const s={pc:0,t:30,a,f:flags};
+    fn(s,{});
+    assert.deepEqual([s.pc,s.t,s.a,s.f],[1,34,value,want]);
+  }
+});
+
+test('T3 observed ED SBC HL,BC carries, half borrows and overflows in 15T',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0xed,0x42,0xcb,0x40]);
+  const c=compileZ80Prefix(rom);
+  assert.equal(c.compiled,1);
+  const module=await import('data:text/javascript,'+encodeURIComponent(c.source));
+  const fn=module.z80AotBlocks.get(0);
+  for(const [hl,bc,carry,want,wantFlags] of [
+    [0,1,0,0xffff,0xbb],
+    [0x8000,1,0,0x7fff,0x3e],
+    [1,1,0,0,0x42],
+    [0x1234,0x1111,1,0x0122,0x02]]){
+    const s={pc:0,t:20,hl,bc,f:carry};
+    fn(s,{});
+    assert.deepEqual([s.pc,s.t,s.hl,s.f],[2,35,want,wantFlags]);
+  }
+  const other=new Uint8Array(0x8000);
+  other.set([0xed,0x52]);
+  assert.equal(compileZ80Prefix(other,{limit:1}).compiled,0);
+});
+
+test('T3 observed RES b,(IX+d) clears memory only in 23T',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0xdd,0xcb,0xfe,0x86,0xcb,0x40]);
+  const c=compileZ80Prefix(rom);
+  assert.equal(c.compiled,1);
+  const module=await import('data:text/javascript,'+encodeURIComponent(c.source));
+  const fn=module.z80AotBlocks.get(0);
+  const calls=[];
+  const s={pc:0,t:10,ix:0xc001,f:0xd7};
+  fn(s,{read8(a,t){calls.push(['read',a,t]);return 0xff;},
+    write8(a,v,t){calls.push(['write',a,v,t]);}});
+  assert.deepEqual(calls,[['read',0xbfff,29],['write',0xbfff,0xfe,33]]);
+  assert.deepEqual([s.pc,s.t,s.f],[4,33,0xd7]);
+  for(const bit of [1,7]){
+    const candidate=new Uint8Array(0x8000);
+    candidate.set([0xdd,0xcb,0,0x86+8*bit,0xcb,0x40]);
+    const build=compileZ80Prefix(candidate);
+    assert.equal(build.compiled,1);
+    const generated=await import('data:text/javascript,'+
+      encodeURIComponent(build.source));
+    const writes=[];
+    generated.z80AotBlocks.get(0)({pc:0,t:0,ix:0xc000,f:0},
+      {read8(){return 255;},write8(_a,v){writes.push(v);}});
+    assert.deepEqual(writes,[255^(1<<bit)]);
+  }
+  for(const bytes of [[0xfd,0xcb,0xfe,0x86],
+    [0xdd,0xcb,0xfe,0x80]]){
+    const other=new Uint8Array(0x8000);other.set(bytes);
+    assert.equal(compileZ80Prefix(other,{limit:1}).compiled,0);
+  }
+});
+
+test('T3 observed PUSH IY writes high then low across stack wrap in 15T',async()=>{
+  const rom=new Uint8Array(0x8000);
+  rom.set([0xfd,0xe5,0xcb,0x40]);
+  const c=compileZ80Prefix(rom);
+  assert.equal(c.compiled,1);
+  const generated=await import('data:text/javascript,'+encodeURIComponent(c.source));
+  const calls=[];
+  const s={pc:0,t:100,sp:0,iy:0xabcd,f:0x83};
+  generated.z80AotBlocks.get(0)(s,{write8(...args){calls.push(args);}});
+  assert.deepEqual(calls,[[0xffff,0xab,112],[0xfffe,0xcd,115]]);
+  assert.deepEqual([s.pc,s.t,s.sp,s.f],[2,115,0xfffe,0x83]);
+  const other=new Uint8Array(0x8000);other.set([0xdd,0xe5]);
+  assert.equal(compileZ80Prefix(other,{limit:1}).compiled,0);
+});
+
+test('T3 observed BIT 7,A preserves carry and sets S or Z/PV in 8T',async()=>{
+  const rom=new Uint8Array(0x8000);rom.set([0xcb,0x7f,0xed,0x00]);
+  const c=compileZ80Prefix(rom);
+  assert.equal(c.compiled,1);
+  const generated=await import('data:text/javascript,'+encodeURIComponent(c.source));
+  const fn=generated.z80AotBlocks.get(0);
+  for(const [a,flags,want] of [[0x80,1,0x91],[0x28,0xff,0x7d],
+    [0,0,0x54]]){
+    const s={pc:0,t:20,a,f:flags};fn(s,{});
+    assert.deepEqual([s.pc,s.t,s.a,s.f],[2,28,a,want]);
+  }
+  const other=new Uint8Array(0x8000);other.set([0xcb,0x47]);
+  assert.equal(compileZ80Prefix(other,{limit:1}).compiled,0);
+});
+
+test('T3 observed INC (IX/IY+d) has 23T, wrap and carry preservation',async()=>{
+  for(const prefix of [0xdd,0xfd]){
+    const rom=new Uint8Array(0x8000);rom.set([prefix,0x34,0xfe,0xcb,0x40]);
+    const c=compileZ80Prefix(rom);
+    assert.equal(c.compiled,1);
+    const generated=await import('data:text/javascript,'+encodeURIComponent(c.source));
+    const fn=generated.z80AotBlocks.get(0);
+    for(const [old,want,flags] of [[0x7f,0x80,0x95],
+      [0xff,0,0x51],[0x0e,0x0f,0x09]]){
+      const writes=[],s={pc:0,t:10,ix:1,iy:1,f:1};
+      fn(s,{read8(a,t){assert.deepEqual([a,t],[0xffff,29]);return old;},
+        write8(...args){writes.push(args);}});
+      assert.deepEqual(writes,[[0xffff,want,33]]);
+      assert.deepEqual([s.pc,s.t,s.f],[3,33,flags]);
+    }
+  }
+});
+
 test('B4 LD r,r register/register and r/(HL) transfer without flag mutation',async()=>{
   const moves=[
     {opcode:0x78,bc:0x4268,hl:0xc041,expectA:0x42,clock:4}, // LD A,B

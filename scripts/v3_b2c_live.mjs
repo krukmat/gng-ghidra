@@ -5,6 +5,7 @@
  */
 import {createServer} from 'node:http';
 import {Worker} from 'node:worker_threads';
+import {performance} from 'node:perf_hooks';
 import {resolve,join} from 'node:path';
 import {existsSync,readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
@@ -14,6 +15,7 @@ import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {b2dCertified} from '../src/v3_b2d_selection.mjs';
 import {b2eCertified} from '../src/v3_b2e_selection.mjs';
 import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
+import {prepareAudioBundle} from '../src/gngb_audio_bundle_overlay.mjs';
 import {createVisibleFrameGate} from '../src/v3_b2c_visible_gate.mjs';
 import {LIVE_TAPE_SCHEMA} from '../src/v3_b3_live_tape.mjs';
 
@@ -73,6 +75,12 @@ const {inputs,apply:applyControl,release:releaseAll,snapshot:heldControls}=live;
 // genuine cold restart of that engine, never a playback or state injection.
 const SESSION_FRAMES=LIVE_FRAMES;
 let advance=null,worker=null,generation=0,operatorGate=null;
+let activeBundle=BUNDLE,audioWorker=null,audioPackets=[],audioQueued=0;
+let pacingOrigin=null;
+let audioActive=false,audioStop=null,audioNextSample=0,audioDelivered=0;
+let audioPendingBatches=0;
+let audioNonzero=0;
+let audioStats=null,workletStats=null,audioDroppedBeforeStart=0;
 let frame=null,latest=0,known=false,cycle=0,unknownBytes=null,source=null;
 let pixelProbe=null,displayedServerFrame=0;
 let lastGood=0,blocks=0,halt=null;
@@ -96,7 +104,13 @@ const state=()=>({schema:'gng.v3.live-engine.v1',mode:'REAL_AOT',
   unknownBytes,cycle,blocks,reads,busWitness,pixelProbe,
   deliveredFrame:displayedServerFrame,source,halt,controls:heldControls(),
   sessionFrames:SESSION_FRAMES,sessionId:generation,
-  operatorPause:operatorGate?.snapshot().paused??false});
+  operatorPause:operatorGate?.snapshot().paused??false,
+  audio:{active:audioActive,stop:audioStop,queuedSamples:audioQueued,
+    pendingBatches:audioPendingBatches,
+    producedSamples:audioNextSample,deliveredSamples:audioDelivered,
+    nonzeroSamples:audioNonzero,
+    droppedBeforeStart:audioDroppedBeforeStart,producer:audioStats,
+    worklet:workletStats}});
 const html=`<!doctype html><html lang="es"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Ghosts 'n Goblins — Motor MC6809 AOT real</title>
@@ -121,6 +135,8 @@ kbd{background:#333e51;padding:2px 5px;border-radius:3px}
 <button id="start" type="button">Start 1P (puerto SYSTEM)</button>
 <button id="continue" type="button">Continuar demostración sin moneda</button></p>
 <p id="interaction-window">Al aparecer el primer fotograma, el motor espera la moneda (CPU pausada en VBlank real).</p>
+<p><button id="audio-enable" type="button">Activar audio</button>
+<span id="audio-health">Audio en espera de un gesto</span></p>
 <p><button id="restart" type="button">Reiniciar GnG desde reset</button></p>
 <pre id="detail"></pre>
 <footer>Los píxeles provienen exclusivamente del compositor aplicado
@@ -132,14 +148,86 @@ const map={Digit5:'coin1',Digit1:'start1',
 ArrowLeft:'p1.left',ArrowRight:'p1.right',
 ArrowUp:'p1.up',ArrowDown:'p1.down',KeyZ:'p1.button1',KeyX:'p1.button2'};
 let last=-1,fetching=false,sessionId=null,paintedCount=0;
+let audioContext=null,audioOutput=null,audioPolling=false,audioPollStop=false,
+  audioEnabled=false,workletReport=null;
 const canvas=document.getElementById('screen'),ctx=canvas.getContext('2d');
 const status=document.getElementById('status'),detail=document.getElementById('detail'),
   cpuInput=document.getElementById('cpu-input'),
-  videoHealth=document.getElementById('video-health');
+  videoHealth=document.getElementById('video-health'),
+  audioHealth=document.getElementById('audio-health');
+document.getElementById('audio-enable').addEventListener('click',async()=>{
+ try{
+   if(!audioContext){
+     audioContext=new AudioContext();
+     await audioContext.resume();
+     const {createGngPCMOutput}=await import('/gngb_audio_worklet_sink.mjs');
+     audioOutput=await createGngPCMOutput(audioContext,{
+       workletUrl:'/gngb_audio_pcm_processor.mjs',onDiagnostic:m=>{
+         workletReport=m;
+         if(m.kind==='AUDIO_WORKLET_STOP'){
+           audioHealth.textContent='Audio detenido: '+m.code;
+           audioPollStop=true;
+           fetch('/audio/stop',{method:'POST',
+             headers:{'Content-Type':'application/json'},
+             body:JSON.stringify({sessionId,code:m.code})}).catch(()=>{});
+         }
+         if(m.kind==='AUDIO_WORKLET_STATS'){
+           fetch('/audio/telemetry',{method:'POST',headers:{'Content-Type':'application/json'},
+             body:JSON.stringify({sessionId:m.sessionId,state:m.state,
+               producedOutputSamples:m.producedOutputSamples,
+               missingOutputSamples:m.missingOutputSamples,
+               lastInputSample:m.lastInputSample,
+               queuedSourceSamples:m.queuedSourceSamples,
+               sampleRate:audioContext.sampleRate,
+               latencySeconds:(audioContext.baseLatency||0)+(audioContext.outputLatency||0),
+               contextTime:m.contextTime})}).catch(()=>{});
+         }
+       }});
+   }
+   await audioContext.resume();
+   if(audioContext.state!=='running')throw Error('AUDIO_CONTEXT_NOT_RUNNING');
+   const r=await fetch('/audio/start',{method:'POST'});
+   if(!r.ok)throw Error('AUDIO_START_REJECTED');
+   const start=await r.json();
+   sessionId=start.sessionId;
+   audioOutput.reset(start.sessionId);
+   audioEnabled=true;
+   audioPollStop=false;
+   document.getElementById('audio-enable').disabled=true;
+   audioHealth.textContent='AudioContext activo: '+audioContext.sampleRate+' Hz';
+   pollAudio();
+ }catch(e){audioHealth.textContent='Audio detenido: '+String(e.message??e);}
+});
+async function pollAudio(){
+ if(audioPolling||audioPollStop||!audioOutput)return;audioPolling=true;
+ try{
+   const r=await fetch('/audio?session='+sessionId,{cache:'no-store'});
+   if(r.status===200){
+     const p=await r.json(),raw=atob(p.pcm);
+     const view=new DataView(new ArrayBuffer(raw.length));
+     for(let i=0;i<raw.length;i++)view.setUint8(i,raw.charCodeAt(i));
+     const samples=new Int16Array(raw.length/2);
+     for(let i=0;i<samples.length;i++)samples[i]=view.getInt16(i*2,true);
+     audioOutput.push({sessionId:p.sessionId,sampleRate:p.sampleRate,
+       firstSample:p.firstSample,samples});
+   }else if(r.status===409){
+     const s=await r.json();audioOutput.stop();
+     audioPollStop=true;
+     audioHealth.textContent='Audio detenido: '+s.code;return;
+   }
+ }catch(e){
+   audioPollStop=true;audioOutput.stop();
+   audioHealth.textContent='Error de audio: '+String(e.message??e);
+   fetch('/audio/stop',{method:'POST',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({sessionId,code:'AUDIO_LIVE_HTTP_CLIENT_STOP'})}).catch(()=>{});
+ }
+ finally{audioPolling=false;if(!audioPollStop)setTimeout(pollAudio,12);}
+}
 function send(control,pressed){fetch('/input',{method:'POST',
 headers:{'Content-Type':'application/json'},body:JSON.stringify({control,pressed})}).catch(()=>{});}
 document.addEventListener('keydown',e=>{
  const control=map[e.code];if(!control)return;e.preventDefault();
+ if(audioContext)void audioContext.resume();
  if(!e.repeat)send(control,true);
 });
 document.addEventListener('keyup',e=>{
@@ -152,9 +240,12 @@ function pulse(control){
   send(control,true);
   setTimeout(()=>send(control,false),400);
 }
-document.getElementById('coin').addEventListener('click',()=>pulse('coin1'));
-document.getElementById('start').addEventListener('click',()=>pulse('start1'));
+document.getElementById('coin').addEventListener('click',()=>{
+ if(audioContext)void audioContext.resume();pulse('coin1');});
+document.getElementById('start').addEventListener('click',()=>{
+ if(audioContext)void audioContext.resume();pulse('start1');});
 document.getElementById('continue').addEventListener('click',async()=>{
+  if(audioContext)await audioContext.resume();
   const response=await fetch('/continue',{method:'POST'});
   if(!response.ok)status.textContent='No se pudo continuar la ejecución';
 });
@@ -163,6 +254,13 @@ document.getElementById('restart').addEventListener('click',async()=>{
  try{
    const response=await fetch('/reset',{method:'POST'});
    if(!response.ok)throw Error('RESET_REJECTED');
+   const next=await response.json();
+   sessionId=next.sessionId;workletReport=null;
+   if(audioOutput){
+     audioOutput.reset(next.sessionId);
+     await fetch('/audio/start',{method:'POST'});
+     audioPollStop=false;pollAudio();
+   }
    ctx.clearRect(0,0,256,224);
    last=-1;status.textContent='Reiniciando CPU MC6809 desde reset…';
  }catch{status.textContent='No se pudo reiniciar el motor';}
@@ -180,6 +278,22 @@ async function tick(){
    if(sessionId!==s.sessionId){
      sessionId=s.sessionId;last=-1;paintedCount=0;
      ctx.clearRect(0,0,256,224);
+     if(audioOutput)audioOutput.reset(sessionId);
+   }
+   if(audioEnabled&&audioContext&&s.operatorPause&&audioContext.state==='running')
+     await audioContext.suspend();
+   if(audioEnabled&&audioContext&&!s.operatorPause&&audioContext.state==='suspended'&&
+      audioOutput)await audioContext.resume();
+   if(audioOutput&&s.audio?.stop)audioHealth.textContent='Audio detenido: '+s.audio.stop;
+   else if(audioOutput&&workletReport?.kind==='AUDIO_WORKLET_STATS'){
+     const played=workletReport.lastInputSample;
+     const latency=(audioContext.baseLatency||0)+(audioContext.outputLatency||0);
+     const avMs=played===null?null:
+       (s.cycle/1500000-played/62500+latency)*1000;
+     audioHealth.textContent='Audio '+workletReport.state+
+       ' · cola '+Math.round(s.audio.queuedSamples/62.5)+' ms'+
+       ' · underruns '+workletReport.missingOutputSamples+
+       (avMs===null?'':' · A/V '+Math.round(avMs)+' ms');
    }
    status.textContent=s.halt?'Motor detenido: '+s.halt.status:
      s.operatorPause?'GnG real — pausado para insertar moneda en frame '+s.frame:
@@ -250,6 +364,13 @@ async function main(){
   if(proof.status!=='INPUT_ROUTE_UNCOMPILED'&&
      proof.status!=='INPUT_STATE_CHANGED')
     throw Error('V3_B2C_B2A_NOT_PROVEN');
+  const prepared=await prepareAudioBundle(ROOT,BUNDLE);
+  activeBundle=prepared.dir;
+  if(!existsSync(join(ROOT,'out/audio/gg2.bin'))||
+     !existsSync(join(ROOT,'out/audio/ym2203_lab')))
+    throw Error('AUDIO_LIVE_PRIVATE_DEPENDENCY_MISSING');
+  console.log('V3_B2C_AUDIO_BUNDLE=PASS_OBSERVER_OVERLAY frames='+
+    prepared.verifiedFrames+' runtime_sha256='+prepared.runtimeSha256);
   console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B3?'B3_G'+B3_SELECTED.generation:BUNDLE===B2E?'B2E':BUNDLE===B2D?'B2D':BUNDLE===B2B?'B2B':'B2A'));
   const launch=()=>{
     const id=++generation;
@@ -259,15 +380,57 @@ async function main(){
     source=null;lastGood=0;blocks=0;halt=null;
     reads={all:0,coin:0,start:0,p1:0};busWitness=null;
     portChanges=[];checkFrame=null;
+    audioPackets=[];audioQueued=0;audioActive=false;audioStop=null;
+    audioNextSample=0;audioDelivered=0;audioNonzero=0;
+    audioPendingBatches=0;
+    audioStats=null;workletStats=null;
+    audioDroppedBeforeStart=0;
+    pacingOrigin=null;
     advance=new Int32Array(new SharedArrayBuffer(4));
     const ack=advance;
     const gate=createVisibleFrameGate();
     operatorGate=gate;
+    const sound=new Worker(new URL('./gngb_live_audio_worker.mjs',import.meta.url),
+      {workerData:{sessionId:id,rom:join(ROOT,'out/audio/gg2.bin'),
+        renderer:join(ROOT,'out/audio/ym2203_lab')}});
+    audioWorker=sound;
+    sound.on('message',m=>{
+      if(id!==generation)return;
+      if(m.type==='stats'){audioStats=m;return;}
+      if(m.type==='stop'){
+        audioStop=m.code;console.error('V3_B2C_AUDIO=STOP_'+m.code);return;
+      }
+      if(m.type!=='pcm')return;
+      if(audioPendingBatches<1){audioStop='AUDIO_LIVE_UNEXPECTED_PCM';return;}
+      audioPendingBatches--;
+      const bytes=Buffer.from(m.samples);
+      const count=bytes.length/2;
+      if(m.sessionId!==id||bytes.length%2||m.firstSample!==audioNextSample||
+         m.sampleRate!==62500){
+        audioStop='AUDIO_LIVE_PCM_GAP';return;
+      }
+      audioNextSample+=count;
+      audioNonzero=m.nonzeroSamples;
+      audioPackets.push({sessionId:id,sampleRate:62500,
+        firstSample:m.firstSample,bytes});
+      audioQueued+=count;
+      const limit=audioActive?12500:6250;
+      while(audioQueued>limit&&!audioActive&&audioPackets.length){
+        const old=audioPackets.shift();
+        audioQueued-=old.bytes.length/2;
+        audioDroppedBeforeStart+=old.bytes.length/2;
+      }
+      if(audioQueued>12500)audioStop='AUDIO_LIVE_BACKPRESSURE_STOP';
+    });
+    sound.on('error',()=>{if(id===generation)audioStop='AUDIO_LIVE_WORKER_STOP';});
+    sound.on('exit',code=>{
+      if(id===generation&&code!==0&&!audioStop)
+        audioStop='AUDIO_LIVE_WORKER_STOP';
+    });
     const fresh=new Worker(new URL('./v3_b2c_engine_worker.mjs',import.meta.url),
-      {workerData:{bundle:BUNDLE,zip:ZIP,inputs:inputs.buffer,
-        advance:ack.buffer,sessionFrames:SESSION_FRAMES}});
+      {workerData:{bundle:activeBundle,zip:ZIP,inputs:inputs.buffer,
+        advance:ack.buffer,sessionFrames:SESSION_FRAMES,sessionId:id}});
     worker=fresh;
-    let lastTickTime=Date.now();
     let firstRealFrame=false;
     const firstControlsPrinted=new Set();
     fresh.on('message',m=>{
@@ -277,7 +440,16 @@ async function main(){
         console.log('V3_B2C_SESSION=STARTED_'+id);
         console.log('V3_B2C_SESSION_FRAMES='+m.sessionFrames);
       }
+      if(m.type==='audio-batch'){
+        if(!audioStop){
+          audioPendingBatches++;
+          sound.postMessage({type:'batch',sessionId:id,
+            throughCycle:m.throughCycle,events:m.events});
+        }
+        return;
+      }
       if(m.type==='frame'){
+        if(pacingOrigin===null)pacingOrigin=performance.now()-m.cycle/1500;
         latest=m.index;cycle=m.cycle;known=m.known;unknownBytes=m.unknownBytes;
         for(const c of m.ports)portChanges.push(c);
         checkFrame={frame:m.index,record_sha256:m.recordSha256};
@@ -310,12 +482,23 @@ async function main(){
         }
         if(gate.shouldAdvance({index:m.index,known:m.known,
           coinHeld:heldControls().includes('coin1')})){
-          const wait=Math.max(0,17-(Date.now()-lastTickTime));
-          setTimeout(()=>{
+          const target=pacingOrigin+m.cycle/1500;
+          const backpressureSince=performance.now();
+          const release=()=>{
             if(id!==generation)return;
-            lastTickTime=Date.now();
-            Atomics.add(ack,0,1);Atomics.notify(ack,0);
-          },wait);
+            if(!audioStop&&(audioPendingBatches>8||
+               (audioActive&&audioQueued>10000))){
+              if(performance.now()-backpressureSince>500)
+                audioStop='AUDIO_LIVE_BACKPRESSURE_STOP';
+              else {setTimeout(release,5);return;}
+            }
+            const wait=Math.max(0,target-performance.now());
+            setTimeout(()=>{
+              if(id!==generation)return;
+              Atomics.add(ack,0,1);Atomics.notify(ack,0);
+            },wait);
+          };
+          release();
         }else{
           // Exactly one authentic VBlank is held, without advancing CPU
           // clocks or replacing video. Coin pressed by operator releases it.
@@ -324,6 +507,7 @@ async function main(){
       }
       if(m.type==='halt'||m.type==='error'){
         halt=m;
+        if(!audioStop)audioStop='AUDIO_LIVE_ENGINE_HALT';
         if(m.type==='halt'&&m.witness)busWitness=m.witness;
         for(const c of m.ports??[])portChanges.push(c);
         console.log('V3_B3_LIVE_TAPE='+saveLiveTape());
@@ -349,19 +533,22 @@ async function main(){
     });
   };
   const coldRestart=()=>{
-    const previous=worker,oldAdvance=advance;
+    const previous=worker,oldSound=audioWorker,oldAdvance=advance;
     if(previous){
       // Release the old worker's VBlank wait before termination. Neither
       // worker can mutate the other session's CPU state or output.
       if(oldAdvance){Atomics.add(oldAdvance,0,1);Atomics.notify(oldAdvance,0);}
       void previous.terminate().catch(()=>{});
     }
+    if(oldSound)void oldSound.terminate().catch(()=>{});
     launch();
     console.log('V3_B2C_RESET=PASS_NEW_COLD_AOT_SESSION id='+generation);
   };
   launch();
   const resumeOperator=()=>{
     if(!operatorGate?.release())return false;
+    // Re-anchor monotonic presentation after a deliberate operator pause.
+    pacingOrigin=performance.now()-cycle/1500;
     if(advance){Atomics.add(advance,0,1);Atomics.notify(advance,0);}
     console.log('V3_B2C_OPERATOR_RESUME=REAL_MC6809_CONTINUES');
     return true;
@@ -371,6 +558,83 @@ async function main(){
       const u=new URL(req.url,'http://127.0.0.1:'+PORT);
       if(req.method==='GET'&&u.pathname==='/'){
         respond(res,200,html,'text/html; charset=utf-8');return;
+      }
+      const modules={
+        '/gngb_audio_worklet_sink.mjs':'gngb_audio_worklet_sink.mjs',
+        '/gngb_audio_pcm_processor.mjs':'gngb_audio_pcm_processor.mjs',
+        '/gngb_audio_resampler.mjs':'gngb_audio_resampler.mjs'};
+      if(req.method==='GET'&&modules[u.pathname]){
+        respond(res,200,readFileSync(join(ROOT,'src',modules[u.pathname])),
+          'text/javascript; charset=utf-8');return;
+      }
+      if(req.method==='POST'&&u.pathname==='/audio/start'){
+        if(audioStop){respond(res,409,JSON.stringify({code:audioStop}));return;}
+        audioActive=true;
+        audioDelivered=audioPackets[0]?.firstSample??audioNextSample;
+        respond(res,200,JSON.stringify({ok:true,sessionId:generation,
+          firstSample:audioDelivered}));return;
+      }
+      if(req.method==='POST'&&u.pathname==='/audio/stop'){
+        let value='';
+        for await(const chunk of req){
+          value+=chunk.toString('utf8');
+          if(value.length>256){respond(res,413,'{}');return;}
+        }
+        let report;try{report=JSON.parse(value)}catch{report=null;}
+        if(report?.sessionId!==generation||
+           !/^AUDIO_[A-Z0-9_]{3,80}$/.test(report?.code)){
+          respond(res,422,'{}');return;
+        }
+        audioStop=report.code;
+        respond(res,200,'{"ok":true}');return;
+      }
+      if(req.method==='GET'&&u.pathname==='/audio'){
+        if(Number(u.searchParams.get('session'))!==generation){
+          respond(res,204,'');return;
+        }
+        if(audioStop){respond(res,409,JSON.stringify({code:audioStop}));return;}
+        if(!audioActive||!audioPackets.length){respond(res,204,'');return;}
+        const packet=audioPackets.shift();
+        audioQueued-=packet.bytes.length/2;
+        if(packet.firstSample!==audioDelivered){
+          audioStop='AUDIO_LIVE_HTTP_PCM_GAP';
+          respond(res,409,JSON.stringify({code:audioStop}));return;
+        }
+        audioDelivered+=packet.bytes.length/2;
+        respond(res,200,JSON.stringify({sessionId:packet.sessionId,
+          sampleRate:packet.sampleRate,firstSample:packet.firstSample,
+          pcm:packet.bytes.toString('base64')}));return;
+      }
+      if(req.method==='POST'&&u.pathname==='/audio/telemetry'){
+        let value='';
+        for await(const chunk of req){
+          value+=chunk.toString('utf8');
+          if(value.length>1024){respond(res,413,'{}');return;}
+        }
+        let report;try{report=JSON.parse(value)}catch{report=null;}
+        if(!report||report.sessionId!==generation||
+           !['WAITING','PLAYING','STOP'].includes(report.state)||
+           !Number.isSafeInteger(report.producedOutputSamples)||
+           !Number.isSafeInteger(report.missingOutputSamples)||
+           !Number.isSafeInteger(report.queuedSourceSamples)||
+           !Number.isFinite(report.sampleRate)||
+           (report.lastInputSample!==null&&
+            !Number.isFinite(report.lastInputSample))){
+          respond(res,422,'{}');return;
+        }
+        const latency=Number.isFinite(report.latencySeconds)?
+          Math.max(0,Math.min(1,report.latencySeconds)):0;
+        const avMs=report.lastInputSample===null?null:
+          (cycle/1500000-report.lastInputSample/62500+latency)*1000;
+        workletStats={state:report.state,
+          producedOutputSamples:report.producedOutputSamples,
+          missingOutputSamples:report.missingOutputSamples,
+          queuedSourceSamples:report.queuedSourceSamples,
+          lastInputSample:report.lastInputSample,
+          sampleRate:report.sampleRate,latencySeconds:latency,avMs};
+        if(report.state==='STOP'&&report.missingOutputSamples>0)
+          audioStop='AUDIO_WORKLET_UNDERRUN';
+        respond(res,200,'{"ok":true}');return;
       }
       if(req.method==='GET'&&u.pathname==='/state'){
         respond(res,200,JSON.stringify(state()));return;

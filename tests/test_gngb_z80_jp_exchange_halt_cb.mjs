@@ -136,7 +136,7 @@ test('B4.T2-B5 EI + HALT clears EI delay only after following instruction',async
 test('B4.T2-B5 CB trace diagnoses rotate/BIT/RES/SET with private-safe families only',()=>{
   for(const [second,kind] of [
   // CB rotate/shift now compiles, so only unsupported CB groups are blockers.
-    [0x40,'CB_BIT_TEST'],[0x7f,'CB_BIT_TEST'],
+    [0x40,'CB_BIT_TEST'],[0x7e,'CB_BIT_TEST'],
     [0x80,'CB_RESET_BIT'],[0xbf,'CB_RESET_BIT'],
     [0xc0,'CB_SET_BIT'],[0xff,'CB_SET_BIT']
   ]) {

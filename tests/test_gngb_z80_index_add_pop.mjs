@@ -53,10 +53,10 @@ test('B4.T2-B4: indexed effective address wraps 16 bits for signed displacement'
 test('B4.T2-B4: indexed load requires full displacement byte and unsupported IX updates remain gated',()=>{
   for(const prefix of [0xdd,0xfd]){
     const rom=new Uint8Array(0x8000);
-    rom.set([prefix,0x34,0x03],0); // indexed INC remains unsupported
+    rom.set([prefix,0x23,0x03],0); // indexed INC IX/IY remains unsupported
     const blocked=compileZ80Prefix(rom);
     assert.equal(blocked.compiled,0);
-    assert.equal(blocked.blockers[0].indexed_instruction,'INDEX_DISPLACEMENT_UPDATE');
+    assert.equal(blocked.blockers[0].indexed_instruction,'INDEX_INC_DEC_RR');
     // Can't synthesize a displacement from outside a ROM boundary.
     const edge=new Uint8Array(0x8000);
     edge.set([prefix,0x46],0x7ffe);
@@ -152,7 +152,7 @@ test('G5 observed indexed SET changes only the addressed bit in 23T with flags p
       assert.deepEqual(s,{...before,pc:4,t:73});
     }
   }
-  for(const ext of [0x46,0x86,0xc0,0xff]) {
+  for(const ext of [0x46,0x80,0xc0,0xff]) {
     const rom=new Uint8Array(0x8000);rom.set([0xdd,0xcb,0,ext]);
     assert.equal(compileZ80Prefix(rom).compiled,0);
   }

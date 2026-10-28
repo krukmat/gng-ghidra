@@ -168,8 +168,8 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
   if(!Number.isInteger(entry)||entry<0||entry>=rom.length ||
      !Number.isInteger(limit)||limit<1||limit>16384)
     throw new Z80StaticError('AUDIO_Z80_COMPILE_ARGS_INVALID');
-  // Multiple roots may ONLY come from operator-provided native evidence.
-  // This compiler does not assume arbitrary ROM offsets are code.
+  // Callers may supply observed roots or the hardware reset/IM1 vectors.
+  // Runtime targets outside that seed set are compiled only when reached.
   const roots=entries===null?[entry]:entries;
   if(!Array.isArray(roots) || roots.length<1 || roots.length>64 ||
      roots.some(pc=>!Number.isInteger(pc)||pc<0||pc>=rom.length))
@@ -224,6 +224,15 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
           '$.pc='+next(2)+';','$.t+='+String(memory?15:8)+';'
         ];
         targets=[next(2)];
+      } else if(second===0x7f) {
+        // Observed BIT 7,A: Z and P/V match tested bit; C is preserved.
+        length=2;
+        lines=[
+          'const value=$.a;',
+          '$.f=($.f&1)|(value&0x28)|0x10|',
+          '((value&128)?0x80:0x44);',
+          '$.pc='+next(2)+';$.t+=8;'];
+        targets=[next(2)];
       } else {
         blockers.push({pc,reason:'UNSUPPORTED_Z80_OPCODE',
           family:'CB_BIT_ROTATE_PREFIX',
@@ -250,6 +259,27 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
           '$.pc='+next(4)+';$.t+=23;'
         ];
         targets=[next(4)];
+      } else if(opcode===0xdd&&second===0xcb&&
+                (read8(pc,3)&0xc7)===0x86) {
+        // Observed RES b,(IX+d) sequence, memory-only. Flags unchanged.
+        const displacement=sign8(read8(pc,2));
+        const clear=255^(1<<((read8(pc,3)>>>3)&7));
+        length=4;
+        lines=[
+          'const addr=($.ix+('+displacement+'))&65535;',
+          'const value=bus.read8(addr,$.t+19)&'+clear+';',
+          'bus.write8(addr,value,$.t+23);',
+          '$.pc='+next(4)+';$.t+=23;'];
+        targets=[next(4)];
+      } else if(opcode===0xfd&&second===0xe5) {
+        // Observed PUSH IY: prefix adds 4T to the 11T stack operation.
+        length=2;
+        lines=[
+          'const value=$.iy;',
+          '$.sp=($.sp-1)&65535;bus.write8($.sp,value>>>8,$.t+12);',
+          '$.sp=($.sp-1)&65535;bus.write8($.sp,value&255,$.t+15);',
+          '$.pc='+next(2)+';$.t+=15;'];
+        targets=[next(2)];
       } else if(second===0x19) {
         // Observed ADD IX/IY,DE only; other indexed ADD forms still gate.
         const index=opcode===0xdd?'ix':'iy';
@@ -286,6 +316,19 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
           'bus.write8(addr,value,$.t+23);',
           '$.pc='+next(3)+';$.t+=23;'
         ];
+        targets=[next(3)];
+      } else if(second===0x34) {
+        // Runtime-observed INC (IX/IY+d), symmetric to DEC, 23T.
+        const index=opcode===0xdd?'ix':'iy';
+        const displacement=sign8(read8(pc,2));
+        length=3;
+        lines=[
+          'const addr=($.'+index+'+('+displacement+'))&65535;',
+          'const old=bus.read8(addr,$.t+19);const value=(old+1)&255;',
+          '$.f=($.f&1)|(value&0xa8)|(value===0?64:0)|',
+          '((old&15)===15?16:0)|(old===127?4:0);',
+          'bus.write8(addr,value,$.t+23);',
+          '$.pc='+next(3)+';$.t+=23;'];
         targets=[next(3)];
       } else if((second&0xc7)===0x46 && second!==0x76) {
         // DD/FD LD r,(IX/IY+d): only the seven destination registers,
@@ -337,6 +380,17 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
             '((old&15)!==0?0x10:0)|(old===128?0x04:0)|0x02|(old!==0?1:0);',
             '$.a=value;$.pc='+next(2)+';','$.t+=8;'];
           targets=[next(2)];
+        } else if(kind==='ED_SBC_HL_RR'&&ext===0x42) {
+          // Observed ED 42: SBC HL,BC (15T). F3/F5 follow result high byte.
+          length=2;
+          lines=[
+            'const lhs=$.hl,rhs=$.bc,carry=$.f&1;',
+            'const diff=lhs-rhs-carry,value=diff&65535;',
+            '$.f=((value>>>8)&0xa8)|(value===0?0x40:0)|',
+            '(((lhs^rhs^value)&0x1000)?0x10:0)|',
+            '(((lhs^rhs)&(lhs^value)&0x8000)?4:0)|2|(diff<0?1:0);',
+            '$.hl=value;$.pc='+next(2)+';$.t+=15;'];
+          targets=[next(2)];
         } else if(kind==='ED_LD_I_A') {
           length=2;
           lines=['$.i=$.a;','$.pc='+next(2)+';','$.t+=9;'];
@@ -375,6 +429,13 @@ export function compileZ80Prefix(rom, {entry=0, entries=null, limit=512}={}) {
         // Observed RLCA: unlike CB RLC, preserve S/Z/PV, reset H/N.
         lines=['const old=$.a;$.a=((old<<1)|(old>>>7))&255;',
           '$.f=($.f&0xc4)|($.a&0x28)|(old>>>7);',
+          '$.pc='+next(1)+';$.t+=4;'];
+        targets=[next(1)];break;
+      }
+      case 0x0f: {
+        // RRCA: bit 0 rotates into bit 7 and carry; S/Z/PV are preserved.
+        lines=['const old=$.a;$.a=((old>>>1)|(old<<7))&255;',
+          '$.f=($.f&0xc4)|($.a&0x28)|(old&1);',
           '$.pc='+next(1)+';$.t+=4;'];
         targets=[next(1)];break;
       }

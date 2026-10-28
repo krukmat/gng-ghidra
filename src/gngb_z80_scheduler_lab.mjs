@@ -62,7 +62,10 @@ export function createZ80SchedulerLab(blocks,bus,{
         resets++;
       }
       heldReset=true;
-    } else heldReset=false;
+    } else if(heldReset) {
+      heldReset=false;
+      nextIrqAt=state.t+irqPeriodTStates;
+    }
     return snapshot();
   };
   const checkReady=()=>{
@@ -133,6 +136,12 @@ export function createZ80SchedulerLab(blocks,bus,{
       boundaryOvershootTStates:state.t-target,
       nativeTimingParityVerified:false,pcmGenerated:false});
   };
+  const advanceResetClockTo=target=>{
+    if(!heldReset||!safeT(target)||target<state.t)
+      throw new AudioZ80SchedulerStop('AUDIO_Z80_LAB_RESET_CLOCK_INVALID');
+    state.t=target;
+    return snapshot();
+  };
   const snapshot=()=>Object.freeze({
     kind:'GNG_AUDIO_B4_T3_SCHEDULER_LAB_V1',
     status:'LAB_IM1_ONLY_PENDING_IRQ_PHASE_NOT_CERTIFIED',
@@ -146,5 +155,6 @@ export function createZ80SchedulerLab(blocks,bus,{
     romLoadedByMameVerified:false,nativeZ80ParityVerified:false,
     audioWorking:false
   });
-  return Object.freeze({state,step,advanceTo,syncBoardReset,snapshot});
+  return Object.freeze({state,step,advanceTo,advanceResetClockTo,
+    syncBoardReset,snapshot});
 }

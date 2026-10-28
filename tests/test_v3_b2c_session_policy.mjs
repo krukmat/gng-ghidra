@@ -8,6 +8,7 @@ test('certified AOT bundles run as genuine ~10-minute live sessions',()=>{
   assert.equal(MAX_LIVE_FRAMES,216000);
   assert.equal(validateLiveFrames({frames:600,blocks:354}),36000);
   assert.equal(validateLiveFrames({frames:6000,blocks:2266}),36000);
+  assert.equal(validateLiveFrames({frames:6000,blocks:38084}),36000);
 });
 test('live bound never weakens bundled evidence or mutates manifest',()=>{
   const manifest=Object.freeze({frames:600,blocks:354});
@@ -16,7 +17,7 @@ test('live bound never weakens bundled evidence or mutates manifest',()=>{
 });
 test('unverified manifests and unsupported requested frame counts fail closed',()=>{
   for(const manifest of [null,{}, {frames:599,blocks:354},
-    {frames:600,blocks:0},{frames:600,blocks:30001},
+    {frames:600,blocks:0},{frames:600,blocks:40001},
     {frames:216001,blocks:354}, {frames:NaN,blocks:354}]){
     assert.throws(()=>validateLiveFrames(manifest),/V3_B2C_UNVERIFIED_BUNDLE/);
   }
