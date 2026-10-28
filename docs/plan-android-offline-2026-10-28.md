@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-10-28 · **Rama:** `main` · **Estado:** AO-0, AO-1 y AO-2 GO; AO-3 instalado en el teléfono con 50–60 fps observados por el operador; AO-4 validado con Playwright. CPU y arranque del teléfono siguen pendientes de medición automática.
 
-**Siguiente acción:** instalar el APK de AO-4 y probar los controles en el teléfono. La medición automática de AO-3 se retoma cuando haya conexión ADB.
+**Siguiente acción:** instalar el APK de AO-4 y probar los controles en el teléfono. El trabajo de sonido está definido en [AO-5](#ao-5--ym2203-en-wasm) y [AO-6](#ao-6--audio-en-la-app), pendiente de ejecución; el botón sigue preparado y deshabilitado. La medición automática de AO-3 se retoma cuando haya conexión ADB.
 
 **UI vigente (operador, 28/10):** pantalla centrada; Disparo y Salto apilados abajo a la izquierda, con fondo transparente y botones translúcidos. Cruceta abajo a la derecha; opciones arriba a la derecha. Moneda y Start vuelven en Game Over; Start cambia a Continuar cuando la ROM abre la continuación. Sonido OFF queda preparado y deshabilitado, por decisión del operador, hasta integrar el audio offline en AO-5/AO-6. Implementación: [AO-4](#ao-4--controles-y-ui-como-la-web).
 
@@ -42,7 +42,7 @@
 |---|---|---|
 | Plataforma | **Operador:** app Android offline; sin LAN, servidor ni Mac durante el juego | Motor, video y audio corren en el teléfono |
 | Shell | **Operador (28/10):** Kotlin mínimo con WebView; descargas de Gradle y emsdk autorizadas | Origen local `https://appassets.androidplatform.net`: módulos ES, Workers y AudioWorklet como en la web. Con React Native cambian solo AO-3 y AO-7 |
-| Audio | **Operador:** con audio desde la v1 | AO-5 y AO-6 están en la ruta crítica |
+| Audio | **Operador:** botón preparado en el APK actual; definir ahora el trabajo de audio offline | AO-5 y AO-6 quedan pendientes para habilitar Sonido ON/OFF; la salida actual del Mac se conserva como referencia |
 | Motor | Copia derivada del runtime de audio con `run()` reanudable por frame | Sin `SharedArrayBuffer` ni `Atomics.wait`; equivalencia probada contra el bundle congelado (AO-1) |
 | Pantalla | CPU siempre a su ritmo real; el render baja a 30 fps si no llega a 60 | Igual o mejor que la web (25 fps) |
 | Red | El APK no declara el permiso `INTERNET` (AO-3 verifica que la WebView carga igual) | Android impide que la app use la red |
@@ -121,19 +121,33 @@ Para jugar con el APK de AO-4: esperar a que Moneda se habilite, tocar **Moneda*
 
 ### AO-5 — YM2203 en WASM
 
-- **Operador:** autoriza instalar emsdk (~1 GB, fuera del repo).
-- Envoltorio C con las funciones del modo `--stream` de `ym2203_lab` (escritura, lectura, avance hasta un tick y salida PCM) y la misma síntesis ymfm. El binario nativo no cambia.
-- Test de equivalencia: el mismo flujo de comandos `W/R/U` (≥ 120 s de juego) entra al nativo y al WASM.
-- **GO:** PCM idéntico byte a byte y render < 2 ms por frame en el Mac. **STOP:** cualquier diferencia.
-- Costo: 10–15% de la ventana de 5 h.
+**Resultado:** un productor PCM que funcione dentro de un Worker de la WebView. La web del Mac usa [gngb_live_audio_worker.mjs](../scripts/gngb_live_audio_worker.mjs), que ejecuta un proceso nativo y entrega PCM por HTTP; ese transporte debe sustituirse en Android.
+
+1. **AO-5.1 — Compilación reproducible.** Instalar emsdk fuera del repo (~1 GB, descarga ya autorizada). Fijar versión concreta y opciones antes de compilar; conservar JDK 17. Usar el mismo ymfm que [audio_ym_native_build.sh](../scripts/audio_ym_native_build.sh): commit `81aec25ccbb98f4873a255f7551ac4dadac59b4a`. Agregar `scripts/ao_build_audio_wasm.sh`; producir el módulo ES y `.wasm` en `out/android/`, con sus hashes y versiones. Compilar para un Worker normal, sin hilos, `SharedArrayBuffer` ni dependencias de Node.
+2. **AO-5.2 — API incremental.** Agregar un adaptador C/C++ del sintetizador de [audio_ym2203_lab.cpp](../src/audio_ym2203_lab.cpp): crear/destruir una instancia doble YM2203, escribir un registro con tick, aplicar reset con tick y avanzar hasta una frontera exclusiva devolviendo PCM. Preservar reloj maestro de 12 MHz, chips de 1,5 MHz, fidelidad mínima, mezcla, saturación y PCM mono Int16 a 62.500 Hz. En el protocolo nativo `W` escribe, `R` hace reset y `U` avanza/entrega PCM; `R` no es una lectura. Mantener índices de muestra, orden de eventos y validaciones de frontera; un reset del chip no rebobina la línea temporal. Mantener el ejecutable nativo como referencia.
+3. **AO-5.3 — Equivalencia y costo.** Agregar `scripts/ao_audio_wasm_check.mjs`. Capturar ≥ 120 s de comandos reales, incluidos Moneda/Start, juego, efectos y resets; alimentar la misma secuencia al nativo y al WASM. Comparar índices, cantidad y bytes de cada bloque PCM, incluidos límites de muestra, eventos en la frontera y bloques consecutivos. Medir la síntesis por frame en el Mac y registrar memoria. Guardar comandos, PCM y resultados en `out/android/check/`.
+
+**GO:** PCM idéntico byte a byte, índices continuos y síntesis < 2 ms por frame en el Mac. **STOP:** cualquier diferencia; resolver antes de conectar el botón. Este GO no sustituye la medida en el teléfono.
+
+Costo: 10–15% de la ventana de 5 h; 1,5–2% semanal. Al cerrar AO-5 se recalibra AO-6 con el costo medido.
 
 ### AO-6 — Audio en la app
 
-- Worker de audio: la sesión Z80 en JS sin cambios y el YM en WASM producen PCM a 62,5 kHz. Va por `MessageChannel` directo al AudioWorklet de G5, también sin cambios (processor + resampler).
-- El consumo del worklet marca el ritmo del motor, en vez de `performance.now()`, para que el reloj de audio no derive contra el de video.
-- El audio arranca con el primer gesto: el botón Audio o el primer toque.
-- **GO:** 10 min en el teléfono sin underrun ni STOP, con desfase A/V ≤ 100 ms y deriva ≤ 20 ms/min (objetivos de G5; G5 cerró con 132 ms por decisión del operador). **STOP:** underruns o A/V fuera de objetivo. El operador decide entre más colchón y recuperar el underrun; las dos opciones cambian la política G5 y necesitan su OK explícito.
-- Costo: 15–25% de la ventana de 5 h.
+**Resultado:** Sonido ON/OFF habilitado, con música y efectos generados en el teléfono durante la partida, sin conexión al Mac. Depende del GO de AO-5.
+
+1. **AO-6.1 — Assets y eventos reales.** Extender [ao_build_assets.mjs](../scripts/ao_build_assets.mjs) con la ROM Z80 verificada mediante [audio_extract_sound_rom.py](../scripts/audio_extract_sound_rom.py), los módulos Z80 y el productor WASM. Servir `.wasm` como `application/wasm` y comprobar la carga desde `WebViewAssetLoader`. Conectar `onAudioEvent` en [engine.worker.mjs](../android/web/engine.worker.mjs); enviar lotes de `SOUNDLATCH_WRITE`/`AUDIO_RESET_LINE` con `throughCycle` creciente antes de vaciar los logs de frame. Conservar la conversión de ciclos MC6809 a ticks maestros (×8), la frontera exclusiva y el orden del productor actual.
+2. **AO-6.2 — Producción local.** Agregar `android/web/audio.worker.mjs`: reutilizar [createZ80LiveSession](../src/gngb_z80_live_session.mjs) y sus reglas de ejecución/resolución, sustituyendo el proceso nativo por la API WASM. La sesión Z80 y los chips nacen con el arranque del motor y avanzan aunque Sonido esté OFF; antes de activar la salida se descarta el PCM ya pasado. Así, activar sonido a mitad de partida conserva el estado musical actual. Transferir bloques `{sessionId, firstSample, sampleRate, samples}` por mensajes, con colas acotadas y confirmación de avance; preservar los límites y STOP del productor actual. Verificar los imports generados del Z80 en la WebView.
+3. **AO-6.3 — Salida y reloj.** Reutilizar [processor](../src/gngb_audio_pcm_processor.mjs), [resampler](../src/gngb_audio_resampler.mjs) y el contrato de [worklet_sink](../src/gngb_audio_worklet_sink.mjs). Conectar el Worker al AudioWorklet mediante un `MessageChannel`; el adaptador del puerto y la telemetría de consumo requieren cambios acotados en el transporte existente. Convertir 62,5 kHz a la frecuencia real del `AudioContext`, conservando 3.125 muestras de prebuffer (50 ms) y capacidad de 12.500 (200 ms). Con salida activa, los contadores de muestras consumidas gobiernan los frames de CPU y el límite de producción; `requestAnimationFrame` presenta el último frame. Agregar avisos de consumo/demanda cada 10–20 ms: el informe actual cada 250 ms sirve de diagnóstico, pero llega tarde para mantener esa cola. Antes de activar audio se conserva el reloj de AO-2; el cambio de reloj se ancla al ciclo actual, sin saltos ni reinicios. Medir consumo, cola y frames con una referencia temporal común.
+4. **AO-6.4 — Botón y ciclo de vida.** Estado inicial Sonido OFF. Habilitar el botón cuando el productor esté listo y las capacidades de audio estén disponibles; crear/reanudar el `AudioContext` desde el toque explícito y mostrar ON solo cuando corra. OFF aplica ganancia cero mientras la salida sigue consumiendo; ON restaura la ganancia sin repetir audio viejo, resetear la CPU ni perder controles. Al pasar a segundo plano, suspender y limpiar la cola; al volver, usar una sesión de salida nueva y prebuffer del estado actual, descartando mensajes anteriores. Si el contexto está suspendido, mantener el avance del juego con el reloj de AO-2 y descartar PCM pasado. Reiniciar el juego reconstruye las sesiones y los chips. Un error de audio silencia y muestra el motivo; un underrun sigue siendo STOP de audio, sin recuperación automática.
+5. **AO-6.5 — Pruebas e integración.** Agregar `scripts/ao_audio_check.mjs` con Playwright headless y captura de PCM/diagnósticos: verificar audio no nulo ante comandos reales, ON/OFF repetido, activación en mitad de partida, Moneda/Start/Continuar, Reiniciar, suspensión/reanudación y rechazo de sesiones viejas. Registrar `AO_AUDIO_READY`, `AO_AUDIO_STATS` y `AO_AUDIO_STOP` tanto en consola como en logcat. Integrar la compilación WASM en `ao_build_apk.sh` y subir `versionCode`. Humo en emulador `-no-window -no-audio`: valida producción y consumo sin salida audible. La escucha y aceptación final se hacen en el teléfono, con el APK local y modo avión.
+
+**GO:** equivalencia de AO-5 y regresión de CPU/video/controles; 10 min en el teléfono con música y efectos audibles, ON/OFF correcto, sin underrun, STOP ni cierres; CPU a ritmo real y render ≥ 30 fps. Desfase A/V ≤ 100 ms y deriva ≤ 20 ms/min (objetivos de G5; G5 cerró con 132 ms por decisión del operador, lo que no aprueba esa excepción para Android). Medir el arranque frío del APK con audio y conservar el umbral AO-3 de < 5 s.
+
+**STOP:** PCM discontinuo, colas que crecen, underruns, pérdida de controles o A/V fuera de objetivo. Si el render cae por debajo de 30 fps, volver a AO-3b. Aumentar el colchón o recuperar underruns cambia la política G5 y requiere el OK explícito del operador; las pruebas registran el fallo con los parámetros vigentes.
+
+Costo: 15–25% de la ventana de 5 h; 2–3,5% semanal. AO-5 + AO-6 suman 25–40% y 3,5–5,5% semanal; AO-7 conserva su presupuesto separado para el cierre del APK.
+
+**Necesario del operador:** instalar el APK nuevo y hacer la escucha de 10 min en el móvil. La instalación manual sirve sin modo de depuración; para medir la WebView con Playwright y recoger CPU/A/V/logcat del teléfono hace falta ADB por USB o Wi-Fi. Los assets de ROM, módulos generados a partir de ella, PCM, informes y APK quedan privados en `out/`; el manifiesto conserva la ausencia de permiso `INTERNET`.
 
 ### AO-7 — APK final e instalación
 
@@ -173,7 +187,7 @@ Para jugar con el APK de AO-4: esperar a que Moneda se habilite, tocar **Moneda*
 | Renderer lento en el teléfono | AO-3: < 30 fps | AO-3b; si no alcanza, 20 fps |
 | Memoria por los 27 MB de JS | La WebView se cierra | Minificar o partir `program.mjs` |
 | `.mjs` sin MIME en `WebViewAssetLoader` | Los módulos no cargan | Handler propio con `text/javascript` |
-| WebView que no carga sin permiso `INTERNET` | AO-3 no arranca | Declarar `INTERNET` sin usarlo y documentarlo |
+| WebView que no carga assets locales | AO-3 no arranca | Corregir rutas y MIME de `WebViewAssetLoader`; conservar la ausencia de permiso `INTERNET` |
 | Deriva entre el reloj de audio y el de video | La cola de audio crece o se vacía | Ritmo guiado por el audio (AO-6) |
 | Underruns en la WebView | STOP del worklet | Decisión del operador (AO-6) |
 | Gradle o el plugin de Android | El build falla | Versiones fijas y JDK 17 |
