@@ -1,10 +1,10 @@
 # G5-AUDIO-RECOVERY — Resolver bloqueo real de audio Z80 → YM2203 → PCM
 
-**Estado:** T0–T2 PASS / T3 reproducción Chrome confirmada, ventana de 120 s PASS en continuidad; cierre T3.7 BLOCKED por reset y estimación A/V · **Prioridad:** P0 · **Repo:** `krukmat/gng-ghidra` · **Rama:** `main` · **Fecha:** 2026-10-28
+**Estado final:** **CLOSED_BY_OPERATOR — FUNCTIONAL_AUDIO_ACCEPTED / FULL_TECHNICAL_CERTIFICATION_NOT_MET** · **Repo:** `krukmat/gng-ghidra` · **Rama:** `main` · **Fecha de cierre:** 2026-10-28
 
-**Resultado actual:** audio auténtico Z80 → dual YM2203 → PCM demostrado en laboratorio; el operador confirmó que se escucha correctamente durante gameplay real en Chrome. El AudioWorklet entregó una ventana medida de 120 s sin fallos de continuidad, pero la certificación integral **NO** está cerrada: STOP durante reset frío y desfase A/V absoluto *estimado* de 132 ms (objetivo ≤100 ms). La deriva observada sí está dentro de objetivo. Las entradas antiguas se conservan como historial; consultar el último checkpoint al final.
+**Resultado final:** el operador confirmó audio original audible durante gameplay real en Chrome. El AudioWorklet completó una ventana monitorizada de **120 s con continuidad PASS**, pero el gate global T3.7 **NO pasó** debido al reset posterior (`AUDIO_BROWSER_RESET_OR_ENGINE_STOP`) y A/V absoluto estimado de **132 ms**, por encima del objetivo de 100 ms. **El cierre es una decisión explícita del operador, no una certificación técnica completa.** Los checkpoints siguientes quedan como evidencia histórica.
 
-**Dirección vigente:** el operador autorizó conectar el audio al engine («pues conectalo... cual es el problema?») y después pidió estas tareas y un prompt de continuación. Se permite modificar la conexión de audio en el worker, servidor/UI y bundle privado necesario. El bot continúa excluido y la semántica MC6809 no forma parte de esta autorización. La cadena local de T3 está implementada; faltan la verificación del AudioWorklet real, sincronía de presentación y audición humana. Los commits `51780ba`, `e5b6fdb` y `1b4805b` contienen T0–T2; no repetir su investigación sin una regresión nueva.
+**Dirección final:** **sin tareas pendientes activas ni nuevos cambios de implementación**. Reabrir únicamente por decisión explícita del operador; conservar todas las restricciones de privacidad y el bot fuera de alcance.
 
 ## Objetivo y definición de terminado
 
@@ -271,3 +271,33 @@ maxHttpObservationGapMs=416
 4. Revisar la estimación A/V (época del reloj emulado, tiempo del Worklet, prebuffer, `baseLatency`/`outputLatency`, presentación de frame). Distinguir *estimación* de medición de sincronía percibida; solo cerrar el umbral si hay evidencia suficiente o si se documenta una excepción explícita aprobada.
 
 **Decisión:** T3.0–T3.6 implementados, PCM y reproducción real demostrados; **T3.7 = PARTIAL / BLOCKED_RESET_AND_AV_ESTIMATE**. No cambiar el bot ni abrir investigación sobre Z80/YM sin un nuevo STOP que apunte a ellos. No declarar `gameAudioFullyCertified=true` todavía.
+
+## Cierre definitivo por decisión del operador — 2026-10-28
+
+**Decisión explícita:** «demos por cerrado el tema» y «actualiza la documentacion». Estado `CLOSED_BY_OPERATOR_WITH_ACCEPTED_LIMITATIONS`. No seguir trabajando ni abrir nuevas tareas G5 sin solicitud explícita; no convertir este cierre en un `T3.7 PASS`.
+
+### Evidencia positiva
+
+- **Audición:** el operador confirmó «se escucha perfecto» y después «listo ya funciona» para el juego en Chrome, no solamente el WAV offline. Existió también un episodio anterior de `AUDIO_WORKLET_UNDERRUN`; no declarar ausencia universal de fallos intermitentes.
+- **Regresión local:** `GNG_AUDIO_G5_FAST_CHECKPOINT_V1`, `PASS_REGRESSION_STATIC_SCAN_Z80_NOT_CERTIFIED`; **161/161 Node PASS**, **78/78 Python PASS**, `SHA1_MATCH`, `private_artifacts_safe=true` y `rom_bytes_exported=false`. `NOT_CERTIFIED` califica la cobertura/paridad estática de la Z80, no la percepción de sonido.
+- **Cadena funcional:** MC6809 → Z80 persistente → 2 YM2203 → PCM → Chrome/AudioWorklet; referencias de MAME únicamente como oráculo diferencial, no como fuente de playback.
+- **Monitor de 120 segundos:** `GNG_AUDIO_CERT=WINDOW_PASS_RESTART_NOW` con `pcmContinuityVerified=true`; **299 observaciones**, **5.775.360 muestras de salida**, **7.523.592 muestras de audio entregadas**, **6.285.728 muestras PCM no nulas** y cola máxima **1.048 muestras (16,8 ms)**. No se detectó fallo de continuidad durante la ventana.
+
+### Aceptación técnica pendiente, conscientemente no requerida para este cierre
+
+- **Reset final:** monitor terminó `status=STOP`, `reason=AUDIO_BROWSER_RESET_OR_ENGINE_STOP`; `resetVerified=false`, `liveBrowserWorkletVerified=false`. Un cambio posterior de control de paquetes obsoletos (commit `a448b329`) no constituye certificación sin nueva medición.
+- **Sincronía A/V:** `measuredAvWithinTarget=false`: pico absoluto estimado **132,010 ms** frente a objetivo **≤100 ms**; deriva estimada **10,452 ms en 120 s** dentro del objetivo de 40 ms/120 s. Es una estimación de relojes, no medición directa de presentación física.
+- **Paridad nativa completa Z80/IRQ:** no certificada. El marcador `humanAuditionConfirmed=false` del JSON es deliberadamente automático y no contradice la confirmación humana expresada en el chat.
+
+### Disposición final
+
+| Aspecto | Cierre |
+| --- | --- |
+| T0–T2: ROM Z80 → dual YM → PCM | PASS conforme a ensayos documentados |
+| T3: sonido durante gameplay Chrome | **FUNCIONAL Y ACEPTADO POR OPERADOR** |
+| Ventana 120 s: continuidad | **PASS** |
+| T3.7: reset y A/V absoluto | **NO PASS, DISPENSADO POR OPERADOR** |
+| Paridad nativa completa | No certificada |
+| Seguimiento | **Ninguno abierto** |
+
+Las evidencias y limitaciones deben conservarse. Nunca publicar ROM, `gg2.bin`, dumps AOT, capturas MAME, YM crudo ni WAV privados; siguen en `out/audio/` y rutas locales ignoradas.
