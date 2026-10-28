@@ -4,7 +4,7 @@
 
 **Dirección vigente:** la base vive en un repositorio local separado, `/Users/matias/rom-migration-base`, con revisión fija `ebec67a03a2566a8c5958bdd8d878d6047fdc4db`. No tiene remoto; el acceso es local según los permisos del propietario. Este repositorio sigue siendo dueño de GnG. La base aún contiene solo contratos, comprobación de copia fijada, documentación y pruebas sintéticas: no se ha extraído una CPU, host ni generador.
 
-RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó interfaces y una receta de GnG **en borrador**, más un lock que fija los contratos y su verificador. El GO de RP-1 queda pendiente: faltan declarar las capacidades reales de las CPU actuales, implementar el módulo de composición GnG, instalar/actualizar una copia seleccionada y terminar el inventario de constantes durante RP-2/RP-3. El esquema exige rechazo de instrucciones desconocidas, pero la base aún no anuncia ninguna CPU. [Plan y tareas](plan-base-reutilizable-2026-10-28.md#4-plan-de-ejecución).
+RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó interfaces, propietarios de constantes y una receta de GnG **en borrador**, más un lock que fija los contratos y su verificador. La salida de diseño RP-1 está cumplida: el esquema exige declarar instrucciones, IRQ, overlays y código dinámico y rechaza capacidades ausentes. La base aún no anuncia ninguna CPU. RP-2/RP-3 deben declarar cobertura real, implementar la composición GnG y terminar el inventario al mover cada componente; RP-5 instalará/actualizará la copia seleccionada. [Plan y tareas](plan-base-reutilizable-2026-10-28.md#4-plan-de-ejecución).
 
 ## Referencia reproducible
 

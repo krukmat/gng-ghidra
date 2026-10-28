@@ -2,7 +2,7 @@
 
 **Dirección vigente:** crear un repositorio separado para extraer de esta versión una base agnóstica y versionada, con herramientas para generar proyectos independientes. Cada proyecto contendrá un juego integrado y generado desde sus binarios originales. Este repositorio conserva GnG como primera integración de referencia y consumidor de la base. La implementación de placa y la integración de juego quedan fuera del repositorio compartido; los compiladores se reutilizan por arquitectura de CPU.
 
-**Estado:** RP-0 ejecutado localmente; RP-1 parcialmente implementado. La base aún no se ha extraído ni certificado. [Checkpoint RP-0/RP-1](rp0-rp1-checkpoint-2026-10-28.md). **Fecha:** 28/10/2026. **Referencia de fuentes revisada:** `889114774e3b1bc27f8c159c23c67874fe27c1d0`. Al preparar este documento, los únicos elementos pendientes en el árbol eran `cfg/` y `gng-ghidra/`, ambos sin seguimiento; no forman parte de la referencia ni se copiarán automáticamente.
+**Estado:** primer bloque RP-0/RP-1 completado como referencia y diseño de contratos; RP-2 a RP-6 pendientes. La base aún no se ha extraído ni certificado. [Checkpoint RP-0/RP-1](rp0-rp1-checkpoint-2026-10-28.md). **Fecha:** 28/10/2026. **Referencia de fuentes revisada:** `889114774e3b1bc27f8c159c23c67874fe27c1d0`. Al preparar este documento, los únicos elementos pendientes en el árbol eran `cfg/` y `gng-ghidra/`, ambos sin seguimiento; no forman parte de la referencia ni se copiarán automáticamente.
 
 **Tareas ejecutables propuestas:** [RP-0: referencia](#rp-0--fijar-la-referencia), [RP-1: contratos](#rp-1--definir-las-fronteras), [RP-2: CPU y placa](#rp-2--separar-compilación-cpu-y-placa), [RP-3: host y audio](#rp-3--separar-host-audio-e-interfaz), [RP-4: construcción](#rp-4--construir-desde-el-binario-original), [RP-5: proyecto nuevo](#rp-5--generar-un-proyecto-independiente), [RP-6: certificación](#rp-6--certificar-y-versionar-la-base).
 
@@ -137,7 +137,7 @@ Cada tarea deja un cambio pequeño y revisable. No ejecutar la extracción compl
 
 - [x] Convertir los contratos de la sección 3 en interfaces pequeñas y documentadas, con unidades temporales y condiciones de error. La implementación de CPU/host sigue en RP-2/RP-3.
 - [x] Definir una receta de proyecto que seleccione CPU, placa, dispositivos, revisión de binario, plataforma y escenarios. Los comportamientos ejecutables van en módulos; el manifiesto contiene datos y referencias. La receta privada GnG es un borrador sin módulos ejecutables aún.
-- [ ] Definir versiones de contrato y capacidades: instrucciones/IRQ soportadas, overlays admitidos y política de código estático/dinámico por CPU.
+- [x] Definir versiones de contrato y capacidades: instrucciones/IRQ soportadas, overlays admitidos y política de código estático/dinámico por CPU. Ninguna CPU se anuncia como disponible antes de extraerla y declarar su cobertura real en RP-2/RP-3.
 - [x] Definir el punto de composición de GnG para que el host reciba una sesión integrada sin imports específicos del juego. Su implementación sigue pendiente.
 - [x] Definir el consumo entre repositorios y la verificación de compatibilidad: revisión fija, contratos, capacidades y actualización reproducible de la copia seleccionada. La instalación/actualización automatizada sigue pendiente de RP-5.
 
