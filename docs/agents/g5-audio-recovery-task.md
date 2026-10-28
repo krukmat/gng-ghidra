@@ -200,7 +200,7 @@ Se añadió `scripts/audio_browser_certify.mjs`, un **monitor HTTP de solo lectu
    ```bash
    git pull --ff-only
    node scripts/audio_fast_checkpoint.mjs
-   node scripts/v3_b2c_live.mjs
+   node scripts/v3_b2c_live.mjs --serve
    ```
    Mantener el servidor en ejecución; usa estrictamente loopback `127.0.0.1:18609`. Los ROM/bundle/renderer privados deben estar preparados localmente.
 2. Chrome **local del Mac**: abrir `http://127.0.0.1:18609`. Insertar moneda (botón Coin o tecla 5), pulsar Start (o 1), pulsar **Activar audio** y comprobar que el indicador `AudioContext activo` aparece. Escuchar música/efectos y jugar (moverse, saltar, atacar). No confundir un WAV offline con sonido en esta pestaña.
@@ -217,3 +217,10 @@ Se añadió `scripts/audio_browser_certify.mjs`, un **monitor HTTP de solo lectu
 - Ante cualquier `STOP`, reportar el código permitido del JSON. No reiniciar la búsqueda Z80 salvo que ese STOP demuestre que la cadena vuelve a fallar. No bajar el requisito de 120 s ni ocultar underruns.
 
 **Estado actual de la task:** T0–T2 PASS; T3.0–T3.6 implementados con evidencia local; T3.7 pendiente de **esta** prueba en Chrome + audición humana + verificación de A/V. El implementador no debe declarar `game_audio_live=true` con solo tests Node/HTTP.
+
+### 2026-10-28 — Evidencia del operador y corrección CLI
+
+- El operador confirma **«se escucha perfecto»** durante la partida. Esto es confirmación humana de audio audible; no sustituye la medición continua del AudioWorklet ni la aceptación temporal T3.7.
+- Regresión ejecutada en el Mac: **161/161 Node y 78/78 Python PASS**, ROM `SHA1_MATCH`, artefactos privados a salvo.
+- Se detectó un error en la instrucción del handoff: el servidor no admite ejecución sin argumentos y devuelve `V3_B2C_USAGE_SERVE_ONLY`. Comando correcto verificado en fuente: `node scripts/v3_b2c_live.mjs --serve`.
+- Falta: `node scripts/audio_browser_certify.mjs` mientras Chrome reproduce la partida; ventana de 120 s, reset frío, métricas de underruns, cola y estimación A/V. No afirmar todavía certificación técnica completa.
