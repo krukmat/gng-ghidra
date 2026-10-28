@@ -1,8 +1,10 @@
 # Plan Android offline — GnG en el teléfono, sin servidor ni red
 
-**Fecha:** 2026-10-28 · **Rama:** `main` · **Estado:** AO-0, AO-1 y AO-2 GO; sigue AO-3.
+**Fecha:** 2026-10-28 · **Rama:** `main` · **Estado:** AO-0, AO-1 y AO-2 GO; AO-3 compilado y validado en emulador, pendiente del teléfono.
 
-**Siguiente acción:** AO-3, shell Kotlin y medida en el teléfono. Antes, el operador activa la depuración USB.
+**Siguiente acción:** medir AO-3 durante 2 min en el teléfono. Antes, el operador activa la depuración USB.
+
+> **AO-3 emulador (28/10/2026; aún sin GO del teléfono).** El shell Kotlin carga los assets privados con `WebViewAssetLoader`, incluidas las extensiones `.mjs` como `text/javascript`. El APK de debug se compiló con Gradle 8.9, AGP 8.7.3, Kotlin 1.9.25 y JDK 17; `aapt dump permissions` no muestra permisos, incluido `INTERNET`. En el emulador Android 36 sin ventana ni audio, Playwright leyó `AO_READY` y 122 `AO_STATS` de la WebView durante 120,83 s: 7205 frames de CPU frente a 7205,99 esperados, 0 deslizamientos, 54,94 fps de render promedio y 41,96 fps mínimos por ventana, 7,58 ms de render por frame y arranque frío de 1,60 s; sin cierres. Informe y captura privados: `out/android/check/ao3-emulator-5554-report.json` y `ao3-emulator-device.png`. Estos números no sustituyen la medida en el teléfono.
 
 > **AO-1 GO (28/10/2026).** [ao_resumable_runtime.mjs](../src/ao_resumable_runtime.mjs) aplica dos anclas exactas al runtime de audio y falla cerrado si alguna no aparece exactamente una vez. [test_ao_resumable_runtime.mjs](../tests/test_ao_resumable_runtime.mjs) compara g6 + overlay de audio, en una copia completa del bundle con solo el runtime parcheado: 600 llamadas `run(k)` contra un `run()`. Salen idénticos los 600 hashes de frame (los de `runFrozen` más el ciclo de CPU), los eventos y marcas de audio, el log de eventos y el ciclo final; tarda ~1 s. Control negativo: con `reset()` en cada llamada, el test falla.
 
