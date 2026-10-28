@@ -117,7 +117,10 @@ async function main(){
       await sleep(POLL_MS);
     }
   }catch(e){
-    report.reason=sanitizedCode(e?.message)??'AUDIO_BROWSER_UNEXPECTED_STOP';
+    const reason=e?.message;
+    report.reason=typeof reason==='string'&&
+      /^AUDIO_[A-Z0-9_]{3,80}$/.test(reason)?reason:
+      'AUDIO_BROWSER_UNEXPECTED_STOP';
   }
   report.maxHttpObservationGapMs=Math.round(maxGapMs);
   report.humanAuditionConfirmed=false; // never infer this from PCM telemetry
