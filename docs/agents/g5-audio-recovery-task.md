@@ -187,3 +187,33 @@ de T3.7. Trabaja autónomamente con commits claros y registra las evidencias
 sanitizadas en el mismo documento. No declares AUDIO_WORKING por tests, tráfico
 YM o WAV offline. Entrega resultados verificables, commits y bloqueos reales.
 ```
+
+## T3.7 — Certificación local Chrome reproducible (instrumentación 2026-10-28)
+
+**Estado:** protocolo implementado, pendiente de ejecución humana con navegador real. El anterior bloqueo fue la ausencia de permisos de Computer Use; el operador **no necesita** conceder permisos de control remoto para ejecutar estas pruebas directamente en Chrome en su Mac.
+
+Se añadió `scripts/audio_browser_certify.mjs`, un **monitor HTTP de solo lectura**: obtiene exclusivamente contadores saneados desde `http://127.0.0.1:18609/state`, sin acceder a `/tape`, ROM, PCM ni controles. `src/gngb_audio_browser_certification.mjs` contiene las reglas puras, con **5 tests ROM-free** en `tests/test_gngb_audio_browser_certification.mjs` registrados en la regresión. Las 5 pruebas pasan en validación aislada; la regresión completa Mac queda pendiente.
+
+### Secuencia única, dos terminales + Chrome
+
+1. Terminal 1, desde la raíz del repositorio:
+   ```bash
+   git pull --ff-only
+   node scripts/audio_fast_checkpoint.mjs
+   node scripts/v3_b2c_live.mjs
+   ```
+   Mantener el servidor en ejecución; usa estrictamente loopback `127.0.0.1:18609`. Los ROM/bundle/renderer privados deben estar preparados localmente.
+2. Chrome **local del Mac**: abrir `http://127.0.0.1:18609`. Insertar moneda (botón Coin o tecla 5), pulsar Start (o 1), pulsar **Activar audio** y comprobar que el indicador `AudioContext activo` aparece. Escuchar música/efectos y jugar (moverse, saltar, atacar). No confundir un WAV offline con sonido en esta pestaña.
+3. Terminal 2: `node scripts/audio_browser_certify.mjs`. Cuando detecte `PLAYING` del **AudioWorklet real**, inicia automáticamente una ventana continua de **120 s**. No pausar ni cambiar de pestaña durante ese periodo; realizar controles ordinarios mientras se escucha.
+4. Tras `GNG_AUDIO_CERT=WINDOW_PASS_RESTART_NOW`, pulsar **Reiniciar** en Chrome, después Coin/Start y dejar que se restablezca el audio. El monitor exige **5 s** de nueva sesión con AudioWorklet `PLAYING`, sin perder muestras.
+5. Compartir **solo el JSON final del terminal 2** y la confirmación humana breve de si se escucha audio reconocible durante la partida y después del reset; no enviar ROM ni los artefactos de `out/audio/`.
+
+### Criterio automatizado y límites
+
+- En los 120 s: mismo ID de sesión; ningún `halt`, pausa, error de productor, cambio de estado de `PLAYING`, incremento de underruns, disminución de contadores o cola superior a **12.500 muestras (200 ms)**. Exigir progreso de salida AudioWorklet, PCM entregado y muestras PCM no nulas en la misma sesión.
+- Reset frío real: sesión incrementada, AudioWorklet vuelve a `PLAYING` y produce nuevas muestras durante 5 s. **Nunca** se fuerza reset mediante HTTP en el certificador; lo hace el usuario desde el juego.
+- Recopilar `maxAbsReportedAvMs` y `reportedAvDriftMs` estimados con `cycle/1500000 - lastInputSample/62500 + latency`. Objetivos preliminares: ≤100 ms absoluto y ≤40 ms de deriva en 120 s. **Son estimaciones de telemetría, no mediciones directas del instante físico de presentación del frame.** Si no están disponibles o fuera de objetivo, estado `BROWSER_TRANSPORT_PASS_AV_ESTIMATE_NOT_CLEARED`; no certificar A/V.
+- `BROWSER_TRANSPORT_PASS_AUDITION_PRESENTATION_PENDING` significa que pasaron los controles automáticos de transporte, reset y estimación A/V. **NO** certifica audición ni alineación perceptual: el operador debe afirmar haber escuchado música/efectos reconocibles y confirmar que se perciben sincronizados con Coin/Start/acción. Solo entonces evaluar el cierre T3.7, sin sobreafirmar paridad nativa completa.
+- Ante cualquier `STOP`, reportar el código permitido del JSON. No reiniciar la búsqueda Z80 salvo que ese STOP demuestre que la cadena vuelve a fallar. No bajar el requisito de 120 s ni ocultar underruns.
+
+**Estado actual de la task:** T0–T2 PASS; T3.0–T3.6 implementados con evidencia local; T3.7 pendiente de **esta** prueba en Chrome + audición humana + verificación de A/V. El implementador no debe declarar `game_audio_live=true` con solo tests Node/HTTP.
