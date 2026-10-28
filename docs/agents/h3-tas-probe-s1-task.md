@@ -1,6 +1,6 @@
 # H3-S1 — Sonda TAS: explorador Go-Explore en la fase 1 desde reset
 
-**Estado:** PENDIENTE (28/10/2026). Aprobada por el operador junto con S0.
+**Estado:** S0 hecho; S1 **GO** (28/10/2026): arena del cíclope en el frame 5348 desde reset, sin pokes, 3 vidas; replay independiente MATCH (cinta `f5cbb0c7…`, RAM `8ad5a998…`). Métricas en el [plan](../plan-contenido-h3-h4-2026-10-27.md). Siguiente: S2.
 Pertenece al [plan de contenido](../plan-contenido-h3-h4-2026-10-27.md) y
 sustituye, como fuente de cintas, a la grabación del operador (paso 3). Viene
 después de [H3-F2](h3-phase2-first-hit-task.md). No reanuda el bot visual de `bot/`.

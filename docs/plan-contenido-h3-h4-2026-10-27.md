@@ -1,8 +1,10 @@
 # Plan de contenido — de H3 a H4 (fases, jefes, dos vueltas y final)
 
-**Fecha:** 2026-10-27 · **Rama:** `main` · **Estado:** pasos 1–2 GO; paso 5 GO (g6); verificación de jefes por búsqueda diferida (§8); barrido de cobertura de jefes: 0 % UNCOMPILED en lo alcanzado, sin g7. En fase 2 el avance real se detiene en la columna de X≈5450; X=5464 solo se alcanza lanzado por un impacto fatal (causa demostrada en H3-F2). No hay señal de jefe ni de puerta funcional. Paso 3 (grabación del operador) pendiente: no bloquea la compilación, solo la certificación.
+**Fecha:** 2026-10-27 · **Rama:** `main` · **Estado:** pasos 1–2 GO; paso 5 GO (g6); verificación de jefes por búsqueda diferida (§8); barrido de cobertura de jefes: 0 % UNCOMPILED en lo alcanzado, sin g7. En fase 2 el avance real se detiene en la columna de X≈5450; X=5464 solo se alcanza lanzado por un impacto fatal (causa demostrada en H3-F2). No hay señal de jefe ni de puerta funcional. Paso 3 (grabación del operador) pasa a opcional: una sonda TAS desde reset certifica igual (§1, decisión 28/10/2026).
 
-**Siguiente acción del paso 5:** corregir la poda y la métrica de [h3_boss_search.mjs](../scripts/h3_boss_search.mjs). Debe cortar en el impacto (modo 3 en `0x0503` sin armadura) en lugar de esperar a `0x9c64`, y no premiar la X ganada en ese modo. Se verifica con `search-p1-7290.json`: la rama `right_jump` de 7221 debe podarse en su propio segmento. [H3-F2](agents/h3-phase2-first-hit-task.md) está cerrada con causa demostrada; sigue abierto cómo superar la columna.
+**Siguiente acción:** H3-S2 de la [tarea H3-S1](agents/h3-tas-probe-s1-task.md): localizar la vida del cíclope comparando la RAM antes y después de cada golpe (GO: `0x72` pasa de 0 a 1). La corrección de la poda de `h3_boss_search.mjs` pasa a §8: la sustituye el corte en el impacto del explorador.
+
+> **H3-S1 GO (28/10/2026).** [h3_explore.mjs](../scripts/h3_explore.mjs) (Go-Explore, g6, semilla 1) llega a la arena del cíclope desde reset, sin pokes ni escrituras de estado y sin perder vidas: frame 5348, fase 0, checkpoint 1, X=3458, scroll=3072, 3 vidas, sin armadura. Métricas: 10.848 ramas, 3.218 celdas, 2.325 cortes, 1.182.308 frames, 64,4 s de reloj (~18.000 fps); X máxima 3458, scroll máximo 3072. Validación: etiquetas RAM correctas sobre `explorer-g4-2730-1606.json`; misma semilla → mismas celdas (`b2e505b4…`) y misma cinta (`f5cbb0c7…`); replay independiente desde reset, sin restore, dos veces: MATCH de hash de RAM (`8ad5a998…`) y señal, sin frame fatal. Cinta privada en `out/h3/explore/tape-s1-5348-arena.json`. Falta la paridad MAME (S3).
 
 > **Avance 27/10/2026.** Herramienta: [h3_tape.mjs](../scripts/h3_tape.mjs) + [h3_tape_recorder.lua](../scripts/h3_tape_recorder.lua) + [h3_tape_convert.mjs](../src/h3_tape_convert.mjs).
 > **Paso 1 GO:** `titleCoinStart` inyectada y convertida → 4/4 eventos idénticos; 2.012 lecturas reales de CPU iguales a lo anotado.
@@ -27,13 +29,14 @@
 | Descubrimiento desde estados de MAME | No crítico; contingencia (§7) | Toda compilación nace de cintas desde reset |
 | Bot | **Operador (27/10, revisado):** sin gate del bot; el contenido se completa sin su verificación | El bot sale de la ruta crítica (§5) |
 | Compilación del contenido | **Operador:** crear todo ya, sin esperar cintas ni bot | La cobertura estática (paso 5) pasa de diferida a activa; las cintas humanas certifican después |
+| Sonda TAS | **Operador (28/10/2026):** una sonda TAS certifica igual que una cinta humana | Requisitos: cinta generada offline desde reset; solo entradas de puerto, sin pokes ni escrituras de estado; doble replay idéntico; paridad MAME en la entrada de fase, el jefe y la transición. La cinta humana pasa a opcional |
 
 ## 2. Estructura
 
 ```
-Pasos 1–2 (GO) → Paso 5: cobertura estática → Paso 3: cinta humana → Paso 4 → F-1 … F-6 → F-L2 → C6
+Pasos 1–2 (GO) → Paso 5: cobertura estática → Paso 3: sonda TAS o cinta humana → Paso 4 → F-1 … F-6 → F-L2 → C6
 
-F-N:  MOTOR (cinta humana → residuo dinámico + certificación) → REGLAS → CIERRE
+F-N:  MOTOR (sonda TAS o cinta humana → residuo dinámico + certificación) → REGLAS → CIERRE
 ```
 
 - Cada paso empieza solo con GO del anterior. Ante STOP la secuencia se detiene, se informa del bloqueo y se replanifica antes de seguir gastando.
@@ -192,7 +195,7 @@ Para cada fase de la primera vuelta. F-(N+1) no empieza sin cerrar F-N. Para N�
 
 | Paso | Contenido | GO |
 |---|---|---|
-| **F-N.1 Motor** | Cinta humana desde reset hasta el final de la fase N → descubrimiento offline del residuo dinámico (lo que el paso 5 no alcanzó) → generación nueva certificada solo si hubo residuo (las anteriores no se tocan). En F-1 entra además la cinta de la candidata M2.4 (`0xAFFC`) | Replay desde reset hasta la transición N→N+1 sin `UNCOMPILED`; paridad MAME en entrada de fase, jefe y transición |
+| **F-N.1 Motor** | Sonda TAS o cinta humana desde reset hasta el final de la fase N → descubrimiento offline del residuo dinámico (lo que el paso 5 no alcanzó) → generación nueva certificada solo si hubo residuo (las anteriores no se tocan). En F-1 entra además la cinta de la candidata M2.4 (`0xAFFC`) | Replay desde reset hasta la transición N→N+1 sin `UNCOMPILED`; paridad MAME en entrada de fase, jefe y transición |
 | **F-N.2 Reglas** | Muerte con respawn en la fase; game over con continue una vez en todo el plan | Detectores del paso 4 confirman el evento y MAME coincide |
 | **F-N.3 Cierre** | Checkpoint breve en `docs/`: generación, cintas, evidencia, mapa de la fase y coste consumido | — |
 
@@ -204,7 +207,7 @@ Los HALT antiguos `0xE79E` y `0xC3A3` se comprueban en el paso 5.0.
 
 ## 5. Gate del bot por fase (B-N) — RETIRADO
 
-**Retirado por decisión del operador (27/10/2026):** el contenido se completa sin verificación del bot. El bot queda fuera de la ruta crítica, como demostración independiente opcional. Los criterios siguientes se conservan solo como referencia por si se reactiva.
+**Retirado por decisión del operador (27/10/2026):** el contenido se completa sin verificación del bot. El bot queda fuera de la ruta crítica, como demostración independiente opcional. **28/10/2026:** el bot visual de `bot/` sigue aparcado; su objetivo es otro (jugar en vivo solo con píxeles) y la sonda TAS (H3-S1) no lo reanuda. Los criterios siguientes se conservan solo como referencia por si se reactiva.
 
 1. **Arranque:** inicio de la fase N mediante prefijo desde reset tomado de la cinta humana (como el prefijo actual hasta 2672). El bot no rejuega fases anteriores.
 2. **Motor del gate:** el episodio del gate corre sobre una generación congelada y certificada, sin compilación bajo demanda.
@@ -246,11 +249,13 @@ Coste estimado (muy aproximado; recalibrar tras el paso 2):
 
 - **Estados de MAME no deterministas al rebobinar** → los detecta la ida y vuelta (pasos 2 y 3).
 - **El operador no avanza una sección ni con rebobinado** → contingencia: descubrimiento offline desde estados de MAME, solo para compilar y nunca como evidencia; requiere plan y validación propios.
-- **Sin cinta humana no hay certificación:** el paso 5 compila, pero ninguna fase cuenta como completada hasta F-N.1 con cinta y paridad MAME.
+- **Sin sonda TAS o cinta humana no hay certificación:** el paso 5 compila, pero ninguna fase cuenta como completada hasta F-N.1 con cinta y paridad MAME.
 
 ## 8. Diferido (solo con disparador)
 
 - **`.inp` de terceros:** no se buscan. Si el operador aporta uno de `gngb` que se reproduce en la versión de MAME disponible, se procesa con el pipeline del paso 1 y sus conversiones quedan en `out/`; si set o versión no coinciden, se descarta.
+
+- **Corrección de la poda de `h3_boss_search.mjs`** (antes «siguiente acción del paso 5»): cortar en el impacto (modo 3 en `0x0503` sin armadura) y no premiar la X ganada en ese modo. Sustituida (28/10/2026) por el corte en el impacto del explorador de H3-S1; solo se retoma si se reactiva la búsqueda en haz.
 
 - **Verificación de jefes por búsqueda (laboratorio):** diferida por el operador (27/10/2026) hasta después de la implementación completa. Retomar desde la revisión del paso 5 (checkpoint `0x0081`, armadura `0x00AC`, [h3_boss_search.mjs](../scripts/h3_boss_search.mjs)).
 

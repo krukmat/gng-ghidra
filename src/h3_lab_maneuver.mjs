@@ -31,10 +31,15 @@ export const maneuverRow=(frame,b)=>({frame,phase:b[0x72],lives:b[0x60],armor:b[
   x:b[0xa0]<<8|b[0xa1],y:b[0xa2]<<8|b[0xa3],mode:b[0x503],sub:b[0x504],
   handler:b[0x510]<<8|b[0x511]});
 
+/** Fatal row: impact (mode 3) without armour, a death handler, or a lost life. */
+export const maneuverFatal=(r,lives)=>{
+  const h=r.handler;
+  return r.mode===3&&!!r.armor||h<0x6000||!!r.armor&&(h===0x8e05||h===0x9c64||
+    (h&0xffe0)===0x9c40)||r.lives<lives;
+};
+
 export function maneuverOutcome(rows,{lives,limit=5464,hold=60}){
-  const h=r=>r.handler;
-  const fatal=r=>r.mode===3&&r.armor||h(r)<0x6000||r.armor&&(h(r)===0x8e05||h(r)===0x9c64||
-    (h(r)&0xffe0)===0x9c40)||r.lives<lives;
+  const fatal=r=>maneuverFatal(r,lives);
   let run=0,above=0;
   for(const r of rows){run=r.x>limit&&!fatal(r)?run+1:0;above=Math.max(above,run);}
   const hit=rows.find(r=>r.mode===3),first=rows.find(fatal);
