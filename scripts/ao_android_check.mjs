@@ -16,13 +16,15 @@ const CHECK=join(ROOT,'out/android/check');
 const ADB=join(process.env.ANDROID_HOME??join(homedir(),'Library/Android/sdk'),
   'platform-tools/adb');
 const PKG='org.gng.offline';
-const seconds=Number(process.argv[2]??15);
-const selected=process.argv[3]??process.env.AO_ADB_SERIAL;
+const audio=process.argv.includes('--audio'); // AO-6: tap Sound ON after boot
+const args=process.argv.slice(2).filter(a=>a!=='--audio');
+const seconds=Number(args[0]??15);
+const selected=args[1]??process.env.AO_ADB_SERIAL;
 if(!Number.isFinite(seconds)||seconds<5)throw Error('AO3_SECONDS_INVALID');
 const adb=(serial,...args)=>execFileSync(ADB,['-s',serial,...args],
   {encoding:'utf8',timeout:120000,maxBuffer:16*1024*1024});
 const matchLine=text=>{
-  const m=/^(AO_[A-Z]+) (.*)$/s.exec(text);
+  const m=/^(AO_[A-Z_]+) (.*)$/s.exec(text);
   if(!m)return null;
   try{return {tag:m[1],data:JSON.parse(m[2])};}catch{return null;}
 };
@@ -82,6 +84,13 @@ async function main(){
       Date.now(),{waitUntil:'domcontentloaded',timeout:30000});
     console.log('AO3_STEP=navigated');
     report.ready=await until(l=>l.tag==='AO_READY',60000,'READY');
+    if(audio){
+      report.audioReady=await until(l=>l.tag==='AO_AUDIO_READY',60000,'AUDIO_READY');
+      await page.waitForFunction(()=>!document.getElementById('sound').disabled,
+        null,{timeout:30000});
+      await page.click('#sound');
+      report.audioSession=await until(l=>l.tag==='AO_AUDIO_SESSION',30000,'AUDIO_SESSION');
+    }
     await until(l=>l.tag==='AO_STATS'&&l.data.t>=seconds*1000,
       (seconds+60)*1000,'STATS');
     const stats=lines.filter(l=>l.tag==='AO_STATS').map(l=>l.data);
@@ -99,6 +108,18 @@ async function main(){
       renderMsPerFrame:+(sum(drawing,'renderMs')/
         Math.max(1,sum(drawing,'rendered'))).toFixed(2)};
     report.playwright={url:page.url(),aoReady:1,aoStats:stats.length};
+    if(audio){
+      const a=lines.filter(l=>l.tag==='AO_AUDIO_STATS').map(l=>l.data);
+      const w=a.map(x=>x.worklet).filter(Boolean);
+      report.audio={label:await page.textContent('#sound'),stats:a.length,
+        playing:w.filter(x=>x.state==='PLAYING').length,
+        missing:Math.max(0,...w.map(x=>x.missing)),
+        maxQueue:Math.max(0,...w.map(x=>x.queued)),
+        outputNonzero:w.at(-1)?.outputNonzero??0,producer:a.at(-1)?.producer??null,
+        avMs:a.map(x=>x.avMs).filter(Boolean).slice(-5),
+        audioPacedFrames:sum(stats,'audioPaced'),
+        stops:lines.filter(l=>l.tag==='AO_AUDIO_STOP').map(l=>l.data)};
+    }
     try{
       report.screenshot=`out/android/check/ao3-${safe}-device.png`;
       await device.screenshot({path:join(CHECK,`ao3-${safe}-device.png`)});

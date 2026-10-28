@@ -3,15 +3,47 @@
  * resumable runtime (run(until)), then renders the newest fully known frame
  * and transfers its RGBA to the page. ?check=N runs N frames unpaced instead
  * and posts the SHA-256 of every rendered frame for the Node comparison.
+ * AO-6: each frame's audio events go to the audio worker. While an output
+ * session plays, the consumed source sample paces the CPU (LEAD ahead) and
+ * the frame shown is the one being heard; otherwise the AO-2 clock rules.
  */
 const CPU_HZ=1.5e6; // MC6809 E clock
 const MAX_BEHIND=30; // frames; further behind re-anchors and counts a slip
 const post=(msg,transfer=[])=>postMessage(msg,transfer);
 const ports=new Uint8Array(5);
+const SAMPLES_PER_FRAME=1048; // 25152 cycles x 8 ticks / 192 ticks per sample
+const SAMPLE_MS=1000/62500;
+const LEAD=5*SAMPLES_PER_FRAME; // queued source samples kept ahead of playback
+const MAX_AUDIO_BACKLOG=120; // frames sent but not yet synthesized
+const CLOCK_LOST_MS=250;
+let audioPort=null,audioAcked=0,audioDead=false;
+// Output clock: {sessionId, latency (samples), port, last:{sample,at}}.
+let clock=null,fillLead=false;
 
 onmessage=({data})=>{
   // AO-4 sends the five input port bytes (SYSTEM, P1, P2, DSW1, DSW2).
   if(data?.type==='ports'&&data.ports?.length===5)ports.set(data.ports);
+  else if(data?.type==='audio-port'){
+    audioPort=data.port;
+    audioPort.onmessage=({data:m})=>{if(m?.type==='ack')audioAcked=m.frame;};
+  }else if(data?.type==='audio-latency'){
+    if(clock?.sessionId===data.sessionId)clock.latency=data.latencyMs/SAMPLE_MS;
+  }else if(data?.type==='audio-clock'){
+    clock?.port?.close();
+    clock=data.sessionId==null?null:{sessionId:data.sessionId,
+      latency:data.latencyMs/SAMPLE_MS,port:data.port,last:null};
+    // A new output starts with the whole LEAD queued, not just the prebuffer.
+    fillLead=clock!==null;
+    if(clock)clock.port.onmessage=({data:m})=>{
+      if(m?.type!=='clock'||m.sessionId!==clock?.sessionId)return;
+      if(m.state==='PLAYING')clock.last={sample:m.sample,at:performance.now()};
+      else clock.last=null;
+    };
+  }
+};
+const audioStop=code=>{
+  if(audioDead)return;
+  audioDead=true;post({type:'audio-stop',code});
 };
 
 async function bytes(name){
@@ -42,13 +74,34 @@ async function start(){
   const readPorts=new Uint8Array(3).fill(255);
   const inputCheck=new URLSearchParams(location.search).has('inputCheck');
   let last=null,latest=null,stateKey=null,gameState=null;
+  let audioEvents=[],audioFrames=0;
+  const heard=[]; // newest drawable frames, for audio-paced presentation
   const cpu=createBoard(code,blocks,{frames:Number.MAX_SAFE_INTEGER,
     portRead:addr=>ports[addr-0x3000],
     onPortRead:read=>{witness.observe(read);readPorts[read.addr-0x3000]=read.value;},
+    onAudioEvent:e=>{
+      if(!audioPort||audioDead)return;
+      audioEvents.push({kind:e.kind,value:e.value,cycle:e.cycle});
+      if(audioEvents.length>5000)audioStop('AUDIO_ENGINE_EVENT_OVERFLOW');
+    },
+    // One batch per completed frame, as in the live engine worker.
+    onAudioComplete:mark=>{
+      if(mark.frames<=audioFrames)return;
+      audioFrames=mark.frames;
+      if(!audioPort||audioDead)return;
+      if(audioFrames-audioAcked>MAX_AUDIO_BACKLOG)
+        return audioStop('AUDIO_PRODUCER_BEHIND');
+      audioPort.postMessage({type:'batch',frame:audioFrames,
+        throughCycle:audioFrames*CYCLES_PER_FRAME,events:audioEvents});
+      audioEvents=[];
+    },
     onFrame:frame=>{
       last=frame;
       // Same rule as the live wrapper: never draw a frame with unknown bytes.
-      if(rendererUnknownCount(frame)===0)latest=frame;
+      if(rendererUnknownCount(frame)===0){
+        latest=frame;heard.push(frame);
+        if(heard.length>40)heard.shift(); // ~670 ms: LEAD + output latency
+      }
       const state=observeGameState(frame);
       if(state){
         gameState=state;
@@ -93,26 +146,48 @@ async function start(){
   }
 
   const frameMs=CYCLES_PER_FRAME/CPU_HZ*1000;
-  let anchor=performance.now(),done=0,shown=0,slips=0;
-  let win={since:anchor,frames:0,rendered:0,cpuMs:0,renderMs:0,lateMs:0};
+  let anchor=performance.now(),done=0,shown=0,slips=0,paced=false;
+  let win={since:anchor,frames:0,rendered:0,cpuMs:0,renderMs:0,lateMs:0,audioFrames:0};
+  // Source sample being consumed now, extrapolated from the last report.
+  const consumed=now=>clock.last.sample+Math.min(now-clock.last.at,40)/SAMPLE_MS;
   const tick=()=>{
     const now=performance.now();
-    win.lateMs=Math.max(win.lateMs,now-(anchor+(done+1)*frameMs));
-    let due=Math.floor((now-anchor)/frameMs);
-    if(due-done>MAX_BEHIND){anchor=now-done*frameMs;due=done+1;slips++;}
+    if(clock?.last&&now-clock.last.at>CLOCK_LOST_MS){
+      clock.last=null;post({type:'audio-clock-lost',frame:done});
+    }
+    let due,frame=latest;
+    if(clock?.last&&!audioDead){
+      const at=consumed(now);
+      due=Math.min(done+MAX_BEHIND,Math.floor((at+LEAD)/SAMPLES_PER_FRAME));
+      // Show the newest drawable frame whose audio is already audible.
+      const audible=Math.floor((at-clock.latency)/SAMPLES_PER_FRAME)+1;
+      frame=heard.findLast(f=>f.index<=audible)??null;
+      paced=true;
+    }else{
+      // Back on the AO-2 clock, anchored at the current frame: no jump.
+      if(paced){anchor=now-done*frameMs;paced=false;}
+      if(fillLead){anchor-=LEAD/SAMPLES_PER_FRAME*frameMs;fillLead=false;}
+      win.lateMs=Math.max(win.lateMs,now-(anchor+(done+1)*frameMs));
+      due=Math.floor((now-anchor)/frameMs);
+      if(due-done>MAX_BEHIND){anchor=now-done*frameMs;due=done+1;slips++;}
+    }
     const c0=performance.now();
-    for(;done<due;done++){if(!step(done+1))return;win.frames++;}
+    for(;done<due;done++){
+      if(!step(done+1))return;
+      win.frames++;if(paced)win.audioFrames++;
+    }
     const c1=performance.now();
     win.cpuMs+=c1-c0;
-    if(latest&&latest.index!==shown){
+    if(frame&&frame.index!==shown){
       // A fresh buffer per render: transferred, never copied.
-      const rgba=render(latest);
-      post({type:'frame',index:latest.index,rgba:rgba.buffer},[rgba.buffer]);
-      shown=latest.index;win.rendered++;
+      const rgba=render(frame);
+      post({type:'frame',index:frame.index,rgba:rgba.buffer},[rgba.buffer]);
+      shown=frame.index;win.rendered++;
       win.renderMs+=performance.now()-c1;
     }
     if(c1-win.since>=1000){
       post({type:'stats',t:Math.round(c1-anchor),frames:done,slips,
+        audioPaced:win.audioFrames,audioBacklog:audioFrames-audioAcked,
         windowMs:Math.round(c1-win.since),windowFrames:win.frames,
         rendered:win.rendered,cpuMs:+win.cpuMs.toFixed(2),
         renderMs:+win.renderMs.toFixed(2),lateMs:+win.lateMs.toFixed(2)});
@@ -120,9 +195,12 @@ async function start(){
       if(inputCheck)post({type:'input-probe',frame:done,
         witness:witness.snapshot(),ports:[...ports],reads:[...readPorts],
         ram2:last?.record[2],ram5:last?.record[5],ram23:last?.record[0x23],gameState});
-      win={since:c1,frames:0,rendered:0,cpuMs:0,renderMs:0,lateMs:0};
+      win={since:c1,frames:0,rendered:0,cpuMs:0,renderMs:0,lateMs:0,audioFrames:0};
     }
-    setTimeout(guarded,Math.max(0,anchor+(done+1)*frameMs-performance.now()));
+    const wait=clock?.last&&!audioDead?
+      Math.min(frameMs,((done+1)*SAMPLES_PER_FRAME-LEAD-consumed(performance.now()))*SAMPLE_MS):
+      anchor+(done+1)*frameMs-performance.now();
+    setTimeout(guarded,Math.max(0,wait));
   };
   const guarded=()=>{try{tick();}catch(e){fail(e);}};
   guarded();

@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-10-28 · **Rama:** `main` · **Estado:** AO-0, AO-1 y AO-2 GO; AO-3 instalado en el teléfono con 50–60 fps observados por el operador; AO-4 validado con Playwright; AO-5 GO en el Mac (YM2203 WASM idéntico al nativo). CPU y arranque del teléfono siguen pendientes de medición automática.
 
-**Siguiente acción:** [AO-6](#ao-6--audio-en-la-app) en curso tras el OK del operador a [AO-5](#ao-5--ym2203-en-wasm); el botón sigue preparado y deshabilitado hasta AO-6. Pendiente en paralelo: probar los controles de AO-4 en el teléfono. La medición automática de AO-3 se retoma cuando haya conexión ADB.
+**Siguiente acción:** joystick táctil flotante en lugar de la cruceta (pedido del operador tras AO-6). Medida automática en el teléfono pendiente de ADB: `node scripts/ao_android_check.mjs 600 <serial> --audio`.
 
 **UI vigente (operador, 28/10):** pantalla centrada; Disparo y Salto apilados abajo a la izquierda, con fondo transparente y botones translúcidos. Cruceta abajo a la derecha; opciones arriba a la derecha. Moneda y Start vuelven en Game Over; Start cambia a Continuar cuando la ROM abre la continuación. Sonido OFF queda preparado y deshabilitado, por decisión del operador, hasta integrar el audio offline en AO-5/AO-6. Implementación: [AO-4](#ao-4--controles-y-ui-como-la-web).
 
@@ -134,6 +134,24 @@ Para jugar con el APK de AO-4: esperar a que Moneda se habilite, tocar **Moneda*
 Costo: 10–15% de la ventana de 5 h; 1,5–2% semanal. Al cerrar AO-5 se recalibra AO-6 con el costo medido.
 
 ### AO-6 — Audio en la app
+
+> **AO-6 aceptado por el operador en el teléfono (28/10/2026): el sonido está bien.** Sin medida automática de CPU/A/V en el teléfono (sin ADB).
+>
+> **AO-6 en el Mac y el emulador.**
+> - **Productor:** [audio.worker.mjs](../android/web/audio.worker.mjs) recibe un lote por frame del motor y lo pasa por Z80, [ao_audio_commands.mjs](../src/ao_audio_commands.mjs) y WASM. Corre desde el arranque con Sonido ON u OFF y solo envía PCM mientras hay una sesión de salida.
+> - **Worklet:** [audio.worklet.mjs](../android/web/audio.worklet.mjs) es nuevo y la web no se modificó. Reutiliza [gngb_audio_resampler.mjs](../src/gngb_audio_resampler.mjs) con 50 ms de prebuffer, 200 ms de capacidad y STOP al primer underrun. Descarta los paquetes de sesiones viejas y cada ~10,7 ms informa al motor la muestra consumida.
+> - **Motor:** [engine.worker.mjs](../android/web/engine.worker.mjs) con salida activa sigue la muestra consumida más un objetivo de 5 frames (84 ms); al abrir la sesión adelanta esos 5 frames de una vez. Presenta el frame que se está oyendo y vuelve al reloj de AO-2 sin saltos cuando falta el informe.
+> - **Latencia de presentación:** se corrige en lazo cerrado con `getOutputTimestamp`. El emulador informa 107 ms de latencia, pero `getOutputTimestamp` indica unos 250 ms más.
+> - **Ciclo de vida:** OFF pone la ganancia en cero; el segundo plano suspende el contexto y cierra la sesión; Reiniciar reconstruye el Z80 y los chips.
+>
+> **Pruebas:**
+> - [ao_audio_check.mjs](../scripts/ao_audio_check.mjs), headless, **GO**: productor activo con OFF sin enviar nada; ON a mitad de partida; ON/OFF ×3 con la misma sesión; segundo plano con contexto suspendido y sesión nueva al volver, simulado porque las pestañas headless no se ocultan; Reiniciar seguido de Moneda/Start y 59 s estables. CPU a 58,65–60,58 Hz, render de 53,6 fps de media (mínimo 40,7), cola entre 3711 y 5028 muestras, 0 underruns, A/V de −0,1 ms de media (máximo 34) y deriva de 0,75 ms/min. Síntesis: 0,5 ms por frame.
+> - [test_ao_audio_worklet.mjs](../tests/test_ao_audio_worklet.mjs) 4/4 (sesiones viejas, underrun, hueco, desbordamiento); tests AO 21/21.
+> - Regresión: AO-2 PASS (píxeles y ritmo); AO-4 5/5 y Game Over + Continuar PASS.
+> - **Emulador** (`ao_android_check.mjs --audio`, SwiftShader): el WebView carga el WASM (`application/wasm`) y el Z80, sintetiza a ~0,8–1,4 ms por frame y arranca en frío en 1,6–2,0 s. En 2 corridas de 60 s, la primera salió limpia (A/V de −21 a +6 ms de media). La segunda tuvo un **underrun a los 60 s**, cuando el motor del emulador se trabó (74 ms de CPU en una ventana de 1 s). Render de 30 fps con mínimos de 23–26: el emulador no valida ese umbral.
+> - **Riesgo abierto:** una pausa de más de ~84 ms en el teléfono vacía la cola. Subir el objetivo (p. ej. 8 frames, 134 ms, dentro de la capacidad de 200 ms) requiere el OK del operador.
+>
+> APK 0.6.0 privado en `out/android/gng.apk`. Informes: `out/android/check/ao6-report.json` y `ao3-emulator-5554-report.json`.
 
 **Resultado:** Sonido ON/OFF habilitado, con música y efectos generados en el teléfono durante la partida, sin conexión al Mac. Depende del GO de AO-5.
 

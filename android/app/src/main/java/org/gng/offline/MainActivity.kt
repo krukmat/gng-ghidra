@@ -31,6 +31,7 @@ class MainActivity : Activity() {
             .addPathHandler("/assets/", WebViewAssetLoader.PathHandler { path ->
                 assets.handle(path)?.apply {
                     if (path.endsWith(".mjs")) mimeType = "text/javascript"
+                    if (path.endsWith(".wasm")) mimeType = "application/wasm"
                 }
             }).build()
         webView = WebView(this).apply {
@@ -63,6 +64,17 @@ class MainActivity : Activity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) immersive()
+    }
+
+    // Background: the page sees visibilitychange, suspends audio and drops its queue.
+    override fun onPause() {
+        webView.onPause()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        webView.onResume()
     }
 
     override fun onDestroy() {

@@ -6,6 +6,7 @@ repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 
+bash "$repo_dir/scripts/ao_build_audio_wasm.sh"
 node "$repo_dir/scripts/ao_build_assets.mjs"
 (cd "$repo_dir/android" && ./gradlew --no-daemon assembleDebug)
 install -m 600 "$repo_dir/out/android/gradle-build/app/outputs/apk/debug/app-debug.apk" \

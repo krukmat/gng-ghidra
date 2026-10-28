@@ -24,7 +24,10 @@ const BUNDLE_FILES=['program.mjs','mc6809_aot_lib.mjs','gngb_block_key.mjs',
 // Worker entry points in src/; their relative imports are copied too.
 const LIB_ENTRIES=['gngb_frame_renderer.mjs','gngb_render_inputs.mjs',
   'v2_b1_observable.mjs','gngb_input_contract.mjs','ao_web_assets.mjs',
-  'ao_touch_controls.mjs','ao_game_state.mjs','v3_b2c_port_witness.mjs'];
+  'ao_touch_controls.mjs','ao_game_state.mjs','v3_b2c_port_witness.mjs',
+  'ao_audio_commands.mjs','ao_ym2203_wasm.mjs','gngb_audio_resampler.mjs'];
+const AUDIO_WASM=join(ROOT,'out/android/audio');
+const Z80_ROM_SHA1='7ef9ec5c2072e21c787a6bbf700033f50c759c1d';
 const sha256=b=>createHash('sha256').update(b).digest('hex');
 
 // A browser module may only import sibling modules: no node:, no packages.
@@ -37,6 +40,7 @@ function libClosure(entries){
     const text=readFileSync(join(ROOT,'src',name),'utf8');
     for(const m of text.matchAll(/\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(?\s*['"]([^'"]+)['"]/g)){
       const spec=m[1]??m[2];
+      if(spec.startsWith('data:'))continue; // the Z80 session's generated code
       if(!/^\.\/[\w.-]+\.mjs$/.test(spec))
         throw Error('AO_ASSETS_NON_BROWSER_IMPORT '+name+' '+spec);
       queue.push(spec.slice(2));
@@ -56,7 +60,7 @@ export async function buildAssets(){
   const audio=await prepareAudioBundle(ROOT,selected.dir);
   const {manifest}=loadFrozen(audio.dir); // every asset SHA-256 checked
   rmSync(ASSETS,{recursive:true,force:true});
-  for(const dir of ['bundle','lib'])
+  for(const dir of ['bundle','lib','audio'])
     mkdirSync(join(ASSETS,dir),{recursive:true,mode:0o700});
   for(const name of BUNDLE_FILES)
     copyFileSync(join(audio.dir,name),join(ASSETS,'bundle',name));
@@ -66,6 +70,16 @@ export async function buildAssets(){
   const gfx=gngbGraphics(name=>execFileSync('unzip',['-p',zip,name],
     {maxBuffer:1<<20,stdio:['ignore','pipe','ignore']}));
   writeFileSync(join(ASSETS,'gfx.bin'),packGfx(gfx),{mode:0o600});
+  // AO-6: Z80 ROM through the hash-checking extractor, and the AO-5 .wasm.
+  execFileSync('python3',['scripts/audio_extract_sound_rom.py'],{cwd:ROOT,stdio:'ignore'});
+  const z80=readFileSync(join(ROOT,'out/audio/gg2.bin'));
+  if(createHash('sha1').update(z80).digest('hex')!==Z80_ROM_SHA1)
+    throw Error('AO_ASSETS_Z80_ROM_INVALID');
+  writeFileSync(join(ASSETS,'audio/gg2.bin'),z80,{mode:0o600});
+  const wasm=readFileSync(join(AUDIO_WASM,'ym2203.wasm'));
+  const build=JSON.parse(readFileSync(join(AUDIO_WASM,'build.json'),'utf8'));
+  if(sha256(wasm)!==build.sha256)throw Error('AO_ASSETS_WASM_MISMATCH');
+  writeFileSync(join(ASSETS,'audio/ym2203.wasm'),wasm,{mode:0o600});
   for(const name of libClosure(LIB_ENTRIES))
     copyFileSync(join(ROOT,'src',name),join(ASSETS,'lib',name));
   for(const name of readdirSync(WEB))
@@ -73,7 +87,8 @@ export async function buildAssets(){
   const files=Object.fromEntries(listFiles(ASSETS).sort().map(path=>
     [relative(ASSETS,path),sha256(readFileSync(path))]));
   const index={schema:'gng.ao.assets.v1',generation:selected.generation,
-    program_sha256:manifest.files['program.mjs'],runtime_sha256:sha256(runtime),files};
+    program_sha256:manifest.files['program.mjs'],runtime_sha256:sha256(runtime),
+    audio_wasm:build,files};
   writeFileSync(join(ASSETS,'assets.json'),JSON.stringify(index,null,2)+'\n',{mode:0o600});
   return index;
 }
