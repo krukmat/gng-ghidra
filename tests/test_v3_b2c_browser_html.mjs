@@ -49,5 +49,29 @@ test('the operator controls pause only at real VBlank and resume CPU',()=>{
   assert.match(script,/fetch\('\/continue'/);
   assert.match(source,/createVisibleFrameGate/);
   assert.match(source,/gate\.shouldAdvance/);
-  assert.match(source,/if\(data\.control==='coin1'&&data\.pressed\)resumeOperator\(\)/);
+  // A real hardware coin press always invokes resumeOperator(); if that
+  // release has nothing to free yet (worker still booting after /reset),
+  // the intent is remembered as earlyCoinPending instead of discarded.
+  assert.match(source,
+    /data\.control==='coin1'&&data\.pressed&&!resumeOperator\(\)/);
+  assert.match(source,/earlyCoinPending=true/);
+  assert.match(source,
+    /const coinHeld=heldControls\(\)\.includes\('coin1'\)\|\|earlyCoinPending;/);
+  assert.match(source,/gate\.shouldAdvance\(\{index:m\.index,known:m\.known,coinHeld\}\)/);
+});
+test('button pulses stay inside the hold the GnG ROM credits',()=>{
+  // Measured on the live engine: a 400 ms (24-frame) Coin hold leaves
+  // CREDIT 0, while 100 ms and 200 ms holds give CREDIT 2 and Start
+  // begins the game. Keep button pulses inside that credited window.
+  const html=new Function('return '+fixture[1])();
+  const js=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const hold=Number(js.match(/PULSE_MS=(\d+)/)?.[1]);
+  assert.ok(hold>=100&&hold<=200,'pulse hold '+hold+' ms outside credited window');
+  assert.match(js,/PULSE_GAP_MS=\d+/);
+});
+test('an early coin credit cannot survive into the next reset session',()=>{
+  // earlyCoinPending must be cleared at the top of launch(), alongside
+  // releaseAll(), so a stale credit from an abandoned session never
+  // auto-releases a session the operator never put money into.
+  assert.match(source,/releaseAll\(\);\s*earlyCoinPending=false;/);
 });

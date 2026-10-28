@@ -75,6 +75,12 @@ const {inputs,apply:applyControl,release:releaseAll,snapshot:heldControls}=live;
 // genuine cold restart of that engine, never a playback or state injection.
 const SESSION_FRAMES=LIVE_FRAMES;
 let advance=null,worker=null,generation=0,operatorGate=null;
+// A real Coin press that arrives after /reset but before the new AOT
+// worker reaches its first known VBlank cannot release a gate that
+// has nothing paused yet (shouldAdvance has not run for this session).
+// Remember that intent and let the very first shouldAdvance honor it,
+// instead of silently discarding a credit the operator actually paid.
+let earlyCoinPending=false;
 let activeBundle=BUNDLE,audioWorker=null,audioPackets=[],audioQueued=0;
 let pacingOrigin=null;
 let audioActive=false,audioStop=null,audioNextSample=0,audioDelivered=0;
@@ -115,30 +121,117 @@ const html=`<!doctype html><html lang="es"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Ghosts 'n Goblins — Motor MC6809 AOT real</title>
 <style>
-:root{background:#0d131e;color:#e8ecf3;font:15px system-ui}
-main{max-width:830px;margin:25px auto;padding:0 16px}h1{font-size:1.3rem}
-canvas{width:min(100%,768px);aspect-ratio:256/224;image-rendering:pixelated;
-background:#050505;border:1px solid #657087}
-small,footer{color:#aeb9ca}pre{font:12px ui-monospace,monospace;
-overflow-wrap:anywhere;white-space:pre-wrap}
-kbd{background:#333e51;padding:2px 5px;border-radius:3px}
+:root{background:#0d131e;color:#e8ecf3;font:15px system-ui;
+--ok:#3ecf6e;--warn:#e8b339;--bad:#e8544f;--idle:#7d8aa0}
+*{box-sizing:border-box}
+body{margin:0}
+main{max-width:860px;margin:20px auto 40px;padding:0 16px}
+h1{font-size:1.15rem;font-weight:600;margin:0 0 12px}
+.topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+margin-bottom:10px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--idle);
+flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--idle) 25%,transparent)}
+.dot.running{background:var(--ok);
+box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}
+.dot.paused{background:var(--warn);
+box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 25%,transparent)}
+.dot.halted{background:var(--bad);
+box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 25%,transparent)}
+#status{margin:0;font-size:.95rem}
+.screen-wrap{position:relative;width:min(100%,768px);margin:0 auto}
+canvas{display:block;width:100%;aspect-ratio:256/224;image-rendering:pixelated;
+background:#050505;border:1px solid #657087;border-radius:4px}
+.screen-wrap:fullscreen canvas,.screen-wrap:fullscreen{width:100%;height:100%;
+max-width:none;border-radius:0}
+.overlay{position:absolute;inset:0;display:none;flex-direction:column;
+align-items:center;justify-content:center;gap:12px;text-align:center;
+background:rgba(5,8,14,.82);border-radius:4px;padding:16px}
+.overlay.show{display:flex}
+.overlay.halt{background:rgba(40,8,8,.88)}
+.overlay p{margin:0;max-width:420px;font-size:.95rem}
+.overlay .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+button{font:inherit;color:inherit;background:#1b2434;border:1px solid #3a4760;
+border-radius:5px;padding:7px 14px;cursor:pointer}
+button:hover:not(:disabled){background:#243049}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:#2c5f3f;border-color:#3f8a5a}
+button.primary:hover:not(:disabled){background:#357149}
+button.danger{background:#5f2c2c;border-color:#8a3f3f}
+button.danger:hover:not(:disabled){background:#712f2f}
+button.ghost{background:transparent}
+.controls{display:flex;align-items:center;justify-content:space-between;
+flex-wrap:wrap;gap:10px;margin-top:12px;padding:10px 12px;background:#141c2b;
+border:1px solid #27324a;border-radius:6px}
+.group{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.group-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;
+color:#7d8aa0;margin-right:2px}
+.keys{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+margin-top:8px;padding:8px 12px;background:#141c2b;border:1px solid #27324a;
+border-radius:6px;font-size:.85rem;color:#aeb9ca}
+kbd{background:#333e51;color:#e8ecf3;padding:2px 7px;border-radius:3px;
+font:12px ui-monospace,monospace;border:1px solid #4a5870;transition:.08s}
+kbd.held{background:#2d5fb3;border-color:#5b8de0}
+kbd.read{background:var(--ok);color:#06220f;border-color:var(--ok)}
+.legend{font-size:.72rem;color:#7d8aa0;margin-left:auto}
+#audio-health{font-size:.85rem;color:#aeb9ca}
+details{margin-top:12px}
+summary{cursor:pointer;font-size:.85rem;color:#aeb9ca;padding:4px 0}
+.diag{display:grid;gap:4px;margin-top:8px;font-size:.85rem;color:#c3cbda}
+pre{font:12px ui-monospace,monospace;overflow-wrap:anywhere;
+white-space:pre-wrap;background:#0a0f18;border:1px solid #27324a;
+border-radius:5px;padding:8px;margin:8px 0 0}
+footer{color:#7d8aa0;font-size:.8rem;margin-top:16px;line-height:1.4}
 </style></head><body><main>
 <h1>Ghosts 'n Goblins — Motor MC6809 recompilado a JavaScript</h1>
-<p id="status">Conectando con el motor real…</p>
+<div class="topbar">
+<span class="dot" id="status-dot"></span>
+<p id="status" role="status" aria-live="polite">Conectando con el motor real…</p>
+</div>
+<div class="screen-wrap" id="screen-wrap">
+<canvas id="screen" width="256" height="224"></canvas>
+<div class="overlay" id="pause-overlay">
+<p id="interaction-window">Al aparecer el primer fotograma, el motor espera la moneda (CPU pausada en VBlank real).</p>
+<div class="row">
+<button id="coin" type="button" class="primary">Insertar moneda <kbd>5</kbd></button>
+<button id="continue" type="button">Continuar sin moneda</button>
+</div>
+</div>
+<div class="overlay halt" id="halt-overlay">
+<p id="halt-message"></p>
+<button id="restart-overlay" type="button" class="danger">Reiniciar motor</button>
+</div>
+</div>
+<div class="controls">
+<div class="group">
+<span class="group-label">Juego</span>
+<button id="coin-bar" type="button">Moneda <kbd>5</kbd></button>
+<button id="start" type="button">Start 1P <kbd>1</kbd></button>
+</div>
+<div class="group">
+<span class="group-label">Sistema</span>
+<button id="audio-enable" type="button">Activar audio</button>
+<button id="fullscreen" type="button" class="ghost" title="Pantalla completa">⛶</button>
+<button id="scale" type="button" class="ghost" title="Cambiar escala">×3</button>
+</div>
+<button id="restart" type="button" class="danger ghost">↺ Reiniciar</button>
+</div>
+<p id="audio-health">Audio en espera de un gesto</p>
+<div class="keys">
+<span>Controles:</span>
+<kbd data-control="p1.left">←</kbd><kbd data-control="p1.up">↑</kbd>
+<kbd data-control="p1.down">↓</kbd><kbd data-control="p1.right">→</kbd>
+<kbd data-control="p1.button1">Z ataque</kbd>
+<kbd data-control="p1.button2">X salto</kbd>
+<span class="legend">azul = tecla apretada · verde = leída por la CPU real</span>
+</div>
+<details id="diagnostics">
+<summary>Diagnóstico técnico</summary>
+<div class="diag">
 <p id="cpu-input">Esperando lecturas de controles por la CPU real…</p>
 <p id="video-health">Esperando framebuffer RGBA del motor…</p>
-<canvas id="screen" width="256" height="224"></canvas>
-<p><kbd>5</kbd> Coin · <kbd>1</kbd> Start ·
-<kbd>←↑↓→</kbd> Dirección · <kbd>Z</kbd> Ataque ·
-<kbd>X</kbd> Salto</p>
-<p><button id="coin" type="button">Insertar moneda (puerto SYSTEM)</button>
-<button id="start" type="button">Start 1P (puerto SYSTEM)</button>
-<button id="continue" type="button">Continuar demostración sin moneda</button></p>
-<p id="interaction-window">Al aparecer el primer fotograma, el motor espera la moneda (CPU pausada en VBlank real).</p>
-<p><button id="audio-enable" type="button">Activar audio</button>
-<span id="audio-health">Audio en espera de un gesto</span></p>
-<p><button id="restart" type="button">Reiniciar GnG desde reset</button></p>
+</div>
 <pre id="detail"></pre>
+</details>
 <footer>Los píxeles provienen exclusivamente del compositor aplicado
 al estado de vídeo producido por la CPU AOT real.
 Si faltan bloques o memoria conocida, el motor se bloquea o retiene
@@ -154,7 +247,40 @@ const canvas=document.getElementById('screen'),ctx=canvas.getContext('2d');
 const status=document.getElementById('status'),detail=document.getElementById('detail'),
   cpuInput=document.getElementById('cpu-input'),
   videoHealth=document.getElementById('video-health'),
-  audioHealth=document.getElementById('audio-health');
+  audioHealth=document.getElementById('audio-health'),
+  statusDot=document.getElementById('status-dot'),
+  screenWrap=document.getElementById('screen-wrap'),
+  pauseOverlay=document.getElementById('pause-overlay'),
+  haltOverlay=document.getElementById('halt-overlay'),
+  haltMessage=document.getElementById('halt-message');
+const keyEls={};
+for(const el of document.querySelectorAll('kbd[data-control]'))
+  keyEls[el.dataset.control]=el;
+// Scale/fullscreen are a per-viewer convenience, never state the server
+// relies on; a blocked or empty localStorage must not affect gameplay.
+const SCALES=[2,3,4,0]; // 0 means "fit" (CSS default, no fixed width)
+let scaleIndex=1;
+try{
+  const raw=localStorage.getItem('gng.scaleIndex');
+  if(raw!==null){
+    const saved=Number(raw);
+    if(Number.isInteger(saved)&&saved>=0&&saved<SCALES.length)scaleIndex=saved;
+  }
+}catch{}
+function applyScale(){
+  const factor=SCALES[scaleIndex];
+  screenWrap.style.maxWidth=factor?(factor*256)+'px':'768px';
+  document.getElementById('scale').textContent=factor?'×'+factor:'ajustar';
+  try{localStorage.setItem('gng.scaleIndex',String(scaleIndex));}catch{}
+}
+applyScale();
+document.getElementById('scale').addEventListener('click',()=>{
+  scaleIndex=(scaleIndex+1)%SCALES.length;applyScale();
+});
+document.getElementById('fullscreen').addEventListener('click',()=>{
+  if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+  else screenWrap.requestFullscreen?.().catch(()=>{});
+});
 document.getElementById('audio-enable').addEventListener('click',async()=>{
  try{
    if(!audioContext){
@@ -232,7 +358,9 @@ async function pollAudio(){
  }
  finally{audioPolling=false;if(!audioPollStop)setTimeout(pollAudio,12);}
 }
-function send(control,pressed){fetch('/input',{method:'POST',
+function send(control,pressed){
+ keyEls[control]?.classList.toggle('held',pressed);
+ fetch('/input',{method:'POST',
 headers:{'Content-Type':'application/json'},body:JSON.stringify({control,pressed})}).catch(()=>{});}
 document.addEventListener('keydown',e=>{
  const control=map[e.code];if(!control)return;e.preventDefault();
@@ -245,12 +373,22 @@ document.addEventListener('keyup',e=>{
 // Direct human-initiated button presses, not scripted gameplay.
  // The browser holds the active-low hardware bit briefly, then releases it.
  // Only a real MC6809 bus read can generate a PASS marker.
+// The GnG ROM filters coin pulses by length: measured on this engine, a
+// 400 ms (24-frame) hold is ignored (CREDIT 0) while 100-200 ms holds are
+// credited, like the lab tapes' 12-frame Coin/Start. Clicks queue so each
+// one is a separate press with a released gap before the next.
+const PULSE_MS=200,PULSE_GAP_MS=200;
+const pulses={};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function pulse(control){
-  send(control,true);
-  setTimeout(()=>send(control,false),400);
+  pulses[control]=(pulses[control]??Promise.resolve()).then(async()=>{
+    send(control,true);await sleep(PULSE_MS);
+    send(control,false);await sleep(PULSE_GAP_MS);
+  });
 }
-document.getElementById('coin').addEventListener('click',()=>{
- if(audioContext)void audioContext.resume();pulse('coin1');});
+function pulseCoin(){if(audioContext)void audioContext.resume();pulse('coin1');}
+document.getElementById('coin').addEventListener('click',pulseCoin);
+document.getElementById('coin-bar').addEventListener('click',pulseCoin);
 document.getElementById('start').addEventListener('click',()=>{
  if(audioContext)void audioContext.resume();pulse('start1');});
 document.getElementById('continue').addEventListener('click',async()=>{
@@ -259,7 +397,7 @@ document.getElementById('continue').addEventListener('click',async()=>{
   if(!response.ok)status.textContent='No se pudo continuar la ejecución';
 });
 window.addEventListener('blur',()=>fetch('/release',{method:'POST'}).catch(()=>{}));
-document.getElementById('restart').addEventListener('click',async()=>{
+async function restartEngine(){
  // Fence old audio fetches BEFORE the server replaces the session.
  audioPollStop=true;
  try{
@@ -275,17 +413,26 @@ document.getElementById('restart').addEventListener('click',async()=>{
    ctx.clearRect(0,0,256,224);
    last=-1;status.textContent='Reiniciando CPU MC6809 desde reset…';
  }catch{status.textContent='No se pudo reiniciar el motor';}
-});
+}
+document.getElementById('restart').addEventListener('click',restartEngine);
+document.getElementById('restart-overlay').addEventListener('click',restartEngine);
 async function tick(){
  if(fetching)return;fetching=true;
  try{
    const s=await (await fetch('/state',{cache:'no-store'})).json();
    document.getElementById('coin').disabled=Boolean(s.halt);
+   document.getElementById('coin-bar').disabled=Boolean(s.halt);
    document.getElementById('start').disabled=Boolean(s.halt);
    document.getElementById('continue').disabled=Boolean(s.halt)||!s.operatorPause;
    document.getElementById('interaction-window').textContent=s.operatorPause?
      'CPU pausada en VBlank real: inserta moneda o continúa la demostración.':
      'CPU ejecutándose: Coin y Start se transmiten al bus MC6809.';
+   pauseOverlay.classList.toggle('show',Boolean(s.operatorPause)&&!s.halt);
+   haltOverlay.classList.toggle('show',Boolean(s.halt));
+   if(s.halt)haltMessage.textContent='Motor detenido: '+
+     (s.halt.status??s.halt.code)+'. El motor espera un reinicio.';
+   statusDot.className='dot'+(s.halt?' halted':s.operatorPause?' paused':
+     s.frameKnown?' running':'');
    if(sessionId!==s.sessionId){
      sessionId=s.sessionId;last=-1;paintedCount=0;
      ctx.clearRect(0,0,256,224);
@@ -317,6 +464,8 @@ async function tick(){
    cpuInput.textContent=list?
      'Entradas leídas por MC6809: '+list:
      'Ninguna tecla activa leída por CPU (pulsación ≠ lectura)';
+   for(const [control,el] of Object.entries(keyEls))
+     el.classList.toggle('read',(samples[control]??0)>0);
    const lastRead=w?.lastActive;
    detail.textContent='Última entrada leída: '+(lastRead?
      lastRead.control+' ciclo '+lastRead.cycle+
@@ -386,6 +535,7 @@ async function main(){
   const launch=()=>{
     const id=++generation;
     releaseAll();
+    earlyCoinPending=false;
     frame=null;latest=0;known=false;cycle=0;unknownBytes=null;
     pixelProbe=null;displayedServerFrame=0;
     source=null;lastGood=0;blocks=0;halt=null;
@@ -491,8 +641,9 @@ async function main(){
           firstControlsPrinted.add('legacy_coin_marker');
           console.log('V3_B2C_COIN=PASS_REAL_CPU_READ frame='+m.index);
         }
-        if(gate.shouldAdvance({index:m.index,known:m.known,
-          coinHeld:heldControls().includes('coin1')})){
+        const coinHeld=heldControls().includes('coin1')||earlyCoinPending;
+        if(m.known)earlyCoinPending=false; // consumed by this gate decision
+        if(gate.shouldAdvance({index:m.index,known:m.known,coinHeld})){
           const target=pacingOrigin+m.cycle/1500;
           const backpressureSince=performance.now();
           const release=()=>{
@@ -700,7 +851,13 @@ async function main(){
         }
         // The user pressed an actual hardware input, not a scripted
         // Coin fixture. Release the paused VBlank with its bit held low.
-        if(data.control==='coin1'&&data.pressed)resumeOperator();
+        // A coin that arrives before this session's worker has reached
+        // its first known VBlank has nothing to release yet (the gate
+        // was just created by /reset); remember it instead of losing
+        // a credit the operator genuinely inserted.
+        if(data.control==='coin1'&&data.pressed&&!resumeOperator()&&
+           operatorGate?.snapshot().armed)
+          earlyCoinPending=true;
         respond(res,200,JSON.stringify({ok:true}));return;
       }
       respond(res,404,JSON.stringify({error:'NOT_FOUND'}));
