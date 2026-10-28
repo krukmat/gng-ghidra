@@ -2,6 +2,8 @@
 export const AUDIO_BROWSER_QUEUE_CAPACITY=12500;
 const valid=n=>Number.isFinite(n)&&n>=0;
 const sanitizedCode=c=>typeof c==='string'&&/^[A-Z0-9_]{3,80}$/.test(c)?c:null;
+export const browserAudioSafeStopReason=error=>
+  sanitizedCode(error?.message)??'AUDIO_BROWSER_UNEXPECTED_STOP';
 
 export function browserAudioSnapshot(raw){
   if(raw?.mode!=='REAL_AOT'||!Number.isSafeInteger(raw.sessionId)||
