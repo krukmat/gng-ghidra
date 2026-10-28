@@ -8,3 +8,4 @@ __pycache__/
 *.rep/
 .DS_Store
 out-synthetic/
+node_modules/

@@ -12,9 +12,9 @@ import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {inflateSync} from 'node:zlib';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
+import {REC,rendererInputs} from '../src/gngb_render_inputs.mjs';
 
-export const REC={ram:0,sprites:0x1e00,buffered:0x2000,fg:0x2200,bg:0x2a00,
-  palExt:0x3200,pal:0x3300,rgba:0x3400,size:0x3800};
+export {REC,rendererInputs};
 
 /** gngb gfx regions exactly as MAME's ROM_START(gngb) loads them. */
 export function gngbGraphics(read){
@@ -80,21 +80,6 @@ export function decodePng(buf){
     prev.set(row);
   }
   return {width,height,rgba:out};
-}
-
-/** Renderer inputs from one reference record plus its jsonl metadata. */
-export function rendererInputs(record,meta,gfx){
-  const vas=new Uint8Array(65536);
-  vas.set(record.subarray(REC.fg,REC.fg+0x800),0x2000);
-  vas.set(record.subarray(REC.bg,REC.bg+0x800),0x2800);
-  // machine_reset zeroes scroll; null means never written yet.
-  const s=meta.scroll.map(v=>v??0);
-  return {videoAddressSpace:vas,
-    bufferedSprites:record.slice(REC.buffered,REC.buffered+0x200),
-    palette:record.slice(REC.rgba,REC.rgba+0x400),
-    scroll:{x:s[0]+256*s[1],y:s[2]+256*s[3]},
-    // LS259 resets to 0 and q0 drives flip_screen inverted.
-    flipScreen:meta.latch[0]===null||!(meta.latch[0]&1),...gfx};
 }
 
 export function diffRgba(a,b,width){
