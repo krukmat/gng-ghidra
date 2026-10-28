@@ -1,202 +1,125 @@
-# gng-ghidra — Ghosts 'n Goblins recompilado a JavaScript
+# gng-ghidra — Cómo migramos un arcade a JavaScript
 
-Este proyecto toma el código original de **Ghosts 'n Goblins** (arcade de Capcom, 1985) y lo **traduce a JavaScript antes de ejecutarlo**. No hay emulador: el juego corre como código JS generado a partir de la ROM, con su imagen y su sonido originales.
+Este repositorio documenta **un proceso** para llevar un juego arcade a JavaScript sin emularlo: el código original se traduce a JS antes de ejecutarse. El primer caso es **Ghosts 'n Goblins** (Capcom, 1985). Hoy corre en el navegador y como app Android offline.
 
-Funciona de dos maneras: **en el navegador** y **como app Android offline**.
+Lo que buscamos reutilizar es el proceso: el producto es su primer resultado.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/img/web-pausa.png" alt="Versión web: pausa en el primer frame visible, con los botones Insertar moneda y Continuar sin moneda"></td>
-<td width="50%"><img src="docs/img/web-credito.png" alt="Versión web tras insertar una moneda: CREDIT 1"></td>
+<td width="50%"><img src="docs/img/web-credito.png" alt="Versión web: pantalla de título con CREDIT 1"></td>
+<td width="50%"><img src="docs/img/android-salta.png" alt="App Android: Arthur corre y salta con el joystick táctil"></td>
 </tr>
 <tr>
-<td colspan="2" align="center"><sub><b>Web</b> · a la izquierda, la pausa en el primer frame visible; a la derecha, después de insertar una moneda</sub></td>
-</tr>
-<tr>
-<td><img src="docs/img/android-corre.png" alt="App Android: Arthur corre con el joystick a la derecha"></td>
-<td><img src="docs/img/android-salta.png" alt="App Android: con el pulgar en la diagonal superior, Arthur corre y salta"></td>
-</tr>
-<tr>
-<td colspan="2" align="center"><sub><b>Android</b> · joystick flotante: a la derecha corre; en la diagonal superior corre y salta</sub></td>
+<td align="center"><sub>Web</sub></td>
+<td align="center"><sub>Android offline</sub></td>
 </tr>
 </table>
 
-> **La ROM no se incluye.** Cada persona usa su propia copia, y todo lo que se genera a partir de ella (código compilado, recursos, APK) queda en `out/`, fuera de Git. Las únicas excepciones son estas cuatro capturas de presentación. Proyecto sin afiliación con Capcom.
-
-## Estado (28/10/2026)
-
-| Área | Estado |
-|---|---|
-| ✅ Imagen | El primer tramo del juego produce frames idénticos píxel a píxel a los de MAME |
-| ✅ Controles | Moneda, Start y Arthur se comportan byte a byte igual que en MAME |
-| ✅ Sonido | El programa de sonido original suena en vivo |
-| 🟡 Contenido | El código de las 7 fases corre igual que en MAME (probado entrando por un atajo); todavía no se recorrió el juego completo de principio a fin |
-| 🟡 Android | Jugable con sonido y joystick; falta el APK final firmado |
-| ⚪ Base reutilizable | Planificada: extraer el esqueleto para migrar otros juegos |
+> La ROM no se incluye. Todo lo que se genera a partir de ella queda en `out/`, fuera de Git; estas capturas son la única excepción. Sin afiliación con Capcom.
 
 ---
 
-## Cómo funciona
+## 1. La regla: nada avanza sin comparar
 
-Un emulador lee cada instrucción del juego mientras corre. Aquí ese trabajo se hace **una sola vez, antes de jugar**:
-
-1. **Compilar.** Un compilador recorre el código 6809 de la ROM y genera una función JavaScript por cada tramo de código sin saltos.
-2. **Congelar.** Ese resultado se guarda como un paquete inmutable, verificado con hashes.
-3. **Ejecutar.** Un modelo en JS de la **placa** (el hardware del arcade: memoria, bancos de ROM, interrupciones) llama a esas funciones. El módulo de video arma cada frame y el programa de sonido original, también compilado, genera el audio.
+Cada etapa repitió el mismo ciclo. MAME, el emulador de referencia, nunca forma parte del producto: solo sirve para comparar.
 
 ```mermaid
 flowchart LR
-  ROM["ROM original"] --> AOT["Compilador"]
-  AOT --> B["Paquete congelado"]
-  B --> P["Placa en JS"]
-  P --> R["Imagen"]
-  P --> Z["Sonido"]
-  R --> H["Navegador o app Android"]
-  Z --> H
+  Q["Pregunta concreta<br/>¿el video sale igual?"] --> R["Capturar la referencia<br/>en MAME"]
+  R --> J["Construir la pieza en JS<br/>sin mirar la referencia"]
+  J --> C{"¿Igual a MAME?"}
+  C -->|sí| GO["GO<br/>siguiente etapa"]
+  C -->|no| STOP["STOP<br/>acotar el fallo"]
+  STOP --> J
+```
+
+- **Una pieza por vez.** Cada parte se valida sola antes de conectarla con las demás.
+- **Lo desconocido no se inventa.** Si falta un dato o un tramo de código, el sistema se detiene y lo informa.
+- **Las cintas de entrada son el idioma común.** Una cinta guarda solo las teclas pulsadas; se reproduce igual en MAME y en JS.
+
+---
+
+## 2. Cómo se llegó al producto
+
+Cada etapa respondió una sola pregunta y dejó una prueba reproducible.
+
+```mermaid
+flowchart LR
+  E1["1 · Referencia<br/>frame real de MAME"] --> E2["2 · Video<br/>dibujar igual"]
+  E2 --> E3["3 · CPU<br/>traducir 6809 a JS"]
+  E3 --> E4["4 · Placa<br/>correr desde el encendido"]
+  E4 --> E5["5 · Controles<br/>jugable"]
+  E5 --> E6["6 · Sonido<br/>Z80 + 2×YM2203"]
+  E6 --> E7["7 · Contenido<br/>toda la ROM"]
+  E7 --> E8["8 · Plataformas<br/>web y Android"]
+```
+
+| Etapa | Pregunta | Cómo se respondió | Prueba |
+|---|---|---|---|
+| 1 · Referencia | ¿Contra qué comparamos? | Capturar en MAME un frame real con su memoria de video, paleta y scroll | Frame de referencia |
+| 2 · Video | ¿Dibujamos igual que el arcade? | Alimentar el módulo de video JS con el estado capturado por MAME | 600/600 frames idénticos |
+| 3 · CPU | ¿El código traducido hace lo mismo? | Una función JS por tramo de código, comparando registros con MAME | 4.955 controles sin diferencias |
+| 4 · Placa | ¿Corre solo, sin ayuda de MAME? | Modelar memoria, bancos e interrupciones y arrancar desde el encendido | 594/600 frames exactos |
+| 5 · Controles | ¿Se puede jugar? | Cintas de entrada reproducidas en MAME y en JS | Moneda, Start y Arthur, byte a byte |
+| 6 · Sonido | ¿Suena el programa original? | Traducir también el procesador de sonido y sintetizar los chips | Salida idéntica a la nativa |
+| 7 · Contenido | ¿Está todo el código? | Analizar la ROM completa en vez de descubrir código jugando | 7 fases cargan igual que en MAME (por atajo) |
+| 8 · Plataformas | ¿Funciona fuera del Mac? | Mismo motor en el navegador y dentro de una app Android sin red | 600 frames idénticos en el navegador; app con sonido |
+
+### Lo que cambió en el camino
+
+```mermaid
+flowchart LR
+  A1["Decompilar con Ghidra"] -.->|descartado| B1["Traducir bloque a bloque<br/>siguiendo a MAME"]
+  A2["Armar una imagen<br/>con datos sueltos"] -.->|descartado| B2["Capturar primero<br/>un frame real"]
+  A3["Descubrir código<br/>fallo por fallo"] -.->|no escalaba| B3["Analizar la ROM<br/>completa"]
+  A4["App Android<br/>vía red local"] -.->|descartado| B4["App offline:<br/>todo en el teléfono"]
+```
+
+Los callejones sin salida también son parte del método: cada uno dejó una regla. El nombre del repositorio viene del primero.
+
+---
+
+## 3. El resultado
+
+```mermaid
+flowchart LR
+  ROM["ROM original"] --> AOT["Compilador<br/>(antes de jugar)"]
+  AOT --> P["Placa modelada en JS"]
+  P --> V["Video"]
+  P --> S["Sonido"]
+  V --> H["Navegador o<br/>app Android"]
+  S --> H
   H -->|controles| P
-  ROM -.->|solo para comparar| M["MAME"]
 ```
 
-**MAME no forma parte del producto**; solo sirve de referencia para comparar (ver [Cómo trabajamos](#cómo-trabajamos)).
+```bash
+bash scripts/v3_b3_local.sh            # genera el paquete compilado en out/ (requiere la ROM)
+node scripts/v3_b2c_live.mjs --serve   # web: http://127.0.0.1:18609
+bash scripts/ao_build_apk.sh           # Android: out/android/gng.apk
+```
 
-Si el juego llega a código que no se compiló, se detiene y avisa en lugar de inventar una respuesta. Lo mismo vale para cualquier valor desconocido: se informa, nunca se asume cero.
-
-> **¿Por qué "ghidra"?** La primera ruta usaba Ghidra para decompilar. Quedó como referencia congelada: compilar bloque a bloque siguiendo a MAME resultó más simple y más fiel.
-
-El detalle (componentes, mapa de memoria, evolución del compilador, contratos) está en [docs/arquitectura-base.md](docs/arquitectura-base.md).
+**Estado (28/10/2026):** video, controles y sonido iguales a MAME; app Android jugable. Falta recorrer el juego completo de principio a fin y el APK final firmado. Detalle técnico en [docs/arquitectura-base.md](docs/arquitectura-base.md).
 
 ---
 
-## Preparar el paquete compilado
+## 4. El próximo juego
 
-Las dos versiones necesitan la ROM en `roms/gng.zip` y el paquete compilado en `out/`. Se genera con:
-
-```bash
-bash scripts/v3_b3_local.sh   # en main y con el árbol limpio
-```
-
-Hoy ese script parte de una generación anterior ya certificada (B2-D), que se construyó en etapas previas; la [bitácora](docs/bitacora-readme-2026-10.md) registra esa cadena. Generar el paquete desde cero con un solo comando es uno de los objetivos de la base reutilizable.
-
-## Versión web
-
-```bash
-node scripts/v3_b2c_live.mjs --serve
-# abrir http://127.0.0.1:18609
-```
-
-La CPU corre en un hilo aparte de Node (un worker) y el navegador solo dibuja los frames y reproduce el sonido. El juego se pausa en el primer frame visible hasta que se inserta una moneda.
-
-| Control | Tecla |
-|---|---|
-| Moneda · Start | `5` · `1` |
-| Mover | flechas |
-| Ataque · salto | `Z` · `X` |
-| Sonido · reiniciar | botones de la página |
-
-Cada partida se graba como una **cinta de entradas** que se puede reproducir después y da exactamente la misma secuencia de imágenes.
-
-## Versión Android offline
-
-Un APK que corre motor, imagen y sonido **dentro del teléfono**. No usa red: ni siquiera declara el permiso de Internet.
-
-- Una app Kotlin mínima que abre una WebView (un navegador integrado en la app) y carga los mismos módulos JS de la versión web.
-- El sonido usa el mismo sintetizador que la versión de escritorio, compilado a WebAssembly, con salida idéntica byte a byte.
-- El audio marca el ritmo del juego, así imagen y sonido no se desincronizan.
-- Controles táctiles: Disparo y Salto a la izquierda, joystick flotante a la derecha.
-
-```bash
-bash scripts/ao_build_apk.sh        # genera out/android/gng.apk (privado)
-adb install -r out/android/gng.apk
-```
-
-Hace falta Android SDK, OpenJDK 17 y emsdk 4.0.15. Plan y mediciones en [docs/plan-android-offline-2026-10-28.md](docs/plan-android-offline-2026-10-28.md).
-
----
-
-## Cómo trabajamos
-
-El método es lo más reutilizable del proyecto.
-
-```mermaid
-flowchart LR
-  A["Capturar referencia<br/>en MAME"] --> B["Correr el JS<br/>sin mirarla"]
-  B --> C["Comparar"]
-  C -->|igual| D["Avanzar"]
-  C -->|distinto| E["Acotar el fallo"]
-```
-
-- **Ningún avance cuenta porque "el código existe".** Cada etapa termina con una comparación reproducible contra MAME y criterios de éxito escritos de antemano.
-- **Primero cada pieza por separado.** El módulo de video se validó con el estado capturado por MAME antes de conectarlo a la CPU JS. El sonido en WebAssembly se comparó con el nativo antes de meterlo en la app.
-- **Cintas de entrada como idioma común.** Una cinta guarda solo las teclas; se reproduce en MAME y en JS y permite comparar de forma determinista.
-- **Las pruebas no tocan la máquina del operador.** El navegador y el emulador Android corren sin ventana, con Playwright.
-
-### Recorrido
-
-1. **Un frame real** de MAME como referencia.
-2. **Video igual a MAME:** 600 de 600 frames idénticos.
-3. **CPU compilada:** 4.955 puntos de control de registros sin diferencias contra MAME.
-4. **Corre solo desde el encendido**, sin estado prestado de MAME.
-5. **Jugable:** moneda, Start y Arthur controlable, iguales a MAME.
-6. **Sonido** original en vivo.
-7. **Contenido:** compilación de toda la ROM; entrando por un atajo, las 7 fases cargan igual que en MAME.
-8. **Android offline** con sonido y controles táctiles.
-
-### Lo que no funcionó
-
-- **Decompilar con Ghidra** por rutina: se reemplazó por la compilación bloque a bloque.
-- **Armar una imagen con datos sueltos:** daba un mosaico ilegible. Por eso el primer paso fue capturar un frame real.
-- **Descubrir código de a poco** (falla, se agrega, se recompila): sumaba 1–3 bloques por vuelta. Lo que escaló fue analizar toda la ROM de una vez.
-- **Un bot que juega mirando la pantalla:** quedó pausado; una búsqueda automática sobre cintas avanzó más rápido.
-
----
-
-## Hacia un esqueleto para otros juegos
-
-La idea es extraer de aquí una **base reutilizable** en un repositorio aparte y que cada juego nuevo sea un proyecto propio que la use. GnG queda como primer caso.
+El objetivo es extraer de aquí una base reutilizable y repetir las mismas etapas con otro juego.
 
 ```mermaid
 flowchart TB
-  G["Juego<br/>ROM, controles, reglas"] --> BO["Placa<br/>memoria, bancos, video, sonido"]
-  BO --> BA["Base común<br/>compiladores, chips, web, Android"]
-  G --> BA
+  G["Juego<br/>ROM, controles"] --> B["Placa<br/>memoria, video, sonido"]
+  B --> C["Base común<br/>compiladores, chips, web, Android"]
 ```
-
-La base no conoce ningún juego ni ninguna placa en particular.
 
 | Si el juego nuevo usa… | Se reutiliza | Hay que hacer |
 |---|---|---|
 | La misma placa | Casi todo | Identificar la ROM y validar |
-| Otra placa con la misma CPU (6809 o Z80) | Compilador, chips como el YM2203, web y Android | Modelar la placa y validar |
-| Otra CPU | Web, Android, empaquetado y método | Compilador nuevo, placa y validación |
+| Otra placa, misma CPU | Compilador, chips de sonido, web y Android | Modelar la placa y validar |
+| Otra CPU | Web, Android y el método | Compilador nuevo, placa y validación |
 
-Reutilizar código no transfiere la validación: cada juego se compara con su propia referencia.
-
-### Pasos para migrar un juego
-
-0. Tener un emulador de referencia con soporte para esa placa.
-1. Identificar la ROM por los CRC de sus chips.
-2. Capturar un frame real en la referencia.
-3. Validar el módulo de video con ese estado capturado.
-4. Modelar la placa a partir del mapa de memoria de la referencia.
-5. Compilar toda la ROM desde sus puntos de entrada.
-6. Correr desde el encendido y comparar frame a frame.
-7. Abrir los controles con cintas reproducibles.
-8. Agregar el sonido y validarlo aparte.
-9. Empaquetar para web y Android.
+El requisito previo es tener un emulador de referencia para esa placa. Reutilizar código no transfiere las pruebas: cada juego vuelve a recorrer las etapas 1 a 8 contra su propia referencia.
 
 ---
-
-## Repositorio
-
-| Carpeta | Contenido |
-|---|---|
-| [src/](src/) | Compilador, placa, video, sonido y piezas de Android |
-| [scripts/](scripts/) | Builds, comparaciones, versión web y chequeos |
-| [tests/](tests/) | Unos 190 archivos de tests; no necesitan la ROM |
-| [android/](android/) | Proyecto Gradle y host web de la app |
-| [docs/](docs/) | Arquitectura, planes y auditorías |
-| `roms/`, `out/` | Privados, fuera de Git |
-
-**Requisitos:** Node.js para jugar en la web; Android SDK, JDK 17 y emsdk para la app; `npm install` para las pruebas de navegador; MAME 0.289 parcheado solo para capturar referencias.
 
 **Más lectura:** [arquitectura detallada](docs/arquitectura-base.md) · [plan Android](docs/plan-android-offline-2026-10-28.md) · [plan 100 % jugable](docs/plan-100pct-jugable-2026-10-26.md) · [bitácora histórica](docs/bitacora-readme-2026-10.md) · [issues](https://github.com/krukmat/gng-ghidra/issues)
