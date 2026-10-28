@@ -56,6 +56,6 @@ test('T3.7 rejects invalid engine state and does not echo private stop details',
   assert.throws(()=>browserAudioSnapshot({mode:'FAKE',sessionId:1,cycle:0}),
     /AUDIO_BROWSER_STATE_INVALID/);
   const s=browserAudioSnapshot(server({stop:'/private/ROM.zip:bad'}));
-  assert.equal(s.stop,null);
-  assert.equal(browserAudioReady(s),true);
+  assert.equal(s.stop,'AUDIO_BROWSER_REDACTED_STOP');
+  assert.equal(browserAudioReady(s),false);
 });
