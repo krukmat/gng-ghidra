@@ -20,7 +20,7 @@ Este README explica la base, las dos modalidades y el proceso que nos trajo hast
 | Sonido en vivo: Z80 + 2×YM2203 (G5) | ✅ |
 | Contenido: fases, jefes, vueltas y final (H3–H4) | 🟡 las 7 fases corren igual que MAME; falta cerrar la fase 1 tras el cíclope |
 | Android offline con sonido y joystick (AO) | 🟡 APK 0.6.3 jugable; falta el APK final firmado y la medida por ADB |
-| Base reutilizable para otros juegos (RP) | ⚪ planificada ([plan](docs/plan-base-reutilizable-2026-10-28.md)) |
+| Base reutilizable para otros juegos (RP) | ⚪ planificada |
 
 ---
 
@@ -270,7 +270,7 @@ Las pruebas pasan por los mismos caminos que usa el producto: Playwright para to
 
 ## 6. Hacia un esqueleto para migrar otros juegos
 
-La dirección vigente es **extraer de este repositorio una base agnóstica y versionada** en un repositorio aparte (nombre de trabajo `rom-migration-base`), con herramientas para generar un proyecto independiente por juego. GnG queda como **primera integración y consumidor de referencia**. El detalle está en [plan-base-reutilizable-2026-10-28.md](docs/plan-base-reutilizable-2026-10-28.md). Todavía no se extrajo nada.
+La dirección vigente es **extraer de este repositorio una base agnóstica y versionada** en un repositorio aparte (nombre de trabajo `rom-migration-base`), con herramientas para generar un proyecto independiente por juego. GnG queda como **primera integración y consumidor de referencia**. Todavía no se extrajo nada.
 
 ### Tres capas con dependencia en un solo sentido
 
@@ -360,7 +360,6 @@ Las tareas de extracción son RP-0 (fijar la referencia) a RP-6 (certificar y ve
 - [Arquitectura con diagramas](https://claude.ai/artifact/49wcCwm3emRLjxMCx6vnAx), la fuente de este README
 - [docs/architecture.md](docs/architecture.md) · [docs/roadmap.md](docs/roadmap.md)
 - [Plan Android offline](docs/plan-android-offline-2026-10-28.md)
-- [Plan de base reutilizable](docs/plan-base-reutilizable-2026-10-28.md)
 - [Plan 100 % jugable](docs/plan-100pct-jugable-2026-10-26.md) · [Contenido H3–H4](docs/plan-contenido-h3-h4-2026-10-27.md)
 - [Oráculo de frame (R0)](docs/frame-oracle.md) · [Plan de ejecución R0–R6](docs/plan-ejecucion.md)
 - [Bitácora del README anterior](docs/bitacora-readme-2026-10.md): instrucciones operativas históricas, R0–V3
