@@ -25,7 +25,7 @@ const CPU_ZERO=Object.freeze({
 });
 export function createZ80SchedulerLab(blocks,bus,{
   irqPeriodTStates=Z80_SOUND_HARDWARE.z80IrqPeriodTStates,
-  maxStepsPerAdvance=100000
+  maxStepsPerAdvance=100000,resolveUncompiledPc=null
 }={}) {
   if(!(blocks instanceof Map)||
      [...blocks.values()].some(fn=>typeof fn!=='function')||
@@ -34,7 +34,8 @@ export function createZ80SchedulerLab(blocks,bus,{
      !Number.isSafeInteger(irqPeriodTStates)||irqPeriodTStates<4||
      irqPeriodTStates>1000000||
      !Number.isInteger(maxStepsPerAdvance)||maxStepsPerAdvance<1||
-     maxStepsPerAdvance>1000000)
+     maxStepsPerAdvance>1000000||
+     (resolveUncompiledPc!==null&&typeof resolveUncompiledPc!=='function'))
     throw new AudioZ80SchedulerStop('AUDIO_Z80_LAB_SCHEDULER_BAD_CONFIG');
 
   const state={...CPU_ZERO};
@@ -101,6 +102,10 @@ export function createZ80SchedulerLab(blocks,bus,{
       state.t+=4;idleHaltCycles+=4;steps++;
       return 'HALT_IDLE_LAB';
     }
+    // Node LAB-only dynamic ROM AOT: resolve a real runtime control-flow
+    // target once, BEFORE executing it. Never invent unmapped ROM/RAM code.
+    if(!blocks.has(state.pc)&&resolveUncompiledPc)
+      resolveUncompiledPc(state.pc,blocks);
     stepZ80AotAtBoundary(blocks,state,bus);
     steps++;
     return 'Z80_AOT_INSTRUCTION';
