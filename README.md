@@ -1,479 +1,367 @@
-# gng-ghidra — ROM → IR → JavaScript / TypeScript proof of concept
+# gng-ghidra — Ghosts 'n Goblins recompilado a JavaScript
 
-**ROM-derived, testable** migration experiment for Ghosts 'n Goblins
-(`gngb`, Motorola 6809). MAME is used **only as an external test oracle**
-for video capture and differential validation; it is not part of the JS product.
+gng-ghidra toma el código MC6809 original de **Ghosts 'n Goblins** (placa `gngb`, Capcom 1985) y lo **traduce a JavaScript antes de ejecutarlo**. Al correr no hay emulador ni intérprete. Una placa modelada despacha bloques ya compilados, un renderer arma cada frame y el programa de sonido Z80 original, también compilado, mueve dos YM2203.
 
-**[Plan operativo actual R0–R6: tareas, subtareas y criterios STOP/GO](docs/plan-ejecucion.md)** · [Issues de seguimiento](https://github.com/krukmat/gng-ghidra/issues). La prioridad inmediata es validar el frame real R0 en el Mac; la recompilación directa 6809→JS es una hipótesis con gate de dos semanas, no una solución ya demostrada.
+El mismo motor funciona de dos maneras:
 
-### Corrección del rumbo visual — R0 (primero)
+- **Web:** un servidor local en el Mac y el juego en el navegador.
+- **Android offline:** un APK que corre motor, video y sonido dentro del teléfono, sin red ni servidor.
 
-La imagen V1.2 enviada por el operador mostró un mosaico
-aleatorio e ilegible. **V1.2 queda rechazado visualmente.**
-No se intentará mejorar el collage con más fixtures.
+MAME **no es parte del producto**. Se usa como oráculo de laboratorio: cada avance se aceptó comparándolo contra una referencia nativa, y esa referencia nunca entra al runtime.
 
-En su lugar se captura un **frame original real**
-externamente (MAME solo en test), junto con memoria
-FG/BG/sprites, scroll y paleta auténticos. Nuestro
-JavaScript recompone esos bytes y muestra un
-diff objetivo contra la imagen de referencia.
+Este README explica la base, las dos modalidades y el proceso que nos trajo hasta acá. El proceso es lo que queremos convertir en un **esqueleto reutilizable para migrar otros juegos**.
 
-```bash
-git pull --ff-only
-bash scripts/r0-blackbox-frame.sh
+> **La ROM no está en el repositorio.** Todo lo que se deriva de ella (bundles, assets, capturas, APK) se genera en la máquina del operador, dentro de `out/`, que Git ignora. En GitHub solo hay código, tests sin ROM, documentación y marcadores de texto como `PASS` o `BLOCKED`.
+
+| Estado al 28/10/2026 · `main` @ `8891147` | |
+|---|---|
+| Primer frame autónomo certificado (V2) | ✅ 290 frames idénticos píxel a píxel a MAME |
+| Crédito, Start y Arthur controlable (H1) | ✅ byte a byte igual a MAME en 9 cintas |
+| Sonido en vivo: Z80 + 2×YM2203 (G5) | ✅ |
+| Contenido: fases, jefes, vueltas y final (H3–H4) | 🟡 las 7 fases corren igual que MAME; falta cerrar la fase 1 tras el cíclope |
+| Android offline con sonido y joystick (AO) | 🟡 APK 0.6.3 jugable; falta el APK final firmado y la medida por ADB |
+| Base reutilizable para otros juegos (RP) | ⚪ planificada ([plan](docs/plan-base-reutilizable-2026-10-28.md)) |
+
+---
+
+## 1. La idea: recompilar, no emular
+
+Un emulador lee cada opcode en tiempo de ejecución y decide qué hacer. Acá ese trabajo se hace **una sola vez, en build**:
+
+1. Un compilador AOT recorre el código desde los vectores RESET e IRQ y genera **una función JavaScript por bloque básico**. Respeta la semántica y el orden de bus de MAME 0.289.
+2. El resultado se **congela** en un bundle inmutable con un manifiesto SHA-256.
+3. En ejecución, la placa solo busca el bloque `(banco, PC)` y lo ejecuta. Si el bloque no existe, **se detiene** (`UNCOMPILED`) en lugar de improvisar.
+
+```mermaid
+flowchart LR
+  ROM["ROM privada<br/>gng.zip · CRC32"] -->|código 6809| AOT["Compilador AOT<br/>mc6809_aot.mjs"]
+  AOT -->|freezeBundle| B["Bundle congelado<br/>program.mjs + manifest"]
+  B --> P["Placa gngb<br/>gngb_runtime.mjs"]
+  ROM -->|13 chips gráficos| R["Renderer<br/>FG · BG · sprites"]
+  P -->|snapshot VBLANK| R
+  ROM -->|gg2.bin| Z["Z80 compilado<br/>+ 2×YM2203"]
+  P -->|sound latch 0x3A00| Z
+  R -->|RGBA 256×224| H["Host<br/>web o Android"]
+  Z -->|PCM| H
+  H -->|controles activos en bajo| P
+
+  ROM -.->|solo laboratorio| M["MAME 0.289<br/>+ oráculo Lua"]
+  M -.-> G["Gates<br/>comparan al final"]
+  P -.->|registros de frame| G
 ```
 
-**Diagnóstico actualizado (21/10/2026):** el intento de capturar
-el frame 1550 dentro de la sesión de Blackbox produjo
-`BLACKBOX_TIMELINE_MISSING` y errores Lua repetidos por no detectar
-DMA en `0x3c00`. Esa combinación **NO** ha validado R0.
+La línea punteada es el laboratorio: MAME captura una referencia, el JS corre sin verla y recién al final los gates comparan las dos cosas.
 
-El nuevo `scripts/r0-blackbox-frame.sh` ejecuta **dos sesiones
-independientes**: primero Blackbox original sin observadores para verificar
-inputs efectivos y generar el vídeo privado; solo si pasa, realiza otra
-ejecución con captura de memoria. La ausencia de DMA en esta segunda
-sesión **se registra una sola vez y no interrumpe el bot**. Es posible
-que el segundo paso siga bloqueado: no se sustituye el buffer DMA por RAM.
+### Principios que sostienen todo
 
-```bash
-git pull --ff-only
-bash scripts/r0-blackbox-frame.sh
-```
+- **Falla en cerrado.** Un valor desconocido (registro, RAM o banco), un opcode no documentado o código en RAM que no coincide con la ROM detienen la placa con un motivo. Nunca se asume cero.
+- **Lo desconocido se informa como desconocido.** Los frames 1–310 quedan sin certificación visual porque alguna entrada del renderer sigue desconocida, y así figuran.
+- **Bundles inmutables por generación.** Cada generación (B2D, g1…g6) se certifica contra la anterior y ninguna modifica a otra.
+- **El oráculo nunca está en el runtime.** MAME se usa para comparar, no para ejecutar.
+- **Frontera privada.** La ROM y sus derivados no salen de la máquina del operador.
 
-El primer paso puede producir
-`out/reference/blackbox-video/gameplay-frame.png` desde el AVI
-auténtico, aunque todavía no tengamos la memoria de sprites bufferizados.
-**Ese PNG NO prueba equivalencia JS**. Si falla la traza del primer paso,
-la ejecución termina con un diagnóstico específico y no intenta R0.
-ROM, AVI, PNG y volcados permanecen en `out/` (privados).
+---
 
-La revisión se determina por los CRC de los chips *dentro* del ZIP, no por su nombre. El wrapper crea un alias privado en `out/` para que MAME cargue `gngb` cuando `roms/gng.zip` contiene `gg4.bin`, `gg3.bin` y `gg5.bin`; no exige renombrar el original.
-MAME se usa **solo como oráculo**; no forma parte de
-la aplicación nativa JS. Hace falta MAME en el Mac.
-[R0 completo](docs/frame-oracle.md).
+## 2. La base común
 
+### Componentes
 
-### Revisar la carpeta Blackbox T1 existente sin volver a ejecutar MAME
+| Capa | Archivos | Responsabilidad |
+|---|---|---|
+| Compilación 6809 | [mc6809_aot.mjs](src/mc6809_aot.mjs), [mc6809_aot_lib.mjs](src/mc6809_aot_lib.mjs) | Descubre bloques y genera JS, con ALU y máscaras de valores conocidos |
+| Descubrimiento | [v3_b3_static_closure.mjs](src/v3_b3_static_closure.mjs), [v3_b3_jump_tables.mjs](src/v3_b3_jump_tables.mjs), [v3_b3_ondemand.mjs](src/v3_b3_ondemand.mjs) | Cierre estático de la ROM, tablas de salto y semillas desde cintas |
+| Congelado | [v2_b1_frozen.mjs](src/v2_b1_frozen.mjs) | Bundle inmutable con hashes y rechazo de corrupción |
+| Placa | [gngb_runtime.mjs](src/gngb_runtime.mjs), [gngb_block_key.mjs](src/gngb_block_key.mjs) | Mapa `gng_main_map`, bancos, IRQ de VBLANK, DMA de sprites, latch y snapshots |
+| Video | [gngb_frame_renderer.mjs](src/gngb_frame_renderer.mjs), [video_memory.mjs](src/video_memory.mjs), [sprite_memory.mjs](src/sprite_memory.mjs) | Compone FG, BG y sprites con prioridad y genera RGBA de 256×224 |
+| Sonido | [gngb_z80_live_session.mjs](src/gngb_z80_live_session.mjs), [gngb_z80_sound_bus.mjs](src/gngb_z80_sound_bus.mjs), [ao_ym2203_wasm.cpp](src/ao_ym2203_wasm.cpp) | Z80 compilado ejecuta `gg2.bin`, dos YM2203 (ymfm) producen PCM |
+| Transporte de audio | [gngb_audio_resampler.mjs](src/gngb_audio_resampler.mjs), [gngb_audio_pcm_queue.mjs](src/gngb_audio_pcm_queue.mjs) | Cola PCM y remuestreo a la frecuencia de la tarjeta de sonido |
+| Entradas | [gngb_input_contract.mjs](src/gngb_input_contract.mjs) | Acciones del jugador traducidas a bits activos en bajo en `0x3000–0x3002` |
 
-Si `out/reference/blackbox-t1/` ya contiene `capture.avi`,
-`input_plan.json`, `input_timeline.json` y `mame.log`, utilizar su
-evidencia **antes** de hacer otra captura:
+### La placa en una tabla
 
-```bash
-python3 scripts/review_blackbox_capture.py --session out/reference/blackbox-t1
-open out/blackbox-t1-review/index.html
-```
+`gngb_runtime.mjs` reproduce el `gng_main_map` de MAME 0.289. Esto es todo lo que la CPU puede tocar:
 
-El inspector compara inputs realmente registrados con el plan (Coin/Start),
-detecta errores Lua y extrae fotogramas auténticos del AVI mediante ffmpeg.
-La salida está en `out/` (privado). **Coin/Start válidos no equivalen a
-partida confirmada**: revisar la secuencia visual. Un AVI tampoco contiene
-por sí solo los snapshots VRAM, DMA, scroll o paleta necesarios para R0.
+| Dirección | Qué es |
+|---|---|
+| `0x0000–0x1DFF` | RAM de trabajo (lo que nunca se escribió es desconocido) |
+| `0x1E00–0x1FFF` | Sprite RAM, 128 × 4 bytes |
+| `0x2000–0x27FF` / `0x2800–0x2FFF` | VRAM FG (tiles 8×8) / VRAM BG (tiles 16×16) |
+| `0x3000–0x3004` | Entradas activas en bajo; DIP fijos en `0xDF` y `0xFB` |
+| `0x3800–0x39FF` | Paleta RGBx_444 |
+| `0x3A00` | Sound latch hacia el Z80 |
+| `0x3B08–0x3B0B` | Scroll del BG |
+| `0x3C00` | Escribir acá copia la sprite RAM al buffer del renderer (DMA) |
+| `0x3D00–0x3D07` | Latch LS259 (flip) |
+| `0x3E00` | Selector de banco |
+| `0x4000–0x5FFF` | ROM con banco (5 bancos de 8 KiB) |
+| `0x6000–0xFFFF` | ROM fija y vectores |
 
-### R0 / T1 — Blackbox conectado a gameplay (no solo coin/start)
+Cada frame dura 25.152 ciclos a 1,5 MHz (16,768 ms). La IRQ de VBLANK entra una vez por frame y queda retenida hasta el ACK.
 
-**Causa del bloqueo corregida:** la ejecución anterior usaba el plan
-\`gng_boot_only.yaml\`: después de Coin/Start no enviaba movimiento.
-La ruta operativa ahora importa el **plan original**
-\`plans/generated/gng_gameplay.yaml\` del checkout fijado de Blackbox,
-lo convierte a un input-plan por frame con su planificador, y ejecuta
-su \`scripts/mame_autoboot.lua\` original. Sólo invierte las etiquetas
-Button 1/2 del plan exportado para respetar GNGb:
-**Button 1 = ataque**, **Button 2 = salto**.
+### Generaciones del bundle
 
-\`\`\`bash
-git pull --ff-only
-bash scripts/r0-blackbox-baseline.sh
-\`\`\`
+El descubrimiento de código fue el problema central. Esta tabla muestra cómo evolucionó:
 
-MAME ejecuta automáticamente ~40 s y graba la sesión en un AVI privado;
-si hay ffmpeg disponible, crea y abre
-\`out/blackbox-baseline/gameplay.mp4\`. No hay que jugar manualmente.
-La traza de **inputs efectivos leídos por MAME** debe mostrar Coin,
-Start, Right, Jump y Attack para que el script avance; una partida
-visualmente correcta **sigue pendiente de comprobar el vídeo**.
-El ROM/AVI/trazas nunca se incluyen en Git. No usar el bot experimental
-\`GNG_BOT_SEQUENCE\` para esta fase.
+| Generación | Cómo se amplió | Tamaño | Qué desbloqueó |
+|---|---|---|---|
+| R3.5 T5 | Bucle `UNCOMPILED` → semilla, 32 iteraciones | 354 bloques | 600 frames continuos desde reset |
+| V3.B2D | Rutas tardías de Coin y Start | 1.654 bloques | 3 perfiles de 1.500 frames |
+| B3 g1–g2 | Descubrimiento de una pasada desde cintas | 2.266 bloques | Crédito, Start y Arthur controlable |
+| B3 g3 | Bloques multi-entrada (el IRQ vuelve a mitad de bloque) | 8.287 entradas | 24.000 frames en vivo |
+| B3 g5 | Cierre estático de toda la ROM | 37.977 entradas | Ningún HALT histórico queda sin cubrir |
+| **B3 g6 (vigente)** | El cierre salta punteros nulos en tablas | 38.084 entradas · 27 MB | Las 7 fases cargan y corren igual que MAME |
 
+La lección: el bucle "falla, agrego la semilla, recompilo" sirve para arrancar, pero agrega 1–3 bloques por vuelta. Lo que escaló fue el **análisis estático**: inmediatos `LDX/LDY/LDU/LDD #` como semillas y tablas de punteros en los 5 bancos.
 
-## Qué puedes ejecutar y ver hoy
+---
 
-**Seguimiento visual:** seis checkpoints verificables ([roadmap](docs/roadmap.md)),
-con tablero local de capturas antes/después, independiente de los tests:
+## 3. Modalidad web
 
 ```bash
-python3 scripts/visual-progress.py
-open out/visual-progress.html
+node scripts/v3_b2c_live.mjs --serve
+# abrir http://127.0.0.1:18609  (solo loopback)
 ```
 
-No se atribuye «aceptado» automáticamente a la existencia de una imagen.
-Las capturas y gráficos ROM permanecen en `out/`, fuera de Git.
+```mermaid
+flowchart LR
+  subgraph Nav["Navegador"]
+    C["canvas 256×224<br/>solo pinta RGBA"]
+    W["AudioWorklet"]
+  end
+  subgraph Node["Hilo principal · Node"]
+    S["v3_b2c_live.mjs<br/>HTTP + ritmo + cinta"]
+  end
+  subgraph Wk["Worker de CPU"]
+    E["createBoard().run()<br/>→ renderGngbRgba"]
+  end
+  A["Worker de audio<br/>Z80 + ym2203 nativo"]
+  C -->|POST /input · /reset| S
+  S -->|GET /state · /pixels cada 40 ms| C
+  S <-->|SharedArrayBuffer<br/>inputs · advance| E
+  E -->|postMessage frame| S
+  S --> A -->|PCM| W
+```
 
+- La CPU corre en un worker. Después de cada frame espera en `Atomics.wait` hasta que el hilo principal la libera, al menos 17 ms después. Eso fija un ritmo cercano a 60 Hz.
+- El navegador no calcula nada: pide el último frame y lo pinta. `/state` incluye `busWitness`, con las lecturas reales que la CPU hizo en `0x3000–0x3001`, su ciclo y su PC.
+- La sesión se pausa en el primer VBLANK visible (frame 311) hasta que se inserta una moneda o se elige continuar sin moneda.
+- Cada sesión graba una **cinta de puertos** en `out/v3/b3/live-tapes`. [v3_b3_live_replay.mjs](scripts/v3_b3_live_replay.mjs) la reproduce offline y llega al mismo hash de frame.
+- Un HALT `UNCOMPILED` muestra el banco y el PC que faltan.
 
-- **[Roadmap de entregas visibles](docs/roadmap.md)**: diferencia gráficos ROM (V0), renderer VRAM (V1), primer frame derivado de código traducido (V2) y gameplay (V3). No contamos más funciones aisladas como avance visual.
-- **Visor gráfico local V0 (código implementado, ROM privada pendiente de comprobar):**
+| Control | Tecla |
+|---|---|
+| Moneda (100 ms apretada, 200 ms suelta; los clicks se encolan) | `5` |
+| Start 1P | `1` |
+| Joystick 4 direcciones | flechas |
+| Ataque · salto | `Z` · `X` |
+| Activar audio (el navegador exige un gesto) | botón |
+| Reiniciar desde reset en frío | botón |
+
+> Por qué 100 ms: medimos que la ROM acredita la moneda solo si la CPU la lee activa en 12 frames o menos. Con 200 ms caía en 12 o 13 lecturas según la fase y a veces no entraba ([df13b38](https://github.com/krukmat/gng-ghidra/commit/df13b38)).
+
+---
+
+## 4. Modalidad Android offline
+
+El objetivo es un APK privado que corra en el teléfono el motor g6, el video y el sonido, **sin Mac, sin servidor y sin red**. El plan completo está en [plan-android-offline-2026-10-28.md](docs/plan-android-offline-2026-10-28.md).
+
+```mermaid
+flowchart LR
+  subgraph APK["APK · sin permiso INTERNET"]
+    K["MainActivity.kt<br/>WebView + WebViewAssetLoader"]
+    subgraph WV["WebView · appassets.androidplatform.net"]
+      UI["app.mjs<br/>canvas + controles táctiles"]
+      EW["engine.worker.mjs<br/>run(until) reanudable"]
+      AW["audio.worker.mjs<br/>Z80 + YM2203 .wasm"]
+      WL["audio.worklet.mjs"]
+    end
+  end
+  UI -->|puertos por mensaje| EW
+  EW -->|frame RGBA| UI
+  EW -->|eventos de sonido| AW
+  AW -->|PCM · MessageChannel| WL
+  WL -->|muestra consumida = reloj| EW
+```
+
+Qué cambia respecto de la web:
+
+| Tema | Web | Android |
+|---|---|---|
+| Host | Node + navegador en el Mac | Shell Kotlin con WebView, todo local |
+| Ritmo de la CPU | `Atomics.wait` sobre `SharedArrayBuffer` | `run(until)` reanudable por frame, sin `SharedArrayBuffer` (una WebView sin aislamiento de origen no lo garantiza) |
+| YM2203 | Proceso nativo (ymfm) por stdin/stdout | ymfm compilado a un `.wasm` de 32 KB, **PCM idéntico byte a byte** al nativo |
+| Reloj maestro | Temporizador del hilo principal | La muestra de audio que el altavoz ya consumió, con 8 frames (134 ms) de adelanto |
+| Underrun | STOP (política G5) | Con sonido ON abre una sesión nueva, máximo 5 por minuto |
+| Controles | Teclado y botones | Disparo y Salto abajo a la izquierda; joystick flotante abajo a la derecha con diagonales de salto ([ao_stick.mjs](src/ao_stick.mjs)) |
+| Pantalla | 25 fps de polling | CPU siempre a ritmo real; el render baja a 30 fps si no llega a 60 |
+
+El runtime reanudable ([ao_resumable_runtime.mjs](src/ao_resumable_runtime.mjs)) es una **copia derivada** del runtime certificado y no lo modifica. Se probó con 600 llamadas `run(k)` contra un solo `run()`: hashes de frame, eventos de audio y ciclo final idénticos.
+
+### Construir e instalar
+
+Requisitos en el Mac: Android SDK, OpenJDK 17 y emsdk 4.0.15 (el wrapper de Gradle se descarga solo). Hace falta además la ROM en `roms/gng.zip` y el bundle g6 ya generado en `out/`.
 
 ```bash
-git pull --ff-only
-python3 src/graphics_preview.py --rom roms/gng.zip
-open out/graphics-preview.html
+bash scripts/ao_build_apk.sh       # WASM de audio + assets privados + assembleDebug
+# → out/android/gng.apk (≈3,4 MB, privado: no se publica ni se comparte)
+adb install -r out/android/gng.apk
 ```
 
-Muestra sprites, tiles y caracteres desde los chips gráficos originales si están presentes en tu ZIP. Si la ROM está dividida, añade `--shared /ruta/al/parent.zip`. Los colores son diagnósticos, no la paleta real del arcade. **No es todavía un frame ni una partida ejecutada.** El HTML generado contiene píxeles de tu ROM y solo debe permanecer local.
+`ao_build_apk.sh` encadena [ao_build_audio_wasm.sh](scripts/ao_build_audio_wasm.sh), [ao_build_assets.mjs](scripts/ao_build_assets.mjs) y Gradle.
 
+### Verificaciones sin pantalla (Playwright, headless)
 
-### V1.1: comparación visual de sprite RAM
+| Comando | Qué comprueba |
+|---|---|
+| `node scripts/ao_browser_check.mjs` | Motor en Chromium headless: los primeros 600 frames RGBA idénticos a Node, 120 s a ritmo real |
+| `node scripts/ao_controls_check.mjs` | Cada toque llega a una lectura real de la CPU; Moneda + Start 5/5; `--gameover` prueba Game Over + Continuar |
+| `node scripts/ao_stick_android_check.mjs` | Joystick en el emulador con toques reales del SO: `0xfe → 0xde → 0xfe → 0xff` |
+| `node scripts/ao_audio_check.mjs` | Sonido ON/OFF, segundo plano y reinicio sin underruns |
+| `node scripts/ao_android_check.mjs 600 <serial> --audio` | Medida automática en el teléfono por ADB (pendiente) |
 
-El primer renderer diagnóstico de sprites (sin CPU ni gameplay)
-está implementado. Es un artefacto **local con bytes derivados
-de la ROM** que muestra ANTES/DESPUÉS y los bytes alterados:
+Ninguna prueba roba el foco ni lee el teclado del operador. El emulador corre sin ventana y el teléfono se usa solo para medir y jugar.
 
-```bash
-git pull --ff-only
-python3 src/sprite_scene.py --rom roms/gng.zip
-open out/visual/vram-sprites.html
+---
+
+## 5. Cómo trabajamos: el proceso de desarrollo
+
+Esto es lo más reutilizable del proyecto, más que cualquier archivo.
+
+### Gates: ningún avance se acepta porque "el código existe"
+
+```mermaid
+flowchart LR
+  A["1. Capturar referencia<br/>MAME parcheado, una vez"] --> B["2. Correr el JS<br/>dos veces, sin verla"]
+  B --> C["3. Abrir la referencia<br/>y comparar"]
+  C -->|PASS| D["Marcador de texto<br/>a GitHub"]
+  C -->|STOP| E["Acotar el fallo<br/>antes de ampliar"]
 ```
 
-Los botones de la página descargan `v1.1-before.png` y
-`v1.1-after.png` para el seguimiento. El panel cambia
-índice gráfico, atributos y posición X/Y, y actualiza el
-buffer solo tras una copia explícita, como el hardware.
-**No es un frame del juego.** [Criterios de aceptación](docs/roadmap.md).
+- Cada etapa se cierra con un **gate reproducible** con criterios GO/STOP escritos antes de empezar.
+- Ante un STOP se frena, se informa y se replanifica. No se sigue gastando sobre algo que no pasó.
+- **Validar cada pieza por separado primero.** El renderer se certificó con el estado capturado por MAME (600/600) antes de conectarlo a la CPU JS. El YM2203 en WASM se comparó contra el nativo antes de meterlo en el APK.
+- Las **cintas de entrada** (solo inputs) son el formato de intercambio. Se pueden versionar, se reproducen en MAME y en el AOT, y permiten regresión determinista.
 
+### Hitos recorridos
 
-### V1.2 — Composición BG/FG/sprites desde VRAM + scroll
+| Etapa | Qué demostró |
+|---|---|
+| **R0** | Frame real de MAME como referencia: PNG, VRAM, paleta, scroll y sprites |
+| **R1** | Renderer JS igual a MAME con el mismo estado: 600/600 frames |
+| **R2** | Oráculo de ejecución: MAME parcheado emite trazas y eventos por ciclo |
+| **R3** | Recompilación 6809 → JS: 4.955 checkpoints de registros sin divergencias |
+| **R3.5** | Runtime continuo desde reset: IRQ y SYNC al ciclo, 594/600 frames exactos |
+| **V2 · R4** | Primer frame autónomo certificado, merge a `main` el 26/10/2026 |
+| **V3 · H1–H2** | Primer control jugable: crédito, Start y Arthur idénticos a MAME; 24.000 frames en vivo sin HALT |
+| **G5** | Sonido Z80 + 2×YM2203 en vivo; regresión de 161 tests de Node y 78 de Python |
+| **H3** | Contenido: cierre estático, 7 fases iguales a MAME y sonda TAS desde reset hasta el cíclope |
+| **AO-1…AO-6** | Android offline: runtime reanudable, WebView, controles táctiles, audio WASM y ritmo marcado por el audio |
 
-Nuevo visor diagnóstico con **escena comparativa ANTES/DESPUÉS**,
-ahora con gráficos ROM de fondo 16×16, foreground 8×8 y sprites.
-Permite variar registros de scroll, tile y posición.
-El mapa de tiles es un **fixture de memoria determinista**,
-no el escenario de una partida. La paleta sigue siendo de
-inspección; es un progreso visual, no gameplay.
+Las pruebas pasan por los mismos caminos que usa el producto: Playwright para todo lo que toca un navegador y el emulador Android sin ventana con toques reales del sistema operativo.
 
-```bash
-git pull --ff-only
-python3 src/vram_scene.py --rom roms/gng.zip
-open out/visual/vram-scene.html
+### Lo que no funcionó (y también se documenta)
+
+- **El pipeline con Ghidra** (P-code 6809 → IR → codegen por rutina, con un MC6809 en C++ como oráculo) fue la primera ruta. Hoy es **referencia congelada**: la recompilación directa por bloque con el orden de bus de MAME resultó más fiel y más simple. El nombre del repositorio viene de esa etapa.
+- **Un collage de fixtures** (V1.2) dio una imagen ilegible y se descartó. Por eso R0 capturó un frame real primero.
+- **El bot visual** quedó pausado: el contenido avanza más rápido con la sonda TAS (Go-Explore) sobre cintas.
+- **Un modo LAN** para Android se empezó y se revirtió sin commit cuando se decidió ir offline.
+
+---
+
+## 6. Hacia un esqueleto para migrar otros juegos
+
+La dirección vigente es **extraer de este repositorio una base agnóstica y versionada** en un repositorio aparte (nombre de trabajo `rom-migration-base`), con herramientas para generar un proyecto independiente por juego. GnG queda como **primera integración y consumidor de referencia**. El detalle está en [plan-base-reutilizable-2026-10-28.md](docs/plan-base-reutilizable-2026-10-28.md). Todavía no se extrajo nada.
+
+### Tres capas con dependencia en un solo sentido
+
+```mermaid
+flowchart TB
+  G["games/&lt;juego&gt;/<br/>revisión ROM · receta · controles · observadores"] --> BO
+  BO["boards/&lt;placa&gt;/<br/>mapa · bancos · IRQ · DMA · video · conexión de sonido"] --> BA
+  G --> BA
+  BA["base/ (versión fija)<br/>build · cpu/&lt;arch&gt; · devices · audio · host/web · plantilla Android"]
 ```
 
-Si faltan ROMs gráficos, usar
-`--shared /ruta/local/zip-padre.zip`.
-La página muestra los cambios byte a byte y descarga PNG
-ANTES/DESPUÉS para el [dashboard visual](docs/roadmap.md).
+La base nunca importa una placa ni un juego concreto. La placa usa dispositivos compartidos y el juego compone ambos.
 
-## Status
+### Qué se reutiliza según el caso
 
-- **PASS locally (Python + Node):** real reset-loop ROM bytes → 7 decoded
-  instructions (`gng.lir.v1`) → verified bounded-memory initialization IR
-  (`gng.sir.v1`) → executable JS and TS.
-- **PASS (operator's Mac, Ghidra 12.1.4):** real-ROM P-code exporter and
-  seven-instruction independent decoder cross-check.
-- **PASS (operator's Mac):** nine-instruction boot prefix (`0x6000` up to
-  but not including `SYNC` at `0x6016`) compiled from Ghidra P-code to
-  JavaScript, executed with Node; 384 sprite RAM bytes verified and
-  execution suspended at the required boundary.
-- **T2.B still partial:** two original-ROM functions matched 60/60 laboratory CPU comparisons each; a third is not validated; live IRQ, bank switching and complete game execution remain pending.
-- **Not a playable port:** physics, graphics, Z80 sound, and other ROM banks
-  have not been translated. No entire 6809 emulator is involved in the
-  generated output.
+| Nuevo proyecto | Se comparte | Hay que hacerlo de nuevo |
+|---|---|---|
+| Otra revisión de la misma placa | Compiladores, dispositivos, placa, host y herramientas | Identificación de ROM, generación, cobertura y validación |
+| Otra placa con CPU ya soportada (6809 o Z80) | Compilador de la CPU, dispositivos coincidentes (p. ej. YM2203), host web y Android | Mapa, bancos, interrupciones, video y pruebas propias |
+| Otra arquitectura de CPU | Host, contratos, empaquetado y método de validación | Compilador y ejecución de la CPU, placa y dispositivos que falten |
 
-## Requirements
+Compartir una CPU o un chip **no** transfiere la evidencia de GnG: cada migración se certifica con su propio oráculo.
 
-- Python 3.10+ (stdlib only)
-- Node.js 20+ for the JS test
-- Your own local `gng.zip` matching **MAME `gngb`** set (the archive previously
-  discussed; requires `gg3.bin`, `gg4.bin`, and `gg5.bin`)
-- Optional: Ghidra supporting processor `6809:BE:16:default`
+### Contratos mínimos entre capas
 
-**Do not commit or upload ROMs.** `.gitignore` excludes them and generated output.
+| Contrato | Qué fija |
+|---|---|
+| Binario → regiones | Revisión, tamaños y hashes; receta de disposición explícita |
+| Compilador → vista de código | Bytes e identidad del código por contexto, sin conocer puertos ni bancos del juego |
+| CPU ↔ placa | Lecturas y escrituras con tiempo y máscaras conocidas; las líneas de interrupción vienen de la placa |
+| Ejecución → host | Crear sesión, avanzar hasta un límite y recibir el estado de parada; reset de CPU, reset de placa y sesión nueva son cosas distintas |
+| Placa → video / sonido | Frame con geometría y secuencia; PCM con frecuencia, posición de muestra y sesión |
+| Usuario → juego → placa | Acciones lógicas traducidas a hardware; DIP y secuencias especiales fuera del host común |
+| Oráculo → comparador | Evidencia atada a binario, herramientas, escenario y ámbito; un PASS no se transfiere sin validar |
 
-## Run the actual proof (Mac / Linux)
-
-```bash
-git clone https://github.com/krukmat/gng-ghidra.git
-cd gng-ghidra
-python3 -m unittest discover -s tests -v
-python3 src/poc.py --rom /absolute/path/to/gng.zip --out out
-node --test tests/test_generated.mjs
-```
-
-Expected output from the ROM verified in development:
+### Estructura de un proyecto generado
 
 ```text
-POC PASS: reset=0x6000, bytes=7 instructions, sprite init=96 x 4=384 bytes
-... tests pass ...
+proyecto-nuevo/
+  base/                  copia versionada de componentes de rom-migration-base
+  boards/<placa>/        bus, mapas, bancos, dispositivos y señales
+  games/<juego>/         revisión ROM, receta, controles y observadores
+  tools/  tests/
+  android/               opcional, generado desde la plantilla
+  roms/  out/            privados, ignorados por Git
+  migration.json         selección y configuración
+  migration.lock.json    revisión exacta y hashes de la base
 ```
 
-The output is inspectable:
+### Receta para migrar un juego (con lo aprendido acá)
 
-| Output | Purpose |
-| --- | --- |
-| `out/rom-map.json` | ROM provenance, fixed ranges, selectable banks |
-| `out/reset-loop.lir.json` | Seven 6809 instructions, addresses, bytes, operands |
-| `out/reset-loop.sir.json` | Auditable, structured fill-loop IR |
-| `out/sprite-init.mjs` | Runnable vanilla JavaScript function |
-| `out/sprite-init.ts` | Same generated routine for TypeScript / RN integration |
-| `out/gngb-flat.bin` | One **bank-4** 64-KiB image for Ghidra, local only |
+1. **Fijar la ROM.** Identificar la revisión por los CRC de los chips, no por el nombre del ZIP.
+2. **Capturar un frame real** del oráculo (estado de video y PNG) antes de escribir código de producto.
+3. **Certificar el renderer** alimentándolo con el estado capturado.
+4. **Modelar la placa** a partir del mapa de memoria del driver de referencia.
+5. **Compilar desde los vectores** y cerrar estáticamente el código alcanzable. Usar el bucle `UNCOMPILED` → semilla solo como red de seguridad.
+6. **Correr desde reset** sin estado inyectado y comparar estado y eventos por frame.
+7. **Abrir los controles** con cintas de entrada reproducibles en el oráculo y en el AOT.
+8. **Agregar el sonido** con el programa original del chip de audio y validar el PCM por separado.
+9. **Empaquetar** para web y, si hace falta, para Android desde la plantilla.
 
-The generated TypeScript routine takes a `Uint8Array(0x10000)`, fills
-`0x1e00..0x1f7f` with `0xf8`, and returns `{ nextX: 0x1f80, nextY: 0 }`.
-It doesn't depend on React Native and can run inside a TS game-core package.
+Las tareas de extracción son RP-0 (fijar la referencia) a RP-6 (certificar y versionar la base), cada una con su GO.
 
-## Optional independent Ghidra check
+---
 
-Set `GHIDRA_HOME` to the installed Ghidra directory (the one with `support/analyzeHeadless`).
+## 7. Estructura del repositorio
 
-```bash
-GHIDRA_HOME=/absolute/path/to/ghidra ./scripts/ghidra-headless.sh /absolute/path/to/gng.zip
-```
+| Carpeta | Contenido |
+|---|---|
+| [src/](src/) | Compilador AOT, placa, renderer, sonido, contratos y piezas `ao_*` de Android |
+| [scripts/](scripts/) | Builds, gates, motor en vivo, exploración H3, audio y verificaciones `ao_*` |
+| [tests/](tests/) | Unos 190 archivos; la regresión no necesita la ROM |
+| [android/](android/) | Proyecto Gradle, `MainActivity.kt` y el host web de la WebView en `android/web/` |
+| [docs/](docs/) | Planes, auditorías, checkpoints y marcadores |
+| `ghidra_scripts/`, `patches/`, `docker/` | Pipeline Ghidra congelado, parches de MAME para el oráculo, entornos de laboratorio |
+| `roms/`, `out/` | Privados e ignorados por Git |
 
-The script imports `out/gngb-flat.bin` at address zero using language
-`6809:BE:16:default`, decodes the bounded routine, exports P-code to
-`out/reset-pcode.json`, and compares every instruction's address and raw bytes
-against the Python LIR. It fails if Ghidra cannot decode or disagrees.
-**This Ghidra cross-check was executed successfully on the operator's Mac.
-It is not part of ROM-free CI.**
+### Requisitos
 
-## Architecture and limits
+- **Producto (web):** Node.js con ES modules y `worker_threads`, la ROM en `roms/gng.zip` y un bundle certificado en `out/`.
+- **Android:** Android SDK, OpenJDK 17 y emsdk 4.0.15.
+- **Pruebas de navegador:** `npm install` (instala solo `playwright-core`).
+- **Laboratorio:** MAME 0.289 con los parches de [patches/](patches/) y Python 3. Solo hace falta para capturar referencias, no para jugar.
 
-See [docs/architecture.md](docs/architecture.md). The first gate proves one
-real ROM function can be **structurally translated** to standalone JS/TS.
-Further mechanics must be added incrementally, with explicit evidence. The
-project intentionally avoids a requirement to automate MAME or record games.
+## 8. Documentación
 
-Source material: [MAME GnG hardware driver](https://github.com/mamedev/mame/blob/master/src/mame/capcom/gng.cpp)
-and [Ghidra SLEIGH 6809](https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Processors/MC6800/data/languages/6809.slaspec).
-
-
-## T2.B — Generalized Ghidra P-code function pipeline (experimental)
-
-A second, separate pipeline now exports candidate functions and CFGs from
-Ghidra, normalizes a typed intermediate representation and compiles supported
-isolated functions into generic JavaScript / TypeScript. It fails closed on
-unsupported P-code, calls, MMIO or unresolved control flow.
-
-```bash
-export GHIDRA_HOME="$(brew --prefix ghidra)/libexec"
-bash scripts/functions-headless.sh "$PWD/roms/gng.zip"
-cat out/functions.report.json
-```
-
-Run ROM-free CI fixtures locally:
-
-```bash
-python3 -m unittest discover -s tests -v
-python3 tests/generate_function_fixtures.py
-node --test tests/test_function_generated.mjs
-tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution node out-synthetic/functions/generated/*.ts
-```
-
-**Verified on real ROM:** the generalized Ghidra exporter and normalizer
-recovered one CFG rooted at reset `0x6000`. Full-routine code generation
-correctly blocks on `SYNC`, but the bounded boot prefix translates and
-passes the memory invariant check in Node:
-```bash
-python3 src/region_codegen.py --input out/functions.ir.json \
-  --entry 0x6000 --stop-before 0x6016 --out out/generated
-node scripts/verify-boot-prefix.mjs
-```
-Results supplied by the operator: `GNG_REGION_CODEGEN=PASS`
-(`instructions=9`) and `GNG_BOOT_PREFIX_MEMORY=PASS`
-(`steps=389 bytes_written=384 boundary=0x6016`).
-
-**Not yet proven:** three separate real routines, full-game behavior, hardware
-interrupts, or end-to-end behavioral equivalence. See
-[docs/t2b.md](docs/t2b.md) and
-[operator evidence](docs/audit/t2b-boot-prefix-operator-evidence-2026-10-12.md).
-
-## T2.B.6–7 — ROM-authenticated function discovery and triage
-
-The Ghidra exporter now reads real CPU vectors, seeds RESET and IRQ entries,
-and follows **decoded** direct call targets (no guessed opcode scanning).
-A fail-closed inventory checks every exported instruction's bytes against
-local ROM, then prioritizes independent candidates without claiming that
-hardware-dependent paths are translatable:
-
-```bash
-bash scripts/functions-headless.sh "$PWD/roms/gng.zip"
-cat out/functions-shortlist.json
-```
-
-Outputs `out/functions-inventory.json` and `out/functions-shortlist.json`
-are local-only. The ROM confirms RESET `0x6000` and IRQ `0x65c4`; all other
-6809 vector targets are `0xffff` sentinels. The IRQ is not a pure leaf.
-
-See [T2.B.6–7 plan](docs/t2b-discovery.md) for eligibility criteria, partial
-results, and the next Ghidra execution requirement.
-
-
-**Operator verification of B.6/B.7:** Ghidra 12.1.4 has now recovered
-three real entries (`0x6000`, `0x65c4`, `0x65fb`), with one direct call
-from IRQ to `0x65fb`. The shortlist remains `PARTIAL` (`eligible=0`).
-Entry `0x65fb` writes to the hardware ROM bank-select register
-`0x3e00` and uses indirect dispatch; do **not** treat it as an isolated
-function or bypass hardware checks. See [discovery status](docs/t2b-discovery.md).
-
-### Real-ROM discovery update — 2026-10-12
-
-The operator's Ghidra 12.1.4 run recovered **14 ROM-rooted code graphs** and
-confirmed seven 6809 extended `JSR` instruction sites with the Ghidra
-`PseudoDisassembler` and the ISA's `0xBD` operand. No anchored sites
-were rejected in that run. This confirms **static decoding only** — it
-does not prove execution reachability, isolated function boundaries or
-behavioral equivalence.
-
-To inspect **all candidates** and their compiler blockers after pulling,
-without re-running Ghidra:
-
-```bash
-python3 src/function_inventory.py --input out/functions.raw.json \
-  --rom-image out/gngb-flat.bin --out out/functions-inventory.json \
-  --shortlist out/functions-shortlist.json
-python3 scripts/triage-functions.py
-```
-
-T2.B.7 remains open until independent, bounded ROM routines are
-selected and validated. See [Ghidra discovery evidence](docs/t2b-discovery.md).
-
-### Memory pointer origin diagnosis
-
-When `src/memory_analysis.py` cannot prove the address range for a
-P-code `LOAD/STORE`, use the 6809 register-origin diagnostic without
-rerunning Ghidra:
-
-```bash
-python3 src/memory_provenance.py \
-  --entries 0x622c 0x6755 0x7930 0x6793 0x6839
-```
-
-The tool tracks per-instruction `unique` temporaries back to `S`
-(stack), `X/Y/U` (indices), `DP`, and other registers. This is a
-**pointer-origin fingerprint**, not a proof that those registers remain
-within RAM; MMIO/ROM write protection is unchanged.
-
-### T2.B.9 — controlled execution of two real-ROM candidates
-
-The operator confirmed that the guarded P-code compiler generated
-modules for 0x622c and 0x6755, with 3/3 and 5/5 conditionally bounded
-memory accesses, respectively. These are real ROM-derived generated
-modules, **not yet behaviorally equivalent** to the MC6809 CPU.
-
-Run a bounded, deterministic JS-only harness (no new Ghidra run):
-
-```bash
-git pull --ff-only
-python3 src/guarded_codegen.py
-node scripts/verify-guarded-functions.mjs
-```
-
-The harness requires SHA-256 of each generated file, checks three
-synthetic input cases per routine, replay determinism, no MMIO/ROM
-mutations, non-mutation of caller buffers, and invalid-DP/S rejection.
-It writes `out/generated-guarded/verification-report.json`.
-
-Even a successful `GNG_GUARDED_HARNESS=PASS_JS_CONTROLLED_ONLY`
-is **not** a native 6809 comparison. See [T2.B.9 harness gate](docs/t2b.md).
-
-**T2.B.9 safety update (2026-10-13):** the previous conditional
-3/3 and 5/5 memory-access counts did not include native P-code direct
-RAM varnodes. These routines appear to touch MMIO. The memory audit
-and guarded pure-codegen gate now include those accesses; a BLOCKED
-result is expected until a hardware I/O test adapter is explicitly
-defined. See [T2.B discovery and memory safety](docs/t2b-discovery.md).
-
-### T2.B.9-A/B — Experimental board-aware ROM transpilation
-
-The previously unsafe routines remain BLOCKED under pure codegen. A separate
-[board-aware experiment](docs/t2b-board-io.md) now permits exactly seven
-verified MMIO sites: two injected one-byte reads in 0x622c and five recorded
-one-byte writes in 0x6755. The new generator never silently writes MMIO into
-the RAM buffer or simulates board behavior.
-
-With an existing verified local Ghidra export, execute:
-
-```bash
-git pull --ff-only
-python3 src/board_codegen.py
-node scripts/verify-board-functions.mjs
-cat out/generated-board/verification-report.json
-```
-
-The output reports deterministic JS execution and exact I/O traces.
-**No behavioral equivalence with an independent MC6809 implementation
-is established by JS-only tests.** Pure output remains blocked.
-
-### T2.B.9-C — Independent CPU oracle (test-only)
-
-The two ROM-derived board functions have now passed the operator's
-controlled JS execution with 3 accepted and 3 rejected states each.
-The separate independent CPU differential is implemented but **not yet
-validated against the operator's real ROM**.
-
-Build a pinned third-party C++ MC6809 reference, execute actual ROM
-instruction bytes on synthetic input states, and compare complete
-register/CC/S, return boundaries, memory deltas, and ordered MMIO events:
-
-```bash
-git pull --ff-only
-python3 src/board_codegen.py
-bash scripts/build-mc6809-oracle.sh
-node scripts/compare-mc6809.mjs
-cat out/generated-board/differential-report.json
-```
-
-No proprietary ROM is transferred or committed. The test-only
-oracle is not a game emulator dependency. See
-[MC6809 differential verification](docs/t2b-mc6809-differential.md).
-
-
-### Native MC6809 differential and third-routine selection (2026-10-15)
-
-**Operator-verified result:** `0x622c` and `0x6755` each matched
-3/3 real ROM opcode executions against the independent MC6809 CPU,
-under synthetic DP/S/board-read input states. The generated JS and
-native CPU agreed on registers, CC flags, RAM changes, RTS behavior
-and ordered MMIO effects. **No actual game entry-state/reachability
-proof exists yet.** See [audit evidence](docs/audit/t2b-mc6809-operator-evidence-2026-10-15.md).
-
-The independent differential test is now expanded to **60 states per
-routine**. For the next block (without rerunning Ghidra):
-
-```bash
-git pull --ff-only
-python3 src/board_codegen.py
-node scripts/compare-mc6809.mjs
-python3 src/third_routine_candidates.py --limit 8
-```
-
-The last command ranks the already-exported ROM functions, detects
-unknown X/U bounds, fixed MMIO, overlapping graphs and incomplete
-RTS stack models. Its shortlist is **static triage, not a certification**.
-
-
-## Expanded native differential and third indexed routine (2026-10-15)
-
-The operator ran the updated native MC6809 comparison against genuine
-local ROM bytes and observed **120/120 vector matches**:
-`0x622c: 60/60` and `0x6755: 60/60`. Game entry states remain
-unverified; this is independent lab-state equivalence only.
-
-The next third routine targets **0x6239**, selected from the operator's
-14-function ROM-backed triage (33 instructions, ten conditionally
-bounded RAM/stack operations, two unresolved indexed pointers and
-**no fixed MMIO**). A separate fail-closed generator enforces
-P-code-proven X/Y/U pointer origin, the existing DP/S contract,
-per-access memory checks and a conservative index range, without
-altering the previously certified routines. Its independent native
-comparison tests 54 new laboratory states. Nothing has been declared
-equivalent for this third routine yet.
-
-```bash
-git pull --ff-only
-python3 src/indexed_codegen.py
-bash scripts/build-mc6809-oracle.sh
-node scripts/compare-indexed-mc6809.mjs
-```
-
-Read [the third-routine gate](docs/t2b-third-indexed.md) for
-conditions, expected pass/block markers and limitations. No new Ghidra
-run is necessary unless the byte-verified export is stale.
+- [Arquitectura con diagramas](https://claude.ai/artifact/49wcCwm3emRLjxMCx6vnAx), la fuente de este README
+- [docs/architecture.md](docs/architecture.md) · [docs/roadmap.md](docs/roadmap.md)
+- [Plan Android offline](docs/plan-android-offline-2026-10-28.md)
+- [Plan de base reutilizable](docs/plan-base-reutilizable-2026-10-28.md)
+- [Plan 100 % jugable](docs/plan-100pct-jugable-2026-10-26.md) · [Contenido H3–H4](docs/plan-contenido-h3-h4-2026-10-27.md)
+- [Oráculo de frame (R0)](docs/frame-oracle.md) · [Plan de ejecución R0–R6](docs/plan-ejecucion.md)
+- [Bitácora del README anterior](docs/bitacora-readme-2026-10.md): instrucciones operativas históricas, R0–V3
+- [Issues](https://github.com/krukmat/gng-ghidra/issues)
