@@ -1,5 +1,7 @@
 # G5 — Final one-shot decision gate: authentic Z80-generated sound
 
+> **ARCHIVED / HISTORICAL — 2026-10-28.** This page describes the earlier investigation and contains obsolete pending commands and test totals. The G5 task was **closed by explicit operator decision**, with real-game audible audio accepted and 120 s PCM continuity PASS, but **not** with complete T3.7 technical certification (reset STOP; A/V estimate 132 ms vs 100 ms target; full Z80/IRQ parity not certified). **Do not restart this one-shot plan**. The authoritative final record is [G5 audio recovery closure](agents/g5-audio-recovery-task.md#cierre-definitivo-por-decisión-del-operador--2026-10-28).
+
 ## Why this replaces incremental B4.T2/B4.T3 checkpoints
 
 The operator verified 115/115 Node and 77/77 Python tests, and confirmed
