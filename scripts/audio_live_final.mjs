@@ -143,6 +143,9 @@ async function run(){
       status:z80.status,reason:z80.reason,
       steps:z80.executed_steps,reached_tstates:z80.reached_tstates,
       target_tstates:targetTStates,
+      runtime_rom_blocks_resolved:z80.runtime_resolved_rom_blocks,
+      runtime_resolution_attempts:z80.runtime_resolution_attempts,
+      runtime_first_unsupported_family:z80.runtime_first_unsupported_family,
       first_native_sound_command_tstate:firstCommandTState,
       irq_requests:z80.irq_requests,irq_acknowledgements:z80.irq_acknowledged_lab,
       native_commands_applied:z80.native_sound_controls_applied,
@@ -212,7 +215,10 @@ async function run(){
         referenceNativeAvailable:!!native,
         provenRootCause:false
       };
-      fail('AUDIO_FINAL_PCM_SILENT');
+      // A runtime STOP is more actionable than a silent partial WAV.
+      // Always preserve both the stop code and source-vs-native YM summary.
+      fail(z80.status==='LAB_ADVANCE_OK'?
+        'AUDIO_FINAL_PCM_SILENT':'AUDIO_FINAL_RUNTIME_STOP_AND_PCM_SILENT');
     }
     const status=z80.status==='LAB_ADVANCE_OK'?
       'Z80_TO_DUAL_YM_TO_PCM_LAB_PASS_NOT_LIVE_GAME':
