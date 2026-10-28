@@ -100,7 +100,12 @@ export async function probeZ80SoundExecution(rom,roots,{
     const prefix='export const z80AotBlocks=';
     if(!single.source.includes(prefix))
       throw new AudioZ80ProbeStop('AUDIO_T3_DYNAMIC_CODE_FORMAT_STOP');
-    const one=new Function(single.source.replace(prefix,'return '))();
+    let one;
+    try {
+      one=new Function(single.source.replace(prefix,'return '))();
+    } catch {
+      throw new AudioZ80ProbeStop('AUDIO_T3_DYNAMIC_CODE_FORMAT_STOP');
+    }
     const instruction=one.get(pc);
     if(typeof instruction!=='function')
       throw new AudioZ80ProbeStop('AUDIO_T3_DYNAMIC_CODE_FORMAT_STOP');
