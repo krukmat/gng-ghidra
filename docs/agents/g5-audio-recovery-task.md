@@ -1,0 +1,58 @@
+# G5-AUDIO-RECOVERY — Resolver bloqueo real de audio Z80 → YM2203 → PCM
+
+**Estado:** OPEN · **Prioridad:** P0 · **Repo:** `krukmat/gng-ghidra` · **Rama:** `main` · **Fecha:** 2026-10-28
+
+## Objetivo y definición de terminado
+
+Resolver y demostrar el audio *original* de Ghosts ’n Goblins generado por la ejecución real del programa de sonido: entradas de la MC6809 → sound latch/reset → Z80 ejecutando `gg2.bin` → dos YM2203 → PCM no silencioso → reproducción durante una partida. **MAME es oráculo diferencial, nunca fuente de playback de registros YM.**
+
+El entregable inmediato es desbloquear el laboratorio real Z80→YM→PCM y documentar las dependencias aún necesarias para el sonido sincronizado de gameplay. No declarar `AUDIO_WORKING` solo porque pasan tests o se genera tráfico YM: la aceptación requiere muestras PCM no nulas, tono reproducible y, para la fase jugable, AudioWorklet conectado durante ejecución real.
+
+## Evidencia verificable de partida
+
+1. **Última ejecución del operador:** `node scripts/audio_live_final.mjs` → `STOP / AUDIO_FINAL_REGRESSION_GATE_STOP`, con `checkpoint:null`, `execution:null`. **Es un STOP anterior a ejecutar la ROM; no confirma ni invalida el nuevo compilador dinámico.** No se conoce el test que falló. Diagnosticarlo **antes** de cambiar código de audio.
+2. Última regresión completa confirmada antes de los cambios dinámicos: **126/126 Node y 78/78 Python PASS**, `gg2.bin` SHA1_MATCH. Tras nuevas pruebas de JIT, el total teórico cambió; no dar por aprobado hasta que corra en el Mac.
+3. Último ensayo significativo anterior al STOP de regresión: **2.362.941 pasos**, `T=19.787.763`, primer comando nativo aplicado en `T=19.782.194`, **una lectura posterior del sound latch** y STOP `AUDIO_Z80_IRQ_UNCOMPILED_PC`. Aquel ensayo produjo **66.532 escrituras YM** pero **0 FM key-ons, 0 PSG volumen no nulo y WAV totalmente silencioso**.
+4. Captura nativa MAME: primera escritura YM en `T=898.884` desde reset; laboratorio Z80 en `T=898.887`, diferencia inicial de 3 T-states **sin paridad completa**. En la ventana comparada MAME produjo **63 FM key-ons** y escrituras de frecuencia/operadores, que faltaron en la ejecución propia. Primer comando *posterior al reset* aproximadamente a `T=19.782.194` (~6,59 s), de ahí que el antiguo corte de 3m T-states fuera insuficiente.
+5. Se incorporó resolución de un único bloque AOT al alcanzar un PC de ROM real no compilado, con límites, exclusión de ejecución fuera de ROM y STOP ante opcode no soportado. **19/19 pruebas sintéticas aisladas PASS**, pero **no probado contra `gg2.bin` después del cambio**. No inventar éxito.
+
+## Referencias obligatorias (leer en orden)
+
+- `docs/audio-g5-final-one-shot.md`: historial y criterios del gate integral.
+- `scripts/audio_fast_checkpoint.mjs`: causa inmediata de `AUDIO_FINAL_REGRESSION_GATE_STOP`; examinar rama de STOP de Node/Python, escaneo y build, sin filtrar contenidos privados.
+- `tests/test_gngb_z80_sound_probe.mjs`, `tests/test_gngb_z80_native_controls.mjs`, `tests/test_gngb_z80_scheduler_lab.mjs`: contratos y regresiones relevantes.
+- `scripts/audio_live_final.mjs`: entrada única y síntesis, salida resumida; comprobar que el STOP principal conserva causa secundaria.
+- `src/gngb_z80_sound_probe.mjs`, `src/gngb_z80_scheduler_lab.mjs`, `src/gngb_z80_irq_boundary.mjs`, `src/gngb_z80_static_codegen.mjs`: fetch, IRQ, AOT inicial + compilación dinámica de PC real, trampas y semántica.
+- `src/gngb_z80_sound_bus.mjs`, `src/gngb_ym_register_health.mjs`, `src/gngb_ym_native_baseline.mjs`: sound latch, contadores FM/PSG y comparación privada.
+- `src/audio_ym2203_lab.cpp`, `scripts/audio_ym_native_build.sh`, `src/gngb_audio_pcm_processor.mjs`, `src/gngb_audio_worklet_sink.mjs`: renderer, PCM y destino navegador.
+- `src/gngb_audio_main_z80_bridge.mjs`, `src/gngb_runtime.mjs`: integración posterior sin alterar inadvertidamente la CPU principal.
+- `docs/audio-b4-live-integration-entry-2026-10-27.md`: contexto de MAME 0.288, reset, `HOLD_LINE`, límites de paridad.
+
+## Plan de ejecución — trabajo real, no nuevos planes
+
+**T0. Recuperar el gate (P0, dependencia de todo lo demás).**
+Ejecutar `git status --short`, `node scripts/audio_fast_checkpoint.mjs` y, si STOP, `node --test` sobre los tests declarados por el script y `python3 -m unittest discover -s tests -p 'test_audio_*.py' -v` de forma local. Identificar **el nombre y la aserción exacta** de cada fallo. Corregir implementación o tests obsoletos sin desactivar pruebas ni saltarse gates. Si el problema es un STOP de ROM/scan/build, investigarlo como tal y no atribuirlo a Node sin evidencia. El report público debe contener únicamente nombres de tests, códigos seguros y contadores, jamás bytes/ROM/tape.
+
+**T1. Validar el bloqueo poscomando con ROM local privada (depende de T0).**
+Ejecutar `node scripts/audio_live_final.mjs`; conservar el comando original capturado, el reloj relativo al reset y los límites. Confirmar dinámicamente la dirección alcanzada tras el sound latch sin publicar PCs ni opcodes privados. Si falla el AOT on-demand, localizar **la instrucción/semántica exacta**, escribir test ROM-free que la reproduzca y corregirla, sin inventar rutas ni ampliar arbitrariamente familias.
+
+**T2. Validar YM y PCM (depende de T1).**
+Para una ejecución continua después de `T=19.782.194`, comparar contadores y secuencia temporal **en privado** con MAME: inicio de eventos FM, key-on, frecuencias, operador, volumen y YM reset. Usar MAME solo como referencia; **no alimentar el sintetizador con YM grabado**. Obtener WAV privado con muestras PCM no nulas generadas únicamente por YM escritos por la Z80. Si no se alcanza, reportar explícitamente la primera divergencia observada y causa probada o hipótesis pendiente.
+
+**T3. Integración jugable (solo cuando T2 pase).**
+Verificar si el bridge MC6809→Z80 y la cadena PCM→AudioWorklet pueden conectarse sin tocar el engine ni el bot. **No modificar el engine/bot sin autorización explícita**; si se requiere cambio ahí, dejar un diff/contrato mínimo revisable y señalarlo como dependencia abierta. AudioWorklet requiere gesto del usuario y sincronía/underruns medidos. No llamar "jugable con audio" al WAV offline.
+
+## Límites y seguridad
+
+- Trabajar en `main` con commits claros; nunca publicar `gg2.bin`, MAME traces, controles privados, YM crudo, archivos `out/audio/`, fuentes AOT derivadas de ROM ni WAV privados. Todo ello permanece en el Mac bajo `out/audio/`; no enviarlo a agentes cloud. Logs compartidos: JSON sanitizado.
+- No desactivar tests, falsificar `audio_working`, usar tapes YM como playback, saltar gate de privacidad ni declarar paridad MAME sin evidencia. No tocar el bot. Evitar cambios de arquitectura si una divergencia concreta basta.
+- No pedir otra captura MAME ni otra ronda de barridos estáticos si los datos existentes alcanzan. Ejecutar primero el mínimo experimento discriminante.
+- No generar más documentos de plan: esta tarea es el contrato de trabajo. Registrar modificaciones y resultados verificables aquí o en un único cierre breve.
+
+## Entregables y aceptación
+
+- **A:** regresión real **PASS** en Mac; número de tests y commit reproducibles.
+- **B:** ejecución de ROM auténtica sobrepasa el primer comando sin `UNCOMPILED_PC` ni semánticas inventadas; cualquier STOP posterior queda tipificado con causa verificable.
+- **C:** el YM escrito por Z80 produce **PCM no silencioso**, comprobado mediante muestras/RMS y oído; comparación MAME suficiente para identificar discrepancias críticas sin declarar paridad no probada.
+- **D:** si se pide audio durante partida, validar conexión MC6809/Z80/dual YM/AudioWorklet, audible y sincronizada; o señalar exactamente el contrato/modificación de engine que requiere autorización.
+- **Salida final al usuario:** commit(s), **PASS/BLOCKED**, primera causa real y evidencia, lo que funciona, lo que falta. **No** una cadena de próximos microcheckpoints.
