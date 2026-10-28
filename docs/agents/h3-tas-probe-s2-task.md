@@ -1,6 +1,6 @@
 # H3-S2 — Sonda TAS: vida del cíclope y paso a la fase 2
 
-**Estado:** PENDIENTE (28/10/2026). Sigue a [H3-S1](h3-tas-probe-s1-task.md) (GO).
+**Estado:** STOP (28/10/2026): `0x72` no cambia en 30 min; vida del jefe en `0x0E76`; MAME confirma el mismo comportamiento (ver el plan). Sigue a [H3-S1](h3-tas-probe-s1-task.md) (GO).
 Pertenece al [plan de contenido](../plan-contenido-h3-h4-2026-10-27.md).
 
 ## Objetivo

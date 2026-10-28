@@ -1,9 +1,12 @@
-/** H3-S1 lab explorer (never shipped): Go-Explore over P1 inputs only.
+/** H3-S1/S2 lab explorer (never shipped): Go-Explore over P1 inputs only.
  * A trajectory is one P1 mask per frame from `start` (bit set = pressed);
  * it becomes port events exactly where the mask changes, so a tape is
  * only inputs. Cells are (phase, checkpoint, X>>4, Y>>3, armour); a cell
  * keeps the trajectory that preserves the armour and, at equal armour,
  * reaches it in fewer frames. Everything is a pure function of the seed.
+ * S2 (from the arena) adds the cyclops life to the cell: object slot 0x0E50,
+ * life byte +0x26 = 0x0E76, 5 at the arena, one less per lance hit, 0 on the
+ * kill (+2000 points, slot state 0x0E50 1->2); unchanged without fire.
  */
 import {createHash} from 'node:crypto';
 import {CYCLES_PER_FRAME} from './gngb_runtime.mjs';
@@ -67,12 +70,29 @@ export function masksToEvents(start,masks){
   return events.sort((a,b)=>a.cycle-b.cycle||(a.control<b.control?-1:a.control>b.control?1:0));
 }
 
+/** Inverse of masksToEvents: P1 masks of frames [start,end) from port
+ * events (events before `start` only set the initial state). */
+export function eventsToMasks(start,end,events){
+  const out=new Uint8Array(Math.max(0,end-start));let m=0,i=0;
+  const ev=events.filter(e=>Object.hasOwn(P1_BITS,e.control));
+  for(let f=start;f<end;f++){
+    while(i<ev.length&&ev[i].cycle<=f*CYCLES_PER_FRAME){
+      const b=P1_BITS[ev[i].control];m=ev[i].pressed?m|b:m&~b;i++;}
+    out[f-start]=m;
+  }
+  return out;
+}
+
 /** RAM labels (read only) of one 0x600-byte view. */
 export const look=b=>({phase:b[0x72],cp:b[0x81],loop:b[0x71],lives:b[0x60],
   x:b[0xa0]<<8|b[0xa1],y:b[0xa2]<<8|b[0xa3],scroll:b[0x58]<<8|b[0x59],armor:b[0xac],
   mode:b[0x503],handler:b[0x510]<<8|b[0x511]});
+export const BOSS_LIFE=0x0e76;
+/** look() plus the cyclops life; `b` must cover BOSS_LIFE. */
+export const lookBoss=b=>({...look(b),boss:b[BOSS_LIFE]});
 export const isFatal=(s,lives)=>maneuverFatal(s,lives);
-export const cellKey=s=>[s.phase,s.cp,s.x>>4,s.y>>3,s.armor].join(':');
+/** S1 key; with lookBoss() (S2) the boss life is one more component. */
+export const cellKey=s=>[s.phase,s.cp,s.x>>4,s.y>>3,s.armor,...'boss' in s?[s.boss]:[]].join(':');
 /** True when `c` beats `old` for the same cell (armour first, then frames). */
 export const better=(c,old)=>!old||c.armor<old.armor||c.armor===old.armor&&c.frame<old.frame;
 
@@ -89,5 +109,5 @@ export function pickCell(cells,rand,scrollBonus=EXPLORE_DEFAULTS.scrollBonus){
 export const sha256=x=>createHash('sha256').update(x).digest('hex');
 /** Canonical cell listing (no snapshots), stable for determinism checks. */
 export const cellsListing=cells=>[...cells].sort((a,b)=>a.key<b.key?-1:a.key>b.key?1:0)
-  .map(c=>({key:c.key,frame:c.frame,armor:c.armor,x:c.x,y:c.y,scroll:c.scroll,
+  .map(c=>({key:c.key,frame:c.frame,armor:c.armor,x:c.x,y:c.y,scroll:c.scroll,boss:c.boss,
     chosen:c.chosen,masks:sha256(c.masks)}));
