@@ -11,7 +11,7 @@
  */
 import {performance} from 'node:perf_hooks';
 import {browserAudioSnapshot,browserAudioReady,
-  browserAudioContinuityStop}
+  browserAudioContinuityStop,browserAudioSafeStopReason}
   from '../src/gngb_audio_browser_certification.mjs';
 
 const URI='http://127.0.0.1:18609/state';
@@ -117,10 +117,7 @@ async function main(){
       await sleep(POLL_MS);
     }
   }catch(e){
-    const reason=e?.message;
-    report.reason=typeof reason==='string'&&
-      /^AUDIO_[A-Z0-9_]{3,80}$/.test(reason)?reason:
-      'AUDIO_BROWSER_UNEXPECTED_STOP';
+    report.reason=browserAudioSafeStopReason(e);
   }
   report.maxHttpObservationGapMs=Math.round(maxGapMs);
   report.humanAuditionConfirmed=false; // never infer this from PCM telemetry
