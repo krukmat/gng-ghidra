@@ -1,8 +1,8 @@
 # G5-AUDIO-RECOVERY — Resolver bloqueo real de audio Z80 → YM2203 → PCM
 
-**Estado:** T0–T2 PASS / T3 cadena local implementada y medida, aceptación de AudioWorklet/audición BLOCKED · **Prioridad:** P0 · **Repo:** `krukmat/gng-ghidra` · **Rama:** `main` · **Fecha:** 2026-10-28
+**Estado:** T0–T2 PASS / T3 reproducción Chrome confirmada, ventana de 120 s PASS en continuidad; cierre T3.7 BLOCKED por reset y estimación A/V · **Prioridad:** P0 · **Repo:** `krukmat/gng-ghidra` · **Rama:** `main` · **Fecha:** 2026-10-28
 
-**Resultado actual:** audio auténtico Z80 → dual YM2203 → PCM demostrado en el laboratorio privado y reconocido por el operador. La partida ahora produce PCM continuo desde sus propios eventos MC6809 y lo entrega por loopback; el AudioWorklet real y la audición durante gameplay siguen sin verificarse. La evidencia T3 al final de este documento reemplaza el estado técnico histórico anterior.
+**Resultado actual:** audio auténtico Z80 → dual YM2203 → PCM demostrado en laboratorio; el operador confirmó que se escucha correctamente durante gameplay real en Chrome. El AudioWorklet entregó una ventana medida de 120 s sin fallos de continuidad, pero la certificación integral **NO** está cerrada: STOP durante reset frío y desfase A/V absoluto *estimado* de 132 ms (objetivo ≤100 ms). La deriva observada sí está dentro de objetivo. Las entradas antiguas se conservan como historial; consultar el último checkpoint al final.
 
 **Dirección vigente:** el operador autorizó conectar el audio al engine («pues conectalo... cual es el problema?») y después pidió estas tareas y un prompt de continuación. Se permite modificar la conexión de audio en el worker, servidor/UI y bundle privado necesario. El bot continúa excluido y la semántica MC6809 no forma parte de esta autorización. La cadena local de T3 está implementada; faltan la verificación del AudioWorklet real, sincronía de presentación y audición humana. Los commits `51780ba`, `e5b6fdb` y `1b4805b` contienen T0–T2; no repetir su investigación sin una regresión nueva.
 
@@ -224,3 +224,50 @@ Se añadió `scripts/audio_browser_certify.mjs`, un **monitor HTTP de solo lectu
 - Regresión ejecutada en el Mac: **161/161 Node y 78/78 Python PASS**, ROM `SHA1_MATCH`, artefactos privados a salvo.
 - Se detectó un error en la instrucción del handoff: el servidor no admite ejecución sin argumentos y devuelve `V3_B2C_USAGE_SERVE_ONLY`. Comando correcto verificado en fuente: `node scripts/v3_b2c_live.mjs --serve`.
 - Falta: `node scripts/audio_browser_certify.mjs` mientras Chrome reproduce la partida; ventana de 120 s, reset frío, métricas de underruns, cola y estimación A/V. No afirmar todavía certificación técnica completa.
+
+## Checkpoint T3.7 — 2026-10-28: continuidad real PASS, reset/A-V pendientes
+
+**Evidencia aportada por el operador** en la sesión real del navegador (no un mock ni el WAV offline):
+
+```text
+GNG_AUDIO_CERT=WINDOW_PASS_RESTART_NOW
+kind=GNG_AUDIO_G5_BROWSER_T37_CERT_V1
+status=STOP
+reason=AUDIO_BROWSER_RESET_OR_ENGINE_STOP
+pcmContinuityVerified=true
+resetVerified=false
+liveBrowserWorkletVerified=false
+measuredAvWithinTarget=false
+measuredOutputSamples=5775360
+measuredDeliveredSamples=7523592
+measuredNonzeroSamples=6285728
+observations=299
+maxQueuedSamples=1048
+maxObservedQueueMs=16.8
+maxAbsReportedAvMs=132.01012640279652
+reportedAvDriftMs=10.451985359651417
+avTelemetryObservations=299
+maxHttpObservationGapMs=416
+```
+
+**Interpretación exacta:**
+
+- **PASS, ventana de 120 segundos:** el monitor alcanzó `WINDOW_PASS_RESTART_NOW`; observó avance real del AudioWorklet y PCM no silencioso durante la ventana; cero STOP/underrun detectado dentro de ella, sin inversión de contadores ni cola >12.500 muestras. La cola máxima observada fue 1.048 muestras (**16,8 ms**). La continuidad marcada `true` se limita a esta ventana pre-reset.
+- **Audición real:** el operador ya confirmó «se escucha perfecto» mientras juega. El JSON conserva `humanAuditionConfirmed=false` porque ese valor nunca se infiere automáticamente; la confirmación humana es un dato independiente del monitor.
+- **Deriva A/V estimada: PASS:** 10,45 ms en 120 s, inferior al objetivo de ≤40 ms en esa ventana (≤20 ms/min).
+- **Desfase absoluto A/V estimado: FUERA DE OBJETIVO:** pico 132,01 ms frente al umbral ≤100 ms. **No está probada una desviación audiovisual física de 132 ms**: la cifra combina tiempo emulado, posición de muestras y latencia reportada, sin timestamp del frame realmente presentado. Debe comprobarse la fórmula y la latencia del dispositivo; no inventar compensaciones ni declarar sincronización certificada.
+- **Reset: BLOCKED:** después del mensaje de éxito de ventana, el monitor entró en estado `RESET` y observó `AUDIO_BROWSER_RESET_OR_ENGINE_STOP`, sin llegar a una segunda sesión `PLAYING` estable por 5 s. El código del monitor agrupa un `audio.stop` y un `halt`; **la causa exacta no está discriminada por el JSON**. No afirmar que sea un fallo de Z80, YM, AudioWorklet o de transición de sesión hasta ver estado público saneado de la nueva sesión.
+
+**Cambios de código posteriores a esta evidencia (no revalidados en el Mac):**
+
+- `scripts/v3_b2c_live.mjs`, commit `a448b329`: protección de `pollAudio()` ante respuestas HTTP PCM/STOP de la sesión anterior. Captura `pollSession`, descarta resultados obsoletos y bloquea el polling anterior **antes** de iniciar el reset frío. Esta es una mitigación de una carrera *plausible*, no una causa probada del STOP ni una corrección ya certificada.
+- `scripts/audio_browser_certify.mjs` y `src/gngb_audio_browser_certification.mjs`: diagnóstico de arranque `--status`, motivos seguros para `WORKLET_START_TIMEOUT` y registro de estado permitido. Son instrumentación pasiva; no arreglan el motor de sonido.
+
+### Ruta crítica para cerrar T3.7
+
+1. Actualizar `main`; iniciar **una sola** instancia del servidor con `node scripts/v3_b2c_live.mjs --serve`. Chrome en `http://127.0.0.1:18609`; Coin, Start y **Activar audio**. Verificar `node scripts/audio_browser_certify.mjs --status` → `READY`. En caso `NOT_READY`, resolver solo `reason`/`state` informados.
+2. Revalidar **reset frío** bajo la protección de sesiones del commit `a448b329`, escuchando antes y después. Registrar el estado saneado de `/state` si reproduce el STOP: `sessionId`, `operatorPause`, `halt.status`, `audio.active`, `audio.stop`, `audio.worklet.state`/`missingOutputSamples`. No publicar capturas, PC, RAM, ROM, YM crudo ni artefactos `out/`. Distinguir pausa temporal esperada durante Coin/Start de STOP terminal. Si persiste el error, corregir la primera causa reproducible con prueba y nuevo commit.
+3. Ejecutar `node scripts/audio_browser_certify.mjs` para repetir el gate de 120 s + reset después de corregir la transición. **No** reutilizar la ventana anterior para declarar que el código modificado pasó. Revalidar el gate completo Node/Python y controles/vídeo tras la corrección.
+4. Revisar la estimación A/V (época del reloj emulado, tiempo del Worklet, prebuffer, `baseLatency`/`outputLatency`, presentación de frame). Distinguir *estimación* de medición de sincronía percibida; solo cerrar el umbral si hay evidencia suficiente o si se documenta una excepción explícita aprobada.
+
+**Decisión:** T3.0–T3.6 implementados, PCM y reproducción real demostrados; **T3.7 = PARTIAL / BLOCKED_RESET_AND_AV_ESTIMATE**. No cambiar el bot ni abrir investigación sobre Z80/YM sin un nuevo STOP que apunte a ellos. No declarar `gameAudioFullyCertified=true` todavía.
