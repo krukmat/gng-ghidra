@@ -200,10 +200,16 @@ document.getElementById('audio-enable').addEventListener('click',async()=>{
 });
 async function pollAudio(){
  if(audioPolling||audioPollStop||!audioOutput)return;audioPolling=true;
+ // Obsolete HTTP responses must never reach the new audio session.
+ const pollSession=sessionId;
  try{
-   const r=await fetch('/audio?session='+sessionId,{cache:'no-store'});
+   const r=await fetch('/audio?session='+pollSession,{cache:'no-store'});
+   if(audioPollStop||pollSession!==sessionId)return;
    if(r.status===200){
-     const p=await r.json(),raw=atob(p.pcm);
+     const p=await r.json();
+     if(audioPollStop||pollSession!==sessionId||p.sessionId!==pollSession)
+       return;
+     const raw=atob(p.pcm);
      const view=new DataView(new ArrayBuffer(raw.length));
      for(let i=0;i<raw.length;i++)view.setUint8(i,raw.charCodeAt(i));
      const samples=new Int16Array(raw.length/2);
@@ -211,11 +217,14 @@ async function pollAudio(){
      audioOutput.push({sessionId:p.sessionId,sampleRate:p.sampleRate,
        firstSample:p.firstSample,samples});
    }else if(r.status===409){
-     const s=await r.json();audioOutput.stop();
+     const s=await r.json();
+     if(audioPollStop||pollSession!==sessionId)return;
+     audioOutput.stop();
      audioPollStop=true;
      audioHealth.textContent='Audio detenido: '+s.code;return;
    }
  }catch(e){
+   if(audioPollStop||pollSession!==sessionId)return;
    audioPollStop=true;audioOutput.stop();
    audioHealth.textContent='Error de audio: '+String(e.message??e);
    fetch('/audio/stop',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -251,6 +260,8 @@ document.getElementById('continue').addEventListener('click',async()=>{
 });
 window.addEventListener('blur',()=>fetch('/release',{method:'POST'}).catch(()=>{}));
 document.getElementById('restart').addEventListener('click',async()=>{
+ // Fence old audio fetches BEFORE the server replaces the session.
+ audioPollStop=true;
  try{
    const response=await fetch('/reset',{method:'POST'});
    if(!response.ok)throw Error('RESET_REJECTED');
