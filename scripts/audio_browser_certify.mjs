@@ -22,8 +22,11 @@ const POLL_MS=400;
 const sleep=ms=>new Promise(ok=>setTimeout(ok,ms));
 
 async function getState(){
-  const response=await fetch(URI,{cache:'no-store',
-    signal:AbortSignal.timeout(2000)});
+  let response;
+  try{
+    response=await fetch(URI,{cache:'no-store',
+      signal:AbortSignal.timeout(2000)});
+  }catch{throw Error('AUDIO_BROWSER_HTTP_UNREACHABLE');}
   if(!response.ok)throw Error('AUDIO_BROWSER_HTTP_STATE_STOP');
   return browserAudioSnapshot(await response.json());
 }
