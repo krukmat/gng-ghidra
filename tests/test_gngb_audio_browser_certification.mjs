@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {browserAudioSnapshot,browserAudioReady,browserAudioContinuityStop}
+import {browserAudioSnapshot,browserAudioReady,browserAudioContinuityStop,
+  browserAudioSafeStopReason}
   from '../src/gngb_audio_browser_certification.mjs';
 
 const server=(change={})=>({
@@ -58,4 +59,13 @@ test('T3.7 rejects invalid engine state and does not echo private stop details',
   const s=browserAudioSnapshot(server({stop:'/private/ROM.zip:bad'}));
   assert.equal(s.stop,'AUDIO_BROWSER_REDACTED_STOP');
   assert.equal(browserAudioReady(s),false);
+});
+
+test('T3.7 certifier STOP path preserves only allowed codes and never references undefined helper',()=>{
+  assert.equal(browserAudioSafeStopReason(Error('AUDIO_BROWSER_WORKLET_UNDERRUN')),
+    'AUDIO_BROWSER_WORKLET_UNDERRUN');
+  assert.equal(browserAudioSafeStopReason(Error('/private/rom/gg2.bin')),
+    'AUDIO_BROWSER_UNEXPECTED_STOP');
+  assert.equal(browserAudioSafeStopReason(undefined),
+    'AUDIO_BROWSER_UNEXPECTED_STOP');
 });
