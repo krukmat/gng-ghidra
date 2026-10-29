@@ -832,12 +832,14 @@ async function main(){
       if(req.method==='GET'&&u.pathname==='/'){
         respond(res,200,html,'text/html; charset=utf-8');return;
       }
+      // The worklet resampler imports the pinned base copy ('../base/...').
       const modules={
-        '/gngb_audio_worklet_sink.mjs':'gngb_audio_worklet_sink.mjs',
-        '/gngb_audio_pcm_processor.mjs':'gngb_audio_pcm_processor.mjs',
-        '/gngb_audio_resampler.mjs':'gngb_audio_resampler.mjs'};
+        '/gngb_audio_worklet_sink.mjs':'src/gngb_audio_worklet_sink.mjs',
+        '/gngb_audio_pcm_processor.mjs':'src/gngb_audio_pcm_processor.mjs',
+        '/gngb_audio_resampler.mjs':'src/gngb_audio_resampler.mjs',
+        '/base/src/audio/resampler.mjs':'base/src/audio/resampler.mjs'};
       if(req.method==='GET'&&modules[u.pathname]){
-        respond(res,200,readFileSync(join(ROOT,'src',modules[u.pathname])),
+        respond(res,200,readFileSync(join(ROOT,modules[u.pathname])),
           'text/javascript; charset=utf-8');return;
       }
       if(req.method==='POST'&&u.pathname==='/audio/start'){
