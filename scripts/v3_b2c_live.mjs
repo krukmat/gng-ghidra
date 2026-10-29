@@ -15,10 +15,8 @@ import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {b2dCertified} from '../src/v3_b2d_selection.mjs';
 import {b2eCertified} from '../src/v3_b2e_selection.mjs';
 import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
-import {prepareAudioBundle} from '../src/gngb_audio_bundle_overlay.mjs';
 import {createVisibleFrameGate} from '../src/v3_b2c_visible_gate.mjs';
 import {LIVE_TAPE_SCHEMA} from '../src/v3_b3_live_tape.mjs';
-import {checkpointRuntime} from '../src/checkpoint_runtime.mjs';
 import {encodeCheckpoint,decodeCheckpoint,ymFirstSample} from '../src/checkpoint_format.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
@@ -588,14 +586,13 @@ async function main(){
   if(proof.status!=='INPUT_ROUTE_UNCOMPILED'&&
      proof.status!=='INPUT_STATE_CHANGED')
     throw Error('V3_B2C_B2A_NOT_PROVEN');
-  const prepared=await prepareAudioBundle(ROOT,BUNDLE,
-    {transform:checkpointRuntime});
-  activeBundle=prepared.dir;
+  const {manifest:activeManifest}=loadFrozen(BUNDLE);
+  activeBundle=BUNDLE;
   if(!existsSync(join(ROOT,'out/audio/gg2.bin'))||
      !existsSync(join(ROOT,'out/audio/ym2203_lab')))
     throw Error('AUDIO_LIVE_PRIVATE_DEPENDENCY_MISSING');
-  console.log('V3_B2C_AUDIO_BUNDLE=PASS_OBSERVER_OVERLAY frames='+
-    prepared.verifiedFrames+' runtime_sha256='+prepared.runtimeSha256);
+  console.log('V3_B2C_AUDIO_BUNDLE=PASS_NATIVE_BOARD program_sha256='+
+    activeManifest.files['program.mjs']);
   console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B3?'B3_G'+B3_SELECTED.generation:BUNDLE===B2E?'B2E':BUNDLE===B2D?'B2D':BUNDLE===B2B?'B2B':'B2A'));
   const launch=(checkpoint=null)=>{
     const id=++generation;

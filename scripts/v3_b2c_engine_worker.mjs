@@ -14,14 +14,15 @@ import {validateLiveFrames} from '../src/v3_b2c_session_policy.mjs';
 import {createPortReadWitness} from '../src/v3_b2c_port_witness.mjs';
 import {inspectRealFrame} from '../src/v3_b2c_pixel_probe.mjs';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
-import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
+import {createBoard,CYCLES_PER_FRAME} from '../boards/gng/runtime.mjs';
+import {mapGngFrozenBlocks} from '../boards/gng/code-view.mjs';
 import {createPortRecorder} from '../src/v3_b3_live_tape.mjs';
 import {gngbGraphics,rendererInputs} from './r35_t5_render_check.mjs';
 
 const inputs=new Int32Array(workerData.inputs);
 const advance=new Int32Array(workerData.advance);
 // Checkpoint: the server sets saveRequest[0]=1; the next frame boundary
-// exports the board (runtime patched by src/checkpoint_runtime.mjs).
+// exports the board through its native state API.
 const saveRequest=new Int32Array(workerData.saveRequest);
 const restored=workerData.checkpoint??null;
 const send=(message,transfer=[])=>parentPort.postMessage(message,transfer);
@@ -43,14 +44,13 @@ try{
   const gfx=gngbGraphics(name=>execFileSync('unzip',['-p',zip,name],
     {maxBuffer:1<<20,stdio:['ignore','pipe','ignore']}));
   const {blocks}=await import(pathToFileURL(join(dir,'program.mjs')).href);
-  const {createBoard}=await import(pathToFileURL(join(dir,'gngb_runtime.mjs')).href);
   if(!(blocks instanceof Map)||blocks.size!==manifest.blocks)
     throw Error('V3_B2C_BLOCKS_MISMATCH');
   send({type:'boot',source:'private-frozen-AOT',blocks:blocks.size,
     bundleCommit:manifest.source_git_head,
     certifiedFrames:manifest.frames,sessionFrames:requestedFrames});
 
-  cpu=createBoard(code,blocks,{frames:requestedFrames,
+  cpu=createBoard(code,mapGngFrozenBlocks(code,blocks),{frames:requestedFrames,
     portRead:(addr,cycle)=>{
       const value=Atomics.load(inputs,addr-0x3000);
       recorder.observe(addr,cycle,value);
