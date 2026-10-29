@@ -78,6 +78,7 @@ RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó inter
 - Interpretación de RAM, etiquetas, 4-way y continuación, movidas a placa/juego.
 - Registrar la cinta de cada informe `rp3_compare` (ruta o SHA) y documentar el comando exacto de la suite del consumidor.
 - Margen de rendimiento en CPU (1,096× con tolerancia 1,10×): vigilar en RP-6.
+- Ruta web de escritorio: desde `202655a` el AudioWorklet no cargaba porque el servidor no servía `base/src/audio/resampler.mjs` (404). Corregido en `67ddea0` y comprobado con Playwright sin ventana (clic en «Activar audio», worklet PLAYING, 0 muestras perdidas, PCM no nulo). Falta que `checkpoint_web_check` pulse «Activar audio» y exija el worklet en PLAYING, para que el gate lo detecte.
 
 `src/ao_ym2203_wasm.*`, `scripts/ao_build_audio_wasm.sh` y `out/android/audio/ym2203.wasm` siguen como referencia. Se mantiene el límite Z80: IRQ IM1, sin NMI ni paridad nativa de interrupciones. El GO de RP-3 requiere esas tareas.
 
