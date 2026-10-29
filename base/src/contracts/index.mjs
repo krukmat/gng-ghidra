@@ -47,7 +47,7 @@ export function validateLock(lock){
      !revision(lock.base.revision)||!obj(lock.base.components)||
      Object.keys(lock.base.components).length===0)fail('LOCK_INVALID');
   for(const [path,digest] of Object.entries(lock.base.components))
-    if(!/^[a-z][a-z0-9_/-]*\.(?:mjs|js|json|wasm)$/.test(path)||
+    if(!/^[a-z][a-z0-9_/-]*\.(?:mjs|js|json|wasm|cpp|h)$/.test(path)||
        path.includes('//')||!hash(digest))fail('LOCK_COMPONENT_INVALID');
   return lock;
 }

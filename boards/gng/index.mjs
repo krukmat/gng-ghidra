@@ -1,9 +1,11 @@
 /** GnG composition for an already verified AOT program and sound region.
  * Binary verification and artifact loading remain owned by the build recipe.
+ * The two halves are exported for hosts that run them in separate workers.
  */
 import {createBoard,CYCLES_PER_FRAME} from './runtime.mjs';
-import {createAudioCommandSource,applyCommand} from '../../src/ao_audio_commands.mjs';
-import {loadYm2203} from '../../src/ao_ym2203_wasm.mjs';
+import {createGngAudioProducer} from '../../src/gngb_audio_producer.mjs';
+
+export {createBoard,CYCLES_PER_FRAME,createGngAudioProducer};
 
 const fail=code=>{const e=Error(code);e.code=code;throw e;};
 export async function createGngSession({code,blocks,soundRom,wasm,
@@ -14,8 +16,7 @@ export async function createGngSession({code,blocks,soundRom,wasm,
      !Number.isSafeInteger(frames)||frames<1||
      (onFrame!==null&&typeof onFrame!=='function')||
      (onPcm!==null&&typeof onPcm!=='function'))fail('GNG_SESSION_CONFIG_INVALID');
-  const source=await createAudioCommandSource(soundRom);
-  const ym=(await loadYm2203(wasm)).create();
+  const audio=await createGngAudioProducer({soundRom,wasm});
   let audioEvents=[],audioFrames=0,closed=false;
   const board=createBoard(code,blocks,{frames,portRead,
     onFrame:r=>{if(onFrame)onFrame(r);},
@@ -23,22 +24,18 @@ export async function createGngSession({code,blocks,soundRom,wasm,
     onAudioComplete:mark=>{
       if(mark.frames<=audioFrames)return;
       if(mark.frames!==audioFrames+1)fail('GNG_AUDIO_FRAME_GAP');
-      const {commands}=source.batch(mark.frames*CYCLES_PER_FRAME,audioEvents);
+      const block=audio.batch(mark.frames*CYCLES_PER_FRAME,audioEvents);
       audioEvents=[];
-      let block;
-      for(const command of commands)block=applyCommand(ym,command)??block;
-      if(!block)fail('GNG_AUDIO_PCM_MISSING');
       audioFrames=mark.frames;
       if(onPcm)onPcm(Object.freeze({session:0,sampleStart:block.firstSample,
-        sampleRate:62500,samples:block.samples}));
+        sampleRate:block.sampleRate,samples:block.samples}));
     }});
   if(checkpoint){
     if(!Number.isSafeInteger(checkpoint.frame)||checkpoint.frame<1||
        checkpoint.cpu?.frames!==checkpoint.frame||
        !(checkpoint.ym instanceof Uint8Array))fail('GNG_CHECKPOINT_INVALID');
     board.importState(checkpoint.cpu);
-    source.importState(checkpoint.audio);
-    ym.load(checkpoint.ym);
+    audio.importState(checkpoint);
     audioFrames=checkpoint.frame;
   }
   const live=()=>{if(closed)fail('GNG_SESSION_CLOSED');};
@@ -46,8 +43,7 @@ export async function createGngSession({code,blocks,soundRom,wasm,
     live();
     if(audioEvents.length||audioFrames!==board.state.records.length)
       fail('GNG_CHECKPOINT_NOT_AT_AUDIO_BOUNDARY');
-    return {frame:audioFrames,cpu:board.exportState(),
-      audio:source.exportState(),ym:ym.save()};
+    return {frame:audioFrames,cpu:board.exportState(),...audio.exportState()};
   };
   return Object.freeze({
     runUntilFrame(frame){live();return board.run(frame);},
@@ -55,7 +51,7 @@ export async function createGngSession({code,blocks,soundRom,wasm,
     exportState,
     snapshot(){live();return {frame:board.state.records.length,
       cycle:board.state.C,audioFrames};},
-    close(){if(!closed){ym.destroy();closed=true;}},
+    close(){if(!closed){audio.close();closed=true;}},
     get board(){return board;}
   });
 }

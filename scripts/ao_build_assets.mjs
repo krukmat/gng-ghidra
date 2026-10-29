@@ -24,11 +24,13 @@ const BUNDLE_FILES=['program.mjs','mc6809_aot_lib.mjs','gngb_block_key.mjs',
 const LIB_ENTRIES=['gngb_frame_renderer.mjs','gngb_render_inputs.mjs',
   'v2_b1_observable.mjs','gngb_input_contract.mjs','ao_web_assets.mjs',
   'ao_touch_controls.mjs','ao_game_state.mjs','v3_b2c_port_witness.mjs',
-  'ao_stick.mjs','ao_audio_commands.mjs','ao_ym2203_wasm.mjs','gngb_audio_resampler.mjs',
+  'ao_stick.mjs','gngb_audio_producer.mjs','gngb_audio_resampler.mjs',
   'checkpoint_format.mjs','v3_b3_live_tape.mjs',
-  'base/src/host/web/pcm-worklet.mjs',
-  'base/src/host/web/frame-pacer.mjs','boards/gng/web-host-config.mjs'];
-const AUDIO_WASM=join(ROOT,'out/android/audio');
+  'base/src/host/web/pcm-worklet.mjs','base/src/host/web/frame-pacer.mjs',
+  'base/src/host/web/engine-worker.mjs','base/src/host/web/audio-worker.mjs',
+  'boards/gng/web-host-config.mjs'];
+// The YM2203 bank built from the pinned base copy (base/src/devices/ym2203).
+const AUDIO_WASM=join(ROOT,'out/android/ym2203-bank');
 const Z80_ROM_SHA1='7ef9ec5c2072e21c787a6bbf700033f50c759c1d';
 const sha256=b=>createHash('sha256').update(b).digest('hex');
 
@@ -74,7 +76,7 @@ export async function buildAssets(){
   const gfx=gngbGraphics(name=>execFileSync('unzip',['-p',zip,name],
     {maxBuffer:1<<20,stdio:['ignore','pipe','ignore']}));
   writeFileSync(join(ASSETS,'gfx.bin'),packGfx(gfx),{mode:0o600});
-  // AO-6: Z80 ROM through the hash-checking extractor, and the AO-5 .wasm.
+  // AO-6: Z80 ROM through the hash-checking extractor, and the bank .wasm.
   execFileSync('python3',['scripts/audio_extract_sound_rom.py'],{cwd:ROOT,stdio:'ignore'});
   const z80=readFileSync(join(ROOT,'out/audio/gg2.bin'));
   if(createHash('sha1').update(z80).digest('hex')!==Z80_ROM_SHA1)
@@ -82,7 +84,9 @@ export async function buildAssets(){
   writeFileSync(join(ASSETS,'audio/gg2.bin'),z80,{mode:0o600});
   const wasm=readFileSync(join(AUDIO_WASM,'ym2203.wasm'));
   const build=JSON.parse(readFileSync(join(AUDIO_WASM,'build.json'),'utf8'));
-  if(sha256(wasm)!==build.sha256)throw Error('AO_ASSETS_WASM_MISMATCH');
+  if(sha256(wasm)!==build.sha256||build.source_sha256!==sha256(readFileSync(
+    join(ROOT,'base/src/devices/ym2203/bank.cpp'))))
+    throw Error('AO_ASSETS_WASM_MISMATCH');
   writeFileSync(join(ASSETS,'audio/ym2203.wasm'),wasm,{mode:0o600});
   for(const name of libClosure([...LIB_ENTRIES,'boards/gng/runtime.mjs',
     'boards/gng/code-view.mjs'])){

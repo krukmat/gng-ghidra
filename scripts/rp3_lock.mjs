@@ -11,7 +11,7 @@ import {capabilities} from '../base/src/cpu/capabilities.mjs';
 
 const [sourceArg,recipeArg,priorArg,outputArg]=process.argv.slice(2);
 if(!sourceArg||!recipeArg||!priorArg||!outputArg)
-  throw Error('RP3_LOCK_USAGE: base-repo rp1-recipe rp2-lock private-output-dir');
+  throw Error('RP3_LOCK_USAGE: base-repo rp1-recipe prior-lock private-output-dir');
 const source=resolve(sourceArg),output=resolve(outputArg);
 if(!output.startsWith(resolve('out')+'/'))throw Error('RP3_LOCK_PRIVATE_OUTPUT_REQUIRED');
 const previous=validateLock(JSON.parse(readFileSync(resolve(priorArg)))),
@@ -26,9 +26,12 @@ const paths=[...new Set([...Object.keys(previous.base.components),
   'src/build/z80/compiler.mjs','src/cpu/z80/boundary.mjs',
   'src/cpu/z80/scheduler.mjs','src/cpu/z80/live-session.mjs',
   'src/audio/pcm-queue.mjs','src/audio/resampler.mjs',
-  'src/host/web/pcm-worklet.mjs','src/host/web/frame-pacer.mjs'])];
+  'src/host/web/pcm-worklet.mjs','src/host/web/frame-pacer.mjs',
+  'src/host/web/engine-worker.mjs','src/host/web/audio-worker.mjs',
+  'src/devices/ym2203/bank.cpp','src/devices/ym2203/wasm.mjs',
+  'src/devices/ym2203/build.mjs'])];
 const revision=git('rev-parse','HEAD').toString().trim();
-const lock={...previous,status:'rp3-z80-pcm',base:{revision,
+const lock={...previous,status:'rp3-ym-host',base:{revision,
   components:Object.fromEntries(paths.map(path=>
     [path,sha(git('show',`${revision}:${path}`))]))}};
 validateLock(lock);verifyPinnedComponents(resolve('base'),lock);

@@ -13,6 +13,7 @@
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {cpSync,mkdirSync,mkdtempSync,readFileSync,rmSync,statSync,writeFileSync} from 'node:fs';
 import {homedir,tmpdir} from 'node:os';
 import {resolve,join,extname,sep} from 'node:path';
@@ -33,7 +34,7 @@ const android=process.argv.includes('--android');
 const serialArg=process.argv[process.argv.indexOf('--android')+1];
 const ADB=join(process.env.ANDROID_HOME??join(homedir(),'Library/Android/sdk'),
   'platform-tools/adb');
-const PKG='org.gng.offline';
+const PKG=process.env.AO_APP_ID??'org.gng.offline';
 const MIME={'.html':'text/html','.mjs':'text/javascript','.json':'application/json',
   '.bin':'application/octet-stream','.wasm':'application/wasm'};
 const server=createServer((req,res)=>{
@@ -112,6 +113,15 @@ async function verify(text,rt){
   assert.ok(Buffer.from(got.ym).equals(Buffer.from(c.ym)),'YM bytes from reset');
   return {frame:c.frame,tapeChanges:c.tape.length,bytes:text.length};
 }
+// The replay uses the reference dual-YM WASM (scripts/ao_build_audio_wasm.sh),
+// not the base bank in the assets: the save must hold the reference bytes.
+function referenceWasm(){
+  const dir=join(ROOT,'out/android/audio'),wasm=readFileSync(join(dir,'ym2203.wasm'));
+  const build=JSON.parse(readFileSync(join(dir,'build.json'),'utf8'));
+  if(createHash('sha256').update(wasm).digest('hex')!==build.sha256)
+    throw Error('AO_CK_REFERENCE_WASM_MISMATCH');
+  return wasm;
+}
 async function replayRuntime(){
   const bundle=selectB3Bundle(ROOT);
   if(!bundle)throw Error('AO_CK_B3_BUNDLE_MISSING');
@@ -126,7 +136,7 @@ async function replayRuntime(){
   rmSync(temp,{recursive:true,force:true});
   return {code,blocks,createBoard,programSha256:manifest.files['program.mjs'],
     rom:Uint8Array.from(readFileSync(join(ROOT,'out/audio/gg2.bin'))),
-    wasm:readFileSync(join(ASSETS,'audio/ym2203.wasm'))};
+    wasm:referenceWasm()};
 }
 
 try{
@@ -142,7 +152,7 @@ try{
     report.serial=serial;
     adb('install','-r',join(ROOT,'out/android/gng.apk'));
     adb('shell','pm','clear',PKG); // no checkpoint from an earlier run
-    adb('shell','am','start','-W','-n',PKG+'/.MainActivity');
+    adb('shell','am','start','-W','-n',PKG+'/org.gng.offline.MainActivity');
     device=(await _android.devices()).find(d=>d.serial()===serial);
     if(!device)throw Error('AO_CK_PLAYWRIGHT_DEVICE_MISSING');
     page=await (await device.webView({pkg:PKG},{timeout:30000})).page();
