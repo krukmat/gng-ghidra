@@ -2,8 +2,11 @@
 // Same synthesis as `audio_ym2203_lab --stream` (12 MHz master, 1.5 MHz chips,
 // OPN_FIDELITY_MIN, MAME gng.cpp gains, mono Int16 at 62.5 kHz), with the
 // stdin protocol replaced by calls: W -> ao_ym_write, R -> ao_ym_reset,
-// U -> ao_ym_render. No I/O, threads or exceptions; errors are sticky codes.
+// U -> ao_ym_render, S -> ao_ym_save, L -> ao_ym_load (same bytes as the
+// native S/L, src/ym2203_checkpoint.h). No I/O, threads or exceptions;
+// errors are sticky codes.
 #include "ymfm_opn.h"
+#include "ym2203_checkpoint.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -14,10 +17,12 @@ constexpr uint32_t chip_hz=1500000;
 constexpr uint32_t sample_hz=chip_hz/24; // OPN_FIDELITY_MIN = 62500 Hz
 constexpr uint64_t ticks_per_sample=master_hz/sample_hz; // 192 ticks
 constexpr uint32_t max_block=12500;
+constexpr uint32_t max_checkpoint=4096; // GYM1 blob, both chips
 
 // Codes returned as negative numbers; the JS loader maps them to names.
 enum code : int32_t {
   OK=0, CLOCK_INVALID=1, WRITE_INVALID=2, CHUNK_TOO_LARGE=3, STOPPED=4,
+  SAVE_INVALID=5, LOAD_INVALID=6,
 };
 class lab_interface : public ymfm::ymfm_interface {
   // No timer/IRQ interactions claimed, as in the native renderer.
@@ -40,7 +45,9 @@ struct synth {
   uint64_t first=0,next=0,frontier=0,lastEvent=0,blockFirst=0;
   uint32_t pending=0;
   int32_t error=OK;
+  bool fresh=true; // no command yet: only then may a checkpoint be loaded
   int16_t pcm[max_block];
+  uint8_t checkpoint[max_checkpoint];
   synth():ym0(intf0),ym1(intf1) {
     ym0.set_fidelity(ymfm::OPN_FIDELITY_MIN);
     ym1.set_fidelity(ymfm::OPN_FIDELITY_MIN);
@@ -70,6 +77,7 @@ int32_t ao_ym_error(synth *s) { return s->error; }
 
 int32_t ao_ym_write(synth *s,double t,uint32_t addr,uint32_t value) {
   if(s->error)return -STOPPED;
+  s->fresh=false;
   uint64_t tick;
   if(!s->clock(t,tick))return s->stop(CLOCK_INVALID);
   if(addr<0xe000 || addr>0xe003 || value>255)return s->stop(WRITE_INVALID);
@@ -82,6 +90,7 @@ int32_t ao_ym_write(synth *s,double t,uint32_t addr,uint32_t value) {
 // Chip reset at tick: the sample timeline continues, it is never rewound.
 int32_t ao_ym_reset(synth *s,double t) {
   if(s->error)return -STOPPED;
+  s->fresh=false;
   uint64_t tick;
   if(!s->clock(t,tick))return s->stop(CLOCK_INVALID);
   if(!s->advance(tick))return s->stop(CHUNK_TOO_LARGE);
@@ -94,6 +103,7 @@ int32_t ao_ym_reset(synth *s,double t) {
 // ao_ym_block_first and lives in ao_ym_pcm until the next render.
 int32_t ao_ym_render(synth *s,double t) {
   if(s->error)return -STOPPED;
+  s->fresh=false;
   uint64_t tick;
   if(!s->clock(t,tick))return s->stop(CLOCK_INVALID);
   if(!s->advance(tick))return s->stop(CHUNK_TOO_LARGE);
@@ -105,4 +115,27 @@ int32_t ao_ym_render(synth *s,double t) {
 }
 const int16_t *ao_ym_pcm(synth *s) { return s->pcm; }
 double ao_ym_block_first(synth *s) { return double(s->blockFirst); }
+// Checkpoint bytes live in ao_ym_checkpoint. Save only after a render (no
+// pending samples); returns the size. Load reads n bytes from the same
+// buffer, only as the first call on a fresh synthesizer.
+uint8_t *ao_ym_checkpoint(synth *s) { return s->checkpoint; }
+int32_t ao_ym_save(synth *s) {
+  if(s->error)return -STOPPED;
+  if(s->pending)return s->stop(SAVE_INVALID);
+  const auto bytes=ymck::save(s->ym0,s->ym1,
+    {s->first,s->next,s->frontier,s->lastEvent});
+  if(bytes.size()>max_checkpoint)return s->stop(SAVE_INVALID);
+  std::copy(bytes.begin(),bytes.end(),s->checkpoint);
+  s->fresh=false;
+  return static_cast<int32_t>(bytes.size());
+}
+int32_t ao_ym_load(synth *s,uint32_t n) {
+  if(s->error)return -STOPPED;
+  ymck::timeline t;
+  if(!s->fresh || n>max_checkpoint ||
+     !ymck::load(s->ym0,s->ym1,t,s->checkpoint,n))return s->stop(LOAD_INVALID);
+  s->first=t.first;s->next=t.next;s->frontier=t.frontier;
+  s->lastEvent=t.lastEvent;s->fresh=false;
+  return OK;
+}
 }

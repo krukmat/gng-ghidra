@@ -6,6 +6,10 @@
  * AO-6: each frame's audio events go to the audio worker. While an output
  * session plays, the consumed source sample paces the CPU (LEAD ahead) and
  * the frame shown is the one being heard; otherwise the AO-2 clock rules.
+ * Checkpoint (gng.checkpoint.v1, src/checkpoint_format.mjs): 'boot' carries
+ * the saved text or null; a loaded session starts cold from that state, like
+ * Reiniciar. 'save' exports the board at the next frame boundary, after that
+ * frame's audio batch, and the audio worker adds Z80 and YM on the same port.
  */
 const CPU_HZ=1.5e6; // MC6809 E clock
 const MAX_BEHIND=30; // frames; further behind re-anchors and counts a slip
@@ -22,8 +26,11 @@ const START_WAIT_MS=1000; // a new output may take this long to start consuming
 let audioPort=null,audioAcked=0,audioDead=false;
 // Output clock: {sessionId, latency (samples), port, last:{sample,at}}.
 let clock=null,fillLead=false;
+let booted=false,saveWanted=false,saving=null;
 
 onmessage=({data})=>{
+  if(data?.type==='boot'&&!booted){booted=true;start(data.checkpoint??null).catch(fail);}
+  else if(data?.type==='save')saveWanted=true;
   // AO-4 sends the five input port bytes (SYSTEM, P1, P2, DSW1, DSW2).
   if(data?.type==='ports'&&data.ports?.length===5)ports.set(data.ports);
   // Test only (?audioTest): block this worker, as a slow phone frame would.
@@ -32,7 +39,10 @@ onmessage=({data})=>{
     while(performance.now()<end);
   }else if(data?.type==='audio-port'){
     audioPort=data.port;
-    audioPort.onmessage=({data:m})=>{if(m?.type==='ack')audioAcked=m.frame;};
+    audioPort.onmessage=({data:m})=>{
+      if(m?.type==='ack')audioAcked=m.frame;
+      else if(m?.type==='checkpoint'||m?.type==='checkpoint-failed')saved(m);
+    };
   }else if(data?.type==='audio-latency'){
     if(clock?.sessionId===data.sessionId)clock.latency=data.latencyMs/SAMPLE_MS;
   }else if(data?.type==='audio-clock'){
@@ -52,6 +62,19 @@ onmessage=({data})=>{
 const audioStop=code=>{
   if(audioDead)return;
   audioDead=true;post({type:'audio-stop',code});
+  if(saving){saving=null;post({type:'checkpoint-failed',code:'CK_AUDIO_STOPPED'});}
+};
+// The audio worker answers after the batch of the saved frame.
+const saved=m=>{
+  const s=saving;saving=null;
+  if(!s)return;
+  if(m.type==='checkpoint-failed')
+    return post({type:'checkpoint-failed',code:'CK_AUDIO_STOPPED'});
+  try{
+    const text=s.encode({programSha256:s.programSha256,frame:s.frame,
+      cpu:s.cpu,audio:m.audio,ym:m.ym,tape:s.tape});
+    post({type:'checkpoint',frame:s.frame,text});
+  }catch(e){post({type:'checkpoint-failed',code:e?.code??'CK_SAVE_FAILED'});}
 };
 
 async function bytes(name){
@@ -59,16 +82,18 @@ async function bytes(name){
   if(!res.ok)throw Error('AO_FETCH_'+res.status+' '+name);
   return new Uint8Array(await res.arrayBuffer());
 }
-async function start(){
+async function start(checkpointText){
   const t0=performance.now();
   const [{blocks},{createBoard,CYCLES_PER_FRAME},{renderGngbRgba},
     {rendererInputs},{rendererUnknownCount},{INPUT_DEFAULTS},
-    {frozenCode,unpackGfx},{createPortReadWitness},{observeGameState}]=await Promise.all([
+    {frozenCode,unpackGfx},{createPortReadWitness},{observeGameState},
+    {encodeCheckpoint,decodeCheckpoint},{createPortRecorder}]=await Promise.all([
     import('./bundle/program.mjs'),import('./bundle/gngb_runtime.mjs'),
     import('./lib/gngb_frame_renderer.mjs'),import('./lib/gngb_render_inputs.mjs'),
     import('./lib/v2_b1_observable.mjs'),import('./lib/gngb_input_contract.mjs'),
     import('./lib/ao_web_assets.mjs'),import('./lib/v3_b2c_port_witness.mjs'),
-    import('./lib/ao_game_state.mjs')]);
+    import('./lib/ao_game_state.mjs'),import('./lib/checkpoint_format.mjs'),
+    import('./lib/v3_b3_live_tape.mjs')]);
   const res=await fetch('bundle/manifest.json');
   if(!res.ok)throw Error('AO_FETCH_'+res.status+' manifest');
   const manifest=await res.json();
@@ -77,16 +102,24 @@ async function start(){
   const [codeBin,overlays,gfxBin]=await Promise.all(
     ['bundle/code.bin','bundle/overlays.bin','gfx.bin'].map(bytes));
   const code=frozenCode(manifest,codeBin,overlays),gfx=unpackGfx(gfxBin);
+  const programSha256=manifest.files['program.mjs'];
+  // Refused if made by another AOT program or inconsistent.
+  const restored=checkpointText&&decodeCheckpoint(checkpointText,{programSha256});
+  // Port changes from reset: a loaded session continues the saved tape.
+  const recorder=createPortRecorder(),tape=restored?restored.tape.map(c=>[...c]):[];
   ports.set(INPUT_DEFAULTS);
   const witness=createPortReadWitness();
   const readPorts=new Uint8Array(3).fill(255);
   const inputCheck=new URLSearchParams(location.search).has('inputCheck');
   let last=null,latest=null,stateKey=null,gameState=null;
-  let audioEvents=[],audioFrames=0;
+  let audioEvents=[],audioFrames=restored?restored.frame:0;
   const heard=[]; // newest drawable frames, for audio-paced presentation
   const cpu=createBoard(code,blocks,{frames:Number.MAX_SAFE_INTEGER,
     portRead:addr=>ports[addr-0x3000],
-    onPortRead:read=>{witness.observe(read);readPorts[read.addr-0x3000]=read.value;},
+    onPortRead:read=>{
+      witness.observe(read);readPorts[read.addr-0x3000]=read.value;
+      recorder.observe(read.addr,read.cycle,read.value);
+    },
     onAudioEvent:e=>{
       if(!audioPort||audioDead)return;
       audioEvents.push({kind:e.kind,value:e.value,cycle:e.cycle});
@@ -96,12 +129,23 @@ async function start(){
     onAudioComplete:mark=>{
       if(mark.frames<=audioFrames)return;
       audioFrames=mark.frames;
+      if(saveWanted&&(!audioPort||audioDead)){
+        saveWanted=false;post({type:'checkpoint-failed',code:'CK_AUDIO_STOPPED'});
+      }
       if(!audioPort||audioDead)return;
       if(audioFrames-audioAcked>MAX_AUDIO_BACKLOG)
         return audioStop('AUDIO_PRODUCER_BEHIND');
       audioPort.postMessage({type:'batch',frame:audioFrames,
         throughCycle:audioFrames*CYCLES_PER_FRAME,events:audioEvents});
       audioEvents=[];
+      // Frame boundary, between instructions: the only valid save point.
+      if(saveWanted&&!saving){
+        saveWanted=false;
+        for(const c of recorder.drain())tape.push(c);
+        saving={encode:encodeCheckpoint,programSha256,frame:audioFrames,
+          cpu:cpu.exportState(),tape:tape.map(c=>[...c])};
+        audioPort.postMessage({type:'save'});
+      }
     },
     onFrame:frame=>{
       last=frame;
@@ -123,6 +167,12 @@ async function start(){
       cpu.state.records[frame.index-1]=null;
       cpu.state.events.length=0;
     }});
+  if(restored){
+    cpu.importState(restored.cpu);
+    audioAcked=restored.frame;
+    // Before any batch: Z80, queued events and both YM2203 of the save.
+    audioPort?.postMessage({type:'restore',audio:restored.audio,ym:restored.ym});
+  }
   const render=frame=>{
     const image=renderGngbRgba(rendererInputs(frame.record,
       {scroll:frame.scroll,latch:frame.latch},gfx));
@@ -154,7 +204,8 @@ async function start(){
   }
 
   const frameMs=CYCLES_PER_FRAME/CPU_HZ*1000;
-  let anchor=performance.now(),done=0,shown=0,slips=0,paced=false;
+  let done=restored?restored.frame:0,anchor=performance.now()-done*frameMs;
+  let shown=0,slips=0,paced=false;
   let win={since:anchor,frames:0,rendered:0,cpuMs:0,renderMs:0,lateMs:0,audioFrames:0};
   // Source sample being consumed now, extrapolated from the last report.
   const consumed=now=>clock.last.sample+Math.min(now-clock.last.at,40)/SAMPLE_MS;
@@ -222,4 +273,3 @@ async function start(){
 }
 const fail=e=>post({type:'error',message:String(e?.message??e),
   code:e?.code??null,stack:String(e?.stack??'').slice(0,2000)});
-start().catch(fail);

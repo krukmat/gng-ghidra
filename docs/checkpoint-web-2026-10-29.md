@@ -1,6 +1,6 @@
 # Checkpoint de sesión (guardado rápido) — web, base común para Android
 
-**Fecha:** 2026-10-29 · **Estado:** web GO · Android pendiente (mismo formato y piezas).
+**Fecha:** 2026-10-29 · **Estado:** web GO · Android GO en el emulador; falta la prueba en el teléfono (mismo formato y piezas).
 
 **Decisiones del operador (29/10/2026):** primero solo web, con estado de audio exacto y un único guardado rápido; Android viene después, así que las piezas y el formato son comunes desde el principio. Hay una excepción explícita al «ENGINE CONGELADO» del [plan del bot](agents/gng-bot-gameplay-plan-2026-10-27.md#L91) para esta función de usuario. El runtime congelado no se modifica: se deriva con parches anclados. El bot no usa estas rutas.
 
@@ -38,8 +38,16 @@ El worker de audio web ahora usa `createAudioCommandSource`, el mismo núcleo qu
 - [checkpoint_web_check.mjs](../scripts/checkpoint_web_check.mjs), con Playwright sin ventana: Moneda y Start, guardar con `G` en plena fase 1 (frame 1217), seguir jugando, cargar con `C`, moverse y disparar. **PASS:** la cinta de la sesión cargada se reproduce desde el reset con `PASS_SAME_FRAME_HASH`. El audio queda en `PLAYING`, sin STOP y sin samples faltantes.
 - Tests relacionados de AO, audio, Z80, B2C y cinta en vivo: 273/273.
 
-## Pendiente para Android
+## Android (29/10/2026, versionCode 8)
 
-1. Exportar `ao_ym_save`/`ao_ym_load` en [ao_ym2203_wasm.cpp](../src/ao_ym2203_wasm.cpp) con `ym2203_checkpoint.h` y agregarlos a `EXPORTS` en `ao_build_audio_wasm.sh`. Probar que el blob WASM sea idéntico al nativo en el mismo punto.
-2. Aplicar `checkpointRuntime` después de `resumableRuntime` en [ao_build_assets.mjs](../scripts/ao_build_assets.mjs).
-3. En la WebView: guardar en IndexedDB y cargar reconstruyendo los workers (como Reiniciar). El AO-6 ya reconstruye el Z80 y los chips.
+**Estado:** GO en Playwright headless y en el emulador; falta la prueba del operador en el teléfono.
+
+- **Uso:** botones **Guardar** y **Cargar** junto a Reiniciar. Hay un solo slot, guardado en IndexedDB (`gng-checkpoint`/`slot`/`quick`) con el mismo `gng.checkpoint.v1` de la web. Cada guardado reemplaza al anterior. Si el motor está detenido o el audio murió, no guarda (se rinde a los 3 s).
+- **Guardar:** el worker de motor exporta la placa en `onAudioComplete`, después del lote de audio de ese frame. Por el mismo puerto pide `save` al worker de audio, que responde con el Z80 y los YM (`ao_ym_save`, sin samples pendientes). El motor arma el texto y la página lo guarda.
+- **Cargar:** igual que Reiniciar, con workers nuevos. La página manda `boot` con el texto. El motor lo valida (`decodeCheckpoint`, mismo programa), hace `importState` y le manda `restore` al audio antes de cualquier lote (`importState` + `ao_ym_load`). La cinta continúa la del checkpoint.
+- **Piezas:** `ao_ym_save`/`ao_ym_load`/`ao_ym_checkpoint` en [ao_ym2203_wasm.cpp](../src/ao_ym2203_wasm.cpp) con `ym2203_checkpoint.h`, `save()`/`load()` en [ao_ym2203_wasm.mjs](../src/ao_ym2203_wasm.mjs), `checkpointRuntime` después de `resumableRuntime` en [ao_build_assets.mjs](../scripts/ao_build_assets.mjs), y [engine.worker](../android/web/engine.worker.mjs), [audio.worker](../android/web/audio.worker.mjs) y [app](../android/web/app.mjs).
+
+**Evidencia:**
+
+- [test_checkpoint_wasm.mjs](../tests/test_checkpoint_wasm.mjs): en el frame 700, el blob del WASM es idéntico byte a byte al `S` del nativo. CPU+Z80+YM restaurados en el WASM dan el mismo PCM hasta el frame 1500. Controles negativos: un sintetizador nuevo no coincide, y un blob alterado o cargado tarde da `AUDIO_YM_LOAD_INVALID`.
+- [ao_checkpoint_check.mjs](../scripts/ao_checkpoint_check.mjs) hace Moneda, Start, Sonido ON, Guardar, sigue jugando, Cargar, dispara y vuelve a Guardar. **PASS** si los dos checkpoints son exactamente el estado al que su cinta llega desde el reset (CPU, Z80 y bytes YM) y si el audio después de cargar queda en PLAYING sin STOP, underrun ni samples faltantes. Resultados: Chromium headless con frames 914/1358, y emulador API 36 (`-no-window -no-audio`, `--android`) con frames 925/1367.

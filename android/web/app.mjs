@@ -11,6 +11,7 @@ const systemControls=document.getElementById('system-controls');
 const startButton=document.getElementById('start');
 const buttons=[...document.querySelectorAll('[data-hold],[data-pulse]')];
 const soundButton=document.getElementById('sound');
+const ckSave=document.getElementById('ck-save'),ckLoad=document.getElementById('ck-load');
 const log=(tag,data)=>console.log(tag+' '+JSON.stringify(data));
 let worker=null,pending=null,drawn=0,playable=false;
 // AO-6 sound: the producer runs from boot; output sessions come and go.
@@ -22,6 +23,61 @@ let worklet=null,audioNote='',av=[],latencyMs=0,recoveries=[];
 const RECOVER_MAX=5;
 const AUDIO_SAMPLES_PER_FRAME=1048;
 let game={credits:0,readyToStart:false,inGame:false};
+// One quick-save checkpoint (gng.checkpoint.v1) in IndexedDB; the engine
+// worker builds and checks it. Saving waits for the next frame boundary.
+const CK_DB='gng-checkpoint',CK_STORE='slot',CK_KEY='quick',CK_SAVE_MS=3000;
+let ckSaved=null,ckSaving=null; // {frame,savedAt}; save timeout
+let ckNote='',ckNoteUntil=0; // shown with the fps for a few seconds
+const ckRequest=(mode,run)=>new Promise((resolve,reject)=>{
+  const open=indexedDB.open(CK_DB,1);
+  open.onupgradeneeded=()=>open.result.createObjectStore(CK_STORE);
+  open.onerror=()=>reject(open.error);
+  open.onsuccess=()=>{
+    const db=open.result,tx=db.transaction(CK_STORE,mode);
+    const req=run(tx.objectStore(CK_STORE));
+    tx.oncomplete=()=>{db.close();resolve(req.result);};
+    tx.onerror=tx.onabort=()=>{db.close();reject(tx.error);};
+  };
+});
+function updateCheckpoint(note=null){
+  ckSave.disabled=!playable||ckSaving!==null;
+  ckLoad.disabled=ckSaved===null||ckSaving!==null;
+  ckLoad.title=ckSaved?'Cargar el checkpoint del frame '+ckSaved.frame:
+    'Sin checkpoint guardado';
+  if(note){ckNote=note;ckNoteUntil=performance.now()+4000;status.textContent=note;}
+}
+function saveCheckpoint(){
+  if(ckSave.disabled)return;
+  ckSaving=setTimeout(()=>savedCheckpoint(null,'CK_SAVE_TIMEOUT'),CK_SAVE_MS);
+  updateCheckpoint('guardando…');
+  worker.postMessage({type:'save'});
+}
+async function savedCheckpoint(data,code=null){
+  if(ckSaving===null)return; // a late answer after a timeout or a restart
+  clearTimeout(ckSaving);ckSaving=null;
+  try{
+    if(code)throw Error(code);
+    const meta={frame:data.frame,savedAt:new Date().toISOString()};
+    await ckRequest('readwrite',store=>store.put({...meta,text:data.text},CK_KEY));
+    ckSaved=meta;log('AO_CK_SAVE',{...meta,bytes:data.text.length});
+    updateCheckpoint('guardado · frame '+meta.frame);
+  }catch(e){
+    log('AO_CK_SAVE_FAILED',{code:String(e?.message??e)});
+    updateCheckpoint('no se pudo guardar');
+  }
+}
+async function loadCheckpoint(){
+  if(ckLoad.disabled)return;
+  try{
+    const slot=await ckRequest('readonly',store=>store.get(CK_KEY));
+    if(!slot?.text)throw Error('CK_EMPTY');
+    log('AO_CK_LOAD',{frame:slot.frame});
+    start(slot.text);
+  }catch(e){
+    log('AO_CK_LOAD_FAILED',{code:String(e?.message??e)});
+    updateCheckpoint('no se pudo cargar');
+  }
+}
 const controls=createTouchControls((ports,held)=>{
   worker?.postMessage({type:'ports',ports});
   for(const button of buttons){
@@ -86,6 +142,7 @@ function enable(value){
   for(const button of buttons)button.disabled=!value||
     (button.dataset.pulse&&game.inGame)||
     (button.dataset.pulse==='start1'&&!game.readyToStart);
+  updateCheckpoint();
 }
 function updateHint(){
   systemControls.hidden=game.inGame;
@@ -218,7 +275,10 @@ function startAudio(){
     audioDead='AUDIO_WORKER_ERROR';audioStop(audioDead,{message:e.message});
   };
 }
-function start(){
+// Reiniciar and Cargar: a cold engine and audio producer; checkpoint is the
+// saved text or null for the reset vector.
+function start(checkpoint=null){
+  if(ckSaving!==null){clearTimeout(ckSaving);ckSaving=null;}
   enable(false);closeSession();worker?.terminate();
   game={credits:0,readyToStart:false,inGame:false};
   pending=null;drawn=0;ctx2d.clearRect(0,0,256,224);halt.hidden=true;
@@ -227,6 +287,8 @@ function start(){
     {type:'module'});
   // Reiniciar rebuilds the Z80 session and the chips with the engine.
   startAudio();
+  // After the audio port: a loaded state restores the producer first.
+  worker.postMessage({type:'boot',checkpoint});
   if(soundOn)openSession();
   worker.onmessage=({data})=>{
     switch(data?.type){
@@ -237,7 +299,8 @@ function start(){
       case 'stats':
         log('AO_STATS',{...data,drawn});
         status.textContent=Math.round(drawn*1000/data.windowMs)+' fps'+
-          (audioNote?' · '+audioNote:'');
+          (audioNote?' · '+audioNote:'')+
+          (performance.now()<ckNoteUntil?' · '+ckNote:'');
         drawn=0;audioStats();break;
       case 'audio-stop':audioDead=data.code;audioStop(data.code);break;
       case 'audio-clock-lost':log('AO_AUDIO_CLOCK_LOST',data);break;
@@ -248,6 +311,8 @@ function start(){
       case 'input-probe':log('AO_INPUT',data);break;
       case 'halt':log('AO_HALT',data);stop('Motor detenido: '+data.status);break;
       case 'error':log('AO_ERROR',data);stop('Error: '+data.message);break;
+      case 'checkpoint':savedCheckpoint(data);break;
+      case 'checkpoint-failed':savedCheckpoint(null,data.code);break;
     }
   };
   worker.onerror=e=>{
@@ -286,7 +351,12 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 document.addEventListener('contextmenu',e=>e.preventDefault());
-document.getElementById('restart').addEventListener('click',start);
+document.getElementById('restart').addEventListener('click',()=>start());
+ckSave.addEventListener('click',saveCheckpoint);
+ckLoad.addEventListener('click',loadCheckpoint);
+ckRequest('readonly',store=>store.get(CK_KEY)).then(slot=>{
+  if(slot?.text){ckSaved={frame:slot.frame,savedAt:slot.savedAt};updateCheckpoint();}
+},e=>log('AO_CK_DB_UNAVAILABLE',{message:String(e?.message??e)}));
 soundButton.addEventListener('click',toggleSound);
 if(new URLSearchParams(location.search).has('audioTest'))
   window.aoTestStall=ms=>worker.postMessage({type:'test-stall',ms});

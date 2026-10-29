@@ -60,8 +60,8 @@
   #attack{border-color:#c08558b3;background:#39291e55}
   #jump{border-color:#5e9eabb3;background:#1c303755}
   #button-stack button.held{background:#285c6199;border-color:#87e1c9;color:#fff}
-  #restart{min-height:32px;padding:4px 14px;font-size:11px;color:#a7b9ca;
-    background:transparent;border-color:#2e3d4b;border-radius:9px}
+  #restart,#ck-save,#ck-load{min-height:32px;padding:4px 10px;font-size:11px;
+    color:#a7b9ca;background:transparent;border-color:#2e3d4b;border-radius:9px}
   #sound{min-height:34px;font-size:12px;border-radius:10px;background:transparent}
   #footer{display:flex;gap:6px;align-items:center;justify-content:space-between;
     width:100%;padding-top:6px}
@@ -97,6 +97,8 @@
         title="Preparando el sonido…">Sonido OFF</button>
       <div id="footer">
         <button id="restart">Reiniciar</button>
+        <button id="ck-save" disabled title="Guardar checkpoint">Guardar</button>
+        <button id="ck-load" disabled title="Sin checkpoint guardado">Cargar</button>
         <output id="status">cargando…</output>
       </div>
     </div>

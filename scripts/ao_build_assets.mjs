@@ -13,6 +13,7 @@ import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {prepareAudioBundle} from '../src/gngb_audio_bundle_overlay.mjs';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {resumableRuntime} from '../src/ao_resumable_runtime.mjs';
+import {checkpointRuntime} from '../src/checkpoint_runtime.mjs';
 import {packGfx} from '../src/ao_web_assets.mjs';
 import {gngbGraphics} from './r35_t5_render_check.mjs';
 
@@ -25,7 +26,8 @@ const BUNDLE_FILES=['program.mjs','mc6809_aot_lib.mjs','gngb_block_key.mjs',
 const LIB_ENTRIES=['gngb_frame_renderer.mjs','gngb_render_inputs.mjs',
   'v2_b1_observable.mjs','gngb_input_contract.mjs','ao_web_assets.mjs',
   'ao_touch_controls.mjs','ao_game_state.mjs','v3_b2c_port_witness.mjs',
-  'ao_stick.mjs','ao_audio_commands.mjs','ao_ym2203_wasm.mjs','gngb_audio_resampler.mjs'];
+  'ao_stick.mjs','ao_audio_commands.mjs','ao_ym2203_wasm.mjs','gngb_audio_resampler.mjs',
+  'checkpoint_format.mjs','v3_b3_live_tape.mjs'];
 const AUDIO_WASM=join(ROOT,'out/android/audio');
 const Z80_ROM_SHA1='7ef9ec5c2072e21c787a6bbf700033f50c759c1d';
 const sha256=b=>createHash('sha256').update(b).digest('hex');
@@ -64,7 +66,9 @@ export async function buildAssets(){
     mkdirSync(join(ASSETS,dir),{recursive:true,mode:0o700});
   for(const name of BUNDLE_FILES)
     copyFileSync(join(audio.dir,name),join(ASSETS,'bundle',name));
-  const runtime=resumableRuntime(readFileSync(join(audio.dir,'gngb_runtime.mjs'),'utf8'));
+  // Checkpoint patch after the resumable one, as the shared anchors expect.
+  const runtime=checkpointRuntime(
+    resumableRuntime(readFileSync(join(audio.dir,'gngb_runtime.mjs'),'utf8')));
   writeFileSync(join(ASSETS,'bundle/gngb_runtime.mjs'),runtime,{mode:0o600});
   const zip=join(ROOT,'roms/gng.zip');
   const gfx=gngbGraphics(name=>execFileSync('unzip',['-p',zip,name],

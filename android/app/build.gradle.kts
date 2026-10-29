@@ -11,8 +11,8 @@ android {
         applicationId = "org.gng.offline"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.6.3"
+        versionCode = 8
+        versionName = "0.7.0"
     }
 
     sourceSets.getByName("main").assets.srcDir(rootProject.file("../out/android/assets"))

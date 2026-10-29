@@ -22,7 +22,8 @@ OUT=out/android/audio
 mkdir -p "$OUT"
 EXPORTS=_ao_ym_create,_ao_ym_destroy,_ao_ym_error,_ao_ym_write,_ao_ym_reset
 EXPORTS=$EXPORTS,_ao_ym_render,_ao_ym_pcm,_ao_ym_block_first
-emcc -std=c++17 -O2 -Wall -Wextra -Wno-unused-parameter -fno-exceptions -I"$YMFM_SRC/src" \
+EXPORTS=$EXPORTS,_ao_ym_checkpoint,_ao_ym_save,_ao_ym_load
+emcc -std=c++17 -O2 -Wall -Wextra -Wno-unused-parameter -fno-exceptions -I"$YMFM_SRC/src" -Isrc \
   src/ao_ym2203_wasm.cpp \
   "$YMFM_SRC/src/ymfm_opn.cpp" "$YMFM_SRC/src/ymfm_ssg.cpp" \
   "$YMFM_SRC/src/ymfm_adpcm.cpp" "$YMFM_SRC/src/ymfm_misc.cpp" \
@@ -31,7 +32,7 @@ emcc -std=c++17 -O2 -Wall -Wextra -Wno-unused-parameter -fno-exceptions -I"$YMFM
   -sFILESYSTEM=0 -sASSERTIONS=0 \
   -o "$OUT/ym2203.wasm"
 WASM_SHA="$(shasum -a 256 "$OUT/ym2203.wasm" | cut -d' ' -f1)"
-SRC_SHA="$(cat src/ao_ym2203_wasm.cpp | shasum -a 256 | cut -d' ' -f1)"
+SRC_SHA="$(cat src/ao_ym2203_wasm.cpp src/ym2203_checkpoint.h | shasum -a 256 | cut -d' ' -f1)"
 cat > "$OUT/build.json" <<EOF
 {"wasm":"ym2203.wasm","sha256":"$WASM_SHA","bytes":$(wc -c < "$OUT/ym2203.wasm" | tr -d ' '),
  "source_sha256":"$SRC_SHA","emcc":"$EMCC_VERSION","ymfm":"$EXPECTED_YMFM"}

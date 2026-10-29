@@ -2,12 +2,14 @@
  * WASM dual YM2203 -> Int16 PCM at 62.5 kHz. It runs from the engine's first
  * frame whether Sound is ON or OFF; PCM goes to the AudioWorklet only while an
  * output session is open, so turning Sound on never replays past audio.
+ * Checkpoint: 'restore' (before any batch) loads the saved Z80 and YM state;
+ * 'save' answers on the engine port with the state after every earlier batch.
  */
 const ROM_SHA1='7ef9ec5c2072e21c787a6bbf700033f50c759c1d';
 const post=m=>postMessage(m);
 const safeCode=e=>/^AUDIO_[A-Z0-9_]{3,80}$/.test(e?.code??e?.message)?
   (e.code??e.message):'AUDIO_PRODUCER_UNEXPECTED_STOP';
-let stopped=false,source=null,ym=null,applyCommand=null;
+let stopped=false,source=null,ym=null,applyCommand=null,batches=0;
 let output=null,sessionId=null;
 let frames=0,produced=0,nonzero=0,sent=0,synthMs=0;
 
@@ -37,6 +39,7 @@ async function init(){
 function batch(engine,m){
   if(stopped)return;
   const t0=performance.now();
+  batches++;
   const {commands,stats}=source.batch(m.throughCycle,m.events);
   let block=null;
   for(const c of commands)block=applyCommand(ym,c)??block;
@@ -65,8 +68,15 @@ onmessage=({data})=>{
   if(data?.type==='engine'){
     const engine=data.port;
     engine.onmessage=({data:m})=>{
-      if(m?.type!=='batch')return;
-      chain=chain.then(()=>batch(engine,m)).catch(stop);
+      if(m?.type==='batch')chain=chain.then(()=>batch(engine,m)).catch(stop);
+      else if(m?.type==='restore')chain=chain.then(()=>{
+        if(batches)throw Error('AUDIO_CK_RESTORE_LATE');
+        source.importState(m.audio);ym.load(m.ym);
+      }).catch(stop);
+      else if(m?.type==='save')chain=chain.then(()=>{
+        if(stopped)throw Error('AUDIO_CK_STOPPED');
+        engine.postMessage({type:'checkpoint',audio:source.exportState(),ym:ym.save()});
+      }).catch(e=>{engine.postMessage({type:'checkpoint-failed'});stop(e);});
     };
   }else if(data?.type==='output'){
     // A new session replaces the port; null closes the output.

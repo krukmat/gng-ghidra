@@ -2,10 +2,14 @@
  * Node and in a WebView Worker: the caller supplies the .wasm bytes. write,
  * reset and render match the native W, R and U commands; render returns
  * {firstSample, samples}, a copy of the Int16 PCM at 62.5 kHz.
+ * save()/load(bytes) match the native S/L: the GYM1 checkpoint of
+ * src/ym2203_checkpoint.h, byte-identical to the native process.
  */
 export const YM_SAMPLE_RATE=62500;
 const CODES=['OK','AUDIO_YM_CLOCK_INVALID','AUDIO_YM_WRITE_INVALID',
-  'AUDIO_YM_CHUNK_TOO_LARGE','AUDIO_YM_STOPPED'];
+  'AUDIO_YM_CHUNK_TOO_LARGE','AUDIO_YM_STOPPED','AUDIO_YM_SAVE_INVALID',
+  'AUDIO_YM_LOAD_INVALID'];
+const MAX_CHECKPOINT=4096;
 
 export class AudioYmStop extends Error {
   constructor(code){super(code);this.code=code;}
@@ -36,6 +40,20 @@ export async function loadYm2203(bytes){
         const at=x.ao_ym_pcm(h);
         return {firstSample:x.ao_ym_block_first(h),
           samples:new Int16Array(x.memory.buffer,at,n).slice()};
+      },
+      // After a render only; returns a copy of the checkpoint bytes.
+      save(){
+        live();
+        const n=check(x.ao_ym_save(h));
+        return new Uint8Array(x.memory.buffer,x.ao_ym_checkpoint(h),n).slice();
+      },
+      // Only as the first call on a fresh synthesizer.
+      load(bytes){
+        live();
+        if(!(bytes instanceof Uint8Array)||bytes.length>MAX_CHECKPOINT)
+          throw new AudioYmStop('AUDIO_YM_LOAD_INVALID');
+        new Uint8Array(x.memory.buffer,x.ao_ym_checkpoint(h),bytes.length).set(bytes);
+        check(x.ao_ym_load(h,bytes.length));
       },
       destroy(){if(h){x.ao_ym_destroy(h);h=0;}},
     });
