@@ -7,7 +7,7 @@ import {createServer} from 'node:http';
 import {Worker} from 'node:worker_threads';
 import {performance} from 'node:perf_hooks';
 import {resolve,join} from 'node:path';
-import {existsSync,readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {existsSync,readFileSync,writeFileSync,mkdirSync,renameSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createLiveControls} from '../src/v3_b2c_live_controls.mjs';
 import {LIVE_FRAMES} from '../src/v3_b2c_session_policy.mjs';
@@ -18,6 +18,8 @@ import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {prepareAudioBundle} from '../src/gngb_audio_bundle_overlay.mjs';
 import {createVisibleFrameGate} from '../src/v3_b2c_visible_gate.mjs';
 import {LIVE_TAPE_SCHEMA} from '../src/v3_b3_live_tape.mjs';
+import {checkpointRuntime} from '../src/checkpoint_runtime.mjs';
+import {encodeCheckpoint,decodeCheckpoint,ymFirstSample} from '../src/checkpoint_format.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 // Use the offline-discovered gameplay bundle when available. Otherwise
@@ -94,6 +96,23 @@ let reads={all:0,coin:0,start:0,p1:0},busWitness=null;
 // Exact port values the CPU read this session (replayable offline).
 let portChanges=[],checkFrame=null;
 const PROGRAM_SHA256=loadFrozen(BUNDLE).manifest.files['program.mjs'];
+// One quick-save checkpoint, private (RAM holds copies of ROM code).
+const CHECKPOINT=join(ROOT,'out/web-checkpoint/quick.json');
+let saveRequest=null,pendingSave=null;
+const checkpointInfo=()=>{
+  if(!existsSync(CHECKPOINT))return {exists:false};
+  try{
+    const c=decodeCheckpoint(readFileSync(CHECKPOINT,'utf8'),
+      {programSha256:PROGRAM_SHA256});
+    return {exists:true,frame:c.frame,savedAt:c.savedAt};
+  }catch(e){return {exists:true,invalid:e.code??'CK_FORMAT_INVALID'};}
+};
+const writeCheckpoint=text=>{
+  mkdirSync(join(ROOT,'out/web-checkpoint'),{recursive:true,mode:0o700});
+  const temp=CHECKPOINT+'.tmp';
+  writeFileSync(temp,text,{mode:0o600});
+  renameSync(temp,CHECKPOINT);
+};
 const liveTape=()=>({schema:LIVE_TAPE_SCHEMA,bundle:BUNDLE,
   generation:B3_SELECTED?.generation??null,program_sha256:PROGRAM_SHA256,
   session:generation,frame:latest,check:checkFrame,halt,changes:portChanges});
@@ -173,7 +192,7 @@ font:12px ui-monospace,monospace;border:1px solid #4a5870;transition:.08s}
 kbd.held{background:#2d5fb3;border-color:#5b8de0}
 kbd.read{background:var(--ok);color:#06220f;border-color:var(--ok)}
 .legend{font-size:.72rem;color:#7d8aa0;margin-left:auto}
-#audio-health{font-size:.85rem;color:#aeb9ca}
+#audio-health,#ck-info{font-size:.85rem;color:#aeb9ca}
 details{margin-top:12px}
 summary{cursor:pointer;font-size:.85rem;color:#aeb9ca;padding:4px 0}
 .diag{display:grid;gap:4px;margin-top:8px;font-size:.85rem;color:#c3cbda}
@@ -213,8 +232,13 @@ footer{color:#7d8aa0;font-size:.8rem;margin-top:16px;line-height:1.4}
 <button id="fullscreen" type="button" class="ghost" title="Pantalla completa">⛶</button>
 <button id="scale" type="button" class="ghost" title="Cambiar escala">×3</button>
 </div>
+<div class="group">
+<button id="ck-save" type="button" title="Guardar checkpoint">Guardar <kbd>G</kbd></button>
+<button id="ck-load" type="button" title="Cargar checkpoint" disabled>Cargar <kbd>C</kbd></button>
+</div>
 <button id="restart" type="button" class="danger ghost">↺ Reiniciar</button>
 </div>
+<p id="ck-info">Sin checkpoint guardado</p>
 <p id="audio-health">Audio en espera de un gesto</p>
 <div class="keys">
 <span>Controles:</span>
@@ -399,12 +423,15 @@ document.getElementById('continue').addEventListener('click',async()=>{
   if(!response.ok)status.textContent='No se pudo continuar la ejecución';
 });
 window.addEventListener('blur',()=>fetch('/release',{method:'POST'}).catch(()=>{}));
-async function restartEngine(){
+async function restartEngine(path='/reset'){
  // Fence old audio fetches BEFORE the server replaces the session.
  audioPollStop=true;
  try{
-   const response=await fetch('/reset',{method:'POST'});
-   if(!response.ok)throw Error('RESET_REJECTED');
+   const response=await fetch(path,{method:'POST'});
+   if(!response.ok){
+     if(audioOutput){audioPollStop=false;pollAudio();}
+     throw Error((await response.json().catch(()=>({}))).reason??'RESET_REJECTED');
+   }
    const next=await response.json();
    sessionId=next.sessionId;workletReport=null;
    if(audioOutput){
@@ -413,11 +440,44 @@ async function restartEngine(){
      audioPollStop=false;pollAudio();
    }
    ctx.clearRect(0,0,256,224);
-   last=-1;status.textContent='Reiniciando CPU MC6809 desde reset…';
- }catch{status.textContent='No se pudo reiniciar el motor';}
+   last=-1;status.textContent=path==='/reset'?'Reiniciando CPU MC6809 desde reset…':
+     'Cargando checkpoint del frame '+next.frame+'…';
+ }catch(e){status.textContent=path==='/reset'?'No se pudo reiniciar el motor':
+   'No se pudo cargar el checkpoint ('+e.message+')';}
 }
-document.getElementById('restart').addEventListener('click',restartEngine);
-document.getElementById('restart-overlay').addEventListener('click',restartEngine);
+document.getElementById('restart').addEventListener('click',()=>restartEngine());
+document.getElementById('restart-overlay').addEventListener('click',()=>restartEngine());
+// Checkpoint: one quick-save slot, saved at a real frame boundary on the
+// server (CPU, sound CPU and both YM2203) and loaded as a cold session.
+const ckInfo=document.getElementById('ck-info'),
+  ckLoad=document.getElementById('ck-load');
+const ckReasons={CK_ENGINE_PAUSED:'el motor está en pausa',
+  CK_ENGINE_HALTED:'el motor está detenido',CK_AUDIO_STOPPED:'el audio está detenido',
+  CK_SAVE_BUSY:'ya se está guardando',CK_SAVE_TIMEOUT:'el motor no respondió'};
+async function refreshCheckpoint(){
+ try{
+   const c=await (await fetch('/checkpoint',{cache:'no-store'})).json();
+   ckLoad.disabled=!c.exists||Boolean(c.invalid);
+   ckInfo.textContent=!c.exists?'Sin checkpoint guardado':c.invalid?
+     'Checkpoint no compatible con este motor ('+c.invalid+')':
+     'Checkpoint: frame '+c.frame+' · '+new Date(c.savedAt).toLocaleString();
+ }catch{}
+}
+async function saveCheckpoint(){
+ const r=await fetch('/checkpoint/save',{method:'POST'}).catch(()=>null);
+ const body=r?await r.json().catch(()=>({})):{};
+ if(r?.ok)await refreshCheckpoint();
+ else ckInfo.textContent='No se pudo guardar: '+(ckReasons[body.reason]??body.reason??'sin conexión');
+}
+const loadCheckpoint=()=>{if(!ckLoad.disabled)restartEngine('/checkpoint/load');};
+document.getElementById('ck-save').addEventListener('click',saveCheckpoint);
+ckLoad.addEventListener('click',loadCheckpoint);
+document.addEventListener('keydown',e=>{
+ if(e.repeat||e.ctrlKey||e.metaKey||e.altKey)return;
+ if(e.code==='KeyG'){e.preventDefault();saveCheckpoint();}
+ else if(e.code==='KeyC'){e.preventDefault();loadCheckpoint();}
+});
+refreshCheckpoint();
 async function tick(){
  if(fetching)return;fetching=true;
  try{
@@ -526,7 +586,8 @@ async function main(){
   if(proof.status!=='INPUT_ROUTE_UNCOMPILED'&&
      proof.status!=='INPUT_STATE_CHANGED')
     throw Error('V3_B2C_B2A_NOT_PROVEN');
-  const prepared=await prepareAudioBundle(ROOT,BUNDLE);
+  const prepared=await prepareAudioBundle(ROOT,BUNDLE,
+    {transform:checkpointRuntime});
   activeBundle=prepared.dir;
   if(!existsSync(join(ROOT,'out/audio/gg2.bin'))||
      !existsSync(join(ROOT,'out/audio/ym2203_lab')))
@@ -534,33 +595,54 @@ async function main(){
   console.log('V3_B2C_AUDIO_BUNDLE=PASS_OBSERVER_OVERLAY frames='+
     prepared.verifiedFrames+' runtime_sha256='+prepared.runtimeSha256);
   console.log('V3_B2C_AOT_BUNDLE='+ (BUNDLE===B3?'B3_G'+B3_SELECTED.generation:BUNDLE===B2E?'B2E':BUNDLE===B2D?'B2D':BUNDLE===B2B?'B2B':'B2A'));
-  const launch=()=>{
+  const launch=(checkpoint=null)=>{
     const id=++generation;
     releaseAll();
     earlyCoinPending=false;
-    frame=null;latest=0;known=false;cycle=0;unknownBytes=null;
+    if(pendingSave){pendingSave.reject(Error('CK_SESSION_REPLACED'));pendingSave=null;}
+    frame=null;latest=checkpoint?.frame??0;known=false;
+    cycle=checkpoint?.cpu.cpu.C??0;unknownBytes=null;
     pixelProbe=null;displayedServerFrame=0;
     source=null;lastGood=0;blocks=0;halt=null;
     reads={all:0,coin:0,start:0,p1:0};busWitness=null;
-    portChanges=[];checkFrame=null;
+    portChanges=checkpoint?checkpoint.tape.map(c=>[...c]):[];checkFrame=null;
     audioPackets=[];audioQueued=0;audioActive=false;audioStop=null;
-    audioNextSample=0;audioDelivered=0;audioNonzero=0;
+    audioNextSample=checkpoint?ymFirstSample(checkpoint.ym):0;
+    audioDelivered=audioNextSample;audioNonzero=0;
     audioPendingBatches=0;
     audioStats=null;workletStats=null;
     audioDroppedBeforeStart=0;
     pacingOrigin=null;
     advance=new Int32Array(new SharedArrayBuffer(4));
+    saveRequest=new Int32Array(new SharedArrayBuffer(4));
+    const request=saveRequest;
     const ack=advance;
-    const gate=createVisibleFrameGate();
+    // A loaded checkpoint resumes mid-game: no first-VBlank coin pause.
+    const gate=createVisibleFrameGate({armed:checkpoint===null});
     operatorGate=gate;
     const sound=new Worker(new URL('./gngb_live_audio_worker.mjs',import.meta.url),
       {workerData:{sessionId:id,rom:join(ROOT,'out/audio/gg2.bin'),
-        renderer:join(ROOT,'out/audio/ym2203_lab')}});
+        renderer:join(ROOT,'out/audio/ym2203_lab'),
+        checkpoint:checkpoint&&{audio:checkpoint.audio,ym:checkpoint.ym}}});
     audioWorker=sound;
     sound.on('message',m=>{
       if(id!==generation)return;
       if(m.type==='stats'){audioStats=m;return;}
+      if(m.type==='checkpoint'||m.type==='checkpoint-failed'){
+        const save=pendingSave;pendingSave=null;
+        if(!save?.cpu)return save?.reject(Error('CK_AUDIO_STATE_MISSING'));
+        if(m.type==='checkpoint-failed')return save.reject(Error('CK_AUDIO_STOPPED'));
+        try{
+          const text=encodeCheckpoint({programSha256:PROGRAM_SHA256,
+            frame:save.frame,cpu:save.cpu,audio:m.audio,ym:m.ym,tape:save.tape});
+          writeCheckpoint(text);
+          console.log('CK_SAVE=PASS frame='+save.frame);
+          save.resolve({frame:save.frame,bytes:text.length});
+        }catch(e){save.reject(e);}
+        return;
+      }
       if(m.type==='stop'){
+        if(pendingSave){pendingSave.reject(Error('CK_AUDIO_STOPPED'));pendingSave=null;}
         audioStop=m.code;console.error('V3_B2C_AUDIO=STOP_'+m.code);return;
       }
       if(m.type!=='pcm')return;
@@ -592,7 +674,8 @@ async function main(){
     });
     const fresh=new Worker(new URL('./v3_b2c_engine_worker.mjs',import.meta.url),
       {workerData:{bundle:activeBundle,zip:ZIP,inputs:inputs.buffer,
-        advance:ack.buffer,sessionFrames:SESSION_FRAMES,sessionId:id}});
+        advance:ack.buffer,sessionFrames:SESSION_FRAMES,sessionId:id,
+        saveRequest:request.buffer,checkpoint:checkpoint?.cpu??null}});
     worker=fresh;
     let firstRealFrame=false;
     const firstControlsPrinted=new Set();
@@ -602,6 +685,18 @@ async function main(){
         source=m.source;blocks=m.blocks;
         console.log('V3_B2C_SESSION=STARTED_'+id);
         console.log('V3_B2C_SESSION_FRAMES='+m.sessionFrames);
+      }
+      if(m.type==='checkpoint'){
+        // Board state at the end of frame m.frame; the audio worker answers
+        // after the batch of that same frame (messages are ordered).
+        for(const c of m.ports)portChanges.push(c);
+        if(!pendingSave||audioStop){
+          pendingSave?.reject(Error('CK_AUDIO_STOPPED'));pendingSave=null;return;
+        }
+        pendingSave.frame=m.frame;pendingSave.cpu=m.cpu;
+        pendingSave.tape=portChanges.map(c=>[...c]);
+        sound.postMessage({type:'save'});
+        return;
       }
       if(m.type==='audio-batch'){
         if(!audioStop){
@@ -696,7 +791,7 @@ async function main(){
       if(id===generation&&!halt)halt={status:'WORKER_EXIT',code};
     });
   };
-  const coldRestart=()=>{
+  const coldRestart=(checkpoint=null)=>{
     const previous=worker,oldSound=audioWorker,oldAdvance=advance;
     if(previous){
       // Release the old worker's VBlank wait before termination. Neither
@@ -705,10 +800,25 @@ async function main(){
       void previous.terminate().catch(()=>{});
     }
     if(oldSound)void oldSound.terminate().catch(()=>{});
-    launch();
-    console.log('V3_B2C_RESET=PASS_NEW_COLD_AOT_SESSION id='+generation);
+    launch(checkpoint);
+    console.log(checkpoint?'CK_LOAD=PASS frame='+checkpoint.frame+' id='+generation:
+      'V3_B2C_RESET=PASS_NEW_COLD_AOT_SESSION id='+generation);
   };
   launch();
+  // Raised at the next frame boundary of the running CPU; fails fast when
+  // the CPU is paused or halted, since no boundary would come.
+  const saveCheckpoint=()=>new Promise((resolve,reject)=>{
+    if(halt)return reject(Error('CK_ENGINE_HALTED'));
+    if(audioStop)return reject(Error('CK_AUDIO_STOPPED'));
+    if(operatorGate?.snapshot().paused||!latest)return reject(Error('CK_ENGINE_PAUSED'));
+    if(pendingSave)return reject(Error('CK_SAVE_BUSY'));
+    const timer=setTimeout(()=>{
+      if(pendingSave?.resolve===done){pendingSave=null;reject(Error('CK_SAVE_TIMEOUT'));}
+    },3000);
+    const done=v=>{clearTimeout(timer);resolve(v);};
+    pendingSave={resolve:done,reject:e=>{clearTimeout(timer);reject(e);}};
+    Atomics.store(saveRequest,0,1);
+  });
   const resumeOperator=()=>{
     if(!operatorGate?.release())return false;
     // Re-anchor monotonic presentation after a deliberate operator pause.
@@ -825,6 +935,32 @@ async function main(){
           return;
         }
         respond(res,200,JSON.stringify({ok:true}));return;
+      }
+      if(req.method==='GET'&&u.pathname==='/checkpoint'){
+        respond(res,200,JSON.stringify(checkpointInfo()));return;
+      }
+      if(req.method==='POST'&&u.pathname==='/checkpoint/save'){
+        try{
+          const saved=await saveCheckpoint();
+          respond(res,200,JSON.stringify({ok:true,...saved}));
+        }catch(e){
+          if(saveRequest)Atomics.store(saveRequest,0,0);
+          respond(res,409,JSON.stringify({ok:false,reason:e.message}));
+        }
+        return;
+      }
+      if(req.method==='POST'&&u.pathname==='/checkpoint/load'){
+        let checkpoint;
+        try{
+          if(!existsSync(CHECKPOINT))throw Error('CK_MISSING');
+          checkpoint=decodeCheckpoint(readFileSync(CHECKPOINT,'utf8'),
+            {programSha256:PROGRAM_SHA256});
+        }catch(e){
+          respond(res,409,JSON.stringify({ok:false,reason:e.code??e.message}));return;
+        }
+        coldRestart(checkpoint);
+        respond(res,200,JSON.stringify({ok:true,sessionId:generation,
+          frame:checkpoint.frame}));return;
       }
       if(req.method==='POST'&&u.pathname==='/reset'){
         coldRestart();

@@ -6,9 +6,13 @@ import {cpSync,existsSync,mkdirSync,mkdtempSync,readFileSync,
 import {join} from 'node:path';
 import {loadFrozen,sha256,runFrozen} from './v2_b1_frozen.mjs';
 
-export async function prepareAudioBundle(root,selectedDir,{verifyFrames=2}={}) {
+// transform: optional runtime source patch (e.g. checkpointRuntime); the copy
+// is keyed by the patched digest and verified against the selected bundle.
+export async function prepareAudioBundle(root,selectedDir,{verifyFrames=2,
+  transform=null}={}) {
   const original=loadFrozen(selectedDir).manifest;
-  const runtime=readFileSync(join(root,'src/gngb_runtime.mjs'));
+  let runtime=readFileSync(join(root,'src/gngb_runtime.mjs'));
+  if(transform)runtime=Buffer.from(transform(runtime.toString('utf8')),'utf8');
   const body=runtime.toString('utf8');
   if(!body.includes('onAudioEvent')||!body.includes('onAudioComplete'))
     throw Error('AUDIO_BUNDLE_OBSERVERS_MISSING');

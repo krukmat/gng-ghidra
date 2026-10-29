@@ -45,7 +45,22 @@ export async function createAudioCommandSource(rom){
     commands.push({kind:'U',tick});
     return {commands,stats};
   };
-  return Object.freeze({batch,snapshot:session.snapshot});
+  // Checkpoint after a batch: Z80 session plus the events still queued
+  // past the frontier. Import only into a fresh source, before any batch.
+  const exportState=()=>({session:session.exportState(),
+    inputEvents:inputEvents.map(e=>({...e})),
+    ymEvents:ymEvents.map(e=>({...e})),seq,frontier});
+  const importState=s=>{
+    if(frontier!==0||inputEvents.length||ymEvents.length||
+       !Array.isArray(s?.inputEvents)||!Array.isArray(s.ymEvents)||
+       !Number.isSafeInteger(s.seq)||!Number.isSafeInteger(s.frontier))
+      fail('AUDIO_LIVE_STATE_INVALID');
+    session.importState(s.session);
+    inputEvents=s.inputEvents.map(e=>({...e}));
+    ymEvents=s.ymEvents.map(e=>({...e}));
+    ({seq,frontier}=s);
+  };
+  return Object.freeze({batch,snapshot:session.snapshot,exportState,importState});
 }
 
 // Native --stream protocol text for the same commands.

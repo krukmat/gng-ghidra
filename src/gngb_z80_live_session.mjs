@@ -17,6 +17,7 @@ export async function createZ80LiveSession(rom,{onYmEvent=()=>{},
     encodeURIComponent(compiled.source));
   const blocks=new Map(generated.z80AotBlocks);
   let resolutions=0,ymWrites=0,latchReads=0,maxOvershoot=0;
+  const resolved=[];
   const bus=createZ80SoundBus(rom,{
     onYmWrite:e=>{ymWrites++;onYmEvent({kind:'W',tick:e.tick12m,
       addr:e.addr,value:e.value});},
@@ -70,6 +71,7 @@ export async function createZ80LiveSession(rom,{onYmEvent=()=>{},
     if(typeof fn!=='function')
       throw new AudioLiveStop('AUDIO_LIVE_CODE_FORMAT_STOP');
     map.set(pc,fn);
+    resolved.push(pc);
   };
   const z80=createZ80SchedulerLab(blocks,bus,{maxStepsPerAdvance:1000000,
     resolveUncompiledPc});
@@ -120,5 +122,19 @@ export async function createZ80LiveSession(rom,{onYmEvent=()=>{},
     executedSteps:z80.snapshot().executedSteps,
     dynamicResolutions:resolutions,maxOvershootTStates:maxOvershoot,
     tStates:z80.state.t,frontierCycle,inReset:bus.resetAsserted});
-  return Object.freeze({apply,completeThrough,snapshot});
+  // Checkpoint after completeThrough(): bus, Z80 and counters. The
+  // single-instruction blocks resolved so far are compiled again on import.
+  const exportState=()=>({bus:bus.exportState(),z80:z80.exportState(),
+    resolved:[...resolved],resolutions,ymWrites,latchReads,maxOvershoot,
+    lastCycle,frontierCycle,mainCommands,resetTransitions});
+  const importState=s=>{
+    if(frontierCycle!==0||mainCommands||resetTransitions||
+       !Array.isArray(s?.resolved)||!Number.isSafeInteger(s.frontierCycle))
+      throw new AudioLiveStop('AUDIO_LIVE_STATE_INVALID');
+    for(const pc of s.resolved)if(!blocks.has(pc))resolveUncompiledPc(pc,blocks);
+    bus.importState(s.bus);z80.importState(s.z80);
+    ({resolutions,ymWrites,latchReads,maxOvershoot,lastCycle,frontierCycle,
+      mainCommands,resetTransitions}=s);
+  };
+  return Object.freeze({apply,completeThrough,snapshot,exportState,importState});
 }

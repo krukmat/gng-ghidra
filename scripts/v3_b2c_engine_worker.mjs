@@ -20,13 +20,17 @@ import {gngbGraphics,rendererInputs} from './r35_t5_render_check.mjs';
 
 const inputs=new Int32Array(workerData.inputs);
 const advance=new Int32Array(workerData.advance);
+// Checkpoint: the server sets saveRequest[0]=1; the next frame boundary
+// exports the board (runtime patched by src/checkpoint_runtime.mjs).
+const saveRequest=new Int32Array(workerData.saveRequest);
+const restored=workerData.checkpoint??null;
 const send=(message,transfer=[])=>parentPort.postMessage(message,transfer);
 const witness=createPortReadWitness();
 // Exact replayable record of every value the CPU read from SYSTEM/P1/DSW.
 const recorder=createPortRecorder();
 let lastGood=0;
 let cpu;
-let audioEvents=[],audioCompletedFrames=0;
+let audioEvents=[],audioCompletedFrames=restored?.frames??0;
 try{
   const dir=resolve(workerData.bundle);
   const {manifest,code}=loadFrozen(dir);
@@ -65,6 +69,9 @@ try{
         throughCycle:mark.frames*CYCLES_PER_FRAME,
         events:audioEvents});
       audioEvents=[];
+      if(Atomics.compareExchange(saveRequest,0,1,0)===1)
+        send({type:'checkpoint',frame:mark.frames,cpu:cpu.exportState(),
+          ports:recorder.drain()});
     },
     onFrame:frame=>{
       // Snapshot is emitted by the ACTUAL runtime. Never infer the
@@ -102,6 +109,7 @@ try{
       Atomics.wait(advance,0,seq);
     }
   });
+  if(restored)cpu.importState(restored);
   const result=cpu.run();
   const finalIO=witness.snapshot();
   send({type:'halt',status:result.status,

@@ -2,8 +2,8 @@
  * its first genuinely rendered frame, not at a fabricated game state.
  * A real Coin button press or explicit continue releases that VBlank.
  */
-export function createVisibleFrameGate(){
-  let armed=true,paused=false,firstVisible=null;
+export function createVisibleFrameGate({armed=true}={}){
+  let paused=false,firstVisible=null;
   return Object.freeze({
     shouldAdvance({index,known,coinHeld=false}){
       if(!Number.isSafeInteger(index)||index<1||typeof known!=='boolean'||

@@ -2,6 +2,7 @@
 // Reads private, timestamped YM writes; the caller supplies their provenance.
 // Z80 and AudioWorklet integration are deliberately NOT implemented here.
 #include "ymfm_opn.h"
+#include "ym2203_checkpoint.h"
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
@@ -66,6 +67,7 @@ int stream() {
   ym1.set_fidelity(ymfm::OPN_FIDELITY_MIN);
   ym0.reset();ym1.reset();
   uint64_t first=0,next=0,frontier=0,lastEvent=0;
+  bool fresh=true;
   std::vector<int16_t> pending;
   const auto advance=[&](uint64_t tick){
     const uint64_t end=(tick+ticks_per_sample-1)/ticks_per_sample;
@@ -80,6 +82,32 @@ int stream() {
     uint64_t tick=0;
     in>>op;
     if(op=='Q' && !(in>>extra))return 0;
+    // Checkpoint: S saves after a render; L <hex> restores as first command.
+    if(op=='S') {
+      if((in>>extra) || !pending.empty())
+        throw std::runtime_error("AUDIO_STREAM_SAVE_INVALID");
+      const auto bytes=ymck::save(ym0,ym1,{first,next,frontier,lastEvent});
+      std::cout.put('S');le32(std::cout,static_cast<uint32_t>(bytes.size()));
+      std::cout.write(reinterpret_cast<const char *>(bytes.data()),
+        static_cast<std::streamsize>(bytes.size()));
+      if(!std::cout.flush())
+        throw std::runtime_error("AUDIO_STREAM_OUTPUT_FAILED");
+      fresh=false;continue;
+    }
+    if(op=='L') {
+      std::string hex;
+      if(!fresh || !(in>>hex) || (in>>extra) || hex.size()%2)
+        throw std::runtime_error("AUDIO_STREAM_LOAD_INVALID");
+      std::vector<uint8_t> bytes(hex.size()/2);
+      for(size_t i=0;i<bytes.size();i++)
+        bytes[i]=static_cast<uint8_t>(std::stoul(hex.substr(2*i,2),nullptr,16));
+      ymck::timeline t;
+      if(!ymck::load(ym0,ym1,t,bytes.data(),bytes.size()))
+        throw std::runtime_error("AUDIO_STREAM_LOAD_INVALID");
+      first=t.first;next=t.next;frontier=t.frontier;lastEvent=t.lastEvent;
+      fresh=false;continue;
+    }
+    fresh=false;
     if(!(in>>tick) || tick<frontier || tick<lastEvent ||
        tick>master_hz*3600)
       throw std::runtime_error("AUDIO_STREAM_CLOCK_INVALID");

@@ -155,6 +155,18 @@ export function createZ80SchedulerLab(blocks,bus,{
     romLoadedByMameVerified:false,nativeZ80ParityVerified:false,
     audioWorking:false
   });
+  // Checkpoint: CPU registers plus the IRQ/reset clock, between steps.
+  const exportState=()=>({cpu:{...state},heldReset,irqPending,nextIrqAt,
+    irqRequests,irqAcknowledged,idleHaltCycles,steps,resets,overshootTStates});
+  const importState=s=>{
+    if(!s?.cpu||!Object.keys(CPU_ZERO).every(k=>k in s.cpu)||
+       !safeT(s.cpu.t)||typeof s.heldReset!=='boolean'||
+       typeof s.irqPending!=='boolean'||!safeT(s.nextIrqAt))
+      throw new AudioZ80SchedulerStop('AUDIO_Z80_LAB_STATE_INVALID');
+    Object.assign(state,s.cpu);
+    ({heldReset,irqPending,nextIrqAt,irqRequests,irqAcknowledged,
+      idleHaltCycles,steps,resets,overshootTStates}=s);
+  };
   return Object.freeze({state,step,advanceTo,advanceResetClockTo,
-    syncBoardReset,snapshot});
+    syncBoardReset,snapshot,exportState,importState});
 }

@@ -81,7 +81,17 @@ export function createZ80SoundBus(rom,{onYmWrite=null,onReset=null,
     }
     return {kind:e.kind,tick12m};
   };
-  return {read8,write8,applyMainEvent,
+  // Checkpoint: the whole bus state between main-CPU events.
+  const exportState=()=>({ram:ram.slice(),latch,resetAsserted,lastMainCycle});
+  const importState=s=>{
+    if(!(s?.ram instanceof Uint8Array)||s.ram.length!==ram.length||
+       !valid8(s.latch)||typeof s.resetAsserted!=='boolean'||
+       !Number.isSafeInteger(s.lastMainCycle))
+      throw new SoundBusStop('AUDIO_Z80_STATE_INVALID');
+    ram.set(s.ram);latch=s.latch;resetAsserted=s.resetAsserted;
+    lastMainCycle=s.lastMainCycle;
+  };
+  return {read8,write8,applyMainEvent,exportState,importState,
     get soundLatch(){return latch},
     get resetAsserted(){return resetAsserted}};
 }
