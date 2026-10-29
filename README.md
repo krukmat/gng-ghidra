@@ -98,7 +98,7 @@ node scripts/v3_b2c_live.mjs --serve   # web: http://127.0.0.1:18609
 bash scripts/ao_build_apk.sh           # Android: out/android/gng.apk
 ```
 
-**Estado (28/10/2026):** video, controles y sonido iguales a MAME; app Android jugable. Falta recorrer el juego completo de principio a fin y el APK final firmado. Detalle técnico en [docs/arquitectura-base.md](docs/arquitectura-base.md).
+**Estado (29/10/2026):** video, controles y sonido iguales a MAME; app Android jugable. En la web y en Android se puede guardar y cargar una partida con el sonido exacto: botones Guardar y Cargar, o las teclas `G` y `C` en la web ([detalle](docs/checkpoint-web-2026-10-29.md)). Falta recorrer el juego completo de principio a fin y el APK final firmado. Detalle técnico en [docs/arquitectura-base.md](docs/arquitectura-base.md).
 
 ---
 
