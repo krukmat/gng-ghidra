@@ -63,8 +63,12 @@
   #restart,#ck-save,#ck-load{min-height:32px;padding:4px 10px;font-size:11px;
     color:#a7b9ca;background:transparent;border-color:#2e3d4b;border-radius:9px}
   #sound{min-height:34px;font-size:12px;border-radius:10px;background:transparent}
-  #footer{display:flex;gap:6px;align-items:center;justify-content:space-between;
-    width:100%;padding-top:6px}
+  #footer{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+    justify-content:space-between;width:100%;padding-top:6px}
+  /* Restart on its own row, Save/Load share the next: three in a row overflow
+     the 126px side panel at 640x360. */
+  #footer button{flex:1 1 0;min-width:0;padding:4px 6px}
+  #footer #restart,#status{flex-basis:100%}
   #hint{margin:0;text-align:center;font-size:12px;color:#acbdcc}
   #status{font:10px/1.6 ui-monospace,monospace;color:#8da899;
     white-space:nowrap;text-align:center}

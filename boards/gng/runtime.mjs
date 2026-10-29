@@ -166,9 +166,33 @@ export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PE
     if(pc<0x6000&&$.bank===null)fail('R35_T5_BANK_UNSELECTED_EXEC',{target:pc});
     return view.at(pc,$.bank);
   };
+  // An identity depends only on (overlay, bank, pc): build and validate each
+  // one once instead of on every dispatched block; the bank/ROM checks still
+  // run. Cached keys are the blocks' own strings, so the executor's lookup
+  // compares identical objects instead of characters.
+  const keys=new Map(),own=new Map([...blocks.keys()].map(k=>[k,k]));
+  const slot=pc=>{
+    if(pc<0x3000){
+      const id=overlayAt(pc);
+      return id<0?-1:0x100000+id*0x10000+pc;
+    }
+    if(pc<0x4000)fail('R35_T5_EXEC_OUTSIDE_ROM',{target:pc});
+    if(pc<0x6000&&$.bank===null)fail('R35_T5_BANK_UNSELECTED_EXEC',{target:pc});
+    return pc<0x6000?($.bank+1)*0x10000+pc:pc;
+  };
   const cpu=createMc6809Executor($,{blocks,cyclesPerFrame,
     readVector:a=>code.fixed[a]<<8|code.fixed[a+1],
-    codeKey:pc=>{const at=codeAt(pc);return at?view.identity(at):null;},
+    codeKey:pc=>{
+      const n=slot(pc);
+      if(n<0)return null;
+      let key=keys.get(n);
+      if(key===undefined){
+        const at=codeAt(pc);
+        if(at){key=view.identity(at);key=own.get(key)??key;}else key=null;
+        keys.set(n,key);
+      }
+      return key;
+    },
     codeContext:pc=>{const at=codeAt(pc);return at?view.context(at):'';},
     onBoundary:at=>{
       if(!$.snapped)snapshot();

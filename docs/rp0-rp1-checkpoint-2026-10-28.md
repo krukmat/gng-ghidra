@@ -2,7 +2,7 @@
 
 ## Estado y siguientes tareas
 
-**Dirección vigente:** la base vive en un repositorio local separado, `/Users/matias/rom-migration-base`, ahora en `21bd7d04b594ebec664d978f6a7a69e9a234e2f4`. No tiene remoto. Este repositorio sigue siendo dueño de GnG. RP-3 extrajo compilador y ejecución Z80, transporte PCM, protocolo AudioWorklet, reloj de frames, un banco YM2203 parametrizable y los hosts de navegador de engine y audio. La placa integrada restaura CPU/Z80/YM de forma nativa; los workers Android/web son composiciones GnG sobre esos hosts, y el de escritorio consume la placa extraída. El shell Android acepta identidad y assets por propiedades Gradle y pasó en emulador con otro paquete. Siguen pendientes dispositivo físico, gate de rendimiento, ruta de escritorio sobre los hosts comunes, plantilla del shell en la base, formato nuevo de artefacto y generador. [Plan y tareas](plan-base-reutilizable-2026-10-28.md#4-plan-de-ejecución).
+**Dirección vigente:** la base vive en un repositorio local separado, `/Users/matias/rom-migration-base`, ahora en `21bd7d04b594ebec664d978f6a7a69e9a234e2f4`. No tiene remoto. Este repositorio sigue siendo dueño de GnG. RP-3 extrajo compilador y ejecución Z80, transporte PCM, protocolo AudioWorklet, reloj de frames, un banco YM2203 parametrizable y los hosts de navegador de engine y audio. La placa integrada restaura CPU/Z80/YM de forma nativa; los workers Android/web son composiciones GnG sobre esos hosts, y el de escritorio consume la placa extraída. El shell Android acepta identidad y assets por propiedades Gradle y pasó en emulador con otro paquete. El gate de rendimiento frente a RP-0 pasa con un 10 % de tolerancia, tras corregir el despacho de bloques de la placa GnG. Siguen pendientes dispositivo físico, ruta de escritorio sobre los hosts comunes, plantilla del shell en la base, formato nuevo de artefacto y generador. [Plan y tareas](plan-base-reutilizable-2026-10-28.md#4-plan-de-ejecución).
 
 RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó interfaces, propietarios de constantes y una receta de GnG **en borrador**. RP-2 añadió una declaración conservadora de MC6809: IRQ, overlays precompilados exactos, sin código dinámico, y rechazo de opcodes o valores desconocidos. RP-3 declaró Z80 con IRQ IM1 y resolución dinámica; la receta RP-1 original falla con `MIGRATION_INTERRUPT_UNSUPPORTED` porque exigía NMI sin implementación. Una derivación privada que exige solo IRQ pasa el contrato de capacidades, pero la construcción completa desde binario original sigue en RP-4/RP-5. Los hosts comunes de navegador ya existen; la instalación automatizada de la copia seleccionada sigue pendiente.
 
@@ -54,7 +54,7 @@ RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó inter
     - seis controles leídos por la CPU;
     - multitouch, deslizamiento, salto diagonal y cancelación del stick PASS;
     - Game Over en el frame 4020 y vuelta al juego con Moneda+Continuar en el 4260.
-  - La aserción de layout falla porque Guardar/Cargar no caben a 640×360. Viene de `1fc0557`, anterior a RP-3.
+  - La aserción de layout fallaba porque Guardar/Cargar no cabían a 640×360 (viene de `1fc0557`, anterior a RP-3). Corregido en el cierre de abajo.
   - Emulador Android, APK de producto: `ao_stick_android_check` PASS con Moneda, Start y stick por toques reales del sistema. La CPU lee:
     - Derecha `0xFE` (frame 1020);
     - Derecha+Salto `0xDE` (1140, pulgar 21 px arriba);
@@ -62,14 +62,22 @@ RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó inter
     - neutro `0xFF` (1260).
   - En un emulador recién arrancado con `-read-only`, el aviso de pantalla completa del sistema se queda con el toque de calibración y la prueba falla. Hay que confirmarlo antes con `adb shell settings put secure immersive_mode_confirmations confirmed`.
 
+- **Layout y rendimiento (29/10/2026, base sin cambios en `21bd7d0`, sin lock nuevo):**
+  - Guardar/Cargar a 640×360: el pie de `android/web/index.html` pasa a filas (Reiniciar sola; Guardar y Cargar juntas; estado debajo). Assets regenerados (generación 6, 49 archivos). `ao_controls_check 5 --gameover` completo, con layout: AO4 PASS, 5/5 arranques, seis lecturas de moneda por intento, Game Over y Continuar en el frame 4260, Reiniciar vuelve al menú. `ao_checkpoint_check` en Chromium: GO (914/1358).
+  - Gate nuevo `scripts/rp3_perf.mjs`: un proceso por muestra con modos intercalados, mediana y solo el tiempo de ejecución. Compara el bundle RP-0 con la placa sobre la base fijada (solo CPU) y la placa antigua más el WASM YM de referencia con la sesión compuesta más el banco (con audio). RP-0 no fijaba tolerancia; se usa el 10 %.
+  - Primera medición FAIL: CPU 2,25× y sesión 1,38×. La placa GnG construía y validaba la identidad `space/context/overlay/pc` (con regex) en cada bloque despachado. Ahora la cachea por overlay, banco y PC, reutiliza la cadena de la propia tabla de bloques y mantiene las comprobaciones de ROM y banco en cada despacho.
+  - Resultado (`rp3-perf-600-r3.json`, 600 frames, 7 repeticiones, Node 22.23.0, mediana en ms/frame): CPU 0,1297 → 0,1422 (1,096×, margen escaso); sesión con audio 0,458 → 0,4801 (1,048×). Dispersión inferior al 3 % salvo valores atípicos aislados.
+  - Equivalencia tras el cambio: `rp3_compare` de 120 frames idéntico a `rp3-compare-120-v6.json` (frames, PCM, ciclo 3018242). La cinta de 900 da `equivalent: true` con restauración. Con `live-tapes/2026-10-28T18-01-50-790Z`, la placa de HEAD y la modificada dan frames, PCM y ciclo (22636801) idénticos. No se identificó la cinta de `rp3-compare-tape-900-v6.json` (ciclo 22636799, mismo PCM y otros frames): ninguna de las siete probadas reproduce su hash de frames, y el checkpoint no la registraba.
+  - Pruebas: base 20/20 con `YM2203_WASM` apuntando al banco; sin esa variable se omiten las tres del dispositivo. Consumidor: `node --test tests/test_*.mjs tests/bot/*.test.mjs` da 777 pasan, 1 omitida y 0 fallos en 141 archivos. La selección de 78 archivos de la línea base (438) no está documentada.
+
 **Pendientes RP-3 ejecutables:**
-- Gate de rendimiento frente a RP-0.
 - Dispositivo Android físico: controles, segundo plano y audio ON/OFF con el paquete parametrizado.
 - Ruta web de escritorio (`scripts/v3_b2c_engine_worker.mjs`, YM nativo de `src/gngb_ym_native_stream.mjs` y laboratorio `src/audio_ym2203_lab.cpp` con `src/ym2203_checkpoint.h`): pasarla a los hosts comunes o retirarla.
 - Plantilla Gradle/Kotlin del shell Android, extraída a la base.
 - Sesión compuesta como punto de entrada de la receta.
 - Interpretación de RAM, etiquetas, 4-way y continuación, movidas a placa/juego.
-- Guardar/Cargar a 640×360: los botones no caben desde `1fc0557`, así que el gate de controles falla en layout.
+- Registrar la cinta de cada informe `rp3_compare` (ruta o SHA) y documentar el comando exacto de la suite del consumidor.
+- Margen de rendimiento en CPU (1,096× con tolerancia 1,10×): vigilar en RP-6.
 
 `src/ao_ym2203_wasm.*`, `scripts/ao_build_audio_wasm.sh` y `out/android/audio/ym2203.wasm` siguen como referencia. Se mantiene el límite Z80: IRQ IM1, sin NMI ni paridad nativa de interrupciones. El GO de RP-3 requiere esas tareas.
 
