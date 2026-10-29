@@ -15,7 +15,8 @@ const APK=join(ROOT,'out/android/gng.apk');
 const CHECK=join(ROOT,'out/android/check');
 const ADB=join(process.env.ANDROID_HOME??join(homedir(),'Library/Android/sdk'),
   'platform-tools/adb');
-const PKG='org.gng.offline';
+const PKG=process.env.AO_APP_ID??'org.gng.offline';
+const ACTIVITY='org.gng.offline.MainActivity';
 const audio=process.argv.includes('--audio'); // AO-6: tap Sound ON after boot
 const args=process.argv.slice(2).filter(a=>a!=='--audio');
 const seconds=Number(args[0]??15);
@@ -65,7 +66,7 @@ async function main(){
     adb(serial,'shell','am','force-stop',PKG);
     report.launchEpochMs=Number(adb(serial,'shell','date','+%s%3N').trim());
     report.launch=adb(serial,'shell','am','start','-W','-n',
-      PKG+'/.MainActivity').trim();
+      PKG+'/'+ACTIVITY).trim();
     console.log('AO3_STEP=attach');
     const devices=await _android.devices();
     device=devices.find(d=>d.serial()===serial);

@@ -25,7 +25,9 @@ const LIB_ENTRIES=['gngb_frame_renderer.mjs','gngb_render_inputs.mjs',
   'v2_b1_observable.mjs','gngb_input_contract.mjs','ao_web_assets.mjs',
   'ao_touch_controls.mjs','ao_game_state.mjs','v3_b2c_port_witness.mjs',
   'ao_stick.mjs','ao_audio_commands.mjs','ao_ym2203_wasm.mjs','gngb_audio_resampler.mjs',
-  'checkpoint_format.mjs','v3_b3_live_tape.mjs'];
+  'checkpoint_format.mjs','v3_b3_live_tape.mjs',
+  'base/src/host/web/pcm-worklet.mjs',
+  'base/src/host/web/frame-pacer.mjs','boards/gng/web-host-config.mjs'];
 const AUDIO_WASM=join(ROOT,'out/android/audio');
 const Z80_ROM_SHA1='7ef9ec5c2072e21c787a6bbf700033f50c759c1d';
 const sha256=b=>createHash('sha256').update(b).digest('hex');

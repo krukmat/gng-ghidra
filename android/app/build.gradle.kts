@@ -3,19 +3,25 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val appId = providers.gradleProperty("AO_APP_ID").getOrElse("org.gng.offline")
+val appLabel = providers.gradleProperty("AO_APP_LABEL").getOrElse("Ghosts'n Goblins")
+val assetsDir = providers.gradleProperty("AO_ASSETS_DIR")
+    .getOrElse("../out/android/assets")
+
 android {
     namespace = "org.gng.offline"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "org.gng.offline"
+        applicationId = appId
+        manifestPlaceholders["appLabel"] = appLabel
         minSdk = 26
         targetSdk = 34
         versionCode = 8
         versionName = "0.7.0"
     }
 
-    sourceSets.getByName("main").assets.srcDir(rootProject.file("../out/android/assets"))
+    sourceSets.getByName("main").assets.srcDir(rootProject.file(assetsDir))
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -11,28 +11,21 @@
  * Reiniciar. 'save' exports the board at the next frame boundary, after that
  * frame's audio batch, and the audio worker adds Z80 and YM on the same port.
  */
-const CPU_HZ=1.5e6; // MC6809 E clock
-const MAX_BEHIND=30; // frames; further behind re-anchors and counts a slip
+import {createFramePacer} from './base/src/host/web/frame-pacer.mjs';
+import {GNG_WEB_HOST} from './boards/gng/web-host-config.mjs';
+
 const post=(msg,transfer=[])=>postMessage(msg,transfer);
-const ports=new Uint8Array(5);
-const SAMPLES_PER_FRAME=1048; // 25152 cycles x 8 ticks / 192 ticks per sample
-const SAMPLE_MS=1000/62500;
-// Queued source samples kept ahead of playback. Operator (28/10): 8 frames
-// (134 ms, within the 200 ms capacity) after 5 frames lost audio on the phone.
-const LEAD=8*SAMPLES_PER_FRAME;
-const MAX_AUDIO_BACKLOG=120; // frames sent but not yet synthesized
-const CLOCK_LOST_MS=250;
-const START_WAIT_MS=1000; // a new output may take this long to start consuming
+const ports=new Uint8Array(GNG_WEB_HOST.inputPortCount);
+const pacer=createFramePacer({...GNG_WEB_HOST,
+  frameMs:GNG_WEB_HOST.cyclesPerFrame/GNG_WEB_HOST.cpuHz*1000});
 let audioPort=null,audioAcked=0,audioDead=false;
-// Output clock: {sessionId, latency (samples), port, last:{sample,at}}.
-let clock=null,fillLead=false;
 let booted=false,saveWanted=false,saving=null;
 
 onmessage=({data})=>{
   if(data?.type==='boot'&&!booted){booted=true;start(data.checkpoint??null).catch(fail);}
   else if(data?.type==='save')saveWanted=true;
   // AO-4 sends the five input port bytes (SYSTEM, P1, P2, DSW1, DSW2).
-  if(data?.type==='ports'&&data.ports?.length===5)ports.set(data.ports);
+  if(data?.type==='ports'&&data.ports?.length===ports.length)ports.set(data.ports);
   // Test only (?audioTest): block this worker, as a slow phone frame would.
   else if(data?.type==='test-stall'&&new URLSearchParams(location.search).has('audioTest')){
     const end=performance.now()+Math.min(2000,data.ms);
@@ -44,19 +37,9 @@ onmessage=({data})=>{
       else if(m?.type==='checkpoint'||m?.type==='checkpoint-failed')saved(m);
     };
   }else if(data?.type==='audio-latency'){
-    if(clock?.sessionId===data.sessionId)clock.latency=data.latencyMs/SAMPLE_MS;
+    pacer.latency(data.sessionId,data.latencyMs);
   }else if(data?.type==='audio-clock'){
-    clock?.port?.close();
-    clock=data.sessionId==null?null:{sessionId:data.sessionId,
-      latency:data.latencyMs/SAMPLE_MS,port:data.port,last:null,
-      startFrame:null,openedAt:null};
-    // A new output starts with the whole LEAD queued, not just the prebuffer.
-    fillLead=clock!==null;
-    if(clock)clock.port.onmessage=({data:m})=>{
-      if(m?.type!=='clock'||m.sessionId!==clock?.sessionId)return;
-      if(m.state==='PLAYING')clock.last={sample:m.sample,at:performance.now()};
-      else clock.last=null;
-    };
+    pacer.open(data);
   }
 };
 const audioStop=code=>{
@@ -136,7 +119,7 @@ async function start(checkpointText){
         saveWanted=false;post({type:'checkpoint-failed',code:'CK_AUDIO_STOPPED'});
       }
       if(!audioPort||audioDead)return;
-      if(audioFrames-audioAcked>MAX_AUDIO_BACKLOG)
+      if(audioFrames-audioAcked>GNG_WEB_HOST.maxAudioBacklog)
         return audioStop('AUDIO_PRODUCER_BEHIND');
       audioPort.postMessage({type:'batch',frame:audioFrames,
         throughCycle:audioFrames*CYCLES_PER_FRAME,events:audioEvents});
@@ -155,7 +138,7 @@ async function start(checkpointText){
       // Same rule as the live wrapper: never draw a frame with unknown bytes.
       if(rendererUnknownCount(frame)===0){
         latest=frame;heard.push(frame);
-        if(heard.length>40)heard.shift(); // ~670 ms: LEAD + output latency
+        if(heard.length>GNG_WEB_HOST.heardCapacity)heard.shift();
       }
       const state=observeGameState(frame);
       if(state){
@@ -179,7 +162,8 @@ async function start(checkpointText){
   const render=frame=>{
     const image=renderGngbRgba(rendererInputs(frame.record,
       {scroll:frame.scroll,latch:frame.latch},gfx));
-    if(image.width!==256||image.height!==224||image.rgba.length!==256*224*4)
+    if(image.width!==GNG_WEB_HOST.width||image.height!==GNG_WEB_HOST.height||
+       image.rgba.length!==image.width*image.height*4)
       throw Error('AO_RENDER_GEOMETRY');
     return image.rgba;
   };
@@ -206,40 +190,17 @@ async function start(checkpointText){
     return;
   }
 
-  const frameMs=CYCLES_PER_FRAME/CPU_HZ*1000;
-  let done=restored?restored.frame:0,anchor=performance.now()-done*frameMs;
-  let shown=0,slips=0,paced=false;
-  let win={since:anchor,frames:0,rendered:0,cpuMs:0,renderMs:0,lateMs:0,audioFrames:0};
-  // Source sample being consumed now, extrapolated from the last report.
-  const consumed=now=>clock.last.sample+Math.min(now-clock.last.at,40)/SAMPLE_MS;
+  let done=restored?restored.frame:0;
+  pacer.reset(done,performance.now());
+  let shown=0;
+  let win={since:pacer.anchor,frames:0,rendered:0,cpuMs:0,renderMs:0,
+    lateMs:0,audioFrames:0};
   const tick=()=>{
     const now=performance.now();
-    if(clock?.last&&now-clock.last.at>CLOCK_LOST_MS){
-      clock.last=null;post({type:'audio-clock-lost',frame:done});
-    }
-    let due,frame=latest;
-    if(clock?.last&&!audioDead){
-      const at=consumed(now);
-      due=Math.min(done+MAX_BEHIND,Math.floor((at+LEAD)/SAMPLES_PER_FRAME));
-      // Show the newest drawable frame whose audio is already audible.
-      const audible=Math.floor((at-clock.latency)/SAMPLES_PER_FRAME)+1;
-      frame=heard.findLast(f=>f.index<=audible)??null;
-      paced=true;
-    }else{
-      // Back on the AO-2 clock, anchored at the current frame: no jump.
-      if(paced){anchor=now-done*frameMs;paced=false;}
-      if(fillLead){anchor-=LEAD/SAMPLES_PER_FRAME*frameMs;fillLead=false;}
-      win.lateMs=Math.max(win.lateMs,now-(anchor+(done+1)*frameMs));
-      due=Math.floor((now-anchor)/frameMs);
-      if(due-done>MAX_BEHIND){anchor=now-done*frameMs;due=done+1;slips++;}
-      // Until the new output plays, queue LEAD and no more: real-time frames
-      // on top of it would overflow the 200 ms worklet capacity.
-      if(clock&&!audioDead&&clock.openedAt===null){
-        clock.startFrame=done;clock.openedAt=now;
-      }
-      if(clock&&!audioDead&&now-clock.openedAt<START_WAIT_MS)
-        due=Math.min(due,clock.startFrame+LEAD/SAMPLES_PER_FRAME);
-    }
+    const {due,frame,paced,clockLost,lateMs}=pacer.select(
+      now,done,latest,heard,audioDead);
+    if(clockLost)post({type:'audio-clock-lost',frame:done});
+    if(lateMs!==null)win.lateMs=Math.max(win.lateMs,lateMs);
     const c0=performance.now();
     for(;done<due;done++){
       if(!step(done+1))return;
@@ -255,7 +216,7 @@ async function start(checkpointText){
       win.renderMs+=performance.now()-c1;
     }
     if(c1-win.since>=1000){
-      post({type:'stats',t:Math.round(c1-anchor),frames:done,slips,
+      post({type:'stats',t:Math.round(c1-pacer.anchor),frames:done,slips:pacer.slips,
         audioPaced:win.audioFrames,audioBacklog:audioFrames-audioAcked,
         windowMs:Math.round(c1-win.since),windowFrames:win.frames,
         rendered:win.rendered,cpuMs:+win.cpuMs.toFixed(2),
@@ -266,9 +227,7 @@ async function start(checkpointText){
         ram2:last?.record[2],ram5:last?.record[5],ram23:last?.record[0x23],gameState});
       win={since:c1,frames:0,rendered:0,cpuMs:0,renderMs:0,lateMs:0,audioFrames:0};
     }
-    const wait=clock?.last&&!audioDead?
-      Math.min(frameMs,((done+1)*SAMPLES_PER_FRAME-LEAD-consumed(performance.now()))*SAMPLE_MS):
-      anchor+(done+1)*frameMs-performance.now();
+    const wait=pacer.wait(performance.now(),done,audioDead);
     setTimeout(guarded,Math.max(0,wait));
   };
   const guarded=()=>{try{tick();}catch(e){fail(e);}};

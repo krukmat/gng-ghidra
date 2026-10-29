@@ -30,9 +30,9 @@ if(!report.startsWith(resolve('out')+'/')||!Number.isInteger(frames)||
    (scenario==='tape'&&!tapeArg))throw Error('RP3_ARGUMENT_INVALID');
 const bundle=resolve(bundleArg),reference=JSON.parse(readFileSync(resolve(referenceArg)));
 const recipe=validateRecipe(JSON.parse(readFileSync(
-  'out/base-reference/rp3-v1/migration.json')));
+  'out/base-reference/rp3-v4/migration.json')));
 const lock=validateLock(JSON.parse(readFileSync(
-  'out/base-reference/rp3-v1/migration.lock.json')));
+  'out/base-reference/rp3-v4/migration.lock.json')));
 verifyPinnedComponents(resolve('base'),lock);
 assertCompatible(recipe,lock,capabilities);
 const {manifest,code}=loadFrozen(bundle);

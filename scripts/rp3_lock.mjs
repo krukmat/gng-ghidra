@@ -25,7 +25,8 @@ for(const [path,expected] of Object.entries(previous.base.components))
 const paths=[...new Set([...Object.keys(previous.base.components),
   'src/build/z80/compiler.mjs','src/cpu/z80/boundary.mjs',
   'src/cpu/z80/scheduler.mjs','src/cpu/z80/live-session.mjs',
-  'src/audio/pcm-queue.mjs','src/audio/resampler.mjs'])];
+  'src/audio/pcm-queue.mjs','src/audio/resampler.mjs',
+  'src/host/web/pcm-worklet.mjs','src/host/web/frame-pacer.mjs'])];
 const revision=git('rev-parse','HEAD').toString().trim();
 const lock={...previous,status:'rp3-z80-pcm',base:{revision,
   components:Object.fromEntries(paths.map(path=>
