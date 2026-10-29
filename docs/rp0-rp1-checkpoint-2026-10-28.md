@@ -48,6 +48,19 @@ RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó inter
     - Checkpoint en Chromium: GO (915/1358).
     - APK de producto `org.gng.offline` en el emulador: `PASS_EMULATOR` (listo en 545 ms, frío 2.979 ms, 1211/1208 frames, 0 deslices, audio en 19/20 ventanas, 0 faltantes, 0 paradas) y checkpoint GO (926/1373).
     - Base 20/20; 438/438 pruebas del consumidor en 78 archivos.
+- **Dentro del juego (mismo build):**
+  - Chromium, `ao_controls_check` en una copia temporal sin la aserción de layout (`ao4-report.json`: PASS, layout `SKIPPED_FAIL`):
+    - 5/5 arranques en frío con Moneda+Start;
+    - seis controles leídos por la CPU;
+    - multitouch, deslizamiento, salto diagonal y cancelación del stick PASS;
+    - Game Over en el frame 4020 y vuelta al juego con Moneda+Continuar en el 4260.
+  - La aserción de layout falla porque Guardar/Cargar no caben a 640×360. Viene de `1fc0557`, anterior a RP-3.
+  - Emulador Android, APK de producto: `ao_stick_android_check` PASS con Moneda, Start y stick por toques reales del sistema. La CPU lee:
+    - Derecha `0xFE` (frame 1020);
+    - Derecha+Salto `0xDE` (1140, pulgar 21 px arriba);
+    - Derecha (1199);
+    - neutro `0xFF` (1260).
+  - En un emulador recién arrancado con `-read-only`, el aviso de pantalla completa del sistema se queda con el toque de calibración y la prueba falla. Hay que confirmarlo antes con `adb shell settings put secure immersive_mode_confirmations confirmed`.
 
 **Pendientes RP-3 ejecutables:**
 - Gate de rendimiento frente a RP-0.
@@ -56,6 +69,7 @@ RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó inter
 - Plantilla Gradle/Kotlin del shell Android, extraída a la base.
 - Sesión compuesta como punto de entrada de la receta.
 - Interpretación de RAM, etiquetas, 4-way y continuación, movidas a placa/juego.
+- Guardar/Cargar a 640×360: los botones no caben desde `1fc0557`, así que el gate de controles falla en layout.
 
 `src/ao_ym2203_wasm.*`, `scripts/ao_build_audio_wasm.sh` y `out/android/audio/ym2203.wasm` siguen como referencia. Se mantiene el límite Z80: IRQ IM1, sin NMI ni paridad nativa de interrupciones. El GO de RP-3 requiere esas tareas.
 
@@ -88,9 +102,9 @@ Estos comandos crean archivos nuevos; no sobrescriben la evidencia anterior.
 | Escenario | Demostrado ahora o en evidencia local existente | Pendiente para la extracción |
 | --- | --- | --- |
 | Arranque corto | 120 frames reproducidos 6 veces con mismo ciclo y hashes; reportes RP-0 | Comparar CPU/placa nueva contra esta referencia |
-| Coin/Start | `out/android/check/ao4-report.json`: PASS; un arranque con lecturas reales de moneda y Start | Repetir con base extraída y revisión fija |
-| Movimiento, salto y ataque | `ao4-report.json`: seis controles leídos; `stick-android-report.json`: PASS en emulador | Comparar cronología e imagen del host nuevo; prueba física en teléfono no atribuida a este checkpoint |
-| Game Over/Continuar | `ao4-gameover-report.json`: PASS y vuelta a juego | Repetir secuencia tras composición |
+| Coin/Start | `out/android/check/ao4-report.json`: con base `21bd7d0`, 5/5 arranques en Chromium con lecturas reales de moneda y Start; en emulador Android, por toque real | Teléfono físico |
+| Movimiento, salto y ataque | Con base `21bd7d0`: `ao4-report.json`, seis controles leídos y stick PASS en Chromium; `stick-android-report.json`, PASS en emulador con el APK de producto | Comparar cronología e imagen con la referencia; teléfono físico |
+| Game Over/Continuar | Con base `21bd7d0`, en Chromium: Game Over en el frame 4020 y vuelta al juego en el 4260 (`ao4-report.json`) | Android y teléfono físico |
 | Scroll/DMA/vídeo | 15 pruebas dirigidas de renderer y DMA PASS ahora; `ao2-report.json`: 290/290 frames dibujables iguales entre Node y navegador | Escenas de scroll/DMA de juego real contra referencia y base extraída |
 | Sonido ON/OFF | `ao5-report.json`: PCM WASM/nativo idéntico en su alcance; `ao6-report.json`: GO en fases OFF/ON, cambios y sesión nueva | PCM/host con base `21bd7d0`: GO en Chromium (`ao_audio_check 5`) y `PASS_EMULATOR` en Android; falta dispositivo físico. No inferir paridad Z80 con MAME de este resultado |
 
