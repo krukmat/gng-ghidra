@@ -3,6 +3,7 @@
  * and a native CPU/Z80/YM restore. Writes hashes and counts only under out/.
  */
 import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -14,6 +15,10 @@ import {createAudioCommandSource,applyCommand} from '../src/ao_audio_commands.mj
 import {loadYm2203} from '../src/ao_ym2203_wasm.mjs';
 import {liveTapeReader,LIVE_TAPE_SCHEMA} from '../src/v3_b3_live_tape.mjs';
 import {CYCLES_PER_FRAME} from '../boards/gng/runtime.mjs';
+import {validateRecipe,validateLock,assertCompatible}
+  from '../base/src/contracts/index.mjs';
+import {verifyPinnedComponents} from '../base/src/build/verify-lock.mjs';
+import {capabilities} from '../base/src/cpu/capabilities.mjs';
 
 const [bundleArg,referenceArg,romArg,wasmArg,framesArg,reportArg,
   scenario='idle',tapeArg]=process.argv.slice(2);
@@ -24,6 +29,12 @@ if(!report.startsWith(resolve('out')+'/')||!Number.isInteger(frames)||
    frames<2||frames>6000||!['idle','tape'].includes(scenario)||
    (scenario==='tape'&&!tapeArg))throw Error('RP3_ARGUMENT_INVALID');
 const bundle=resolve(bundleArg),reference=JSON.parse(readFileSync(resolve(referenceArg)));
+const recipe=validateRecipe(JSON.parse(readFileSync(
+  'out/base-reference/rp3-v1/migration.json')));
+const lock=validateLock(JSON.parse(readFileSync(
+  'out/base-reference/rp3-v1/migration.lock.json')));
+verifyPinnedComponents(resolve('base'),lock);
+assertCompatible(recipe,lock,capabilities);
 const {manifest,code}=loadFrozen(bundle);
 const sha=b=>createHash('sha256').update(b).digest('hex');
 if(frames>manifest.frames||reference.inputs.bundle.path!==bundle||
@@ -35,8 +46,13 @@ if(frames>manifest.frames||reference.inputs.bundle.path!==bundle||
   throw Error('RP3_REFERENCE_MISMATCH');
 const rom=new Uint8Array(readFileSync(resolve(romArg))),
   wasm=new Uint8Array(readFileSync(resolve(wasmArg)));
-const soundRegion=JSON.parse(readFileSync(resolve('out/base-reference/rp1-v4/migration.json')))
-  .binary.regions.find(x=>x.id==='gg2');
+for(const region of recipe.binary.regions){
+  const bytes=execFileSync('unzip',['-p',reference.inputs.romZip.path,
+    region.entry],{maxBuffer:1<<20});
+  if(bytes.length!==region.bytes||sha(bytes)!==region.sha256)
+    throw Error('RP3_RECIPE_REGION_MISMATCH '+region.id);
+}
+const soundRegion=recipe.binary.regions.find(x=>x.id==='gg2');
 if(!soundRegion||rom.length!==soundRegion.bytes||sha256Bytes(rom)!==soundRegion.sha256||
    wasm.length!==reference.inputs.ym2203Wasm.bytes||
    sha256Bytes(wasm)!==reference.inputs.ym2203Wasm.sha256)
@@ -87,6 +103,8 @@ same(newFrames.slice(0,frames),newFrames.slice(frames),'frames-restore');
 same(newPcm.slice(0,frames),newPcm.slice(frames),'pcm-restore');
 if(freshState.cycle!==tailState.cycle)throw Error('RP3_CYCLE_MISMATCH');
 const result={schema:'rom-migration.rp3.compare.v1',scenario,frames,
+  recipeRegions:recipe.binary.regions.length,recipeDataCompatible:true,
+  lockedComponents:Object.keys(lock.base.components).length,
   bundleProgramSha256:manifest.files['program.mjs'],
   frameSequenceSha256:sha(JSON.stringify(oldFrames)),
   pcmSequenceSha256:sha(JSON.stringify(oldPcm)),
