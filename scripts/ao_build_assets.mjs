@@ -7,13 +7,11 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {copyFileSync,mkdirSync,readdirSync,readFileSync,rmSync,statSync,
   writeFileSync} from 'node:fs';
-import {join,relative,resolve} from 'node:path';
+import {dirname,join,relative,resolve,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {prepareAudioBundle} from '../src/gngb_audio_bundle_overlay.mjs';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
-import {resumableRuntime} from '../src/ao_resumable_runtime.mjs';
-import {checkpointRuntime} from '../src/checkpoint_runtime.mjs';
 import {packGfx} from '../src/ao_web_assets.mjs';
 import {gngbGraphics} from './r35_t5_render_check.mjs';
 
@@ -32,20 +30,24 @@ const AUDIO_WASM=join(ROOT,'out/android/audio');
 const Z80_ROM_SHA1='7ef9ec5c2072e21c787a6bbf700033f50c759c1d';
 const sha256=b=>createHash('sha256').update(b).digest('hex');
 
-// A browser module may only import sibling modules: no node:, no packages.
+// Preserve relative paths for selected pinned base modules in the browser.
 function libClosure(entries){
-  const seen=new Set(),queue=[...entries];
+  const seen=new Set(),queue=entries.map(name=>name.includes('/')?name:'src/'+name);
   while(queue.length){
-    const name=queue.shift();
+    const name=queue.shift(),absolute=resolve(ROOT,name);
     if(seen.has(name))continue;
+    if(!absolute.startsWith(ROOT+sep)||
+       !(name.startsWith('src/')||name.startsWith('base/src/')||
+         name.startsWith('boards/gng/')))
+      throw Error('AO_ASSETS_MODULE_OUTSIDE_SELECTION '+name);
     seen.add(name);
-    const text=readFileSync(join(ROOT,'src',name),'utf8');
+    const text=readFileSync(absolute,'utf8');
     for(const m of text.matchAll(/\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(?\s*['"]([^'"]+)['"]/g)){
       const spec=m[1]??m[2];
       if(spec.startsWith('data:'))continue; // the Z80 session's generated code
-      if(!/^\.\/[\w.-]+\.mjs$/.test(spec))
+      if(!/^\.\.?(?:\/[\w.-]+)+\.mjs$/.test(spec))
         throw Error('AO_ASSETS_NON_BROWSER_IMPORT '+name+' '+spec);
-      queue.push(spec.slice(2));
+      queue.push(relative(ROOT,resolve(dirname(absolute),spec)));
     }
   }
   return [...seen].sort();
@@ -66,10 +68,6 @@ export async function buildAssets(){
     mkdirSync(join(ASSETS,dir),{recursive:true,mode:0o700});
   for(const name of BUNDLE_FILES)
     copyFileSync(join(audio.dir,name),join(ASSETS,'bundle',name));
-  // Checkpoint patch after the resumable one, as the shared anchors expect.
-  const runtime=checkpointRuntime(
-    resumableRuntime(readFileSync(join(audio.dir,'gngb_runtime.mjs'),'utf8')));
-  writeFileSync(join(ASSETS,'bundle/gngb_runtime.mjs'),runtime,{mode:0o600});
   const zip=join(ROOT,'roms/gng.zip');
   const gfx=gngbGraphics(name=>execFileSync('unzip',['-p',zip,name],
     {maxBuffer:1<<20,stdio:['ignore','pipe','ignore']}));
@@ -84,14 +82,18 @@ export async function buildAssets(){
   const build=JSON.parse(readFileSync(join(AUDIO_WASM,'build.json'),'utf8'));
   if(sha256(wasm)!==build.sha256)throw Error('AO_ASSETS_WASM_MISMATCH');
   writeFileSync(join(ASSETS,'audio/ym2203.wasm'),wasm,{mode:0o600});
-  for(const name of libClosure(LIB_ENTRIES))
-    copyFileSync(join(ROOT,'src',name),join(ASSETS,'lib',name));
+  for(const name of libClosure([...LIB_ENTRIES,'boards/gng/runtime.mjs',
+    'boards/gng/code-view.mjs'])){
+    const dest=join(ASSETS,name.replace(/^src\//,'lib/'));
+    mkdirSync(dirname(dest),{recursive:true,mode:0o700});
+    copyFileSync(join(ROOT,name),dest);
+  }
   for(const name of readdirSync(WEB))
     copyFileSync(join(WEB,name),join(ASSETS,name));
   const files=Object.fromEntries(listFiles(ASSETS).sort().map(path=>
     [relative(ASSETS,path),sha256(readFileSync(path))]));
   const index={schema:'gng.ao.assets.v1',generation:selected.generation,
-    program_sha256:manifest.files['program.mjs'],runtime_sha256:sha256(runtime),
+    program_sha256:manifest.files['program.mjs'],
     audio_wasm:build,files};
   writeFileSync(join(ASSETS,'assets.json'),JSON.stringify(index,null,2)+'\n',{mode:0o600});
   return index;

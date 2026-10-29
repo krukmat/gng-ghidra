@@ -10,5 +10,11 @@ export const capabilities=Object.freeze({
     overlays:true,
     dynamicCode:false,
     stopOnUnsupported:true,
+  }),z80:Object.freeze({
+    instructions:[],
+    interrupts:['irq'],
+    overlays:false,
+    dynamicCode:true,
+    stopOnUnsupported:true,
   })},
 });

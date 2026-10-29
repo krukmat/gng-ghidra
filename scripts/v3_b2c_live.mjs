@@ -68,7 +68,9 @@ const B3_SELECTED=b2dReady()?selectB3Bundle(ROOT):null;
 const B3=B3_SELECTED?.dir;
 const BUNDLE=B3??(b2eReady()?B2E:b2dReady()?B2D:b2bReady()?B2B:B2A);
 const ZIP=join(ROOT,'roms/gng.zip');
-const PORT=18609;
+const PORT=Number(process.env.GNG_WEB_PORT??18609);
+if(!Number.isInteger(PORT)||PORT<1024||PORT>65535)
+  throw Error('GNG_WEB_PORT_INVALID');
 const live=createLiveControls();
 const {inputs,apply:applyControl,release:releaseAll,snapshot:heldControls}=live;
 // 600 frames is the B2A *certification* horizon, not a live session.

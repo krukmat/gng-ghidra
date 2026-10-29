@@ -17,8 +17,11 @@ globalThis.AudioWorkletProcessor=class{constructor(){this.port=port();}};
 globalThis.registerProcessor=(name,cls)=>{assert.equal(name,'ao-pcm-sink');Processor=cls;};
 const temp=mkdtempSync(join(tmpdir(),'gng-ao6-'));
 mkdirSync(join(temp,'lib'));
+mkdirSync(join(temp,'base/src/audio'),{recursive:true});
 cpSync(join(ROOT,'android/web/audio.worklet.mjs'),join(temp,'audio.worklet.mjs'));
 cpSync(join(ROOT,'src/gngb_audio_resampler.mjs'),join(temp,'lib/gngb_audio_resampler.mjs'));
+cpSync(join(ROOT,'base/src/audio/resampler.mjs'),
+  join(temp,'base/src/audio/resampler.mjs'));
 await import(pathToFileURL(join(temp,'audio.worklet.mjs')).href);
 rmSync(temp,{recursive:true,force:true});
 

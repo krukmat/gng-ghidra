@@ -1,6 +1,6 @@
 /** AO-2 engine worker: the frozen AOT engine at real speed, without
  * SharedArrayBuffer. Each tick runs the frames that are due through the
- * resumable runtime (run(until)), then renders the newest fully known frame
+ * board runtime (run(until)), then renders the newest fully known frame
  * and transfers its RGBA to the page. ?check=N runs N frames unpaced instead
  * and posts the SHA-256 of every rendered frame for the Node comparison.
  * AO-6: each frame's audio events go to the audio worker. While an output
@@ -84,11 +84,13 @@ async function bytes(name){
 }
 async function start(checkpointText){
   const t0=performance.now();
-  const [{blocks},{createBoard,CYCLES_PER_FRAME},{renderGngbRgba},
+  const [{blocks},{createBoard,CYCLES_PER_FRAME},{mapGngFrozenBlocks},
+    {renderGngbRgba},
     {rendererInputs},{rendererUnknownCount},{INPUT_DEFAULTS},
     {frozenCode,unpackGfx},{createPortReadWitness},{observeGameState},
     {encodeCheckpoint,decodeCheckpoint},{createPortRecorder}]=await Promise.all([
-    import('./bundle/program.mjs'),import('./bundle/gngb_runtime.mjs'),
+    import('./bundle/program.mjs'),import('./boards/gng/runtime.mjs'),
+    import('./boards/gng/code-view.mjs'),
     import('./lib/gngb_frame_renderer.mjs'),import('./lib/gngb_render_inputs.mjs'),
     import('./lib/v2_b1_observable.mjs'),import('./lib/gngb_input_contract.mjs'),
     import('./lib/ao_web_assets.mjs'),import('./lib/v3_b2c_port_witness.mjs'),
@@ -114,7 +116,8 @@ async function start(checkpointText){
   let last=null,latest=null,stateKey=null,gameState=null;
   let audioEvents=[],audioFrames=restored?restored.frame:0;
   const heard=[]; // newest drawable frames, for audio-paced presentation
-  const cpu=createBoard(code,blocks,{frames:Number.MAX_SAFE_INTEGER,
+  const cpu=createBoard(code,mapGngFrozenBlocks(code,blocks),{
+    frames:Number.MAX_SAFE_INTEGER,
     portRead:addr=>ports[addr-0x3000],
     onPortRead:read=>{
       witness.observe(read);readPorts[read.addr-0x3000]=read.value;

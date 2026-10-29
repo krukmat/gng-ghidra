@@ -15,7 +15,10 @@ import {chromium} from 'playwright-core';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const OUT=resolve(process.argv[2]??join(ROOT,'out/web-checkpoint/check'));
-const BASE='http://127.0.0.1:18609';
+const PORT=Number(process.env.GNG_WEB_PORT??18609);
+if(!Number.isInteger(PORT)||PORT<1024||PORT>65535)
+  throw Error('GNG_WEB_PORT_INVALID');
+const BASE='http://127.0.0.1:'+PORT;
 const QUICK=join(ROOT,'out/web-checkpoint/quick.json'),BACKUP=QUICK+'.check-backup';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const fail=s=>{throw Error('CK_CHECK_'+s);};

@@ -57,3 +57,23 @@ export function createGngCodeView(code){
   };
   return {identity,resolve,read,seed,at,context};
 }
+
+/** Translate the frozen program's legacy numeric keys at the board edge. */
+export function mapGngFrozenBlocks(code,blocks){
+  if(!(blocks instanceof Map))throw Error('GNG_BLOCKS_INVALID');
+  const view=createGngCodeView(code),mapped=new Map();
+  for(const [key,fn] of blocks){
+    if(!Number.isSafeInteger(key)||typeof fn!=='function')
+      throw Error('GNG_BLOCK_KEY_INVALID');
+    const pc=key&0xffff;
+    const at=key>=0x100000?
+      view.at(pc,null,Math.floor((key-0x100000)/0x10000)):
+      key>=0x10000?view.at(pc,Math.floor(key/0x10000)-1):
+        view.at(pc,null);
+    if(!at)throw Error('GNG_BLOCK_KEY_INVALID');
+    const id=view.identity(at);
+    if(mapped.has(id))throw Error('GNG_BLOCK_KEY_DUPLICATE');
+    mapped.set(id,fn);
+  }
+  return mapped;
+}
