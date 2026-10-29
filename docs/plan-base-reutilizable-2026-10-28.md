@@ -2,7 +2,7 @@
 
 **Dirección vigente:** crear un repositorio separado para extraer de esta versión una base agnóstica y versionada, con herramientas para generar proyectos independientes. Cada proyecto contendrá un juego integrado y generado desde sus binarios originales. Este repositorio conserva GnG como primera integración de referencia y consumidor de la base. La implementación de placa y la integración de juego quedan fuera del repositorio compartido; los compiladores se reutilizan por arquitectura de CPU.
 
-**Estado:** primer bloque RP-0/RP-1 completado como referencia y diseño de contratos; RP-2 a RP-6 pendientes. La base aún no se ha extraído ni certificado. [Checkpoint RP-0/RP-1](rp0-rp1-checkpoint-2026-10-28.md). **Fecha:** 28/10/2026. **Referencia de fuentes revisada:** `889114774e3b1bc27f8c159c23c67874fe27c1d0`. Al preparar este documento, los únicos elementos pendientes en el árbol eran `cfg/` y `gng-ghidra/`, ambos sin seguimiento; no forman parte de la referencia ni se copiarán automáticamente.
+**Estado actual (29/10/2026):** RP-0/RP-1 y la extracción principal 6809 de RP-2 completadas en la base local `86cb95ecc0fc07d1a03b2b8bab0d890b4475874d`. La receta completa de GnG sigue bloqueada por Z80, audio y composición de RP-3/RP-5; la base no está certificada ni publicada. [Checkpoint y resultados RP-2](rp0-rp1-checkpoint-2026-10-28.md#rp-2--extraccion-6809-29102026). La referencia de análisis original fue `889114774e3b1bc27f8c159c23c67874fe27c1d0`; los dos commits de quick-save/load del 29/10 se incorporan como requisitos de estado, sin sustituir el bundle privado fijado en RP-0. `cfg/` y `gng-ghidra/` siguen fuera de la extracción.
 
 **Tareas ejecutables propuestas:** [RP-0: referencia](#rp-0--fijar-la-referencia), [RP-1: contratos](#rp-1--definir-las-fronteras), [RP-2: CPU y placa](#rp-2--separar-compilación-cpu-y-placa), [RP-3: host y audio](#rp-3--separar-host-audio-e-interfaz), [RP-4: construcción](#rp-4--construir-desde-el-binario-original), [RP-5: proyecto nuevo](#rp-5--generar-un-proyecto-independiente), [RP-6: certificación](#rp-6--certificar-y-versionar-la-base).
 
@@ -46,6 +46,7 @@ El nombre del repositorio nuevo es provisional; su creación forma parte de RP-0
 | [mc6809_aot.mjs](../src/mc6809_aot.mjs) | `base/build/mc6809/` | Conservar semántica y tiempos; sustituir mapa y claves de GnG por resolución de código explícita |
 | [gngb_block_key.mjs](../src/gngb_block_key.mjs) | Identidad de código en la base + resolución en placa | Quitar del núcleo los límites `0x4000/0x6000`; distinguir espacio, contexto de banco y versión de overlay |
 | [gngb_runtime.mjs](../src/gngb_runtime.mjs) | Ejecución 6809 + `boards/gng/` | Separar CPU/reset/servicio de IRQ de mapa, línea de IRQ, DMA, paleta, scroll, latch y snapshots |
+| [checkpoint_runtime.mjs](../src/checkpoint_runtime.mjs), [checkpoint_format.mjs](../src/checkpoint_format.mjs) | Estado nativo de placa/CPU en RP-2; formato y composición completa en RP-3 | Los commits `6f86ac5` y `1fc0557` añadieron guardado exacto. La ruta extraída ofrece `exportState`/`importState` sin parche textual; Z80, YM, PCM, web y Android siguen en RP-3 |
 | [gngb_frame_renderer.mjs](../src/gngb_frame_renderer.mjs), [video_memory.mjs](../src/video_memory.mjs), [sprite_memory.mjs](../src/sprite_memory.mjs) | `boards/gng/video/` | Mantener la implementación específica; exponer imagen y geometría al host mediante contrato |
 | [gngb_z80_static_codegen.mjs](../src/gngb_z80_static_codegen.mjs), [gngb_z80_irq_boundary.mjs](../src/gngb_z80_irq_boundary.mjs) | `base/build/z80/` y `base/cpu/z80/` | Extraer lo implementado; publicar límites de instrucciones, interrupciones y ejecución |
 | [gngb_z80_scheduler_lab.mjs](../src/gngb_z80_scheduler_lab.mjs), [gngb_z80_sound_bus.mjs](../src/gngb_z80_sound_bus.mjs), [gngb_z80_live_session.mjs](../src/gngb_z80_live_session.mjs) | Ejecución Z80 + `boards/gng/audio/` + herramienta de resolución | Separar bus y temporización de placa; conservar y declarar la resolución dinámica actual |
@@ -147,13 +148,13 @@ Cada tarea deja un cambio pequeño y revisable. No ejecutar la extracción compl
 
 **Depende de RP-1.**
 
-- [ ] Extraer ALU/estado/ejecución 6809 y pasar la vista de código al compilador. Mover resolución de bancos, bus, señales y snapshots a la placa GnG.
-- [ ] Preservar máscaras conocidas, control de overlays y rechazo de instrucciones o código no soportados.
-- [ ] Hacer nativa la API reanudable; retirar de la ruta nueva el parche textual de [ao_resumable_runtime.mjs](../src/ao_resumable_runtime.mjs). Mantener los bundles originales intactos.
-- [ ] Probar el compilador con vistas sintéticas pequeñas de distinta disposición de ROM y bancos. Estos casos prueban el contrato, no representan un segundo juego certificado.
-- [ ] Comparar ejecución segmentada y continua con la referencia: estado CPU, accesos/eventos relevantes y snapshots, conservando ciclos y cortes de frame.
+- [x] Extraer ALU/estado/ejecución 6809 y pasar la vista de código al compilador. Mover resolución de bancos, bus, señales y snapshots a la placa GnG.
+- [x] Preservar máscaras conocidas, control de overlays y rechazo de instrucciones o código no soportados.
+- [x] Hacer nativa la API reanudable; retirar de la ruta nueva el parche textual de [ao_resumable_runtime.mjs](../src/ao_resumable_runtime.mjs). Mantener los bundles originales intactos.
+- [x] Probar el compilador con vistas sintéticas pequeñas de distinta disposición de ROM y bancos. Estos casos prueban el contrato, no representan un segundo juego certificado.
+- [x] Comparar ejecución segmentada y continua con la referencia: estado CPU, accesos/eventos relevantes y snapshots, conservando ciclos y cortes de frame. La cinta privada fijada cambia el recorrido y se comparó durante 900 frames; el checkpoint CPU se restauró en el frame 450.
 
-**Salida:** compilador sin dependencia de `gngb_block_key`, ejecución 6809 y placa GnG separadas. **GO:** mismos resultados semánticos en los escenarios seleccionados; no se exige que el texto JS generado conserve su hash tras reorganizar código.
+**Salida RP-2:** compilador sin dependencia de `gngb_block_key`, ejecución 6809 y placa GnG separadas. **GO alcanzado en el alcance 6809:** mismos resultados semánticos en arranque de 120 frames y cinta privada de 900 frames; no se exige que el texto JS generado conserve su hash tras reorganizar código. El lock privado fija seis componentes de la base. La receta completa aún falla cerrada por falta de Z80; [evidencia y pendientes](rp0-rp1-checkpoint-2026-10-28.md#rp-2--extraccion-6809-29102026).
 
 ### RP-3 — Separar host, audio e interfaz
 
@@ -162,6 +163,7 @@ Cada tarea deja un cambio pequeño y revisable. No ejecutar la extracción compl
 - [ ] Sustituir constantes de puertos, geometría y tiempo del worker por contratos de la sesión integrada.
 - [ ] Mover interpretación de RAM, etiquetas, política 4-way y combinación de continuación a placa/juego según corresponda.
 - [ ] Extraer transporte PCM y síntesis YM2203; mantener en GnG la conexión de chips, frecuencias, mezcla, reset y relación de relojes.
+- [ ] Integrar `gng.checkpoint.v1` con la sesión compuesta: restaurar Z80, YM, lotes PCM y workers web/Android sin perder el estado exacto ya demostrado por los commits `6f86ac5` y `1fc0557`. Conservar en GnG la política de un slot y almacenamiento de producto.
 - [ ] Separar ejecución Z80, bus sonoro y resolución de bloques. La ruta actual de [gngb_z80_live_session.mjs](../src/gngb_z80_live_session.mjs) compila al iniciar y resuelve destinos durante la ejecución: declararlo y conservarlo al extraer. Congelar también el Z80 sería un trabajo posterior con gate propio.
 - [ ] Parametrizar shell Android, identidad de producto y empaquetado; conservar controles, ciclo de vida, funcionamiento offline y sincronización audio/vídeo.
 
