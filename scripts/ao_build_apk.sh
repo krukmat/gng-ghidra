@@ -19,9 +19,9 @@ node_bin="$(command -v node)"
 bash "$repo_dir/scripts/ao_build_audio_wasm.sh"
 node "$repo_dir/scripts/ao_build_assets.mjs"
 gradle_args=()
-[[ -z "${AO_APP_ID:-}" ]] || gradle_args+=("-PAO_APP_ID=$AO_APP_ID")
-[[ -z "${AO_APP_LABEL:-}" ]] || gradle_args+=("-PAO_APP_LABEL=$AO_APP_LABEL")
-[[ -z "${AO_ASSETS_DIR:-}" ]] || gradle_args+=("-PAO_ASSETS_DIR=$AO_ASSETS_DIR")
+[[ -z "${AO_APP_ID:-}" ]] || gradle_args+=("-PSHELL_APP_ID=$AO_APP_ID")
+[[ -z "${AO_APP_LABEL:-}" ]] || gradle_args+=("-PSHELL_APP_LABEL=$AO_APP_LABEL")
+[[ -z "${AO_ASSETS_DIR:-}" ]] || gradle_args+=("-PSHELL_ASSETS_DIR=$AO_ASSETS_DIR")
 (cd "$repo_dir/android" && ./gradlew --no-daemon ${gradle_args[@]+"${gradle_args[@]}"} assembleDebug)
 install -m 600 "$repo_dir/out/android/gradle-build/app/outputs/apk/debug/app-debug.apk" \
   "$repo_dir/out/android/gng.apk"

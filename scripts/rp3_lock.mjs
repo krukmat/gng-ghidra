@@ -29,7 +29,10 @@ const paths=[...new Set([...Object.keys(previous.base.components),
   'src/host/web/pcm-worklet.mjs','src/host/web/frame-pacer.mjs',
   'src/host/web/engine-worker.mjs','src/host/web/audio-worker.mjs',
   'src/devices/ym2203/bank.cpp','src/devices/ym2203/wasm.mjs',
-  'src/devices/ym2203/build.mjs'])];
+  'src/devices/ym2203/build.mjs',
+  'templates/android/app/build.gradle.kts',
+  'templates/android/app/src/main/AndroidManifest.xml',
+  'templates/android/app/src/main/java/org/rommigration/shell/MainActivity.kt'])];
 const revision=git('rev-parse','HEAD').toString().trim();
 const lock={...previous,status:'rp3-ym-host',base:{revision,
   components:Object.fromEntries(paths.map(path=>

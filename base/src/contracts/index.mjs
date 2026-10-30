@@ -46,9 +46,12 @@ export function validateLock(lock){
      lock.contract!==CONTRACT_VERSION||!obj(lock.base)||
      !revision(lock.base.revision)||!obj(lock.base.components)||
      Object.keys(lock.base.components).length===0)fail('LOCK_INVALID');
+  // Relative file paths; template files (Gradle, manifest, Kotlin) keep their
+  // conventional names. No empty, '.' or '..' segment can leave the base.
   for(const [path,digest] of Object.entries(lock.base.components))
-    if(!/^[a-z][a-z0-9_/-]*\.(?:mjs|js|json|wasm|cpp|h)$/.test(path)||
-       path.includes('//')||!hash(digest))fail('LOCK_COMPONENT_INVALID');
+    if(!/^[a-z][A-Za-z0-9_./-]*\.(?:mjs|js|json|wasm|cpp|h|kt|kts|xml)$/.test(path)||
+       path.split('/').some(s=>s===''||s==='.'||s==='..')||!hash(digest))
+      fail('LOCK_COMPONENT_INVALID');
   return lock;
 }
 

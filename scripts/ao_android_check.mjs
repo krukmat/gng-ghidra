@@ -16,7 +16,7 @@ const CHECK=join(ROOT,'out/android/check');
 const ADB=join(process.env.ANDROID_HOME??join(homedir(),'Library/Android/sdk'),
   'platform-tools/adb');
 const PKG=process.env.AO_APP_ID??'org.gng.offline';
-const ACTIVITY='org.gng.offline.MainActivity';
+const ACTIVITY='org.rommigration.shell.MainActivity'; // base shell template
 const audio=process.argv.includes('--audio'); // AO-6: tap Sound ON after boot
 const args=process.argv.slice(2).filter(a=>a!=='--audio');
 const seconds=Number(args[0]??15);
@@ -135,7 +135,7 @@ async function main(){
   finally{
     try{
       const logcat=adb(serial,'logcat','-d','-v','epoch','-s',
-        'GngWebView:I','AndroidRuntime:E','*:S');
+        'WebShell:I','AndroidRuntime:E','*:S');
       writeFileSync(join(CHECK,`ao3-${safe}-logcat.txt`),logcat,{mode:0o600});
       const ready=[...logcat.matchAll(/^\s*(\d+\.\d+).*AO_READY /gm)];
       const r=ready.map(m=>Number(m[1])*1000)

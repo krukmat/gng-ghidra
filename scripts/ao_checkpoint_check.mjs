@@ -152,7 +152,7 @@ try{
     report.serial=serial;
     adb('install','-r',join(ROOT,'out/android/gng.apk'));
     adb('shell','pm','clear',PKG); // no checkpoint from an earlier run
-    adb('shell','am','start','-W','-n',PKG+'/org.gng.offline.MainActivity');
+    adb('shell','am','start','-W','-n',PKG+'/org.rommigration.shell.MainActivity');
     device=(await _android.devices()).find(d=>d.serial()===serial);
     if(!device)throw Error('AO_CK_PLAYWRIGHT_DEVICE_MISSING');
     page=await (await device.webView({pkg:PKG},{timeout:30000})).page();

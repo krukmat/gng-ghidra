@@ -1,4 +1,4 @@
-package org.gng.offline
+package org.rommigration.shell
 
 import android.app.Activity
 import android.content.pm.ApplicationInfo
@@ -14,12 +14,18 @@ import android.webkit.WebView
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 
+// Serves the generated site from assets/ over a local https origin, keeps the
+// screen on and immersive, and forwards console messages to logcat.
 class MainActivity : Activity() {
     private lateinit var webView: WebView
 
+    companion object {
+        const val TAG = "WebShell"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.i("GngWebView", "AO_ACTIVITY_START")
+        Log.i(TAG, "SHELL_ACTIVITY_START")
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         immersive()
         WebView.setWebContentsDebuggingEnabled(
@@ -43,7 +49,7 @@ class MainActivity : Activity() {
             }
             webChromeClient = object : WebChromeClient() {
                 override fun onConsoleMessage(message: ConsoleMessage): Boolean {
-                    Log.i("GngWebView", "${message.message()} (${message.sourceId()}:${message.lineNumber()})")
+                    Log.i(TAG, "${message.message()} (${message.sourceId()}:${message.lineNumber()})")
                     return true
                 }
             }

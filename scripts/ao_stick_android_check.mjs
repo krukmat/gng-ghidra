@@ -30,7 +30,7 @@ let device;
 try{
   adb('install','-r',APK);
   adb('shell','am','force-stop',PKG);
-  adb('shell','am','start','-W','-n',PKG+'/.MainActivity');
+  adb('shell','am','start','-W','-n',PKG+'/org.rommigration.shell.MainActivity');
   device=(await _android.devices()).find(d=>d.serial()===serial);
   assert.ok(device,'device');
   const page=await(await device.webView({pkg:PKG},{timeout:30000})).page();
