@@ -14,6 +14,7 @@ import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
 import {renderGngbRgba} from '../src/gngb_frame_renderer.mjs';
 import {rendererUnknownCount} from '../src/v2_b1_observable.mjs';
 import {gngbGraphics,rendererInputs} from '../scripts/r35_t5_render_check.mjs';
+import {playerLabels} from '../games/gngb/state.mjs';
 import {loadEngine} from './engine-evaluation.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
@@ -34,9 +35,8 @@ const engine=await loadEngine(ROOT);
 const result=engine.run(tape.events,{startFrame:report.startFrame,
   endFrame:report.endFrame,captureFrames:frames});
 const labels=frames.map(frame=>{
-  const r=result.captures.get(frame),b=r.record;
-  return {frame,known:[0xa0,0xa1,0xa2,0xa3,0x60].every(a=>r.known[a]===255),
-    world:b[0xa0]*256+b[0xa1],y:b[0xa2]*256+b[0xa3],lives:b[0x60]};
+  const {known,world,y,lives}=playerLabels(result.captures.get(frame));
+  return {frame,known,world,y,lives};
 });
 const directions=new Set(['p1.right','p1.left']),held=new Set();
 let directionHeld=false;

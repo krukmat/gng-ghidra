@@ -11,6 +11,7 @@
 import {createHash} from 'node:crypto';
 import {CYCLES_PER_FRAME} from './gngb_runtime.mjs';
 import {maneuverFatal} from './h3_lab_maneuver.mjs';
+import {look,BOSS_LIFE} from '../games/gngb/state.mjs';
 
 export const P1_BITS=Object.freeze({'p1.right':1,'p1.left':2,'p1.down':4,'p1.up':8,
   'p1.button1':16,'p1.button2':32});
@@ -83,11 +84,8 @@ export function eventsToMasks(start,end,events){
   return out;
 }
 
-/** RAM labels (read only) of one 0x600-byte view. */
-export const look=b=>({phase:b[0x72],cp:b[0x81],loop:b[0x71],lives:b[0x60],
-  x:b[0xa0]<<8|b[0xa1],y:b[0xa2]<<8|b[0xa3],scroll:b[0x58]<<8|b[0x59],armor:b[0xac],
-  mode:b[0x503],handler:b[0x510]<<8|b[0x511]});
-export const BOSS_LIFE=0x0e76;
+/** RAM labels (read only) of one 0x600-byte view, owned by the game. */
+export {look,BOSS_LIFE};
 /** look() plus the cyclops life; `b` must cover BOSS_LIFE. */
 export const lookBoss=b=>({...look(b),boss:b[BOSS_LIFE]});
 export const isFatal=(s,lives)=>maneuverFatal(s,lives);

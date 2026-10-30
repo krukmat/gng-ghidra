@@ -4,26 +4,14 @@
  * Absolute integer cycles start at reset; events apply BEFORE a read at
  * the same cycle. This module neither edits CPU state nor dispatches code.
  */
+import {INPUT_PORTS,INPUT_CONTROLS,IDLE_BYTES} from '../boards/gng/inputs.mjs';
+import {DIP_DEFAULTS,fourWayConflict} from '../games/gngb/inputs.mjs';
+
 export const INPUT_SCHEMA='gng.v3.input-contract.v1';
-export const INPUT_PORTS=Object.freeze({
-  SYSTEM:0x3000,P1:0x3001,P2:0x3002,DSW1:0x3003,DSW2:0x3004,
-});
-export const INPUT_DEFAULTS=Object.freeze([0xff,0xff,0xff,0xdf,0xfb]);
+// Ports and bits are the board's; DIP defaults and the 4-way policy the game's.
+export {INPUT_PORTS,INPUT_CONTROLS};
+export const INPUT_DEFAULTS=Object.freeze([...IDLE_BYTES,...DIP_DEFAULTS]);
 const PORT_NAMES=Object.freeze(Object.keys(INPUT_PORTS));
-const CONTROL_SPECS=Object.freeze({
-  start1:['SYSTEM',0x01],start2:['SYSTEM',0x02],
-  service1:['SYSTEM',0x20],coin1:['SYSTEM',0x40],coin2:['SYSTEM',0x80],
-  'p1.right':['P1',0x01],'p1.left':['P1',0x02],
-  'p1.down':['P1',0x04],'p1.up':['P1',0x08],
-  'p1.button1':['P1',0x10],'p1.button2':['P1',0x20],
-  'p2.right':['P2',0x01],'p2.left':['P2',0x02],
-  'p2.down':['P2',0x04],'p2.up':['P2',0x08],
-  'p2.button1':['P2',0x10],'p2.button2':['P2',0x20],
-});
-export const INPUT_CONTROLS=Object.freeze(
-  Object.fromEntries(Object.entries(CONTROL_SPECS).map(([name,[port,bit]])=>
-    [name,Object.freeze({port,bit,activeLow:true})]))
-);
 const deny=reason=>{throw Error('V3_B1_INPUT_'+reason);};
 const VALID_SCHEDULES=new WeakSet();
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&
@@ -43,12 +31,7 @@ function validateOptions(options){
     own(options,'dip2')?options.dip2:INPUT_DEFAULTS[4]];
 }
 function checkDirections(pressed){
-  // Conservative frontend policy for MAME's PORT_4WAY: reject conflicting
-  // input combinations, not a claim about its live joystick resolution.
-  for(const player of ['p1','p2']){
-    const dirs=['up','down','left','right'].filter(d=>pressed.has(player+'.'+d));
-    if(dirs.length>1)deny('FOUR_WAY_COMBINATION');
-  }
+  if(fourWayConflict(pressed))deny('FOUR_WAY_COMBINATION');
 }
 function portsFrom(pressed,dips){
   const bytes=[INPUT_DEFAULTS[0],INPUT_DEFAULTS[1],INPUT_DEFAULTS[2],

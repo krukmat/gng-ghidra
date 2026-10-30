@@ -2,7 +2,7 @@
  * base browser engine host (base/src/host/web/engine-worker.mjs), which owns
  * pacing, presentation, audio batches and the save protocol. GnG supplies
  * input ports 0x3000-0x3004, the drawable rule (no unknown bytes), the
- * renderer, game-state observation and gng.checkpoint.v1
+ * renderer, game-state observation (games/gngb/state.mjs) and gng.checkpoint.v1
  * (src/checkpoint_format.mjs): 'boot' carries the saved text or null and a
  * loaded session starts cold from that state, like Reiniciar.
  */
@@ -25,7 +25,7 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink}){
     import('./lib/gngb_frame_renderer.mjs'),import('./lib/gngb_render_inputs.mjs'),
     import('./lib/v2_b1_observable.mjs'),import('./lib/gngb_input_contract.mjs'),
     import('./lib/ao_web_assets.mjs'),import('./lib/v3_b2c_port_witness.mjs'),
-    import('./lib/ao_game_state.mjs'),import('./lib/checkpoint_format.mjs'),
+    import('./games/gngb/state.mjs'),import('./lib/checkpoint_format.mjs'),
     import('./lib/v3_b3_live_tape.mjs')]);
   const res=await fetch('bundle/manifest.json');
   if(!res.ok)throw Error('AO_FETCH_'+res.status+' manifest');

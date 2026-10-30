@@ -6,6 +6,7 @@ import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {defineInputSchedule,readScheduledPort} from '../src/gngb_input_contract.mjs';
 import {createEvaluation} from './evaluation.mjs';
+import {playerLabels} from '../games/gngb/state.mjs';
 
 export async function loadEngine(root){
   const selected=selectB3Bundle(root);
@@ -25,10 +26,9 @@ export async function loadEngine(root){
       onFrame:r=>{
         const frame=board.state.records.length;
         if(frame>=startFrame){
-          const known=[0xa0,0xa1,0xa2,0xa3,0x60,0x52].every(a=>r.known[a]===255);
-          evaluation.observe({frame,world:r.record[0xa0]*256+r.record[0xa1],
-            y:r.record[0xa2]*256+r.record[0xa3],lives:r.record[0x60],
-            stage:r.record[0x52],known});
+          const l=playerLabels(r);
+          evaluation.observe({frame,world:l.world,y:l.y,lives:l.lives,
+            stage:l.stage,known:l.known&&l.stageKnown});
         }
         if(wanted.has(frame))captures.set(frame,r);
         if(frame===endFrame)lastRecordHash=createHash('sha256').update(r.record)

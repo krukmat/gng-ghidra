@@ -2,8 +2,8 @@
  * Android WebView worker can import them. Moved verbatim from
  * scripts/r35_t5_render_check.mjs, which re-exports both.
  */
-export const REC={ram:0,sprites:0x1e00,buffered:0x2000,fg:0x2200,bg:0x2a00,
-  palExt:0x3200,pal:0x3300,rgba:0x3400,size:0x3800};
+import {REC} from '../boards/gng/frame-record.mjs';
+export {REC};
 
 /** Renderer inputs from one reference record plus its jsonl metadata. */
 export function rendererInputs(record,meta,gfx){

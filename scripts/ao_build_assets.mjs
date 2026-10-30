@@ -23,7 +23,7 @@ const BUNDLE_FILES=['program.mjs','mc6809_aot_lib.mjs','gngb_block_key.mjs',
 // Worker entry points in src/; their relative imports are copied too.
 const LIB_ENTRIES=['gngb_frame_renderer.mjs','gngb_render_inputs.mjs',
   'v2_b1_observable.mjs','gngb_input_contract.mjs','ao_web_assets.mjs',
-  'ao_touch_controls.mjs','ao_game_state.mjs','v3_b2c_port_witness.mjs',
+  'ao_touch_controls.mjs','games/gngb/state.mjs','v3_b2c_port_witness.mjs',
   'ao_stick.mjs','gngb_audio_producer.mjs','gngb_audio_resampler.mjs',
   'checkpoint_format.mjs','v3_b3_live_tape.mjs',
   'base/src/host/web/pcm-worklet.mjs','base/src/host/web/frame-pacer.mjs',
@@ -42,7 +42,7 @@ function libClosure(entries){
     if(seen.has(name))continue;
     if(!absolute.startsWith(ROOT+sep)||
        !(name.startsWith('src/')||name.startsWith('base/src/')||
-         name.startsWith('boards/gng/')))
+         name.startsWith('boards/gng/')||name.startsWith('games/gngb/')))
       throw Error('AO_ASSETS_MODULE_OUTSIDE_SELECTION '+name);
     seen.add(name);
     const text=readFileSync(absolute,'utf8');

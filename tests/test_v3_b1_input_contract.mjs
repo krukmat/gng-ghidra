@@ -157,7 +157,12 @@ test('T1.4: schedule copies and deep-freezes external input, never aliases',()=>
 });
 
 test('T1.5: input contract has no dependencies on emulator or AOT compiler',()=>{
-  const code=readFileSync(new URL('../src/gngb_input_contract.mjs',import.meta.url),'utf8');
-  assert.doesNotMatch(code,/^\s*import\s+(?:\*|\{|['"])/m);
+  const read=path=>readFileSync(new URL(path,import.meta.url),'utf8');
+  const code=read('../src/gngb_input_contract.mjs');
+  // Only the board's port map and the game's input policy, both import-free.
+  const specs=[...code.matchAll(/^\s*import\b[^'"]*['"]([^'"]+)['"]/gm)].map(m=>m[1]);
+  assert.deepEqual(specs,['../boards/gng/inputs.mjs','../games/gngb/inputs.mjs']);
+  for(const data of ['../boards/gng/inputs.mjs','../games/gngb/inputs.mjs'])
+    assert.doesNotMatch(read(data),/^\s*import\s+(?:\*|\{|['"])/m);
   assert.doesNotMatch(code,/\b(?:eval|new Function)\s*\(/);
 });
