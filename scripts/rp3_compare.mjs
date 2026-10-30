@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** Private RP-3 comparison: pinned AOT input, old board/audio with the
- * reference YM WASM, composition with the base YM2203 bank WASM, and a native
+ * reference YM WASM, the recipe entry point (original ZIP regions) composed
+ * with the base YM2203 bank WASM, and a native
  * CPU/Z80/YM restore. Writes hashes and counts only under out/.
  */
 import {createHash} from 'node:crypto';
@@ -10,8 +11,7 @@ import {dirname,join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {createBoard as createOld} from '../src/gngb_runtime.mjs';
-import {createGngSession} from '../boards/gng/index.mjs';
-import {mapGngFrozenBlocks} from '../boards/gng/code-view.mjs';
+import {createSession} from '../boards/gng/index.mjs';
 import {createAudioCommandSource,applyCommand} from '../src/ao_audio_commands.mjs';
 import {loadYm2203} from '../src/ao_ym2203_wasm.mjs';
 import {liveTapeReader,LIVE_TAPE_SCHEMA} from '../src/v3_b3_live_tape.mjs';
@@ -56,11 +56,13 @@ if(deviceBuild.sha256!==sha256Bytes(device)||deviceBuild.bytes!==device.length||
    deviceBuild.source_sha256!==sha256Bytes(readFileSync('base/src/devices/ym2203/bank.cpp'))||
    deviceBuild.ymfm!==YMFM_REVISION||deviceBuild.emcc!==EMCC_VERSION)
   throw Error('RP3_DEVICE_WASM_MISMATCH');
+const regions={};
 for(const region of recipe.binary.regions){
   const bytes=execFileSync('unzip',['-p',reference.inputs.romZip.path,
     region.entry],{maxBuffer:1<<20});
   if(bytes.length!==region.bytes||sha(bytes)!==region.sha256)
     throw Error('RP3_RECIPE_REGION_MISMATCH '+region.id);
+  regions[region.id]=new Uint8Array(bytes);
 }
 const soundRegion=recipe.binary.regions.find(x=>x.id==='gg2');
 if(!soundRegion||rom.length!==soundRegion.bytes||sha256Bytes(rom)!==soundRegion.sha256||
@@ -72,7 +74,6 @@ if(tape&&(tape.schema!==LIVE_TAPE_SCHEMA||
    tape.program_sha256!==manifest.files['program.mjs']))throw Error('RP3_TAPE_MISMATCH');
 const portRead=()=>tape?liveTapeReader(tape.changes):null;
 const {blocks}=await import(pathToFileURL(join(bundle,'program.mjs')).href);
-const converted=mapGngFrozenBlocks(code,blocks);
 function sha256Bytes(b){return createHash('sha256').update(b).digest('hex');}
 const frameHash=r=>sha(Buffer.concat([Buffer.from(r.record),Buffer.from(r.known),
   Buffer.from(JSON.stringify([r.scroll,r.bank,r.latch,r.sprite_buffer_valid,r.writes]))]));
@@ -94,8 +95,8 @@ const old=createOld(code,blocks,{frames,portRead:portRead(),
 if(old.run().status!=='FRAMES_DONE'||audioFrames!==frames)throw Error('RP3_OLD_STOP');
 ym.destroy();
 const newFrames=[],newPcm=[];
-const make=checkpoint=>createGngSession({code,blocks:converted,
-  soundRom:rom,wasm:device,frames,portRead:portRead(),checkpoint,
+const make=checkpoint=>createSession(recipe,regions,{program:{code,blocks},
+  devices:{ym2203:device},frames,portRead:portRead(),checkpoint,
   onFrame:r=>{newFrames.push(frameHash(r));},
   onPcm:p=>newPcm.push([p.sampleStart,pcmHash(p)])});
 const fresh=await make(null);
@@ -118,6 +119,8 @@ same(newFrames.slice(0,frames),newFrames.slice(frames),'frames-restore');
 same(newPcm.slice(0,frames),newPcm.slice(frames),'pcm-restore');
 if(freshState.cycle!==tailState.cycle)throw Error('RP3_CYCLE_MISMATCH');
 const result={schema:'rom-migration.rp3.compare.v1',scenario,frames,
+  entry:'boards/gng/index.mjs#createSession',
+  tape:tape?{path:resolve(tapeArg),sha256:sha(readFileSync(resolve(tapeArg)))}:null,
   recipeRegions:recipe.binary.regions.length,recipeDataCompatible:true,
   lockedComponents:Object.keys(lock.base.components).length,
   referenceWasmSha256:sha256Bytes(wasm),deviceWasmSha256:deviceBuild.sha256,

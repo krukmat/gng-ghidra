@@ -70,13 +70,19 @@ RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó inter
   - Equivalencia tras el cambio: `rp3_compare` de 120 frames idéntico a `rp3-compare-120-v6.json` (frames, PCM, ciclo 3018242). La cinta de 900 da `equivalent: true` con restauración. Con `live-tapes/2026-10-28T18-01-50-790Z`, la placa de HEAD y la modificada dan frames, PCM y ciclo (22636801) idénticos. No se identificó la cinta de `rp3-compare-tape-900-v6.json` (ciclo 22636799, mismo PCM y otros frames): ninguna de las siete probadas reproduce su hash de frames, y el checkpoint no la registraba.
   - Pruebas: base 20/20 con `YM2203_WASM` apuntando al banco; sin esa variable se omiten las tres del dispositivo. Consumidor: `node --test tests/test_*.mjs tests/bot/*.test.mjs` da 777 pasan, 1 omitida y 0 fallos en 141 archivos. La selección de 78 archivos de la línea base (438) no está documentada.
 
+- **Entrada de la receta (30/10/2026, base sin cambios en `21bd7d0`, lock `rp3-v6`):**
+  - `boards/gng/index.mjs` exporta `createSession(recipe, regions, {program, devices, ...})`, como fija `docs/contracts.md` de la base. Valida la receta, exige placa `gng`, juego `games/gngb/index.mjs` y dispositivo `ym2203`, y compone `createGngSession` con la ROM sonora tomada de la región `gg2` verificada.
+  - `games/gngb/index.mjs` es dueño de la revisión y de los papeles de las regiones (programa `gg4/gg3/gg5`, sonido `gg2`). `verifyInput` acepta exactamente las regiones de la receta por ID, tamaño y SHA-256 (con `crypto.subtle`, válido también en el navegador). `assertProgramMatches` exige que el código del bundle AOT (`0x6000–0xffff` y los cinco bancos) sea el que sale de esas regiones.
+  - `scripts/rp3_compare.mjs` construye la sesión nueva desde la receta y las regiones del ZIP, y registra en el informe la entrada y la cinta (ruta y SHA-256). Con 120 frames sin entrada (`rp3-compare-120-entry.json`), frames, PCM, ciclo `3018242` y corte en 60 son idénticos a `rp3-compare-120-v6.json`. Con la cinta `live-tapes/2026-10-28T18-01-50-790Z-FRAMES_DONE.json`, 900 frames (`rp3-compare-tape-900-entry.json`), son idénticos a `rp3-compare-tape-900-v6-perf.json`: ciclo `22636801`, corte en 450, con restauración.
+  - Pruebas: `tests/test_gng_recipe_entry.mjs`, sin ROM: rechazo de recetas ajenas, regiones inexactas o de más y programa que no corresponde a las regiones. Consumidor: `node --test tests/test_*.mjs tests/bot/*.test.mjs` da 780 pasan, 1 omitida y 0 fallos.
+  - Límite: los workers web/Android siguen componiendo las dos mitades (placa y productor de audio) por separado y cargan el bundle sin las regiones originales; no pasan por esta entrada. `rp3_perf` mide `createGngSession` porque solo cronometra la ejecución.
+
 **Pendientes RP-3 ejecutables:**
 - Dispositivo Android físico: controles, segundo plano y audio ON/OFF con el paquete parametrizado.
 - Ruta web de escritorio (`scripts/v3_b2c_engine_worker.mjs`, YM nativo de `src/gngb_ym_native_stream.mjs` y laboratorio `src/audio_ym2203_lab.cpp` con `src/ym2203_checkpoint.h`): pasarla a los hosts comunes o retirarla.
 - Plantilla Gradle/Kotlin del shell Android, extraída a la base.
-- Sesión compuesta como punto de entrada de la receta.
+- Workers web/Android a través de la entrada de la receta: requiere que los assets incluyan las regiones verificadas o un manifiesto equivalente.
 - Interpretación de RAM, etiquetas, 4-way y continuación, movidas a placa/juego.
-- Registrar la cinta de cada informe `rp3_compare` (ruta o SHA) y documentar el comando exacto de la suite del consumidor.
 - Margen de rendimiento en CPU (1,096× con tolerancia 1,10×): vigilar en RP-6.
 - Ruta web de escritorio: desde `202655a` el AudioWorklet no cargaba porque el servidor no servía `base/src/audio/resampler.mjs` (404). Corregido en `67ddea0` y comprobado con Playwright sin ventana (clic en «Activar audio», worklet PLAYING, 0 muestras perdidas, PCM no nulo). Falta que `checkpoint_web_check` pulse «Activar audio» y exija el worklet en PLAYING, para que el gate lo detecte.
 

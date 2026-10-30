@@ -1,13 +1,35 @@
-/** GnG composition for an already verified AOT program and sound region.
- * Binary verification and artifact loading remain owned by the build recipe.
+/** GnG composition. `createSession` is the recipe entry point: it checks the
+ * recipe, verifies the original regions through the game module and binds the
+ * AOT program to them. `createGngSession` composes already verified inputs.
  * The two halves are exported for hosts that run them in separate workers.
  */
 import {createBoard,CYCLES_PER_FRAME} from './runtime.mjs';
+import {mapGngFrozenBlocks} from './code-view.mjs';
 import {createGngAudioProducer} from '../../src/gngb_audio_producer.mjs';
+import {validateRecipe} from '../../base/src/contracts/index.mjs';
+import {verifyInput,assertProgramMatches,SOUND_REGION}
+  from '../../games/gngb/index.mjs';
 
 export {createBoard,CYCLES_PER_FRAME,createGngAudioProducer};
 
 const fail=code=>{const e=Error(code);e.code=code;throw e;};
+
+/** Recipe → session. `program` is the loaded AOT bundle `{code, blocks}`
+ * with its numeric block keys; `devices.ym2203` is the bank WASM bytes. */
+export async function createSession(recipe,regions,{program,devices,...integration}={}){
+  validateRecipe(recipe);
+  if(recipe.board.id!=='gng'||recipe.board.module!=='boards/gng/index.mjs'||
+     recipe.game.module!=='games/gngb/index.mjs'||
+     recipe.devices.length!==1||recipe.devices[0]!=='ym2203')
+    fail('GNG_RECIPE_UNSUPPORTED');
+  if(!program?.code||!(program.blocks instanceof Map)||
+     !(devices?.ym2203 instanceof Uint8Array))fail('GNG_SESSION_CONFIG_INVALID');
+  const input=await verifyInput(recipe,regions);
+  assertProgramMatches(program.code,input.regions);
+  return createGngSession({...integration,code:program.code,
+    blocks:mapGngFrozenBlocks(program.code,program.blocks),
+    soundRom:input.regions[SOUND_REGION],wasm:devices.ym2203});
+}
 export async function createGngSession({code,blocks,soundRom,wasm,
   frames=Number.MAX_SAFE_INTEGER,portRead=null,onFrame=null,onPcm=null,
   checkpoint=null}={}){
