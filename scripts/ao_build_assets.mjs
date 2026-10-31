@@ -13,6 +13,8 @@ import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {prepareAudioBundle} from '../src/gngb_audio_bundle_overlay.mjs';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {packGfx} from '../src/ao_web_assets.mjs';
+import {validateRecipe} from '../base/src/contracts/index.mjs';
+import {verifyInput,assertProgramMatches} from '../games/gngb/index.mjs';
 import {gngbGraphics} from './r35_t5_render_check.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
@@ -31,6 +33,8 @@ const LIB_ENTRIES=['gngb_frame_renderer.mjs','gngb_render_inputs.mjs',
   'boards/gng/web-host-config.mjs'];
 // The YM2203 bank built from the pinned base copy (base/src/devices/ym2203).
 const AUDIO_WASM=join(ROOT,'out/android/ym2203-bank');
+// Private recipe of the current lock (scripts/rp3_lock.mjs).
+const RECIPE=resolve(ROOT,process.env.AO_RECIPE??'out/base-reference/rp3-v7/migration.json');
 const Z80_ROM_SHA1='7ef9ec5c2072e21c787a6bbf700033f50c759c1d';
 const sha256=b=>createHash('sha256').update(b).digest('hex');
 
@@ -66,15 +70,22 @@ export async function buildAssets(){
   const selected=selectB3Bundle(ROOT);
   if(!selected)throw Error('AO_ASSETS_B3_BUNDLE_MISSING');
   const audio=await prepareAudioBundle(ROOT,selected.dir);
-  const {manifest}=loadFrozen(audio.dir); // every asset SHA-256 checked
+  const {manifest,code}=loadFrozen(audio.dir); // every asset SHA-256 checked
+  const zip=join(ROOT,'roms/gng.zip');
+  const unzip=name=>execFileSync('unzip',['-p',zip,name],
+    {maxBuffer:1<<20,stdio:['ignore','pipe','ignore']});
+  // The recipe entry checks of createSession, at build time: the original
+  // regions by ID, size and SHA-256, and the AOT program built from them.
+  const recipe=validateRecipe(JSON.parse(readFileSync(RECIPE,'utf8')));
+  const input=await verifyInput(recipe,Object.fromEntries(recipe.binary.regions
+    .map(r=>[r.id,new Uint8Array(unzip(r.entry))])));
+  assertProgramMatches(code,input.regions);
   rmSync(ASSETS,{recursive:true,force:true});
   for(const dir of ['bundle','lib','audio'])
     mkdirSync(join(ASSETS,dir),{recursive:true,mode:0o700});
   for(const name of BUNDLE_FILES)
     copyFileSync(join(audio.dir,name),join(ASSETS,'bundle',name));
-  const zip=join(ROOT,'roms/gng.zip');
-  const gfx=gngbGraphics(name=>execFileSync('unzip',['-p',zip,name],
-    {maxBuffer:1<<20,stdio:['ignore','pipe','ignore']}));
+  const gfx=gngbGraphics(unzip);
   writeFileSync(join(ASSETS,'gfx.bin'),packGfx(gfx),{mode:0o600});
   // AO-6: Z80 ROM through the hash-checking extractor, and the bank .wasm.
   execFileSync('python3',['scripts/audio_extract_sound_rom.py'],{cwd:ROOT,stdio:'ignore'});
@@ -100,6 +111,8 @@ export async function buildAssets(){
     [relative(ASSETS,path),sha256(readFileSync(path))]));
   const index={schema:'gng.ao.assets.v1',generation:selected.generation,
     program_sha256:manifest.files['program.mjs'],
+    recipe:{id:recipe.id,revision:input.revision,regions:recipe.binary.regions
+      .map(({id,bytes,sha256})=>({id,bytes,sha256}))},
     audio_wasm:build,files};
   writeFileSync(join(ASSETS,'assets.json'),JSON.stringify(index,null,2)+'\n',{mode:0o600});
   return index;

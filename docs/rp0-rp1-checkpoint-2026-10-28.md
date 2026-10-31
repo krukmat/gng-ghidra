@@ -100,10 +100,15 @@ RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó inter
     - `ao_controls_check 1` en Chromium sin ventana: AO4 PASS, con el tramo de teclado: Moneda y Start por teclado, derecha+Z leídos por la CPU (`0xee`), arriba rechazado por 4-way y cinta exportada en el frame 722.
     - `rp3_compare` de 720 frames con esa cinta exportada por la página: `equivalent: true` (`rp3-compare-desktop-tape-720.json`).
     - `ao_checkpoint_check` en Chromium: GO (915/1359), con clic en Sonido y worklet en PLAYING tras la carga.
+- **Receta en el build (31/10/2026):** `scripts/ao_build_assets.mjs` aplica las comprobaciones de entrada de `createSession` antes de escribir los assets. Verifica las cuatro regiones de la ROM contra la receta del lock vigente (ID, tamaño y SHA-256; `AO_RECIPE` permite otra) y que el programa AOT se haya compilado a partir de ellas. Si algo no coincide, el build falla sin tocar `out/android/assets`. `assets.json` registra la receta y las regiones. Los workers no cambian: cargan solo assets ya verificados, sin datos de ROM adicionales.
+  - Prueba negativa: una receta con el hash de `gg3` alterado da `AO_ASSETS=BLOCKED_GNGB_INPUT_REGION_MISMATCH gg3` y deja los assets intactos.
+  - Emulador `dubbridge` con el APK reconstruido:
+    - `ao_android_check 20 --audio`: `PASS_EMULATOR`, listo en 758 ms, 1207 frames, audio en 19/20 ventanas con 0 faltantes y 0 paradas.
+    - `ao_checkpoint_check --android`: GO (926/1370).
+    - `ao_stick_android_check`: PASS. En el emulador recién arrancado, el aviso del sistema «Viewing full screen» se comía el toque de calibración. El check lo marca como visto solo en emuladores y, en un teléfono, lo informa en lugar de esperar.
 
 **Pendientes RP-3 ejecutables:**
 - Dispositivo Android físico: controles, segundo plano y audio ON/OFF con el paquete parametrizado.
-- Workers web/Android a través de la entrada de la receta: requiere que los assets incluyan las regiones verificadas o un manifiesto equivalente.
 - Margen de rendimiento en CPU (1,096× con tolerancia 1,10×): vigilar en RP-6.
 - Laboratorio del bot (`scripts/v3_b2c_live.mjs`): sin gate de navegador propio. Puede romperse cuando cambie la placa, como el 404 del resampler corregido en `67ddea0`; se repara o se porta a la app común al retomar el bot.
 

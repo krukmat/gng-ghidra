@@ -29,6 +29,10 @@ const probes=[],bad=[];
 let device;
 try{
   adb('install','-r',APK);
+  // A fresh emulator (-read-only) shows Android's "Viewing full screen" notice
+  // on every boot and it swallows the calibration tap; mark it as seen there.
+  if(serial.startsWith('emulator-'))
+    adb('shell','settings','put','secure','immersive_mode_confirmations','confirmed');
   adb('shell','am','force-stop',PKG);
   adb('shell','am','start','-W','-n',PKG+'/org.rommigration.shell.MainActivity');
   device=(await _android.devices()).find(d=>d.serial()===serial);
@@ -59,6 +63,8 @@ try{
   const dpr=await page.evaluate(()=>devicePixelRatio);
   const [w,h]=adb('shell','wm','size').match(/(\d+)x(\d+)/).slice(1).map(Number);
   const probe={x:Math.max(w,h)/2,y:Math.min(w,h)/2};
+  if(/mCurrentFocus=.*ImmersiveModeConfirmation/.test(adb('shell','dumpsys','window')))
+    throw Error('STICK_SYSTEM_NOTICE: dismiss "Viewing full screen" on the device');
   adb('shell','input','tap',String(probe.x),String(probe.y));
   await page.waitForFunction(()=>window.lastDown,null,{timeout:5000});
   const down=await page.evaluate(()=>window.lastDown);
