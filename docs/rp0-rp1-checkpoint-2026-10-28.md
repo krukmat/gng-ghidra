@@ -107,12 +107,13 @@ RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó inter
     - `ao_checkpoint_check --android`: GO (926/1370).
     - `ao_stick_android_check`: PASS. En el emulador recién arrancado, el aviso del sistema «Viewing full screen» se comía el toque de calibración. El check lo marca como visto solo en emuladores y, en un teléfono, lo informa en lugar de esperar.
 
-**Pendientes RP-3 ejecutables:**
-- Dispositivo Android físico: controles, segundo plano y audio ON/OFF con el paquete parametrizado.
+**RP-3 aceptada (31/10/2026).** La prueba en un dispositivo Android físico (controles, segundo plano y audio ON/OFF con el paquete parametrizado) se hace en la verificación final del proyecto.
+
+**Para vigilar después de RP-3:**
 - Margen de rendimiento en CPU (1,096× con tolerancia 1,10×): vigilar en RP-6.
 - Laboratorio del bot (`scripts/v3_b2c_live.mjs`): sin gate de navegador propio. Puede romperse cuando cambie la placa, como el 404 del resampler corregido en `67ddea0`; se repara o se porta a la app común al retomar el bot.
 
-`src/ao_ym2203_wasm.*`, `scripts/ao_build_audio_wasm.sh` y `out/android/audio/ym2203.wasm` siguen como referencia. Se mantiene el límite Z80: IRQ IM1, sin NMI ni paridad nativa de interrupciones. El GO de RP-3 requiere esas tareas.
+`src/ao_ym2203_wasm.*`, `scripts/ao_build_audio_wasm.sh` y `out/android/audio/ym2203.wasm` siguen como referencia. Se mantiene el límite Z80: IRQ IM1, sin NMI ni paridad nativa de interrupciones. 
 
 ## Referencia reproducible
 
