@@ -6,6 +6,8 @@
 
 ## Uso (web)
 
+> **31/10/2026:** el escritorio usa ahora la app común: `node scripts/ao_serve.mjs`, con los botones Guardar y Cargar o las teclas `G` y `C`, y el guardado en IndexedDB como en Android. Lo que sigue describe la ruta anterior, que queda como laboratorio del bot.
+
 `node scripts/v3_b2c_live.mjs --serve` → botones **Guardar `G`** y **Cargar `C`**. El checkpoint se guarda en `out/web-checkpoint/quick.json`, es privado y no se versiona: la RAM contiene copias de código de la ROM. Cada guardado reemplaza al anterior. Mientras la CPU está en la pausa de moneda o detenida, no se puede guardar.
 
 ## Diseño

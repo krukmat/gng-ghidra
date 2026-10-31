@@ -4,6 +4,7 @@
  * the session bit for bit, including any halt. Inputs only: no ROM, RAM or
  * video bytes are recorded.
  */
+import {decodeCheckpoint} from './checkpoint_format.mjs';
 export const LIVE_TAPE_SCHEMA='gng.v3.b3-live-tape.v1';
 const PORTS=5;
 
@@ -46,4 +47,14 @@ export function liveTapeReader(changes){
     if(at[port]<0)throw Error('V3_B3_LIVE_TAPE_UNRECORDED_READ');
     return list[at[port]][1];
   };
+}
+
+/** A checkpoint's tape (port changes from reset) as a live tape file, the
+ * input of rp3_compare's tape scenario. The checkpoint is fully checked. */
+export function checkpointTape(text){
+  let programSha256;
+  try{programSha256=JSON.parse(text)?.programSha256;}catch{} // decode reports it
+  const c=decodeCheckpoint(text,{programSha256});
+  return {schema:LIVE_TAPE_SCHEMA,program_sha256:c.programSha256,frame:c.frame,
+    changes:c.tape};
 }

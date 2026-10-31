@@ -2,6 +2,8 @@
 /** GnG's *real* live AOT engine, served only on loopback.
  * Not a capture player, fake scene or MAME emulator.
  * HTTP and keyboard events run on main Node thread, CPU on worker thread.
+ * Bot lab only (bot/record-gameplay.mjs, bot/practice-water.mjs drive its
+ * HTTP API). The product's desktop route is the common app: ao_serve.mjs.
  */
 import {createServer} from 'node:http';
 import {Worker} from 'node:worker_threads';

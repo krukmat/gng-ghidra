@@ -11,13 +11,13 @@
  * Usage: node scripts/ao_checkpoint_check.mjs [--android [serial]]
  */
 import assert from 'node:assert/strict';
-import {createServer} from 'node:http';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {cpSync,mkdirSync,mkdtempSync,readFileSync,rmSync,statSync,writeFileSync} from 'node:fs';
+import {cpSync,mkdirSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {homedir,tmpdir} from 'node:os';
-import {resolve,join,extname,sep} from 'node:path';
+import {resolve,join} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
+import {createAssetServer} from './ao_serve.mjs';
 import {chromium,_android} from 'playwright-core';
 import {decodeCheckpoint,CYCLES_PER_FRAME} from '../src/checkpoint_format.mjs';
 import {checkpointRuntime} from '../src/checkpoint_runtime.mjs';
@@ -35,17 +35,7 @@ const serialArg=process.argv[process.argv.indexOf('--android')+1];
 const ADB=join(process.env.ANDROID_HOME??join(homedir(),'Library/Android/sdk'),
   'platform-tools/adb');
 const PKG=process.env.AO_APP_ID??'org.gng.offline';
-const MIME={'.html':'text/html','.mjs':'text/javascript','.json':'application/json',
-  '.bin':'application/octet-stream','.wasm':'application/wasm'};
-const server=createServer((req,res)=>{
-  try{
-    const path=resolve(ASSETS,'.'+new URL(req.url,'http://local').pathname);
-    if(!path.startsWith(ASSETS+sep)||!MIME[extname(path)]||!statSync(path).isFile())
-      throw Error('NOT_FOUND');
-    res.writeHead(200,{'Content-Type':MIME[extname(path)],'Cache-Control':'no-store'});
-    res.end(readFileSync(path));
-  }catch{res.writeHead(404);res.end();}
-});
+const server=createAssetServer(ASSETS);
 const logs=[],bad=[];
 const report={schema:'gng.ao.checkpoint-check.v1'};
 let browser,page,device;

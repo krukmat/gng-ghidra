@@ -3,30 +3,23 @@
  * Real touch events -> worker messages -> real MC6809 reads.
  * Five cold boots must accept Coin then Start; Start without Coin must fail.
  * Add --gameover to wait for a real loss and verify Coin + Continue.
+ * Then the desktop keyboard after Reiniciar: 5 Coin, 1 Start, arrows and Z
+ * read by the CPU, and T exports the session tape (out/android/check).
  */
 import assert from 'node:assert/strict';
-import {createServer} from 'node:http';
-import {readFileSync,writeFileSync,mkdirSync,statSync} from 'node:fs';
-import {resolve,join,extname,sep} from 'node:path';
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {resolve,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {createAssetServer} from './ao_serve.mjs';
 import {chromium} from 'playwright-core';
+import {LIVE_TAPE_SCHEMA} from '../src/v3_b3_live_tape.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const ASSETS=join(ROOT,'out/android/assets'),CHECK=join(ROOT,'out/android/check');
 const trials=Number(process.argv[2]??5);
 const checkGameOver=process.argv.includes('--gameover');
 if(!Number.isInteger(trials)||trials<1||trials>5)throw Error('AO4_TRIALS_INVALID');
-const MIME={'.html':'text/html','.mjs':'text/javascript','.json':'application/json',
-  '.bin':'application/octet-stream','.wasm':'application/wasm'};
-const server=createServer((req,res)=>{
-  try{
-    const path=resolve(ASSETS,'.'+new URL(req.url,'http://local').pathname);
-    if(!path.startsWith(ASSETS+sep)||!MIME[extname(path)]||!statSync(path).isFile())
-      throw Error('NOT_FOUND');
-    res.writeHead(200,{'Content-Type':MIME[extname(path)],'Cache-Control':'no-store'});
-    res.end(readFileSync(path));
-  }catch{res.writeHead(404);res.end();}
-});
+const server=createAssetServer(ASSETS);
 const report={schema:'gng.ao4.controls-check.v1',trials:[]};
 let browser,page;
 try{
@@ -195,6 +188,34 @@ try{
   await page.waitForFunction(()=>!document.getElementById('system-controls').hidden&&
     document.getElementById('coin').disabled);
   report.restartReturnsToMenu='PASS';
+  // Keyboard: the same controls; a held key is one more finger.
+  probes.length=0;
+  await page.waitForFunction(()=>!document.getElementById('coin').disabled);
+  const kbBase=await until(p=>p.frame>=320);
+  await page.keyboard.press('Digit5');
+  const kbCoin=await until(p=>p.frame>kbBase.frame&&p.ram23===1);
+  await page.waitForFunction(()=>!document.getElementById('start').disabled);
+  await page.keyboard.press('Digit1');
+  const kbStart=await until(p=>p.frame>kbCoin.frame&&p.ram2>=2&&p.ram23===0);
+  await page.keyboard.down('ArrowRight');await page.keyboard.down('KeyZ');
+  const kbHeld=await until(p=>p.frame>kbStart.frame&&p.reads[1]===0xee);
+  await page.keyboard.down('ArrowUp'); // 4-way: refused while Right is held
+  const kbFour=await until(p=>p.frame>kbHeld.frame+10);
+  assert.equal(kbFour.reads[1],0xee);
+  for(const key of ['ArrowUp','KeyZ','ArrowRight'])await page.keyboard.up(key);
+  const kbFree=await until(p=>p.frame>kbFour.frame&&p.reads[1]===255);
+  const [download]=await Promise.all([page.waitForEvent('download'),
+    page.keyboard.press('KeyT')]);
+  const tapePath=join(CHECK,'ao4-tape.json');await download.saveAs(tapePath);
+  const tape=JSON.parse(readFileSync(tapePath,'utf8'));
+  const manifest=JSON.parse(readFileSync(join(ASSETS,'bundle/manifest.json'),'utf8'));
+  assert.equal(tape.schema,LIVE_TAPE_SCHEMA);
+  assert.equal(tape.program_sha256,manifest.files['program.mjs']);
+  assert.ok(tape.frame>kbFree.frame&&tape.changes.length>0);
+  report.keyboard={status:'PASS',coinReads:kbCoin.witness.activeSamples.coin1,
+    startedFrame:kbStart.frame,heldP1:kbHeld.reads[1],tapeFrame:tape.frame,
+    tapeChanges:tape.changes.length,tape:'out/android/check/ao4-tape.json'};
+  console.log('AO4_KEYBOARD=PASS tape_frame='+tape.frame);
   report.status='PASS';
 }catch(e){
   report.status='BLOCKED';report.error=String(e.stack??e);

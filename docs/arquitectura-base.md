@@ -53,6 +53,8 @@ Ninguna generación modifica a la anterior.
 
 ## Motor web por dentro
 
+> **31/10/2026:** el escritorio de producto usa la misma app que Android (`node scripts/ao_serve.mjs`): el motor corre en un worker del navegador sobre los hosts de la base. El servidor descrito aquí queda como laboratorio del bot (`bot/record-gameplay.mjs`, `bot/practice-water.mjs`).
+
 ```mermaid
 flowchart LR
   subgraph Nav["Navegador"]

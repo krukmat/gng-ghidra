@@ -94,11 +94,12 @@ flowchart LR
 
 ```bash
 bash scripts/v3_b3_local.sh            # genera el paquete compilado en out/ (requiere la ROM)
-node scripts/v3_b2c_live.mjs --serve   # web: http://127.0.0.1:18609
+node scripts/ao_build_assets.mjs       # app común web/Android en out/android/assets
+node scripts/ao_serve.mjs              # escritorio: http://127.0.0.1:18609/index.html
 bash scripts/ao_build_apk.sh           # Android: out/android/gng.apk
 ```
 
-**Estado (29/10/2026):** video, controles y sonido iguales a MAME; app Android jugable. En la web y en Android se puede guardar y cargar una partida con el sonido exacto: botones Guardar y Cargar, o las teclas `G` y `C` en la web ([detalle](docs/checkpoint-web-2026-10-29.md)). Falta recorrer el juego completo de principio a fin y el APK final firmado. Detalle técnico en [docs/arquitectura-base.md](docs/arquitectura-base.md).
+**Estado (29/10/2026):** video, controles y sonido iguales a MAME; app Android jugable. En la web y en Android se puede guardar y cargar una partida con el sonido exacto: botones Guardar y Cargar, o las teclas `G` y `C` en escritorio; `T` exporta la cinta de la sesión ([detalle](docs/checkpoint-web-2026-10-29.md)). Falta recorrer el juego completo de principio a fin y el APK final firmado. Detalle técnico en [docs/arquitectura-base.md](docs/arquitectura-base.md).
 
 ---
 

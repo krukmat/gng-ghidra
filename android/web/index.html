@@ -70,6 +70,9 @@
   #footer button{flex:1 1 0;min-width:0;padding:4px 6px}
   #footer #restart,#status{flex-basis:100%}
   #hint{margin:0;text-align:center;font-size:12px;color:#acbdcc}
+  /* Desktop only: the keyboard drives the same controls. */
+  #keys{display:none;margin:0;text-align:center;font-size:10px;color:#7f93a6}
+  @media(hover:hover) and (pointer:fine){#keys{display:block}}
   #status{font:10px/1.6 ui-monospace,monospace;color:#8da899;
     white-space:nowrap;text-align:center}
   #halt{position:absolute;inset:0;display:flex;align-items:center;
@@ -97,6 +100,8 @@
         <button id="start" data-pulse="start1" disabled>Start</button>
       </div>
       <p id="hint">Cargando el juego…</p>
+      <p id="keys">Teclado: 5 moneda · 1 start · flechas · Z disparo · X salto ·
+        G guardar · C cargar · T cinta</p>
       <button id="sound" disabled aria-pressed="false"
         title="Preparando el sonido…">Sonido OFF</button>
       <div id="footer">

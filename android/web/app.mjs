@@ -1,6 +1,9 @@
-/** Offline display and multitouch controls. No keyboard listeners. */
+/** Offline display, multitouch controls and, on desktop, the keyboard
+ * (ao_keyboard.mjs) through the same controls. */
 import {createTouchControls} from './lib/ao_touch_controls.mjs';
 import {followBase,knobOffset,stickSector} from './lib/ao_stick.mjs';
+import {keyAction} from './lib/ao_keyboard.mjs';
+import {checkpointTape} from './lib/v3_b3_live_tape.mjs';
 
 const canvas=document.getElementById('screen');
 const ctx2d=canvas.getContext('2d',{alpha:false});
@@ -27,6 +30,7 @@ let game={credits:0,readyToStart:false,inGame:false};
 // worker builds and checks it. Saving waits for the next frame boundary.
 const CK_DB='gng-checkpoint',CK_STORE='slot',CK_KEY='quick',CK_SAVE_MS=3000;
 let ckSaved=null,ckSaving=null; // {frame,savedAt}; save timeout
+let ckTape=false; // this save exports the tape instead of filling the slot
 let ckNote='',ckNoteUntil=0; // shown with the fps for a few seconds
 const ckRequest=(mode,run)=>new Promise((resolve,reject)=>{
   const open=indexedDB.open(CK_DB,1);
@@ -46,10 +50,11 @@ function updateCheckpoint(note=null){
     'Sin checkpoint guardado';
   if(note){ckNote=note;ckNoteUntil=performance.now()+4000;status.textContent=note;}
 }
-function saveCheckpoint(){
+function saveCheckpoint(tape=false){
   if(ckSave.disabled)return;
+  ckTape=tape;
   ckSaving=setTimeout(()=>savedCheckpoint(null,'CK_SAVE_TIMEOUT'),CK_SAVE_MS);
-  updateCheckpoint('guardando…');
+  updateCheckpoint(tape?'exportando cinta…':'guardando…');
   worker.postMessage({type:'save'});
 }
 async function savedCheckpoint(data,code=null){
@@ -57,14 +62,27 @@ async function savedCheckpoint(data,code=null){
   clearTimeout(ckSaving);ckSaving=null;
   try{
     if(code)throw Error(code);
+    if(ckTape)return downloadTape(data.text);
     const meta={frame:data.frame,savedAt:new Date().toISOString()};
     await ckRequest('readwrite',store=>store.put({...meta,text:data.text},CK_KEY));
     ckSaved=meta;log('AO_CK_SAVE',{...meta,bytes:data.text.length});
     updateCheckpoint('guardado · frame '+meta.frame);
   }catch(e){
-    log('AO_CK_SAVE_FAILED',{code:String(e?.message??e)});
-    updateCheckpoint('no se pudo guardar');
+    log(ckTape?'AO_TAPE_FAILED':'AO_CK_SAVE_FAILED',{code:String(e?.message??e)});
+    updateCheckpoint(ckTape?'no se pudo exportar':'no se pudo guardar');
   }
+}
+// The session's port changes from reset, as rp3_compare replays them.
+function downloadTape(text){
+  const tape=checkpointTape(text);
+  const url=URL.createObjectURL(new Blob([JSON.stringify(tape)],
+    {type:'application/json'}));
+  const a=document.createElement('a');a.href=url;
+  a.download='gng-tape-'+new Date().toISOString().replace(/[:.]/g,'-')+
+    '-frame'+tape.frame+'.json';
+  a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  log('AO_TAPE_EXPORT',{frame:tape.frame,changes:tape.changes.length});
+  updateCheckpoint('cinta · frame '+tape.frame);
 }
 async function loadCheckpoint(){
   if(ckLoad.disabled)return;
@@ -325,15 +343,26 @@ document.getElementById('layout').addEventListener('pointerdown',e=>{
   const button=e.target.closest('[data-hold],[data-pulse]');
   if(!button||button.disabled||e.button!==0)return;
   e.preventDefault();
-  if(button.dataset.pulse){
-    controls.pulse(button.dataset.pulse==='start1'&&game.canContinue?
-      'continue1':button.dataset.pulse);
-    return;
-  }
+  if(button.dataset.pulse)return pulse(button.dataset.pulse);
   button.setPointerCapture(e.pointerId);
   controls.hold(e.pointerId,button.dataset.hold);
 });
+const pulse=key=>controls.pulse(key==='start1'&&game.canContinue?'continue1':key);
 const release=e=>{if(e.pointerId!==stick?.id)controls.release(e.pointerId);};
+// A held key is one more finger; Coin and Start obey their buttons' state.
+document.addEventListener('keydown',e=>{
+  const action=keyAction(e);if(!action)return;
+  e.preventDefault();if(e.repeat)return;
+  if(action.hold)controls.hold('key:'+e.code,action.hold);
+  else if(action.pulse){
+    const button=buttons.find(b=>b.dataset.pulse===action.pulse);
+    if(!button.disabled)pulse(action.pulse);
+  }else if(action.command==='save')saveCheckpoint();
+  else if(action.command==='load')loadCheckpoint();
+  else saveCheckpoint(true);
+});
+// Any key up: a modifier pressed meanwhile must not leave a hold stuck.
+document.addEventListener('keyup',e=>controls.release('key:'+e.code));
 for(const event of ['pointerup','pointercancel','lostpointercapture'])
   document.addEventListener(event,release);
 const releaseAll=()=>{restStick();controls.releaseAll();};
@@ -352,7 +381,7 @@ document.addEventListener('visibilitychange',()=>{
 });
 document.addEventListener('contextmenu',e=>e.preventDefault());
 document.getElementById('restart').addEventListener('click',()=>start());
-ckSave.addEventListener('click',saveCheckpoint);
+ckSave.addEventListener('click',()=>saveCheckpoint());
 ckLoad.addEventListener('click',loadCheckpoint);
 ckRequest('readonly',store=>store.get(CK_KEY)).then(slot=>{
   if(slot?.text){ckSaved={frame:slot.frame,savedAt:slot.savedAt};updateCheckpoint();}
