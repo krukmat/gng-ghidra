@@ -2,7 +2,7 @@
 
 **Dirección vigente:** crear un repositorio separado para extraer de esta versión una base agnóstica y versionada, con herramientas para generar proyectos independientes. Cada proyecto contendrá un juego integrado y generado desde sus binarios originales. Este repositorio conserva GnG como primera integración de referencia y consumidor de la base. La implementación de placa y la integración de juego quedan fuera del repositorio compartido; los compiladores se reutilizan por arquitectura de CPU.
 
-**Estado actual (31/10/2026):** RP-0 a RP-4 completadas y aceptadas; RP-5 y RP-6 diferidas. Sigue la verificación final del proyecto. La base local está en `090c44dba90c26bea5886b6450ebc765cfa39c86`, lock v8; GnG se construye desde `roms/gng.zip` con `base/tools/migrate.mjs`. RP-3 extrajo Z80, transporte PCM, protocolo AudioWorklet, reloj de frames, banco YM2203, hosts de navegador de engine y audio y la plantilla del shell Android. GnG entra por la receta (`boards/gng/index.mjs#createSession`, y el build de assets aplica las mismas comprobaciones), y web, escritorio y Android usan la misma app sobre esos hosts. La prueba en un teléfono físico se hace en la verificación final del proyecto (decisión del operador, 31/10/2026). La base no está certificada ni publicada. [Checkpoint y resultados RP-3](rp0-rp1-checkpoint-2026-10-28.md#rp-3--z80-audio-y-worker-29102026). `cfg/` y `gng-ghidra/` siguen fuera de la extracción.
+**Estado actual (31/10/2026):** RP-0 a RP-5 completadas; RP-6 diferida hasta clonar otro juego. Sigue la verificación final del proyecto. La base local está en `090c44dba90c26bea5886b6450ebc765cfa39c86`, lock v8; GnG se construye desde `roms/gng.zip` con `base/tools/migrate.mjs`. RP-3 extrajo Z80, transporte PCM, protocolo AudioWorklet, reloj de frames, banco YM2203, hosts de navegador de engine y audio y la plantilla del shell Android. GnG entra por la receta (`boards/gng/index.mjs#createSession`, y el build de assets aplica las mismas comprobaciones), y web, escritorio y Android usan la misma app sobre esos hosts. La prueba en un teléfono físico se hace en la verificación final del proyecto (decisión del operador, 31/10/2026). La base está en el repositorio privado [`krukmat/rom-migration-base`](https://github.com/krukmat/rom-migration-base), versión `v0.1.0` (`bec61dd`), con generador de proyectos. GnG sigue fijado en `090c44d`: los 28 archivos que copia son idénticos en `v0.1.0`. La base no está certificada. [Checkpoint y resultados RP-3](rp0-rp1-checkpoint-2026-10-28.md#rp-3--z80-audio-y-worker-29102026). `cfg/` y `gng-ghidra/` siguen fuera de la extracción.
 
 **Tareas ejecutables propuestas:** [RP-0: referencia](#rp-0--fijar-la-referencia), [RP-1: contratos](#rp-1--definir-las-fronteras), [RP-2: CPU y placa](#rp-2--separar-compilación-cpu-y-placa), [RP-3: host y audio](#rp-3--separar-host-audio-e-interfaz), [RP-4: construcción](#rp-4--construir-desde-el-binario-original), [RP-5: proyecto nuevo](#rp-5--generar-un-proyecto-independiente), [RP-6: certificación](#rp-6--certificar-y-versionar-la-base).
 
@@ -36,7 +36,7 @@ La extracción se implementará en el repositorio nuevo; los cambios en este se 
 
 GnG será el consumidor de referencia externo. Sus adaptadores y escenarios de aceptación se ejecutarán desde este repositorio contra una revisión exacta de la base. Los tests de la base usarán programas sintéticos y contratos; no requerirán este checkout, ROM de GnG, carpetas `out/` ni acceso a capturas privadas. Hasta que GnG pueda consumirla, la versión original permanece como referencia ejecutable.
 
-El nombre del repositorio nuevo es provisional; su creación forma parte de RP-0 y sigue pendiente. Este documento describe la decisión y las tareas, no acredita que ya exista un remoto.
+El repositorio es `krukmat/rom-migration-base`, privado (31/10/2026). `gng-ghidra` es público como muestra del proceso, por decisión del operador; eso deja visible la copia de la base fijada en `base/`.
 
 ## 2. Inventario de extracción
 
@@ -196,23 +196,22 @@ Lo que esta fase mueve a la base entra sin GnG: los nombres, las constantes, las
 
 ### RP-5 — Generar un proyecto independiente
 
-**Diferida (decisión del operador, 31/10/2026):** se hará cuando se clone otro juego. No forma parte del objetivo actual.
-
-- [ ] El repositorio agnóstico contiene solo lo agnóstico de este refactor, sin GnG. Hoy el código (`src/`, `templates/`) ya no tiene GnG; quedan en la documentación de la base la tabla de asignación GnG de `docs/contracts.md`, el origen y los nombres `gngb_*` de `docs/provenance.md` y menciones sueltas (`docs/z80-audio.md`, un test «non-GnG»). Pasarlos a `gng-ghidra` y agregar a la base un test que falle si aparece GnG en cualquier archivo versionado.
+**Hecha (31/10/2026; el operador la adelantó).** Base `v0.1.0` = `bec61dd` en `krukmat/rom-migration-base` (privado). Suite de la base: 29 pruebas pasan, 3 omitidas.
 
 **Depende de RP-4.**
 
-- [ ] Generar la estructura de la sección 3 con identidad de proyecto, plataforma y selección explícita de componentes.
-- [ ] Fijar repositorio, revisión íntegra y hashes de la base en `migration.lock.json`. Primera entrega: copia versionada de los componentes necesarios obtenida de esa revisión; actualizaciones explícitas, sin edición manual de la copia ni dependencia de rutas del checkout original. La distribución mediante paquete podrá decidirse después.
-- [ ] Incluir un ejemplo sintético mínimo y puntos de extensión para binarios, placa y juego; no incluir ROM, assets derivados, bundles o evidencia privada de GnG.
-- [ ] Conectar en `gng-ghidra` su receta de referencia con la base externa para reconstrucción local con los binarios del operador. La plantilla genérica y el repositorio de la base no incorporan la integración GnG.
-- [ ] Verificar en un directorio temporal que el proyecto generado construye su ejemplo sin acceder al repositorio padre, y que rechaza entradas incompletas/incompatibles con diagnóstico concreto.
+- [x] La base contiene solo lo agnóstico. La tabla de asignación de GnG y la procedencia archivo por archivo pasaron a [base-asignacion-y-procedencia.md](base-asignacion-y-procedencia.md). `tests/no-game-identity.test.mjs` falla si un archivo de la base nombra un juego.
+- [x] `tools/project.mjs init` genera la estructura de la sección 3 con identidad de proyecto y grupos de componentes explícitos (`core` más `mc6809`, `z80`, `ym2203`, `web`, `android`). Un módulo seleccionado no puede importar archivos fuera de la selección.
+- [x] `migration.lock.json` fija repositorio, revisión íntegra, grupos y hashes. `update --to` reemplaza la copia desde otra revisión y rechaza una copia editada a mano.
+- [x] El ejemplo sintético es un programa 6809 de 32 KiB con una placa de una CPU. `tools/example.mjs` lo verifica, construye y valida con la cadena fijada y corre 3 frames. No incluye ROM, assets, bundles ni evidencia de GnG.
+- [x] GnG ya construye su receta desde `roms/gng.zip` con `base/tools/migrate.mjs` (RP-4). Sigue fijado en `090c44d`; no se repitieron los gates de RP-4 porque sus componentes no cambiaron.
+- [x] `tests/project.test.mjs` genera el proyecto desde un clon temporal, comprueba que no haya rutas absolutas, borra el clon y corre las pruebas del proyecto (4/4). También comprueba que entradas incompletas o incompatibles se rechacen con un código concreto.
 
 **Salida:** generador y plantilla utilizables. **GO:** el proyecto es independiente y no contiene rutas absolutas ni conocimiento implícito de GnG. Esto demuestra separación y generación, no compatibilidad con un segundo juego.
 
 ### RP-6 — Certificar y versionar la base
 
-**Diferida (decisión del operador, 31/10/2026):** junto con RP-5, al clonar otro juego. No habrá reconstrucción de GnG desde un checkout limpio; la validación con GnG es la de RP-4.
+**Diferida (decisión del operador, 31/10/2026):** hasta clonar otro juego. No habrá reconstrucción de GnG desde un checkout limpio; la validación con GnG es la de RP-4.
 
 **Depende de RP-5.**
 
