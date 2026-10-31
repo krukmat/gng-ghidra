@@ -52,7 +52,7 @@
   <text class="cap" x="836" y="40">3 · OUTPUT</text>
 
     <rect class="box k" x="36" y="56" width="200" height="74" rx="6"/>
-  <text class="m b" x="136" y="82" text-anchor="middle">roms/gng.zip</text>
+  <text class="m b" x="136" y="82" text-anchor="middle">roms/&lt;game&gt;.zip</text>
   <text class="s" x="136" y="100" text-anchor="middle">original, private</text>
   <text class="s" x="136" y="116" text-anchor="middle">never modified</text>
 
@@ -65,7 +65,7 @@
 
   <rect class="box g" x="36" y="274" width="200" height="100" rx="6"/>
   <text class="t" x="136" y="298" text-anchor="middle">prepare</text>
-  <text class="m" x="136" y="316" text-anchor="middle">games/gngb/build.mjs</text>
+  <text class="m" x="136" y="316" text-anchor="middle">games/&lt;game&gt;/build.mjs</text>
   <text class="s" x="136" y="334" text-anchor="middle">fixed 0x6000–0xFFFF</text>
   <text class="s" x="136" y="350" text-anchor="middle">+ 5 banks of 8 KiB</text>
   <text class="s" x="136" y="366" text-anchor="middle">view · strategies · scenario</text>
@@ -98,7 +98,7 @@
   <text class="s" x="602" y="228">runs the game's scenarios</text>
   <text class="s" x="602" y="244">on the blocks compiled so far</text>
   <rect class="box g" x="602" y="258" width="188" height="48" rx="5"/>
-  <text class="m" x="696" y="278" text-anchor="middle">idle-6000 · gngb board</text>
+  <text class="m" x="696" y="278" text-anchor="middle">idle-6000 · board</text>
   <text class="s" x="696" y="296" text-anchor="middle">6000 frames, no input</text>
   <text class="s" x="602" y="328">a PC with no block is a new seed;</text>
   <text class="s" x="602" y="344">RAM code is traced to its ROM source</text>
@@ -136,7 +136,7 @@
   <text class="m" x="852" y="400">ao_build_assets.mjs</text>
   <text class="s" x="852" y="420">bundle · graphics · gg2 · ym2203.wasm</text>
   <text class="s" x="852" y="436">web module closure</text>
-  <text class="s" x="852" y="450">gng.ao.assets.v2 index + sha256</text>
+  <text class="s" x="852" y="450">asset index + sha256</text>
   <path class="e g" d="M950 328V358" marker-end="url(#b-ag)"/>
 
   <rect class="box g k" x="836" y="484" width="228" height="76" rx="6"/>

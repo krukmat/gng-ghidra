@@ -52,7 +52,7 @@
   <text class="s" x="36" y="58">roms/ and out/ stay out of Git.</text>
 
   <rect class="box k" x="36" y="84" width="160" height="70" rx="6"/>
-  <text class="m b" x="116" y="110" text-anchor="middle">roms/gng.zip</text>
+  <text class="m b" x="116" y="110" text-anchor="middle">roms/&lt;game&gt;.zip</text>
   <text class="s" x="116" y="128" text-anchor="middle">the only source</text>
   <text class="s" x="116" y="144" text-anchor="middle">of game bytes</text>
 
@@ -103,7 +103,7 @@
   <path class="e" d="M116 384V356" marker-end="url(#f-a)"/>
   <text class="lbl" x="126" y="374">git pull</text>
   <rect class="gh" x="16" y="384" width="1068" height="100" rx="14"/>
-  <text class="cap" x="36" y="408">GITHUB · gng-ghidra PUBLIC · NO ROM BYTES</text>
+  <text class="cap" x="36" y="408">GITHUB · THIS REPOSITORY, PUBLIC · NO ROM BYTES</text>
   <text class="m b" x="36" y="436">base/</text>
   <text class="s" x="36" y="454">pinned copy of the private base</text>
   <text class="m b" x="300" y="436">boards/ · games/ · src/</text>

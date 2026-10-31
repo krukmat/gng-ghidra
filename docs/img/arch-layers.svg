@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1100 560" width="1100" height="560" role="img" aria-label="Layers. rom-migration-base (private) holds contracts, the build chain, CPUs, devices, audio, web hosts, templates and tools. gng-ghidra (public) holds the GnG game, board, renderer, app and scripts, and consumes the base as a pinned copy in base/ checked by a lock. The base imports nothing from GnG.">
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1100 560" width="1100" height="560" role="img" aria-label="Layers. rom-migration-base (private) holds contracts, the build chain, CPUs, devices, audio, web hosts, templates and tools. this repository (public) holds the game, board, renderer, app and scripts, and consumes the base as a pinned copy in base/ checked by a lock. The base imports nothing from the game.">
 <style>svg{--paper:#f1f4f2;--panel:#ffffff;--ink:#16201d;--ink-2:#4b5a55;--rule:#c4cec9;--grid:#edf1ef;--base:#1c5db3;--base-soft:#e6eefa;--game:#93570b;--game-soft:#f7ecdb;--ok:#23764a;--stop:#b0281f;--stop-soft:#fae6e3;--oracle:#6a707b;--screen:#0e1413;--screen-ink:#d6e2dd;--f-ui:"Helvetica Neue",Helvetica,Arial,sans-serif;--f-mono:"SF Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace}
 .dg text{font-family:var(--f-ui);font-size:13px;fill:var(--ink)}
 .dg .t{font-size:13.5px;font-weight:650}
@@ -98,36 +98,36 @@
   <text class="s" x="550" y="302" text-anchor="middle">file</text>
 
   <path class="e x" d="M506 440H594" marker-end="url(#c-ax)"/>
-  <text class="lbl tx" x="550" y="418" text-anchor="middle">GnG import</text><text class="lbl tx" x="550" y="430" text-anchor="middle">forbidden</text>
+  <text class="lbl tx" x="550" y="418" text-anchor="middle">game import</text><text class="lbl tx" x="550" y="430" text-anchor="middle">forbidden</text>
 
-    <text class="cap tg" x="594" y="40">GNG-GHIDRA · PUBLIC · CONSUMER</text>
+    <text class="cap tg" x="594" y="40">THIS REPOSITORY · PUBLIC · CONSUMER</text>
   <rect class="box g k" x="594" y="52" width="470" height="484" rx="10"/>
 
   <rect class="box" x="614" y="72" width="430" height="70" rx="6"/>
-  <text class="m b" x="630" y="93">games/gngb</text>
+  <text class="m b" x="630" y="93">games/&lt;game&gt;</text>
   <text class="s" x="630" y="111">build.mjs: prepare · validate · package hooks</text>
   <text class="s" x="630" y="127">code image · input recipe · game state</text>
 
   <rect class="box" x="614" y="152" width="430" height="102" rx="6"/>
-  <text class="m b" x="630" y="173">boards/gng</text>
+  <text class="m b" x="630" y="173">boards/&lt;board&gt;</text>
   <text class="s" x="630" y="191">runtime · memory map, IRQ, DMA, banks</text>
-  <text class="s" x="630" y="207">code-view · ram-code · bundle (gng.code-image.v1)</text>
+  <text class="s" x="630" y="207">code-view · ram-code · bundle (code image)</text>
   <text class="s" x="630" y="223">inputs · frame-record · audio/ym2203</text>
   <text class="s" x="630" y="239">web-host-config · pacing and ports for the host</text>
 
   <rect class="box" x="614" y="264" width="430" height="52" rx="6"/>
-  <text class="m b" x="630" y="285">src/gngb_frame_renderer</text>
+  <text class="m b" x="630" y="285">src/ frame renderer</text>
   <text class="s" x="630" y="303">FG · BG · sprites → RGBA 256×224</text>
 
   <rect class="box" x="614" y="326" width="430" height="70" rx="6"/>
   <text class="m b" x="630" y="347">android/web</text>
   <text class="s" x="630" y="365">app · engine.worker · audio.worker · audio.worklet</text>
-  <text class="s" x="630" y="381">GnG entry points for the base hosts</text>
+  <text class="s" x="630" y="381">Game entry points for the base hosts</text>
 
   <rect class="box" x="614" y="406" width="430" height="54" rx="6"/>
   <text class="m b" x="630" y="427">scripts/</text>
   <text class="s" x="630" y="445">assets, APK, lock, comparators against the oracle</text>
 
-  <text class="s" x="614" y="490">Everything that knows GnG addresses, chips or rules.</text>
+  <text class="s" x="614" y="490">Everything that knows the game's addresses, chips or rules.</text>
   <text class="s" x="614" y="508">The base is used as is; base/ is never edited.</text>
 </svg>

@@ -65,12 +65,12 @@
 
     <rect class="box b" x="400" y="86" width="300" height="250" rx="8"/>
   <text class="m" x="416" y="110">base/src/host/web/engine-worker</text>
-  <text class="s" x="416" y="127">+ GnG engine.worker.mjs</text>
+  <text class="s" x="416" y="127">+ game engine.worker.mjs</text>
   <rect class="box g" x="416" y="140" width="268" height="44" rx="5"/>
   <text class="m" x="550" y="159" text-anchor="middle">createBoard(code, blocks).run()</text>
   <text class="s" x="550" y="176" text-anchor="middle">bundle · 25,152 cycles per frame</text>
   <rect class="box g" x="416" y="200" width="268" height="44" rx="5"/>
-  <text class="m" x="550" y="219" text-anchor="middle">renderGngbRgba</text>
+  <text class="m" x="550" y="219" text-anchor="middle">RGBA renderer</text>
   <text class="s" x="550" y="236" text-anchor="middle">only if every value read is known</text>
   <rect class="box b" x="416" y="260" width="268" height="60" rx="5"/>
   <text class="m" x="550" y="279" text-anchor="middle">frame-pacer</text>
@@ -88,7 +88,7 @@
 
     <rect class="box b" x="824" y="86" width="240" height="250" rx="8"/>
   <text class="m" x="840" y="110">host/web/audio-worker</text>
-  <text class="s" x="840" y="127">+ GnG audio.worker.mjs</text>
+  <text class="s" x="840" y="127">+ game audio.worker.mjs</text>
   <rect class="box b" x="840" y="140" width="208" height="56" rx="5"/>
   <text class="t" x="944" y="162" text-anchor="middle">Compiled Z80</text>
   <text class="s" x="944" y="180" text-anchor="middle">gg2 · 3 MHz · IRQ 240 Hz</text>
