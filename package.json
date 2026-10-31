@@ -1,6 +1,7 @@
 {
   "name": "gng-ghidra",
   "private": true,
+  "license": "MIT",
   "description": "Dev tooling only: Playwright drives the browser checks.",
   "scripts": {
     "test": "node --test tests/test_*.mjs tests/bot/*.test.mjs",

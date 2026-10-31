@@ -13,7 +13,7 @@ This repository shows **a process** for bringing an arcade game to JavaScript wi
 </tr>
 </table>
 
-> The ROM is not included. Everything derived from it stays in `out/`, outside Git; these screenshots are the only exception. Not affiliated with the original rights holders.
+> Non-commercial research project. No ROM or game assets are included or provided; see the [legal notice](#legal-notice).
 
 ---
 
@@ -68,6 +68,16 @@ The repository name comes from the first approach, decompiling with Ghidra, whic
 A new game does not start by copying this repository: the base generator creates a project with the pinned base, its lock and a runnable example. Reusing code does not carry over the proof: each game goes through stages 1 to 8 again against its own reference.
 
 ![Project generator and what a new game reuses](docs/img/arch-next-game.svg)
+
+## Legal notice
+
+This is a non-commercial research project on static recompilation of arcade code. It is not affiliated with, sponsored by or endorsed by the owners of the game or its trademarks; all names and marks belong to their respective owners and are used only to identify compatibility.
+
+- No ROM images, data extracted from them or game assets are included, and none will be provided. Running the game requires a ROM you are entitled to use.
+- Everything generated from the ROM (bundle, assets, APK) stays in `out/`, outside Git, and must not be redistributed.
+- The screenshots above are for documentation and commentary only.
+- The code written for this repository is MIT-licensed ([LICENSE](LICENSE)); the [NOTICE](NOTICE) file lists what that license does not cover.
+- To request removal of any material, open an issue.
 
 ---
 
