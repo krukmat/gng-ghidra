@@ -175,6 +175,8 @@ Cada tarea deja un cambio pequeño y revisable. No ejecutar la extracción compl
 
 **Depende de RP-2 y RP-3.**
 
+Lo que esta fase mueve a la base entra sin GnG: los nombres, las constantes, las rutas y los tamaños de GnG se quedan en `gng-ghidra` (`boards/gng`, `games/gngb`, receta).
+
 - [ ] Separar verificador de binarios de la receta de archivos, hashes y regiones de GnG.
 - [ ] Extraer descubrimiento, compilación, congelado y empaquetado para que acepten entradas explícitas. Admitir comenzar con un proyecto vacío de artefactos, sin B2-D/B3 ni rutas de `out/` de este repositorio.
 - [ ] Mantener saltos indirectos y análisis estático como estrategias declaradas por arquitectura/placa/juego; registrar destinos faltantes y límites de cobertura.
@@ -193,6 +195,8 @@ Cada tarea deja un cambio pequeño y revisable. No ejecutar la extracción compl
 ### RP-5 — Generar un proyecto independiente
 
 **Diferida (decisión del operador, 31/10/2026):** se hará cuando se clone otro juego. No forma parte del objetivo actual.
+
+- [ ] El repositorio agnóstico contiene solo lo agnóstico de este refactor, sin GnG. Hoy el código (`src/`, `templates/`) ya no tiene GnG; quedan en la documentación de la base la tabla de asignación GnG de `docs/contracts.md`, el origen y los nombres `gngb_*` de `docs/provenance.md` y menciones sueltas (`docs/z80-audio.md`, un test «non-GnG»). Pasarlos a `gng-ghidra` y agregar a la base un test que falle si aparece GnG en cualquier archivo versionado.
 
 **Depende de RP-4.**
 
