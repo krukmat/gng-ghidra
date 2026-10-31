@@ -2,6 +2,10 @@
   "name": "gng-ghidra",
   "private": true,
   "description": "Dev tooling only: Playwright drives the browser checks.",
+  "scripts": {
+    "test": "node --test tests/test_*.mjs tests/bot/*.test.mjs",
+    "rp3:compare": "A='out/v3/b3/g6/frozen out/base-reference/reference-rp3.json out/base-reference/rp3-v7 out/audio/gg2.bin out/android/audio/ym2203.wasm out/android/ym2203-bank/ym2203.wasm' T=$(date +%Y%m%dT%H%M%S); node scripts/rp3_compare.mjs $A 120 out/base-reference/rp3-compare-120-$T.json idle >/dev/null && node scripts/rp3_compare.mjs $A 900 out/base-reference/rp3-compare-tape-900-$T.json tape out/v3/b3/live-tapes/2026-10-28T18-01-50-790Z-FRAMES_DONE.json >/dev/null && echo RP3_COMPARE=PASS out/base-reference/rp3-compare-*-$T.json"
+  },
   "devDependencies": {
     "playwright-core": "1.64.1"
   }
