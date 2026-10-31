@@ -181,9 +181,18 @@ Cada tarea deja un cambio pequeño y revisable. No ejecutar la extracción compl
 - [ ] Crear el formato nuevo de bundle con módulos y regiones declarados. Preservar hashes, rechazo de corrupción y trazabilidad del origen; no heredar tamaños `0x1a000/0xa000`, lista fija de módulos ni límite de 20.000 frames como contrato universal.
 - [ ] Definir comandos estables para verificar entorno/entrada, construir, validar y empaquetar; implementación inicial en CLI con entradas no interactivas y errores claros.
 
-**Salida:** receta GnG ejecutable desde sus entradas originales y herramientas bloqueadas por versión. **GO:** reconstrucción reproducible en directorio limpio sin copiar bundles anteriores ni acceder a ellos implícitamente; el oráculo no es dependencia de ejecución del producto.
+**Salida:** receta GnG ejecutable desde sus entradas originales y herramientas bloqueadas por versión. **GO (decisión del operador, 31/10/2026):**
+- Una corrida de la cadena movida a la base con la ROM de GnG produce un bundle idéntico al vigente, sin copiar bundles anteriores ni acceder a ellos implícitamente. El oráculo no es dependencia de ejecución del producto.
+- Con ese bundle se repiten las pruebas de jugabilidad, que son obligatorias:
+  - web en Chromium: controles, teclado, audio y checkpoint;
+  - emulador Android: `ao_android_check --audio`, `ao_checkpoint_check --android` y `ao_stick_android_check`.
+- No se reconstruye desde un checkout limpio.
+
+**Objetivo final del proyecto:** que `gng-ghidra` funcione como corresponde sobre la base al terminar RP-4. Después viene la verificación final, que incluye la prueba en un teléfono físico.
 
 ### RP-5 — Generar un proyecto independiente
+
+**Diferida (decisión del operador, 31/10/2026):** se hará cuando se clone otro juego. No forma parte del objetivo actual.
 
 **Depende de RP-4.**
 
@@ -196,6 +205,8 @@ Cada tarea deja un cambio pequeño y revisable. No ejecutar la extracción compl
 **Salida:** generador y plantilla utilizables. **GO:** el proyecto es independiente y no contiene rutas absolutas ni conocimiento implícito de GnG. Esto demuestra separación y generación, no compatibilidad con un segundo juego.
 
 ### RP-6 — Certificar y versionar la base
+
+**Diferida (decisión del operador, 31/10/2026):** junto con RP-5, al clonar otro juego. No habrá reconstrucción de GnG desde un checkout limpio; la validación con GnG es la de RP-4.
 
 **Depende de RP-5.**
 
@@ -217,8 +228,8 @@ Estimación orientativa de consumo de plan, no tiempo de calendario; se recalibr
 | RP-2 | 5–8 puntos | 1–1,6 puntos |
 | RP-3 | 5–8 puntos | 1–1,6 puntos |
 | RP-4 | 4–7 puntos | 0,8–1,4 puntos |
-| RP-5 | 3–5 puntos | 0,6–1 punto |
-| RP-6 | 3–5 puntos | 0,6–1 punto |
+| RP-5 | diferida | — |
+| RP-6 | diferida | — |
 | **Total provisional** | **24–40 puntos** | **4,7–8 puntos** |
 
 La extracción completa puede superar la ventana disponible. El primer bloque de implementación debe limitarse a RP-0 + RP-1 (4–7 puntos / 0,7–1,4 semanal), entregar referencia y contratos y recalibrar antes de RP-2. No iniciar suites costosas sin comprobar versiones de runtime, herramientas nativas y dependencias de staging/Docker requeridas por el gate elegido; sin coverage salvo exigencia del gate.
