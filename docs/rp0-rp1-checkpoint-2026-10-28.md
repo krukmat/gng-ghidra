@@ -141,6 +141,8 @@ RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó inter
     - `ao_checkpoint_check --android`: GO (926/1386, 997.533 muestras distintas de cero).
     - `ao_stick_android_check`: PASS.
 
+**RP-4 aceptada (31/10/2026).** Con esto se cumple el objetivo de la extracción. RP-5 y RP-6 quedan diferidas hasta que se clone otro juego. Lo siguiente es la verificación final del proyecto, que incluye la prueba en un teléfono físico.
+
 ## Referencia reproducible
 
 - Checkout de GnG al iniciar: `b8725b48cfa5bec24f1782f9cf38e24b461cac92`. Las nuevas herramientas y este checkpoint son cambios posteriores.
