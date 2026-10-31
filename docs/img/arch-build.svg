@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1100 600" width="1100" height="600" role="img" aria-label="Build chain. The private ZIP is verified against the recipe; the prepare hook builds the code image and view; static discovery and the MC6809 compiler produce blocks; discovery by running feeds missing blocks back as seeds; the bundle is validated for 600 frames, packaged into assets and built into an APK.">
+<style>svg{--paper:#f1f4f2;--panel:#ffffff;--ink:#16201d;--ink-2:#4b5a55;--rule:#c4cec9;--grid:#edf1ef;--base:#1c5db3;--base-soft:#e6eefa;--game:#93570b;--game-soft:#f7ecdb;--ok:#23764a;--stop:#b0281f;--stop-soft:#fae6e3;--oracle:#6a707b;--screen:#0e1413;--screen-ink:#d6e2dd;--f-ui:"Helvetica Neue",Helvetica,Arial,sans-serif;--f-mono:"SF Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace}
+.dg text{font-family:var(--f-ui);font-size:13px;fill:var(--ink)}
+.dg .t{font-size:13.5px;font-weight:650}
+.dg .m{font-family:var(--f-mono);font-size:11px}
+.dg .s{font-size:11.5px;fill:var(--ink-2)}
+.dg .n{font-size:12.5px}
+.dg .lbl{font-size:11px;fill:var(--ink-2)}
+.dg .cap{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;fill:var(--ink-2)}
+.dg .b{font-weight:700}
+.dg .tb{fill:var(--base)}
+.dg .tg{fill:var(--game)}
+.dg .tx{fill:var(--stop)}
+.dg .to{fill:var(--oracle)}
+.dg .scr{fill:var(--screen-ink)}
+.dg .box{fill:var(--panel);stroke:var(--ink-2);stroke-width:1.2}
+.dg .box.b{fill:var(--base-soft);stroke:var(--base)}
+.dg .box.g{fill:var(--game-soft);stroke:var(--game)}
+.dg .box.x{fill:var(--stop-soft);stroke:var(--stop)}
+.dg .box.o{fill:var(--panel);stroke:var(--oracle);stroke-dasharray:5 4}
+.dg .box.k{stroke-width:2}
+.dg .e{fill:none;stroke:var(--ink-2);stroke-width:1.4}
+.dg .e.b{stroke:var(--base);stroke-width:1.8}
+.dg .e.g{stroke:var(--game);stroke-width:1.8}
+.dg .e.x{stroke:var(--stop);stroke-width:1.6;stroke-dasharray:6 4}
+.dg .e.o{stroke:var(--oracle);stroke-dasharray:5 4}
+.dg .ah{fill:var(--ink-2)}
+.dg .ah.b{fill:var(--base)}
+.dg .ah.g{fill:var(--game)}
+.dg .ah.x{fill:var(--stop)}
+.dg .ah.o{fill:var(--oracle)}
+.dg .zone{fill:none;stroke:var(--ink-2);stroke-width:1.2;stroke-dasharray:8 6}
+.dg .gh{fill:none;stroke:var(--rule);stroke-width:1.5}
+.dg .bus{stroke:var(--ink-2);stroke-width:3}
+.dg .tick{stroke:var(--rule);stroke-width:1.2}
+.dg .row{fill:var(--panel);stroke:var(--rule);stroke-width:1}
+.dg .row.v{fill:var(--base-soft)}
+.dg .row.c{fill:var(--game-soft)}
+.dg .frame{fill:none;stroke:var(--ink-2);stroke-width:1.2}
+.dg .screen{fill:var(--screen);stroke:var(--ink-2)}
+.dg .sq-x{fill:var(--stop)}
+.dg .sq-ok{fill:var(--ok)}</style>
+<rect width="100%" height="100%" rx="10" fill="#ffffff"/>
+  <defs>
+    <marker id="b-ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah b" d="M0 1L10 5L0 9z"/></marker>
+    <marker id="b-ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah g" d="M0 1L10 5L0 9z"/></marker>
+    <marker id="b-ax" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah x" d="M0 1L10 5L0 9z"/></marker>
+  </defs>
+
+  <text class="cap" x="36" y="40">1 · INPUT</text>
+  <text class="cap" x="296" y="40">2 · DISCOVERY AND COMPILATION</text>
+  <text class="cap" x="836" y="40">3 · OUTPUT</text>
+
+    <rect class="box k" x="36" y="56" width="200" height="74" rx="6"/>
+  <text class="m b" x="136" y="82" text-anchor="middle">roms/gng.zip</text>
+  <text class="s" x="136" y="100" text-anchor="middle">original, private</text>
+  <text class="s" x="136" y="116" text-anchor="middle">never modified</text>
+
+  <rect class="box b" x="36" y="160" width="200" height="84" rx="6"/>
+  <text class="t" x="136" y="184" text-anchor="middle">Verify input</text>
+  <text class="m" x="136" y="202" text-anchor="middle">readZipEntries · readRegions</text>
+  <text class="s" x="136" y="220" text-anchor="middle">recipe: size + sha256</text>
+  <text class="s" x="136" y="236" text-anchor="middle">per region, or stop</text>
+  <path class="e b" d="M136 130V160" marker-end="url(#b-ab)"/>
+
+  <rect class="box g" x="36" y="274" width="200" height="100" rx="6"/>
+  <text class="t" x="136" y="298" text-anchor="middle">prepare</text>
+  <text class="m" x="136" y="316" text-anchor="middle">games/gngb/build.mjs</text>
+  <text class="s" x="136" y="334" text-anchor="middle">fixed 0x6000–0xFFFF</text>
+  <text class="s" x="136" y="350" text-anchor="middle">+ 5 banks of 8 KiB</text>
+  <text class="s" x="136" y="366" text-anchor="middle">view · strategies · scenario</text>
+  <path class="e b" d="M136 244V274" marker-end="url(#b-ab)"/>
+
+    <rect class="box b" x="296" y="56" width="250" height="178" rx="6"/>
+  <text class="t" x="312" y="82">Static discovery</text>
+  <text class="m" x="312" y="100">mc6809/discover.mjs</text>
+  <text class="s" x="312" y="126">vectors 0xFFF2–0xFFFE → 7 roots</text>
+  <text class="s" x="312" y="144">direct flow of each block</text>
+  <text class="s" x="312" y="162">JMP/JSR [A|B|D,X|Y|U] tables</text>
+  <text class="s" x="312" y="178">   base from LDX/LDY/LDU # · 241 tables</text>
+  <text class="s" x="312" y="196">LDX/LDY/LDU/LDD # immediates</text>
+  <text class="s" x="312" y="212">   + pointer tables of up to 64</text>
+  <path class="e g" d="M236 324H266V145H296" marker-end="url(#b-ag)"/>
+  <text class="lbl" x="272" y="250">view</text>
+
+  <rect class="box b" x="296" y="264" width="250" height="110" rx="6"/>
+  <text class="t" x="312" y="290">MC6809 compiler</text>
+  <text class="m" x="312" y="308">mc6809/compiler.mjs</text>
+  <text class="s" x="312" y="330">1 JS function per basic block</text>
+  <text class="s" x="312" y="346">mid-block entries (IRQ)</text>
+  <text class="s" x="312" y="362">cycle-exact bus order</text>
+  <path class="e b" d="M421 234V264" marker-end="url(#b-ab)"/>
+  <text class="lbl" x="429" y="254">seeds</text>
+
+    <rect class="box b" x="586" y="160" width="220" height="214" rx="6"/>
+  <text class="t" x="602" y="186">Discovery by running</text>
+  <text class="m" x="602" y="204">discover-run.mjs</text>
+  <text class="s" x="602" y="228">runs the game's scenarios</text>
+  <text class="s" x="602" y="244">on the blocks compiled so far</text>
+  <rect class="box g" x="602" y="258" width="188" height="48" rx="5"/>
+  <text class="m" x="696" y="278" text-anchor="middle">idle-6000 · gngb board</text>
+  <text class="s" x="696" y="296" text-anchor="middle">6000 frames, no input</text>
+  <text class="s" x="602" y="328">a PC with no block is a new seed;</text>
+  <text class="s" x="602" y="344">RAM code is traced to its ROM source</text>
+  <text class="s" x="602" y="360">and added as an overlay</text>
+  <path class="e b" d="M546 300H586" marker-end="url(#b-ab)"/>
+  <text class="lbl" x="566" y="292" text-anchor="middle">blocks</text>
+  <path class="e x" d="M696 374V404H421V374" marker-end="url(#b-ax)"/>
+  <text class="lbl tx" x="558" y="420" text-anchor="middle">missing block → seed → recompile</text>
+
+    <rect class="box b k" x="836" y="56" width="228" height="178" rx="6"/>
+  <text class="t" x="852" y="82">Bundle</text>
+  <text class="m" x="852" y="100">writeBundle · out/…/bundle</text>
+  <text class="m" x="852" y="126">program.mjs</text>
+  <text class="s" x="960" y="126">38,084 blocks</text>
+  <text class="m" x="852" y="144">alu.mjs</text>
+  <text class="s" x="960" y="144">library</text>
+  <text class="m" x="852" y="162">code.bin</text>
+  <text class="s" x="960" y="162">fixed + banks</text>
+  <text class="m" x="852" y="180">overlays.bin</text>
+  <text class="s" x="960" y="180">0x1A00 · 78 B</text>
+  <text class="m" x="852" y="198">manifest.json</text>
+  <text class="s" x="960" y="198">sha256 of all</text>
+  <text class="s" x="852" y="220">same ZIP → same hash</text>
+  <path class="e b" d="M806 200H822V145H836" marker-end="url(#b-ab)"/>
+  <text class="lbl" x="814" y="130" text-anchor="middle">final</text>
+
+  <rect class="box g" x="836" y="264" width="228" height="64" rx="6"/>
+  <text class="t" x="852" y="288">validate</text>
+  <text class="s" x="852" y="308">600 frames from reset with no</text>
+  <text class="s" x="852" y="322">missing block, or no bundle</text>
+  <path class="e b" d="M950 234V264" marker-end="url(#b-ab)"/>
+
+  <rect class="box g" x="836" y="358" width="228" height="96" rx="6"/>
+  <text class="t" x="852" y="382">package → assets</text>
+  <text class="m" x="852" y="400">ao_build_assets.mjs</text>
+  <text class="s" x="852" y="420">bundle · graphics · gg2 · ym2203.wasm</text>
+  <text class="s" x="852" y="436">web module closure</text>
+  <text class="s" x="852" y="450">gng.ao.assets.v2 index + sha256</text>
+  <path class="e g" d="M950 328V358" marker-end="url(#b-ag)"/>
+
+  <rect class="box g k" x="836" y="484" width="228" height="76" rx="6"/>
+  <text class="t" x="852" y="508">APK</text>
+  <text class="m" x="852" y="526">ao_build_apk.sh · Gradle</text>
+  <text class="s" x="852" y="546">Android template from the base</text>
+  <path class="e g" d="M950 454V484" marker-end="url(#b-ag)"/>
+
+    <text class="n b tx" x="36" y="470">Fail closed, never guess</text>
+  <rect class="sq-x" x="37" y="483" width="6" height="6"/>
+  <text class="s" x="50" y="490">region missing, wrong size or wrong sha256</text>
+  <rect class="sq-x" x="37" y="501" width="6" height="6"/>
+  <text class="s" x="50" y="508">discovery stalls or exceeds its limit</text>
+  <rect class="sq-x" x="37" y="519" width="6" height="6"/>
+  <text class="s" x="50" y="526">RAM code with no source in the ROM</text>
+  <rect class="sq-x" x="37" y="537" width="6" height="6"/>
+  <text class="s" x="50" y="544">output directory exists or undeclared import</text>
+
+  <text class="n b" x="440" y="470">What is not resolved is counted</text>
+  <text class="s" x="440" y="490">479 indirect jumps with no static target</text>
+  <text class="s" x="440" y="508">stay in report.json; discovery by</text>
+  <text class="s" x="440" y="526">running covers the ones the game uses,</text>
+  <text class="s" x="440" y="544">and the board stops on any other.</text>
+</svg>

@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1100 490" width="1100" height="490" role="img" aria-label="Project generator. init copies core plus the chosen groups from one base commit into a new project with a lock and a runnable example; update replaces the copy and stops if it was edited. Below, what a new game reuses depending on its board and CPU.">
+<style>svg{--paper:#f1f4f2;--panel:#ffffff;--ink:#16201d;--ink-2:#4b5a55;--rule:#c4cec9;--grid:#edf1ef;--base:#1c5db3;--base-soft:#e6eefa;--game:#93570b;--game-soft:#f7ecdb;--ok:#23764a;--stop:#b0281f;--stop-soft:#fae6e3;--oracle:#6a707b;--screen:#0e1413;--screen-ink:#d6e2dd;--f-ui:"Helvetica Neue",Helvetica,Arial,sans-serif;--f-mono:"SF Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace}
+.dg text{font-family:var(--f-ui);font-size:13px;fill:var(--ink)}
+.dg .t{font-size:13.5px;font-weight:650}
+.dg .m{font-family:var(--f-mono);font-size:11px}
+.dg .s{font-size:11.5px;fill:var(--ink-2)}
+.dg .n{font-size:12.5px}
+.dg .lbl{font-size:11px;fill:var(--ink-2)}
+.dg .cap{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;fill:var(--ink-2)}
+.dg .b{font-weight:700}
+.dg .tb{fill:var(--base)}
+.dg .tg{fill:var(--game)}
+.dg .tx{fill:var(--stop)}
+.dg .to{fill:var(--oracle)}
+.dg .scr{fill:var(--screen-ink)}
+.dg .box{fill:var(--panel);stroke:var(--ink-2);stroke-width:1.2}
+.dg .box.b{fill:var(--base-soft);stroke:var(--base)}
+.dg .box.g{fill:var(--game-soft);stroke:var(--game)}
+.dg .box.x{fill:var(--stop-soft);stroke:var(--stop)}
+.dg .box.o{fill:var(--panel);stroke:var(--oracle);stroke-dasharray:5 4}
+.dg .box.k{stroke-width:2}
+.dg .e{fill:none;stroke:var(--ink-2);stroke-width:1.4}
+.dg .e.b{stroke:var(--base);stroke-width:1.8}
+.dg .e.g{stroke:var(--game);stroke-width:1.8}
+.dg .e.x{stroke:var(--stop);stroke-width:1.6;stroke-dasharray:6 4}
+.dg .e.o{stroke:var(--oracle);stroke-dasharray:5 4}
+.dg .ah{fill:var(--ink-2)}
+.dg .ah.b{fill:var(--base)}
+.dg .ah.g{fill:var(--game)}
+.dg .ah.x{fill:var(--stop)}
+.dg .ah.o{fill:var(--oracle)}
+.dg .zone{fill:none;stroke:var(--ink-2);stroke-width:1.2;stroke-dasharray:8 6}
+.dg .gh{fill:none;stroke:var(--rule);stroke-width:1.5}
+.dg .bus{stroke:var(--ink-2);stroke-width:3}
+.dg .tick{stroke:var(--rule);stroke-width:1.2}
+.dg .row{fill:var(--panel);stroke:var(--rule);stroke-width:1}
+.dg .row.v{fill:var(--base-soft)}
+.dg .row.c{fill:var(--game-soft)}
+.dg .frame{fill:none;stroke:var(--ink-2);stroke-width:1.2}
+.dg .screen{fill:var(--screen);stroke:var(--ink-2)}
+.dg .sq-x{fill:var(--stop)}
+.dg .sq-ok{fill:var(--ok)}</style>
+<rect width="100%" height="100%" rx="10" fill="#ffffff"/>
+  <defs>
+    <marker id="n-ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah b" d="M0 1L10 5L0 9z"/></marker>
+  </defs>
+
+  <text class="cap tb" x="36" y="40">ROM-MIGRATION-BASE</text>
+  <text class="cap tg" x="376" y="40">NEW PROJECT</text>
+  <text class="cap tb" x="796" y="40">UPDATE</text>
+
+    <rect class="box b k" x="36" y="56" width="240" height="250" rx="8"/>
+  <text class="t" x="52" y="82">One base commit</text>
+  <text class="s" x="52" y="100">read from Git, not the work tree</text>
+  <text class="m b" x="52" y="130">core</text><text class="s" x="118" y="130">always: contracts, CLI</text>
+  <text class="m b" x="52" y="150">mc6809</text><text class="s" x="118" y="150">CPU + compiler</text>
+  <text class="m b" x="52" y="170">z80</text><text class="s" x="118" y="170">CPU + compiler</text>
+  <text class="m b" x="52" y="190">ym2203</text><text class="s" x="118" y="190">sound chip</text>
+  <text class="m b" x="52" y="210">web</text><text class="s" x="118" y="210">hosts + audio</text>
+  <text class="m b" x="52" y="230">android</text><text class="s" x="118" y="230">offline template</text>
+  <text class="s" x="52" y="264">default: mc6809,web</text>
+  <text class="s" x="52" y="282">a group brings only its files</text>
+
+  <path class="e b" d="M276 150H376" marker-end="url(#n-ab)"/>
+  <text class="lbl m" x="326" y="138" text-anchor="middle">init</text>
+  <text class="lbl" x="326" y="168" text-anchor="middle">--id --out</text>
+  <text class="lbl" x="326" y="180" text-anchor="middle">--components</text>
+
+    <rect class="box g k" x="376" y="56" width="340" height="250" rx="8"/>
+  <text class="m b" x="392" y="82">&lt;id&gt;/</text>
+  <text class="m" x="392" y="110">base/</text><text class="s" x="550" y="110">only the chosen groups</text>
+  <text class="m" x="392" y="134">migration.lock.json</text><text class="s" x="550" y="134">revision, groups, hashes</text>
+  <text class="m" x="392" y="158">migration.json</text><text class="s" x="550" y="158">recipe: regions + sha256</text>
+  <text class="m" x="392" y="182">boards/example</text><text class="s" x="550" y="182">one-CPU board</text>
+  <text class="m" x="392" y="206">games/example</text><text class="s" x="550" y="206">synthetic 6809, 32 KiB</text>
+  <text class="m" x="392" y="230">tests/</text><text class="s" x="550" y="230">base + example, no ROM</text>
+  <text class="s" x="392" y="264">npm test: builds the example, runs 3 frames</text>
+  <text class="s" x="392" y="282">no absolute paths; needs no base checkout</text>
+
+    <rect class="box b" x="796" y="56" width="268" height="250" rx="8"/>
+  <text class="m b" x="812" y="82">update --to &lt;rev&gt;</text>
+  <text class="s" x="812" y="108">1 · checks base/ against the lock</text>
+  <text class="s" x="812" y="126">2 · builds base.next at &lt;rev&gt;</text>
+  <text class="s" x="824" y="142">with the same groups</text>
+  <text class="s" x="812" y="160">3 · replaces base/ and the lock</text>
+  <text class="s" x="812" y="178">4 · lists added, removed, changed</text>
+  <text class="n b tx" x="812" y="212">Stops before writing</text>
+  <rect class="sq-x" x="813" y="225" width="6" height="6"/>
+  <text class="s" x="826" y="232">edited copy: BASE_COPY_EDITED</text>
+  <rect class="sq-x" x="813" y="243" width="6" height="6"/>
+  <text class="s" x="826" y="250">import outside the selection</text>
+  <rect class="sq-x" x="813" y="261" width="6" height="6"/>
+  <text class="s" x="826" y="268">invalid ID, group or revision</text>
+  <rect class="sq-x" x="813" y="279" width="6" height="6"/>
+  <text class="s" x="826" y="286">output directory exists</text>
+
+  <path class="e b" d="M796 150H716" marker-end="url(#n-ab)"/>
+  <text class="lbl" x="756" y="138" text-anchor="middle">copy</text>
+  <text class="lbl" x="756" y="168" text-anchor="middle">new</text>
+
+    <text class="cap" x="36" y="346">WHAT A NEW GAME CHANGES</text>
+  <rect class="box g" x="36" y="358" width="328" height="88" rx="6"/>
+  <text class="t" x="52" y="382">Same board</text>
+  <text class="s" x="52" y="404">reused: almost everything</text>
+  <text class="s" x="52" y="422">to do: its ROM recipe, validation</text>
+  <rect class="box g" x="386" y="358" width="328" height="88" rx="6"/>
+  <text class="t" x="402" y="382">Other board, same CPU</text>
+  <text class="s" x="402" y="404">reused: compiler, chips, web, Android</text>
+  <text class="s" x="402" y="422">to do: boards/&lt;board&gt;, validation</text>
+  <rect class="box g" x="736" y="358" width="328" height="88" rx="6"/>
+  <text class="t" x="752" y="382">Other CPU</text>
+  <text class="s" x="752" y="404">reused: web and Android hosts, the method</text>
+  <text class="s" x="752" y="422">to do: CPU group in the base, board, validation</text>
+  <text class="s" x="36" y="474">Reusing code does not carry over the proof: each game is compared against its own reference.</text>
+</svg>

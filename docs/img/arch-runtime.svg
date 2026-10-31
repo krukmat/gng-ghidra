@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1100 520" width="1100" height="520" role="img" aria-label="Runtime in three threads. The main thread paints RGBA and reads input; the engine worker runs the board and renderer; the audio worker runs the compiled Z80 and two YM2203 chips in WASM and feeds an AudioWorklet whose clock paces the engine. All inside an offline Android WebView.">
+<style>svg{--paper:#f1f4f2;--panel:#ffffff;--ink:#16201d;--ink-2:#4b5a55;--rule:#c4cec9;--grid:#edf1ef;--base:#1c5db3;--base-soft:#e6eefa;--game:#93570b;--game-soft:#f7ecdb;--ok:#23764a;--stop:#b0281f;--stop-soft:#fae6e3;--oracle:#6a707b;--screen:#0e1413;--screen-ink:#d6e2dd;--f-ui:"Helvetica Neue",Helvetica,Arial,sans-serif;--f-mono:"SF Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace}
+.dg text{font-family:var(--f-ui);font-size:13px;fill:var(--ink)}
+.dg .t{font-size:13.5px;font-weight:650}
+.dg .m{font-family:var(--f-mono);font-size:11px}
+.dg .s{font-size:11.5px;fill:var(--ink-2)}
+.dg .n{font-size:12.5px}
+.dg .lbl{font-size:11px;fill:var(--ink-2)}
+.dg .cap{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;fill:var(--ink-2)}
+.dg .b{font-weight:700}
+.dg .tb{fill:var(--base)}
+.dg .tg{fill:var(--game)}
+.dg .tx{fill:var(--stop)}
+.dg .to{fill:var(--oracle)}
+.dg .scr{fill:var(--screen-ink)}
+.dg .box{fill:var(--panel);stroke:var(--ink-2);stroke-width:1.2}
+.dg .box.b{fill:var(--base-soft);stroke:var(--base)}
+.dg .box.g{fill:var(--game-soft);stroke:var(--game)}
+.dg .box.x{fill:var(--stop-soft);stroke:var(--stop)}
+.dg .box.o{fill:var(--panel);stroke:var(--oracle);stroke-dasharray:5 4}
+.dg .box.k{stroke-width:2}
+.dg .e{fill:none;stroke:var(--ink-2);stroke-width:1.4}
+.dg .e.b{stroke:var(--base);stroke-width:1.8}
+.dg .e.g{stroke:var(--game);stroke-width:1.8}
+.dg .e.x{stroke:var(--stop);stroke-width:1.6;stroke-dasharray:6 4}
+.dg .e.o{stroke:var(--oracle);stroke-dasharray:5 4}
+.dg .ah{fill:var(--ink-2)}
+.dg .ah.b{fill:var(--base)}
+.dg .ah.g{fill:var(--game)}
+.dg .ah.x{fill:var(--stop)}
+.dg .ah.o{fill:var(--oracle)}
+.dg .zone{fill:none;stroke:var(--ink-2);stroke-width:1.2;stroke-dasharray:8 6}
+.dg .gh{fill:none;stroke:var(--rule);stroke-width:1.5}
+.dg .bus{stroke:var(--ink-2);stroke-width:3}
+.dg .tick{stroke:var(--rule);stroke-width:1.2}
+.dg .row{fill:var(--panel);stroke:var(--rule);stroke-width:1}
+.dg .row.v{fill:var(--base-soft)}
+.dg .row.c{fill:var(--game-soft)}
+.dg .frame{fill:none;stroke:var(--ink-2);stroke-width:1.2}
+.dg .screen{fill:var(--screen);stroke:var(--ink-2)}
+.dg .sq-x{fill:var(--stop)}
+.dg .sq-ok{fill:var(--ok)}</style>
+<rect width="100%" height="100%" rx="10" fill="#ffffff"/>
+  <defs>
+    <marker id="e-ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah b" d="M0 1L10 5L0 9z"/></marker>
+    <marker id="e-ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah g" d="M0 1L10 5L0 9z"/></marker>
+  </defs>
+
+  <rect class="zone" x="16" y="16" width="1068" height="488" rx="14"/>
+  <text class="cap" x="36" y="40">ANDROID APP · WEBVIEW · LOCAL ASSETS · NO INTERNET PERMISSION</text>
+
+  <text class="cap" x="156" y="74" text-anchor="middle">MAIN THREAD</text>
+  <text class="cap" x="550" y="74" text-anchor="middle">ENGINE WORKER</text>
+  <text class="cap" x="944" y="74" text-anchor="middle">AUDIO WORKER</text>
+
+    <rect class="box g" x="36" y="86" width="240" height="250" rx="8"/>
+  <text class="m b" x="156" y="110" text-anchor="middle">app.mjs</text>
+  <rect class="screen" x="66" y="124" width="180" height="120" rx="2"/>
+  <text class="m scr" x="156" y="180" text-anchor="middle">canvas 256×224</text>
+  <text class="s scr" x="156" y="198" text-anchor="middle">only paints RGBA</text>
+  <text class="s" x="156" y="266" text-anchor="middle">floating joystick · Fire · Jump</text>
+  <text class="s" x="156" y="282" text-anchor="middle">keyboard · Coin · Start</text>
+  <text class="s" x="156" y="298" text-anchor="middle">Reset · Save · Load</text>
+  <text class="s" x="156" y="320" text-anchor="middle">checkpoint in IndexedDB</text>
+
+    <rect class="box b" x="400" y="86" width="300" height="250" rx="8"/>
+  <text class="m" x="416" y="110">base/src/host/web/engine-worker</text>
+  <text class="s" x="416" y="127">+ GnG engine.worker.mjs</text>
+  <rect class="box g" x="416" y="140" width="268" height="44" rx="5"/>
+  <text class="m" x="550" y="159" text-anchor="middle">createBoard(code, blocks).run()</text>
+  <text class="s" x="550" y="176" text-anchor="middle">bundle · 25,152 cycles per frame</text>
+  <rect class="box g" x="416" y="200" width="268" height="44" rx="5"/>
+  <text class="m" x="550" y="219" text-anchor="middle">renderGngbRgba</text>
+  <text class="s" x="550" y="236" text-anchor="middle">only if every value read is known</text>
+  <rect class="box b" x="416" y="260" width="268" height="60" rx="5"/>
+  <text class="m" x="550" y="279" text-anchor="middle">frame-pacer</text>
+  <text class="s" x="550" y="296" text-anchor="middle">runs up to 8 frames ahead</text>
+  <text class="s" x="550" y="312" text-anchor="middle">of what has been heard</text>
+  <path class="e b" d="M550 184V200" marker-end="url(#e-ab)"/>
+
+  <path class="e g" d="M276 140H400" marker-end="url(#e-ag)"/>
+  <text class="lbl" x="338" y="120" text-anchor="middle">active-low bits</text>
+  <text class="lbl" x="338" y="132" text-anchor="middle">0x3000–0x3002</text>
+  <path class="e b" d="M400 222H276" marker-end="url(#e-ab)"/>
+  <text class="lbl" x="338" y="214" text-anchor="middle">frame + RGBA</text>
+  <path class="e b" d="M276 300H400" marker-end="url(#e-ab)"/>
+  <text class="lbl" x="338" y="292" text-anchor="middle">boot: cold or checkpoint</text>
+
+    <rect class="box b" x="824" y="86" width="240" height="250" rx="8"/>
+  <text class="m" x="840" y="110">host/web/audio-worker</text>
+  <text class="s" x="840" y="127">+ GnG audio.worker.mjs</text>
+  <rect class="box b" x="840" y="140" width="208" height="56" rx="5"/>
+  <text class="t" x="944" y="162" text-anchor="middle">Compiled Z80</text>
+  <text class="s" x="944" y="180" text-anchor="middle">gg2 · 3 MHz · IRQ 240 Hz</text>
+  <rect class="box b" x="840" y="212" width="208" height="56" rx="5"/>
+  <text class="t" x="944" y="234" text-anchor="middle">2×YM2203 · WASM</text>
+  <text class="s" x="944" y="252" text-anchor="middle">ymfm · 32 KB · mono</text>
+  <path class="e b" d="M944 196V212" marker-end="url(#e-ab)"/>
+  <text class="s" x="944" y="296" text-anchor="middle">PCM at 62,500 Hz</text>
+  <text class="s" x="944" y="312" text-anchor="middle">tied to CPU cycles</text>
+
+  <path class="e b" d="M700 160H824" marker-end="url(#e-ab)"/>
+  <text class="lbl" x="762" y="140" text-anchor="middle">latch 0x3A00 + reset</text>
+  <text class="lbl" x="762" y="152" text-anchor="middle">with its cycle, per frame</text>
+
+    <rect class="box b" x="584" y="386" width="300" height="84" rx="8"/>
+  <text class="t" x="600" y="410">AudioWorklet</text>
+  <text class="m" x="600" y="428">host/web/pcm-worklet</text>
+  <text class="s" x="600" y="446">resamples to the device rate</text>
+  <text class="s" x="600" y="462">counts samples already heard</text>
+  <path class="e b" d="M860 336V386" marker-end="url(#e-ab)"/>
+  <text class="lbl" x="868" y="372">MessageChannel</text>
+
+  <rect class="box" x="960" y="404" width="104" height="48" rx="6"/>
+  <text class="t" x="1012" y="432" text-anchor="middle">Speaker</text>
+  <path class="e b" d="M884 440H960" marker-end="url(#e-ab)"/>
+
+  <path class="e b" d="M584 428H550V336" marker-end="url(#e-ab)"/>
+  <text class="lbl" x="542" y="372" text-anchor="end">audio clock:</text>
+  <text class="lbl" x="542" y="384" text-anchor="end">sets the pace</text>
+
+    <rect class="box b" x="36" y="386" width="420" height="84" rx="8"/>
+  <text class="t" x="52" y="410">Android shell</text>
+  <text class="m" x="52" y="428">templates/android · MainActivity.kt</text>
+  <text class="s" x="52" y="446">WebViewAssetLoader serves the APK assets;</text>
+  <text class="s" x="52" y="462">fullscreen, landscape, screen kept on</text>
+</svg>

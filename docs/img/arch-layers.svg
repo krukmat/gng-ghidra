@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1100 560" width="1100" height="560" role="img" aria-label="Layers. rom-migration-base (private) holds contracts, the build chain, CPUs, devices, audio, web hosts, templates and tools. gng-ghidra (public) holds the GnG game, board, renderer, app and scripts, and consumes the base as a pinned copy in base/ checked by a lock. The base imports nothing from GnG.">
+<style>svg{--paper:#f1f4f2;--panel:#ffffff;--ink:#16201d;--ink-2:#4b5a55;--rule:#c4cec9;--grid:#edf1ef;--base:#1c5db3;--base-soft:#e6eefa;--game:#93570b;--game-soft:#f7ecdb;--ok:#23764a;--stop:#b0281f;--stop-soft:#fae6e3;--oracle:#6a707b;--screen:#0e1413;--screen-ink:#d6e2dd;--f-ui:"Helvetica Neue",Helvetica,Arial,sans-serif;--f-mono:"SF Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace}
+.dg text{font-family:var(--f-ui);font-size:13px;fill:var(--ink)}
+.dg .t{font-size:13.5px;font-weight:650}
+.dg .m{font-family:var(--f-mono);font-size:11px}
+.dg .s{font-size:11.5px;fill:var(--ink-2)}
+.dg .n{font-size:12.5px}
+.dg .lbl{font-size:11px;fill:var(--ink-2)}
+.dg .cap{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;fill:var(--ink-2)}
+.dg .b{font-weight:700}
+.dg .tb{fill:var(--base)}
+.dg .tg{fill:var(--game)}
+.dg .tx{fill:var(--stop)}
+.dg .to{fill:var(--oracle)}
+.dg .scr{fill:var(--screen-ink)}
+.dg .box{fill:var(--panel);stroke:var(--ink-2);stroke-width:1.2}
+.dg .box.b{fill:var(--base-soft);stroke:var(--base)}
+.dg .box.g{fill:var(--game-soft);stroke:var(--game)}
+.dg .box.x{fill:var(--stop-soft);stroke:var(--stop)}
+.dg .box.o{fill:var(--panel);stroke:var(--oracle);stroke-dasharray:5 4}
+.dg .box.k{stroke-width:2}
+.dg .e{fill:none;stroke:var(--ink-2);stroke-width:1.4}
+.dg .e.b{stroke:var(--base);stroke-width:1.8}
+.dg .e.g{stroke:var(--game);stroke-width:1.8}
+.dg .e.x{stroke:var(--stop);stroke-width:1.6;stroke-dasharray:6 4}
+.dg .e.o{stroke:var(--oracle);stroke-dasharray:5 4}
+.dg .ah{fill:var(--ink-2)}
+.dg .ah.b{fill:var(--base)}
+.dg .ah.g{fill:var(--game)}
+.dg .ah.x{fill:var(--stop)}
+.dg .ah.o{fill:var(--oracle)}
+.dg .zone{fill:none;stroke:var(--ink-2);stroke-width:1.2;stroke-dasharray:8 6}
+.dg .gh{fill:none;stroke:var(--rule);stroke-width:1.5}
+.dg .bus{stroke:var(--ink-2);stroke-width:3}
+.dg .tick{stroke:var(--rule);stroke-width:1.2}
+.dg .row{fill:var(--panel);stroke:var(--rule);stroke-width:1}
+.dg .row.v{fill:var(--base-soft)}
+.dg .row.c{fill:var(--game-soft)}
+.dg .frame{fill:none;stroke:var(--ink-2);stroke-width:1.2}
+.dg .screen{fill:var(--screen);stroke:var(--ink-2)}
+.dg .sq-x{fill:var(--stop)}
+.dg .sq-ok{fill:var(--ok)}</style>
+<rect width="100%" height="100%" rx="10" fill="#ffffff"/>
+  <defs>
+    <marker id="c-ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah b" d="M0 1L10 5L0 9z"/></marker>
+    <marker id="c-ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah g" d="M0 1L10 5L0 9z"/></marker>
+    <marker id="c-ax" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah x" d="M0 1L10 5L0 9z"/></marker>
+  </defs>
+
+    <text class="cap tb" x="36" y="40">ROM-MIGRATION-BASE · PRIVATE · v0.1.0 · NO GAME CONTENT</text>
+  <rect class="box b k" x="36" y="52" width="470" height="484" rx="10"/>
+
+  <rect class="box" x="56" y="72" width="430" height="52" rx="6"/>
+  <text class="m b" x="72" y="93">src/contracts</text>
+  <text class="s" x="72" y="111">recipe, regions, lock, CPU capabilities</text>
+
+  <rect class="box" x="56" y="134" width="430" height="102" rx="6"/>
+  <text class="m b" x="72" y="155">src/build</text>
+  <text class="s" x="72" y="173">input · own ZIP reader, CRC32, sha256 per region</text>
+  <text class="s" x="72" y="189">mc6809/compiler · mc6809/discover · z80/compiler</text>
+  <text class="s" x="72" y="205">discover-run · discovery by running</text>
+  <text class="s" x="72" y="221">bundle · package · verify-lock</text>
+
+  <rect class="box" x="56" y="246" width="210" height="70" rx="6"/>
+  <text class="m b" x="72" y="267">src/cpu</text>
+  <text class="s" x="72" y="285">mc6809: alu · executor</text>
+  <text class="s" x="72" y="301">z80: session · scheduler</text>
+
+  <rect class="box" x="276" y="246" width="210" height="70" rx="6"/>
+  <text class="m b" x="292" y="267">src/devices · src/audio</text>
+  <text class="s" x="292" y="285">ym2203: bank.cpp → .wasm</text>
+  <text class="s" x="292" y="301">PCM queue · resampler</text>
+
+  <rect class="box" x="56" y="326" width="430" height="70" rx="6"/>
+  <text class="m b" x="72" y="347">src/host/web</text>
+  <text class="s" x="72" y="365">engine-worker · audio-worker · pcm-worklet · frame-pacer</text>
+  <text class="s" x="72" y="381">pacing, presentation, audio batches, save state</text>
+
+  <rect class="box" x="56" y="406" width="210" height="54" rx="6"/>
+  <text class="m b" x="72" y="427">templates/</text>
+  <text class="s" x="72" y="445">offline android · project</text>
+
+  <rect class="box" x="276" y="406" width="210" height="54" rx="6"/>
+  <text class="m b" x="292" y="427">tools/</text>
+  <text class="s" x="292" y="445">migrate.mjs · project.mjs</text>
+
+  <text class="s" x="56" y="490">CPUs: MC6809 and Z80. Devices: YM2203.</text>
+  <text class="s" x="56" y="508">No import leaves the base; a test rejects game names.</text>
+
+    <path class="e b" d="M506 180H594" marker-end="url(#c-ab)"/>
+  <text class="lbl" x="550" y="160" text-anchor="middle">copy</text>
+  <text class="lbl" x="550" y="172" text-anchor="middle">in base/</text>
+  <rect class="box b" x="520" y="214" width="60" height="96" rx="5"/>
+  <text class="m b" x="550" y="238" text-anchor="middle">lock</text>
+  <text class="s" x="550" y="256" text-anchor="middle">revision</text>
+  <text class="s" x="550" y="272" text-anchor="middle">+ hash</text>
+  <text class="s" x="550" y="288" text-anchor="middle">per</text>
+  <text class="s" x="550" y="302" text-anchor="middle">file</text>
+
+  <path class="e x" d="M506 440H594" marker-end="url(#c-ax)"/>
+  <text class="lbl tx" x="550" y="418" text-anchor="middle">GnG import</text><text class="lbl tx" x="550" y="430" text-anchor="middle">forbidden</text>
+
+    <text class="cap tg" x="594" y="40">GNG-GHIDRA · PUBLIC · CONSUMER</text>
+  <rect class="box g k" x="594" y="52" width="470" height="484" rx="10"/>
+
+  <rect class="box" x="614" y="72" width="430" height="70" rx="6"/>
+  <text class="m b" x="630" y="93">games/gngb</text>
+  <text class="s" x="630" y="111">build.mjs: prepare · validate · package hooks</text>
+  <text class="s" x="630" y="127">code image · input recipe · game state</text>
+
+  <rect class="box" x="614" y="152" width="430" height="102" rx="6"/>
+  <text class="m b" x="630" y="173">boards/gng</text>
+  <text class="s" x="630" y="191">runtime · memory map, IRQ, DMA, banks</text>
+  <text class="s" x="630" y="207">code-view · ram-code · bundle (gng.code-image.v1)</text>
+  <text class="s" x="630" y="223">inputs · frame-record · audio/ym2203</text>
+  <text class="s" x="630" y="239">web-host-config · pacing and ports for the host</text>
+
+  <rect class="box" x="614" y="264" width="430" height="52" rx="6"/>
+  <text class="m b" x="630" y="285">src/gngb_frame_renderer</text>
+  <text class="s" x="630" y="303">FG · BG · sprites → RGBA 256×224</text>
+
+  <rect class="box" x="614" y="326" width="430" height="70" rx="6"/>
+  <text class="m b" x="630" y="347">android/web</text>
+  <text class="s" x="630" y="365">app · engine.worker · audio.worker · audio.worklet</text>
+  <text class="s" x="630" y="381">GnG entry points for the base hosts</text>
+
+  <rect class="box" x="614" y="406" width="430" height="54" rx="6"/>
+  <text class="m b" x="630" y="427">scripts/</text>
+  <text class="s" x="630" y="445">assets, APK, lock, comparators against the oracle</text>
+
+  <text class="s" x="614" y="490">Everything that knows GnG addresses, chips or rules.</text>
+  <text class="s" x="614" y="508">The base is used as is; base/ is never edited.</text>
+</svg>
