@@ -55,7 +55,17 @@ export function createGngCodeView(code){
     if(pc>=0x4000&&bank!==null)return banked(bank,pc);
     return null;
   };
-  return {identity,resolve,read,seed,at,context};
+  // Discovery: fixed code reaching the window may run with any bank.
+  const banks=code.banks.length/0x2000;
+  const targets=({from,pc})=>{
+    if(from.space==='fixed'&&pc>=0x4000&&pc<0x6000)
+      return Array.from({length:banks},(_,b)=>banked(b,pc));
+    const x=resolve({from,pc});
+    return x?[x]:[];
+  };
+  const scanRanges=()=>[{from:fixed(0x6000),start:0x6000,end:0x10000},
+    ...Array.from({length:banks},(_,b)=>({from:banked(b,0x4000),start:0x4000,end:0x6000}))];
+  return {identity,resolve,read,seed,at,context,targets,scanRanges};
 }
 
 /** Translate the frozen program's legacy numeric keys at the board edge. */

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /** Private RP-3 comparison: pinned AOT input, old board/audio with the
  * reference YM WASM, the recipe entry point (original ZIP regions) composed
- * with the base YM2203 bank WASM, and a native
+ * with the base YM2203 bank WASM and the program bundle built by the base
+ * chain (RP-4), and a native
  * CPU/Z80/YM restore. Writes hashes and counts only under out/.
  */
 import {createHash} from 'node:crypto';
@@ -19,14 +20,16 @@ import {CYCLES_PER_FRAME} from '../boards/gng/runtime.mjs';
 import {validateRecipe,validateLock,assertCompatible}
   from '../base/src/contracts/index.mjs';
 import {verifyPinnedComponents} from '../base/src/build/verify-lock.mjs';
+import {checkBundle} from '../base/tools/migrate.mjs';
+import {gngCode} from '../boards/gng/bundle.mjs';
 import {capabilities} from '../base/src/cpu/capabilities.mjs';
 import {YMFM_REVISION,EMCC_VERSION} from '../base/src/devices/ym2203/build.mjs';
 
-const [bundleArg,referenceArg,lockArg,romArg,wasmArg,deviceArg,framesArg,
+const [bundleArg,programArg,referenceArg,lockArg,romArg,wasmArg,deviceArg,framesArg,
   reportArg,scenario='idle',tapeArg]=process.argv.slice(2);
-if(!bundleArg||!referenceArg||!lockArg||!romArg||!wasmArg||!deviceArg||
+if(!bundleArg||!programArg||!referenceArg||!lockArg||!romArg||!wasmArg||!deviceArg||
    !framesArg||!reportArg)
-  throw Error('RP3_USAGE: bundle reference lock-dir sound-rom reference-wasm device-wasm frames private-report [idle|tape tape-file]');
+  throw Error('RP3_USAGE: bundle program-bundle reference lock-dir sound-rom reference-wasm device-wasm frames private-report [idle|tape tape-file]');
 const report=resolve(reportArg),frames=Number(framesArg);
 if(!report.startsWith(resolve('out')+'/')||!Number.isInteger(frames)||
    frames<2||frames>6000||!['idle','tape'].includes(scenario)||
@@ -74,6 +77,11 @@ if(tape&&(tape.schema!==LIVE_TAPE_SCHEMA||
    tape.program_sha256!==manifest.files['program.mjs']))throw Error('RP3_TAPE_MISMATCH');
 const portRead=()=>tape?liveTapeReader(tape.changes):null;
 const {blocks}=await import(pathToFileURL(join(bundle,'program.mjs')).href);
+// The session side runs the bundle the base chain built from the same ZIP.
+const program=checkBundle(resolve(programArg),recipe);
+const session={code:gngCode(program.manifest,program.files['code.bin'],
+  program.files['overlays.bin']),blocks:(await import(pathToFileURL(
+  join(resolve(programArg),'program.mjs')).href)).blocks};
 function sha256Bytes(b){return createHash('sha256').update(b).digest('hex');}
 const frameHash=r=>sha(Buffer.concat([Buffer.from(r.record),Buffer.from(r.known),
   Buffer.from(JSON.stringify([r.scroll,r.bank,r.latch,r.sprite_buffer_valid,r.writes]))]));
@@ -95,7 +103,7 @@ const old=createOld(code,blocks,{frames,portRead:portRead(),
 if(old.run().status!=='FRAMES_DONE'||audioFrames!==frames)throw Error('RP3_OLD_STOP');
 ym.destroy();
 const newFrames=[],newPcm=[];
-const make=checkpoint=>createSession(recipe,regions,{program:{code,blocks},
+const make=checkpoint=>createSession(recipe,regions,{program:session,
   devices:{ym2203:device},frames,portRead:portRead(),checkpoint,
   onFrame:r=>{newFrames.push(frameHash(r));},
   onPcm:p=>newPcm.push([p.sampleStart,pcmHash(p)])});
@@ -126,6 +134,7 @@ const result={schema:'rom-migration.rp3.compare.v1',scenario,frames,
   referenceWasmSha256:sha256Bytes(wasm),deviceWasmSha256:deviceBuild.sha256,
   cutStateBytesEqual:true,ymCheckpointBytes:checkpoint.ym.length,
   bundleProgramSha256:manifest.files['program.mjs'],
+  sessionProgramSha256:program.manifest.files['program.mjs'],
   frameSequenceSha256:sha(JSON.stringify(oldFrames)),
   pcmSequenceSha256:sha(JSON.stringify(oldPcm)),
   pcmBlocks:oldPcm.length,cut,cycle:freshState.cycle,equivalent:true};

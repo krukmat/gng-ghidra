@@ -6,6 +6,9 @@
  * after it) are exactly the state their tape reaches from reset: CPU, Z80
  * and YM bytes (WASM) identical; audio keeps PLAYING with no STOP, underrun
  * or missing samples after the load.
+ * The replay runs on the reference g6 program and runtime, which RP-4 showed
+ * equivalent to the shipped bundle (scripts/rp4_compare.mjs); the save is
+ * decoded against the shipped program's SHA-256.
  * --android [serial]: same flow in the debug WebView of out/android/gng.apk
  * (installed by adb; run the emulator with -no-window -no-audio).
  * Usage: node scripts/ao_checkpoint_check.mjs [--android [serial]]
@@ -124,7 +127,9 @@ async function replayRuntime(){
   const {blocks}=await import(pathToFileURL(join(temp,'program.mjs')).href);
   const {createBoard}=await import(pathToFileURL(join(temp,'gngb_runtime.mjs')).href);
   rmSync(temp,{recursive:true,force:true});
-  return {code,blocks,createBoard,programSha256:manifest.files['program.mjs'],
+  const shipped=JSON.parse(readFileSync(join(ASSETS,'bundle/manifest.json'),'utf8'));
+  return {code,blocks,createBoard,programSha256:shipped.files['program.mjs'],
+    referenceProgramSha256:manifest.files['program.mjs'],
     rom:Uint8Array.from(readFileSync(join(ROOT,'out/audio/gg2.bin'))),
     wasm:referenceWasm()};
 }

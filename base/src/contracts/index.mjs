@@ -25,7 +25,13 @@ export function validateRecipe(r){
   for(const region of r.binary.regions){
     if(!obj(region)||!name(region.id)||seen.has(region.id)||
        !Number.isSafeInteger(region.bytes)||region.bytes<1||
-       !hash(region.sha256))fail('REGION_INVALID');
+       !hash(region.sha256)||
+       (region.entry!==undefined&&(r.binary.kind!=='zip'||
+         typeof region.entry!=='string'||!/^[\w./-]+$/.test(region.entry)||
+         region.entry.split('/').some(s=>s===''||s==='.'||s==='..')))||
+       (region.offset!==undefined&&(r.binary.kind!=='flat'||
+         !Number.isSafeInteger(region.offset)||region.offset<0)))
+      fail('REGION_INVALID');
     seen.add(region.id);
   }
   for(const [architecture,required] of Object.entries(r.requirements)){

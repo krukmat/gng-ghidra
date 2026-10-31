@@ -1,4 +1,4 @@
-/** GnG engine worker entry: the frozen AOT bundle on the GnG board behind the
+/** GnG engine worker entry: the program bundle on the GnG board behind the
  * base browser engine host (base/src/host/web/engine-worker.mjs), which owns
  * pacing, presentation, audio batches and the save protocol. GnG supplies
  * input ports 0x3000-0x3004, the drawable rule (no unknown bytes), the
@@ -15,13 +15,13 @@ async function bytes(name){
   return new Uint8Array(await res.arrayBuffer());
 }
 async function createGngEngine({checkpoint:checkpointText,ports,sink}){
-  const [{blocks},{createBoard},{mapGngFrozenBlocks},
+  const [{blocks},{createBoard},{gngCode},
     {renderGngbRgba},
     {rendererInputs},{rendererUnknownCount},{INPUT_DEFAULTS},
-    {frozenCode,unpackGfx},{createPortReadWitness},{observeGameState},
+    {unpackGfx},{createPortReadWitness},{observeGameState},
     {encodeCheckpoint,decodeCheckpoint},{createPortRecorder}]=await Promise.all([
     import('./bundle/program.mjs'),import('./boards/gng/runtime.mjs'),
-    import('./boards/gng/code-view.mjs'),
+    import('./boards/gng/bundle.mjs'),
     import('./lib/gngb_frame_renderer.mjs'),import('./lib/gngb_render_inputs.mjs'),
     import('./lib/v2_b1_observable.mjs'),import('./lib/gngb_input_contract.mjs'),
     import('./lib/ao_web_assets.mjs'),import('./lib/v3_b2c_port_witness.mjs'),
@@ -30,11 +30,11 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink}){
   const res=await fetch('bundle/manifest.json');
   if(!res.ok)throw Error('AO_FETCH_'+res.status+' manifest');
   const manifest=await res.json();
-  if(!(blocks instanceof Map)||blocks.size!==manifest.blocks)
+  if(!(blocks instanceof Map)||blocks.size!==manifest.program.blocks)
     throw Error('AO_BLOCK_COUNT_MISMATCH');
   const [codeBin,overlays,gfxBin]=await Promise.all(
     ['bundle/code.bin','bundle/overlays.bin','gfx.bin'].map(bytes));
-  const code=frozenCode(manifest,codeBin,overlays),gfx=unpackGfx(gfxBin);
+  const code=gngCode(manifest,codeBin,overlays),gfx=unpackGfx(gfxBin);
   const programSha256=manifest.files['program.mjs'];
   // Refused if made by another AOT program or inconsistent.
   const restored=checkpointText&&decodeCheckpoint(checkpointText,{programSha256});
@@ -44,7 +44,7 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink}){
   const witness=createPortReadWitness();
   const readPorts=new Uint8Array(3).fill(255);
   let last=null,stateKey=null,gameState=null;
-  const cpu=createBoard(code,mapGngFrozenBlocks(code,blocks),{
+  const cpu=createBoard(code,blocks,{
     frames:Number.MAX_SAFE_INTEGER,
     portRead:addr=>ports[addr-0x3000],
     onPortRead:read=>{

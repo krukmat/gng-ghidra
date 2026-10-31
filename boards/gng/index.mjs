@@ -4,7 +4,6 @@
  * The two halves are exported for hosts that run them in separate workers.
  */
 import {createBoard,CYCLES_PER_FRAME} from './runtime.mjs';
-import {mapGngFrozenBlocks} from './code-view.mjs';
 import {createGngAudioProducer} from '../../src/gngb_audio_producer.mjs';
 import {validateRecipe} from '../../base/src/contracts/index.mjs';
 import {verifyInput,assertProgramMatches,SOUND_REGION}
@@ -14,8 +13,9 @@ export {createBoard,CYCLES_PER_FRAME,createGngAudioProducer};
 
 const fail=code=>{const e=Error(code);e.code=code;throw e;};
 
-/** Recipe → session. `program` is the loaded AOT bundle `{code, blocks}`
- * with its numeric block keys; `devices.ym2203` is the bank WASM bytes. */
+/** Recipe → session. `program` is the loaded program bundle `{code, blocks}`
+ * (boards/gng/bundle.mjs) keyed by code identity; `devices.ym2203` is the
+ * bank WASM bytes. */
 export async function createSession(recipe,regions,{program,devices,...integration}={}){
   validateRecipe(recipe);
   if(recipe.board.id!=='gng'||recipe.board.module!=='boards/gng/index.mjs'||
@@ -27,7 +27,7 @@ export async function createSession(recipe,regions,{program,devices,...integrati
   const input=await verifyInput(recipe,regions);
   assertProgramMatches(program.code,input.regions);
   return createGngSession({...integration,code:program.code,
-    blocks:mapGngFrozenBlocks(program.code,program.blocks),
+    blocks:program.blocks,
     soundRom:input.regions[SOUND_REGION],wasm:devices.ym2203});
 }
 export async function createGngSession({code,blocks,soundRom,wasm,

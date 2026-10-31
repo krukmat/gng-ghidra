@@ -115,6 +115,32 @@ RP-0 dejó referencia privada y un escenario corto reproducido. RP-1 dejó inter
 
 `src/ao_ym2203_wasm.*`, `scripts/ao_build_audio_wasm.sh` y `out/android/audio/ym2203.wasm` siguen como referencia. Se mantiene el límite Z80: IRQ IM1, sin NMI ni paridad nativa de interrupciones. 
 
+## RP-4 — construcción desde el binario original (31/10/2026)
+
+- **Base `090c44d` y lock v8:** la cadena de construcción entró en la base sin nada de GnG ([build chain](../base/src/build/), `base/tools/migrate.mjs` con `verify`, `build`, `validate` y `package`):
+  - lectura de regiones desde ZIP o archivo plano;
+  - estrategias estáticas 6809 sobre la vista de código (vectores, flujo directo, tablas de saltos indexadas, continuaciones con carga inmediata y tablas de punteros);
+  - descubrimiento en ejecución mediante escenarios del proyecto;
+  - formato `rom-migration.bundle.v1`;
+  - ayudas de empaquetado.
+
+  `out/base-reference/rp4-v8/`, derivado con `scripts/rp3_lock.mjs`, fija 28 componentes; la copia en `base/` está verificada.
+- **Lo que queda en GnG:** disposición de la ROM, vista de código con `targets`/`scanRanges`, parámetros de las estrategias, escenario de descubrimiento (6000 frames sin entrada), localizador de código en RAM (`boards/gng/ram-code.mjs`) y formato de datos del bundle (`boards/gng/bundle.mjs`). Todo eso lo reúne `games/gngb/build.mjs`, el módulo de proyecto. `ao_build_assets` es su `package`.
+- **Construcción:** `migrate build` desde `roms/gng.zip`, sin bundles anteriores ni B2-D/B3, da 38.084 bloques (10.029 semillas estáticas, 7 raíces, 241 tablas, 775 destinos de tabla) y 1 semilla en ejecución: la superposición de RAM en 0x1A00, encontrada en el frame 259. Hay 479 salidas indirectas que la estrategia estática no resuelve. Dos corridas dan el mismo programa (`0a50ac77…`).
+- **Igualdad con g6 (decisión del operador: funcional, no byte a byte):**
+  - `scripts/rp4_compare.mjs`: mismo `code.bin`, misma superposición y mismas 38.084 identidades de bloque. Frames idénticos en las 9 cintas B3 de 6000 frames (g6 en su runtime y el bundle nuevo en `boards/gng`). Reporte: `out/rp4/compare-g6.json`.
+  - El texto de `program.mjs` difiere porque usa el compilador de la base, con identidades de texto, 10.040 funciones en lugar de 10.089 y otro orden de semillas.
+  - Los checkpoints guardados con g6 se rechazan (`CK_PROGRAM_MISMATCH`).
+- **Consumidores:** `createSession`, el worker, `ao_build_assets` y `rp3_compare` (la sesión de la receta corre el bundle nuevo; la referencia sigue siendo g6). `ao_checkpoint_check` decodifica con el hash del programa empaquetado y repite la partida en g6.
+- **GO:**
+  - `npm test`: 786/786.
+  - `npm run rp3:compare`: PASS con 120 frames sin entrada y con la cinta `out/v3/b3/live-tapes/2026-10-28T18-01-50-790Z-FRAMES_DONE.json` de 900 frames; frames y PCM idénticos a g6, con restauración (`rp3-compare-*-20261031T080825.json`).
+  - Chromium sin ventana: `ao_controls_check` AO4 PASS (5/5 y teclado; cinta `out/android/check/ao4-tape.json`, frame 722) y `ao_checkpoint_check` GO (914/1357, 996.420 muestras de salida distintas de cero).
+  - Emulador `dubbridge`:
+    - `ao_android_check --audio`: `PASS_EMULATOR`, 38.084 bloques, 909/908,6 frames, audio en 14/15 ventanas con 0 faltantes. El modo demostración sin moneda es silencioso, igual que en g6.
+    - `ao_checkpoint_check --android`: GO (926/1386, 997.533 muestras distintas de cero).
+    - `ao_stick_android_check`: PASS.
+
 ## Referencia reproducible
 
 - Checkout de GnG al iniciar: `b8725b48cfa5bec24f1782f9cf38e24b461cac92`. Las nuevas herramientas y este checkpoint son cambios posteriores.

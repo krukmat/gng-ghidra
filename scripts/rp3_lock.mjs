@@ -32,9 +32,13 @@ const paths=[...new Set([...Object.keys(previous.base.components),
   'src/devices/ym2203/build.mjs',
   'templates/android/app/build.gradle.kts',
   'templates/android/app/src/main/AndroidManifest.xml',
-  'templates/android/app/src/main/java/org/rommigration/shell/MainActivity.kt'])];
+  'templates/android/app/src/main/java/org/rommigration/shell/MainActivity.kt',
+  // RP-4: build chain from the original binary.
+  'src/build/input.mjs','src/build/mc6809/discover.mjs',
+  'src/build/discover-run.mjs','src/build/bundle.mjs','src/build/package.mjs',
+  'tools/migrate.mjs'])];
 const revision=git('rev-parse','HEAD').toString().trim();
-const lock={...previous,status:'rp3-ym-host',base:{revision,
+const lock={...previous,status:'rp4-build-chain',base:{revision,
   components:Object.fromEntries(paths.map(path=>
     [path,sha(git('show',`${revision}:${path}`))]))}};
 validateLock(lock);verifyPinnedComponents(resolve('base'),lock);

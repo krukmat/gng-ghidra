@@ -2,7 +2,7 @@
 
 **Dirección vigente:** crear un repositorio separado para extraer de esta versión una base agnóstica y versionada, con herramientas para generar proyectos independientes. Cada proyecto contendrá un juego integrado y generado desde sus binarios originales. Este repositorio conserva GnG como primera integración de referencia y consumidor de la base. La implementación de placa y la integración de juego quedan fuera del repositorio compartido; los compiladores se reutilizan por arquitectura de CPU.
 
-**Estado actual (31/10/2026):** RP-0 a RP-3 completadas. La base local está en `da867a7d4cb2eae399e1623b6e942e1c6e083668`, lock v7. RP-3 extrajo Z80, transporte PCM, protocolo AudioWorklet, reloj de frames, banco YM2203, hosts de navegador de engine y audio y la plantilla del shell Android. GnG entra por la receta (`boards/gng/index.mjs#createSession`, y el build de assets aplica las mismas comprobaciones), y web, escritorio y Android usan la misma app sobre esos hosts. La prueba en un teléfono físico se hace en la verificación final del proyecto (decisión del operador, 31/10/2026). La base no está certificada ni publicada. [Checkpoint y resultados RP-3](rp0-rp1-checkpoint-2026-10-28.md#rp-3--z80-audio-y-worker-29102026). `cfg/` y `gng-ghidra/` siguen fuera de la extracción.
+**Estado actual (31/10/2026):** RP-0 a RP-3 completadas; RP-4 con GO completo, pendiente de aceptación. La base local está en `090c44dba90c26bea5886b6450ebc765cfa39c86`, lock v8; GnG se construye desde `roms/gng.zip` con `base/tools/migrate.mjs`. RP-3 extrajo Z80, transporte PCM, protocolo AudioWorklet, reloj de frames, banco YM2203, hosts de navegador de engine y audio y la plantilla del shell Android. GnG entra por la receta (`boards/gng/index.mjs#createSession`, y el build de assets aplica las mismas comprobaciones), y web, escritorio y Android usan la misma app sobre esos hosts. La prueba en un teléfono físico se hace en la verificación final del proyecto (decisión del operador, 31/10/2026). La base no está certificada ni publicada. [Checkpoint y resultados RP-3](rp0-rp1-checkpoint-2026-10-28.md#rp-3--z80-audio-y-worker-29102026). `cfg/` y `gng-ghidra/` siguen fuera de la extracción.
 
 **Tareas ejecutables propuestas:** [RP-0: referencia](#rp-0--fijar-la-referencia), [RP-1: contratos](#rp-1--definir-las-fronteras), [RP-2: CPU y placa](#rp-2--separar-compilación-cpu-y-placa), [RP-3: host y audio](#rp-3--separar-host-audio-e-interfaz), [RP-4: construcción](#rp-4--construir-desde-el-binario-original), [RP-5: proyecto nuevo](#rp-5--generar-un-proyecto-independiente), [RP-6: certificación](#rp-6--certificar-y-versionar-la-base).
 
@@ -177,11 +177,11 @@ Cada tarea deja un cambio pequeño y revisable. No ejecutar la extracción compl
 
 Lo que esta fase mueve a la base entra sin GnG: los nombres, las constantes, las rutas y los tamaños de GnG se quedan en `gng-ghidra` (`boards/gng`, `games/gngb`, receta).
 
-- [ ] Separar verificador de binarios de la receta de archivos, hashes y regiones de GnG.
-- [ ] Extraer descubrimiento, compilación, congelado y empaquetado para que acepten entradas explícitas. Admitir comenzar con un proyecto vacío de artefactos, sin B2-D/B3 ni rutas de `out/` de este repositorio.
-- [ ] Mantener saltos indirectos y análisis estático como estrategias declaradas por arquitectura/placa/juego; registrar destinos faltantes y límites de cobertura.
-- [ ] Crear el formato nuevo de bundle con módulos y regiones declarados. Preservar hashes, rechazo de corrupción y trazabilidad del origen; no heredar tamaños `0x1a000/0xa000`, lista fija de módulos ni límite de 20.000 frames como contrato universal.
-- [ ] Definir comandos estables para verificar entorno/entrada, construir, validar y empaquetar; implementación inicial en CLI con entradas no interactivas y errores claros.
+- [x] Separar verificador de binarios de la receta de archivos, hashes y regiones de GnG. `base/src/build/input.mjs` lee ZIP o plano y verifica las regiones declaradas; GnG conserva los roles y la disposición.
+- [x] Extraer descubrimiento, compilación, congelado y empaquetado para que acepten entradas explícitas. Admitir comenzar con un proyecto vacío de artefactos, sin B2-D/B3 ni rutas de `out/` de este repositorio. La construcción de GnG parte de `roms/gng.zip` solo.
+- [x] Mantener saltos indirectos y análisis estático como estrategias declaradas por arquitectura/placa/juego; registrar destinos faltantes y límites de cobertura. El reporte registra salidas indirectas y semillas halladas en ejecución.
+- [x] Crear el formato nuevo de bundle con módulos y regiones declarados (`rom-migration.bundle.v1`). Preservar hashes, rechazo de corrupción y trazabilidad del origen; no heredar tamaños `0x1a000/0xa000`, lista fija de módulos ni límite de 20.000 frames como contrato universal.
+- [x] Definir comandos estables para verificar entorno/entrada, construir, validar y empaquetar; implementación inicial en CLI con entradas no interactivas y errores claros (`base/tools/migrate.mjs`).
 
 **Salida:** receta GnG ejecutable desde sus entradas originales y herramientas bloqueadas por versión. **GO (decisión del operador, 31/10/2026):**
 - Una corrida de la cadena movida a la base con la ROM de GnG produce un bundle idéntico al vigente, sin copiar bundles anteriores ni acceder a ellos implícitamente. El oráculo no es dependencia de ejecución del producto.
@@ -189,6 +189,8 @@ Lo que esta fase mueve a la base entra sin GnG: los nombres, las constantes, las
   - web en Chromium: controles, teclado, audio y checkpoint;
   - emulador Android: `ao_android_check --audio`, `ao_checkpoint_check --android` y `ao_stick_android_check`.
 - No se reconstruye desde un checkout limpio.
+
+**Resultado (31/10/2026, pendiente de aceptación):** GO completo con el bundle construido por la base; igualdad funcional con g6 por decisión del operador. [Evidencia](rp0-rp1-checkpoint-2026-10-28.md#rp-4--construcción-desde-el-binario-original-31102026).
 
 **Objetivo final del proyecto:** que `gng-ghidra` funcione como corresponde sobre la base al terminar RP-4. Después viene la verificación final, que incluye la prueba en un teléfono físico.
 
