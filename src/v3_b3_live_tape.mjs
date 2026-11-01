@@ -49,12 +49,43 @@ export function liveTapeReader(changes){
   };
 }
 
-/** A checkpoint's tape (port changes from reset) as a live tape file, the
- * input of rp3_compare's tape scenario. The checkpoint is fully checked. */
-export function checkpointTape(text){
+/** The frame record the runtime delivered at a checkpoint's frame, rebuilt
+ * from its CPU state (gngb_runtime snapshot): RAM, sprite DMA and palette,
+ * the bytes the renderer draws. */
+export function checkpointRecord({mem,km,dma,dmaMask,pal,palExt}){
+  const r=new Uint8Array(0x3800),k=new Uint8Array(0x3800);
+  r.set(mem.subarray(0,0x2000));k.set(km.subarray(0,0x2000));
+  if(dma){r.set(dma,0x2000);k.set(dmaMask,0x2000);}
+  else k.fill(255,0x2000,0x2200); // no DMA yet: reference stores zeros
+  r.set(mem.subarray(0x2000,0x3000),0x2200);k.set(km.subarray(0x2000,0x3000),0x2200);
+  r.set(palExt,0x3200);r.set(pal,0x3300);k.fill(255,0x3200,0x3800);
+  for(let i=0;i<256;i++){
+    const o=0x3400+i*4;
+    r[o]=(palExt[i]>>4)*17;r[o+1]=(palExt[i]&15)*17;r[o+2]=(pal[i]>>4)*17;r[o+3]=255;
+  }
+  return {record:r,known:k};
+}
+
+function decodeTape(text){
   let programSha256;
   try{programSha256=JSON.parse(text)?.programSha256;}catch{} // decode reports it
   const c=decodeCheckpoint(text,{programSha256});
-  return {schema:LIVE_TAPE_SCHEMA,program_sha256:c.programSha256,frame:c.frame,
-    changes:c.tape};
+  return {c,tape:{schema:LIVE_TAPE_SCHEMA,program_sha256:c.programSha256,frame:c.frame,
+    changes:c.tape}};
+}
+
+/** A checkpoint's tape (port changes from reset) as a live tape file, the
+ * input of rp3_compare's tape scenario. The checkpoint is fully checked. */
+export function checkpointTape(text){return decodeTape(text).tape;}
+
+/** checkpointTape plus the check lab tapes carry, {frame, record_sha256}
+ * (sha256 of record then known), so a replay can prove the session reached
+ * the same picture. Web Crypto: browser and Node. */
+export async function checkedCheckpointTape(text){
+  const {c,tape}=decodeTape(text),{record,known}=checkpointRecord(c.cpu);
+  const bytes=new Uint8Array(record.length+known.length);
+  bytes.set(record);bytes.set(known,record.length);
+  const digest=new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes));
+  const record_sha256=[...digest].map(b=>b.toString(16).padStart(2,'0')).join('');
+  return {...tape,check:{frame:c.frame,record_sha256}};
 }

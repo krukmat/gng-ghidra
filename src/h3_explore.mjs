@@ -58,9 +58,10 @@ export function chunkMasks(rand,n,prev=0,p=EXPLORE_DEFAULTS){
   return out;
 }
 
-/** Port events of masks applied from frame `start`, all released at the end. */
-export function masksToEvents(start,masks){
-  const events=[];let prev=0;
+/** Port events of masks applied from frame `start` (P1 held before it:
+ * `prev`), all released at the end. */
+export function masksToEvents(start,masks,prev=0){
+  const events=[];
   const emit=(frame,m)=>{
     for(const [control,bit] of Object.entries(P1_BITS))
       if((prev^m)&bit)events.push({cycle:frame*CYCLES_PER_FRAME,control,pressed:!!(m&bit)});

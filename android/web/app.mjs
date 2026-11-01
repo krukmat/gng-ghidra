@@ -3,7 +3,7 @@
 import {createTouchControls} from './lib/ao_touch_controls.mjs';
 import {followBase,knobOffset,stickSector} from './lib/ao_stick.mjs';
 import {keyAction} from './lib/ao_keyboard.mjs';
-import {checkpointTape} from './lib/v3_b3_live_tape.mjs';
+import {checkedCheckpointTape} from './lib/v3_b3_live_tape.mjs';
 
 const canvas=document.getElementById('screen');
 const ctx2d=canvas.getContext('2d',{alpha:false});
@@ -62,7 +62,7 @@ async function savedCheckpoint(data,code=null){
   clearTimeout(ckSaving);ckSaving=null;
   try{
     if(code)throw Error(code);
-    if(ckTape)return downloadTape(data.text);
+    if(ckTape)return await downloadTape(data.text);
     const meta={frame:data.frame,savedAt:new Date().toISOString()};
     await ckRequest('readwrite',store=>store.put({...meta,text:data.text},CK_KEY));
     ckSaved=meta;log('AO_CK_SAVE',{...meta,bytes:data.text.length});
@@ -72,9 +72,10 @@ async function savedCheckpoint(data,code=null){
     updateCheckpoint(ckTape?'no se pudo exportar':'no se pudo guardar');
   }
 }
-// The session's port changes from reset, as rp3_compare replays them.
-function downloadTape(text){
-  const tape=checkpointTape(text);
+// The session's port changes from reset, as rp3_compare replays them, with
+// the record hash of the frame so a lab replay can check it.
+async function downloadTape(text){
+  const tape=await checkedCheckpointTape(text);
   const url=URL.createObjectURL(new Blob([JSON.stringify(tape)],
     {type:'application/json'}));
   const a=document.createElement('a');a.href=url;

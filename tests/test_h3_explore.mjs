@@ -67,3 +67,19 @@ test('S2: la vida del cíclope entra en la celda; S1 no cambia',()=>{
   // S1 listings (and so their hashes) keep no boss field.
   assert.ok(!JSON.stringify(cellsListing([{...s1,key:'k',chosen:0,masks:new Uint8Array(0)}])).includes('boss'));
 });
+
+test('cinta en vivo: un valor por puerto y frame, al inicio del frame',async()=>{
+  const {liveToEvents}=await import('../src/h3_live_import.mjs');
+  const at=(f,d=0)=>f*CPF+d;
+  const changes=[[0,at(310,5),0xff],[1,at(310,16),0xff],[2,at(310,27),0xff],[0,at(311,100),0xbf],
+    [0,at(317,3),0xff],[1,at(1224,9),0xfe],[1,at(1224,500),0xee],[1,at(1300),0xff],[1,at(1400),0xfd]];
+  // The last change in a frame wins; nothing at or after endFrame.
+  assert.deepEqual(f(liveToEvents(changes,1400)),['311:coin1+','317:coin1-','1224:p1.button1+',
+    '1224:p1.right+','1300:p1.button1-','1300:p1.right-']);
+  assert.equal(defineInputSchedule(liveToEvents(changes)).events.length,7);
+  assert.throws(()=>liveToEvents([[1,at(5),0x7f]]),/H3_LIVE_UNMAPPED_BIT/);
+  assert.throws(()=>liveToEvents([[3,at(5),0x00]]),/H3_LIVE_DIP_NOT_DEFAULT/);
+  assert.throws(()=>liveToEvents([[0,at(5),0xff],[0,at(4),0xff]]),/H3_LIVE_TAPE_INVALID/);
+  // P1 held before START is not pressed again by the explorer's masks.
+  assert.deepEqual(f(masksToEvents(1200,Uint8Array.from([1]),1)),['1201:p1.right-']);
+});

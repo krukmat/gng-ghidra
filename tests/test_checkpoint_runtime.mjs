@@ -11,6 +11,7 @@ import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {prepareAudioBundle} from '../src/gngb_audio_bundle_overlay.mjs';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
 import {INPUT_DEFAULTS} from '../src/gngb_input_contract.mjs';
+import {checkpointRecord} from '../src/v3_b3_live_tape.mjs';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const runtime=readFileSync(join(ROOT,'src/gngb_runtime.mjs'),'utf8');
@@ -47,6 +48,7 @@ test('a board restored at a frame boundary continues exactly like the original',
       if(a===0x3000&&f%300>=260&&f%300<266)return INPUT_DEFAULTS[0]&~0x01;
       return INPUT_DEFAULTS[a-0x3000];
     };
+    const records=new Map();
     const trace=(out,onMark=()=>{})=>{
       const cpu=createBoard(code,blocks,{frames:FRAMES,portRead:port,
         onAudioEvent:e=>out.push(JSON.stringify(['A',e.kind,e.value,e.cycle])),
@@ -59,6 +61,7 @@ test('a board restored at a frame boundary continues exactly like the original',
           h.update(r.record);h.update(r.known);
           h.update(JSON.stringify([r.scroll,r.bank,r.latch,r.sprite_buffer_valid,r.writes]));
           out.push('F'+r.index+' '+cpu.state.C+' '+h.digest('hex'));
+          if(r.index===SAVE_AT)records.set(out,Buffer.concat([r.record,r.known]));
           cpu.state.records[r.index-1]=null;
         }});
       return cpu;
@@ -70,6 +73,10 @@ test('a board restored at a frame boundary continues exactly like the original',
     });
     assert.equal(original.run().status,'FRAMES_DONE');
     assert.ok(saved,'state must be exported at the save frame');
+    // The exported state rebuilds the record delivered at its frame (tape check).
+    const rebuilt=checkpointRecord(saved);
+    assert.equal(saved.frames,SAVE_AT);
+    assert.ok(Buffer.concat([rebuilt.record,rebuilt.known]).equals(records.get(whole)));
     const resumed=[];
     const restored=trace(resumed);
     restored.importState(saved);

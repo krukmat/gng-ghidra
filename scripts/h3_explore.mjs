@@ -1,18 +1,25 @@
 #!/usr/bin/env node
 /** H3-S1/S2 TAS probe: Go-Explore from reset to the phase-1 cyclops arena
  * (S1) and, with --from, from the end of a saved tape until 0x72 changes (S2).
- * Base tape titleCoinStart, then only P1 port masks from frame 1200; no
+ * Base tape titleCoinStart (or the --from tape's), then only P1 port masks from frame 1200; no
  * pokes and no RAM or state writes (save/restore only between branches).
  * A branch is cut on an impact without armour, a death handler or a lost
  * life (maneuverFatal); an impact with armour simply yields another cell.
  * Usage:
  *   node scripts/h3_explore.mjs explore [--from <tape.json>] [seed=1] [iters=Infinity] [minutes=30]
  *   node scripts/h3_explore.mjs replay <tape.json> [every=0]
+ *   node scripts/h3_explore.mjs import <live-tape.json> [frame] [--unverified]
  * explore writes out/h3/explore/cells-s<seed>-i<iters>.json (no snapshots)
  * and the best tape (inputs only, sha256, seed and parameters); exit 0 on GO.
- * --from replays the tape's P1 masks up to its goalFrame (its RAM hash must
- * match), then explores with the cyclops life in the cell; the prefix masks
- * are part of the new tape.
+ * --from replays the tape up to its goalFrame (its RAM hash must match):
+ * other ports, and P1 before frame 1200, come from that tape (a human's own
+ * coin and Start). It then explores with the cyclops life in the cell; the
+ * prefix is part of the new tape.
+ * import turns a live tape (app or lab recording) into a live-recording B3
+ * tape at frame starts, replays it on this bundle and requires the record
+ * hash of the tape's check (--unverified accepts a tape without one). It also
+ * records whether P1 still matters at the end (not attract mode); --from
+ * refuses a tape where it does not.
  * replay runs a fresh board from reset without restore, prints label rows
  * every `every` frames, and checks the tape's RAM hash and signal if present.
  */
@@ -26,7 +33,9 @@ import {defineInputSchedule,readScheduledPort} from '../src/gngb_input_contract.
 import {B3_TAPE_SCHEMA,b3Tape} from '../src/v3_b3_tapes.mjs';
 import {labCreateBoard} from '../src/v3_b3_lab_board.mjs';
 import {resolveB3LabTape} from '../src/v3_b3_external_tape.mjs';
-import {EXPLORE_DEFAULTS as P,prng,chunkMasks,masksToEvents,eventsToMasks,look,lookBoss,BOSS_LIFE,
+import {LIVE_TAPE_SCHEMA} from '../src/v3_b3_live_tape.mjs';
+import {liveToEvents} from '../src/h3_live_import.mjs';
+import {EXPLORE_DEFAULTS as P,P1_BITS,prng,chunkMasks,masksToEvents,eventsToMasks,look,lookBoss,BOSS_LIFE,
   isFatal,cellKey,better,pickCell,sha256,cellsListing} from '../src/h3_explore.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
@@ -41,14 +50,18 @@ const OUT=join(ROOT,'out/h3/explore');
 async function makeBoard(portRead,perFrame){
   const board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
     manifest.files['gngb_runtime.mjs'],code,blocks,{frames:1,portRead,
-      onFrame:r=>{const i=board.state.records.length;board.state.records[i-1]=null;perFrame(i,r.record);}});
+      onFrame:r=>{const i=board.state.records.length;board.state.records[i-1]=null;perFrame(i,r.record,r);}});
   return board;
 }
 const ram=(board,n=0x600)=>board.state.ramBytes(0,n).bytes;
 const fail=m=>{console.log(m);process.exit(3);};
 
 async function explore(seed,iters,minutes,from){
-  const rand=prng(seed),base=defineInputSchedule(b3Tape('titleCoinStart').events);
+  const rand=prng(seed),tape=from?resolveB3LabTape(from):null,meta=from?JSON.parse(readFileSync(from,'utf8')).h3:null;
+  const first=from?meta.goalFrame:START;
+  // Ports other than P1, and P1 before START, follow the source tape up to first.
+  const src=from?tape.events.filter(e=>e.cycle<first*CPF):b3Tape('titleCoinStart').events;
+  const base=defineInputSchedule(src),p1Before=eventsToMasks(START,START+1,src.filter(e=>e.cycle<START*CPF))[0];
   const cur=new Uint8Array(MAX_FRAMES);
   let fatalAt=0,livesRef=null,phaseRef=null,phaseAt=0;
   const board=await makeBoard((addr,cycle)=>addr===0x3001&&cycle>=START*CPF?
@@ -56,14 +69,13 @@ async function explore(seed,iters,minutes,from){
   (i,rec)=>{const s=look(rec);
     if(livesRef!==null&&!fatalAt&&isFatal(s,livesRef))fatalAt=i;
     if(phaseRef!==null&&!phaseAt&&s.phase!==phaseRef)phaseAt=i;});
-  let first=START,prefix=new Uint8Array(0),source=null;
+  let prefix=new Uint8Array(0),source=null;
   if(from){
-    const tape=resolveB3LabTape(from),meta=JSON.parse(readFileSync(from,'utf8')).h3;
-    first=meta.goalFrame;
-    prefix=eventsToMasks(START,first,tape.events.filter(e=>e.cycle>=START*CPF));
+    prefix=eventsToMasks(START,first,src);
     cur.set(prefix);
     if(board.lab.advanceTo(first).status!=='FRAMES_DONE')fail('H3_EXPLORE_PREFIX_FAILED');
     if(sha256(ram(board,0x3000))!==meta.ramSha)fail('H3_EXPLORE_PREFIX_MISMATCH');
+    if(meta.inputsLive===false)fail('H3_EXPLORE_FROM_INPUTS_IGNORED');
     source={file:basename(from),sha256:tape.sha256,goalFrame:first,ramSha:meta.ramSha};
   }else if(board.lab.advanceTo(START).status!=='FRAMES_DONE')fail('H3_EXPLORE_START_FAILED');
   const view=from?()=>lookBoss(ram(board,BOSS_LIFE+1)):()=>look(ram(board));
@@ -109,7 +121,8 @@ async function explore(seed,iters,minutes,from){
   board.lab.restore(win.snap);
   const signal={phase:win.phase,cp:win.cp,x:win.x,y:win.y,scroll:win.scroll,lives:win.lives,armor:win.armor};
   const metadata={schema:B3_TAPE_SCHEMA,profile:'explorer-g4',frames:win.frame+60,
-    events:defineInputSchedule([...b3Tape('titleCoinStart').events,...masksToEvents(START,win.masks)]).events};
+    events:defineInputSchedule([...src.filter(e=>!Object.hasOwn(P1_BITS,e.control)||e.cycle<START*CPF),
+      ...masksToEvents(START,win.masks,p1Before)].sort((a,b)=>a.cycle-b.cycle)).events};
   const tapeSha=sha256(JSON.stringify(metadata));
   const probe=from?'h3-s2':'h3-s1',tag=goal?from?'-phase':'-arena':'-best';
   const tapeFile=join(OUT,'tape-'+(from?'s2-':'')+'s'+seed+'-'+win.frame+tag+'.json');
@@ -151,9 +164,50 @@ async function replay(path,every){
   process.exitCode=match===false?1:0;
 }
 
+async function importLive(path,frame,unverified){
+  const text=readFileSync(path,'utf8'),live=JSON.parse(text);
+  if(live?.schema!==LIVE_TAPE_SCHEMA||!Array.isArray(live.changes))fail('H3_IMPORT_NOT_LIVE_TAPE');
+  const end=frame||live.check?.frame||live.frame;
+  const metadata={schema:B3_TAPE_SCHEMA,profile:'live-recording',frames:end,
+    events:defineInputSchedule(liveToEvents(live.changes,end)).events};
+  const schedule=defineInputSchedule(metadata.events);
+  let hash=null,probe=null;
+  const board=await makeBoard((addr,cycle)=>addr===0x3001&&probe!==null&&cycle>=end*CPF?
+    0xff^probe:readScheduledPort(schedule,addr,cycle),(i,rec,r)=>{
+    if(i===end)hash=sha256(Buffer.concat([rec,r.known]));});
+  const res=board.lab.advanceTo(end);
+  if(res.status!=='FRAMES_DONE')fail('H3_IMPORT_HALT '+JSON.stringify(res));
+  const ref=live.check?.frame===end?live.check.record_sha256:null;
+  const gate=ref===null?'NO_REFERENCE':hash===ref?'PASS':'FAIL';
+  const s=look(ram(board)),ramSha=sha256(ram(board,0x3000));
+  const signal={phase:s.phase,cp:s.cp,x:s.x,y:s.y,scroll:s.scroll,lives:s.lives,armor:s.armor};
+  // Attract mode or a cutscene ignores P1: 60 frames right vs left leave Arthur
+  // in the same place (RAM alone differs: the game keeps a copy of the port).
+  const snap=board.lab.save(),after=[];
+  for(const mask of [P1_BITS['p1.right'],P1_BITS['p1.left']]){
+    board.lab.restore(snap);probe=mask;
+    if(board.lab.advanceTo(end+60).status!=='FRAMES_DONE')fail('H3_IMPORT_PROBE_HALT');
+    const t=look(ram(board));after.push(JSON.stringify([t.x,t.y,t.scroll,t.mode]));
+  }
+  const inputsLive=after[0]!==after[1];
+  const source={file:basename(path),sha256:sha256(text),program_sha256:live.program_sha256,
+    generation:live.generation??null,changes:live.changes.length,check:live.check??null};
+  console.log('H3_IMPORT_GATE '+gate+' gen='+GEN+' frame='+end+' record='+hash+(ref?' ref='+ref:'')+
+    ' ram='+ramSha+' signal='+JSON.stringify(signal)+' inputsLive='+inputsLive+' source='+source.sha256);
+  if(gate==='FAIL'||gate==='NO_REFERENCE'&&!unverified)fail('H3_IMPORT_'+gate);
+  const tapeSha=sha256(JSON.stringify(metadata));
+  const tapeFile=join(OUT,'tape-live-'+basename(path,'.json')+'-'+end+'.json');
+  mkdirSync(OUT,{recursive:true,mode:0o700});
+  writeFileSync(tapeFile,JSON.stringify({...metadata,sha256:tapeSha,h3:{probe:'h3-live',bundle:GEN,
+    goalFrame:end,signal,inputsLive,source,gate,ramSha}})+'\n',{mode:0o600});
+  console.log('H3_IMPORT_TAPE='+tapeFile+' sha256='+tapeSha);
+}
+
 const args=process.argv.slice(2),at=args.indexOf('--from');
 const from=at>=0?args.splice(at,2)[1]:null;
+const loose=args.indexOf('--unverified'),unverified=loose>=0&&!!args.splice(loose,1);
 const [cmd,a,b,c]=args;
 if(cmd==='explore')await explore(Number(a??1),Number(b??Infinity),Number(c??30),from);
 else if(cmd==='replay')await replay(a,Number(b??0));
-else fail('usage: h3_explore.mjs explore [--from tape] [seed] [iters] [minutes] | replay <tape> [every]');
+else if(cmd==='import')await importLive(a,Number(b??0),unverified);
+else fail('usage: h3_explore.mjs explore [--from tape] [seed] [iters] [minutes] | replay <tape> [every] | import <live-tape> [frame] [--unverified]');

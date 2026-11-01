@@ -4,7 +4,8 @@
  * Five cold boots must accept Coin then Start; Start without Coin must fail.
  * Add --gameover to wait for a real loss and verify Coin + Continue.
  * Then the desktop keyboard after Reiniciar: 5 Coin, 1 Start, arrows and Z
- * read by the CPU, and T exports the session tape (out/android/check).
+ * read by the CPU, and T exports the session tape (out/android/check) with
+ * the record hash of its frame.
  */
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
@@ -212,6 +213,9 @@ try{
   assert.equal(tape.schema,LIVE_TAPE_SCHEMA);
   assert.equal(tape.program_sha256,manifest.files['program.mjs']);
   assert.ok(tape.frame>kbFree.frame&&tape.changes.length>0);
+  // Record hash of the export frame, checked by a lab replay (h3_explore import).
+  assert.equal(tape.check?.frame,tape.frame);
+  assert.match(tape.check.record_sha256,/^[0-9a-f]{64}$/);
   report.keyboard={status:'PASS',coinReads:kbCoin.witness.activeSamples.coin1,
     startedFrame:kbStart.frame,heldP1:kbHeld.reads[1],tapeFrame:tape.frame,
     tapeChanges:tape.changes.length,tape:'out/android/check/ao4-tape.json'};
