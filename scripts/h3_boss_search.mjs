@@ -108,7 +108,6 @@ console.log('H3_BOSS_START '+JSON.stringify(s0));
 if(s0.phase!==phase)throw Error('H3_BOSS_START_PHASE '+s0.phase);
 // XCAP stops rewarding x in a boss arena.
 const value=(s,maxX,maxY,minY)=>s.phase!==phase?1e9:
-  1000000*weaponPriority(s,policy)+
   WX*Math.min(maxX,XCAP)+WY*maxY+WCY*Math.min(s.y,YCAP)+
   WU*(s0.y-minY)+WS*s.score-WA*s.armor-WB*s.boss;
 let branches=0,halts=0,invalidTransitions=0;
@@ -156,7 +155,7 @@ while(START+(depth+1)*K<=END&&!done){
       ' retry='+backtracks+' alternatives='+beam.length+' remaining='+(prior.ranked.length-prior.cursor));
     continue;
   }
-  next.sort((a,b)=>b.v-a.v);
+  next.sort((a,b)=>weaponPriority(b.s,policy)-weaponPriority(a.s,policy)||b.v-a.v);
   const seen=new Set(),ranked=[];
   for(const c of next){
     const key=[c.s.x,c.s.y,c.s.armor,...policy?[c.s.weapon]:[],
@@ -169,7 +168,9 @@ while(START+(depth+1)*K<=END&&!done){
     history.set(depth+1,{ranked,cursor:beam.length});
     for(const d of history.keys())if(d<depth+1-BACKTRACK)history.delete(d);
   }
-  if(beam[0].v>best.v)best=beam[0];
+  if(weaponPriority(beam[0].s,policy)>weaponPriority(best.s,policy)||
+    weaponPriority(beam[0].s,policy)===weaponPriority(best.s,policy)&&beam[0].v>best.v)
+    best=beam[0];
   if(((frame-START)/K)%5===4)console.log('H3_BOSS_PROGRESS f='+(frame+K)+' '+JSON.stringify(beam[0].s)+' maxX='+beam[0].maxX+' maxY='+beam[0].maxY);
   depth++;
 }
