@@ -40,6 +40,7 @@ import {LIVE_TAPE_SCHEMA} from '../src/v3_b3_live_tape.mjs';
 import {liveToEvents} from '../src/h3_live_import.mjs';
 import {EXPLORE_DEFAULTS as P,P1_BITS,prng,chunkMasks,extendMasks,masksToEvents,eventsToMasks,look,lookBoss,BOSS_LIFE,
   isFatal,cellKey,better,bestRank,pickCell,sha256,cellsListing} from '../src/h3_explore.mjs';
+import {weaponPolicyForPhase,phaseOutcome,progressionCandidate} from '../src/h3_weapon_policy.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const selected=selectB3Bundle(ROOT);
@@ -83,14 +84,17 @@ async function explore(seed,iters,minutes,from){
   }else if(board.lab.advanceTo(START).status!=='FRAMES_DONE')fail('H3_EXPLORE_START_FAILED');
   const view=from?()=>lookBoss(ram(board,BOSS_LIFE+1)):()=>look(ram(board));
   const s0=view();phaseRef=from?s0.phase:null;
+  const policy=from?weaponPolicyForPhase(s0.phase):null;
   console.log('H3_EXPLORE_START gen='+GEN+' seed='+seed+' from='+(from??'reset')+' '+JSON.stringify(s0));
   const root={...s0,key:cellKey(s0),frame:first,masks:prefix,snap:board.lab.save(),chosen:0};
   const cells=new Map([[root.key,root]]),list=[root];
   // S1: scroll to the arena. S2: phase, then less boss life, then X (H3_RANK=y: armour, then height).
-  const rankMode=process.env.H3_RANK??'x',rank=bestRank(from,rankMode);
-  const isGoal=from?s=>s.phase!==s0.phase:s=>s.phase===0&&s.scroll>=ARENA;
-  const ahead=(a,b)=>{const x=rank(a),y=rank(b);for(let i=0;i<4;i++)if(x[i]!==y[i])return x[i]>y[i];return false;};
-  let best=root,goal=null,halt=null,n=0,cuts=0,frames=0,transition=null;
+  const rankMode=process.env.H3_RANK??'x',rank=bestRank(from,rankMode,policy);
+  const isGoal=from?s=>progressionCandidate(phaseOutcome(s0.phase,s.phase,s.weapon,policy)):
+    s=>s.phase===0&&s.scroll>=ARENA;
+  const ahead=(a,b)=>{const x=rank(a),y=rank(b);for(let i=0;i<x.length;i++)
+    if(x[i]!==y[i])return x[i]>y[i];return false;};
+  let best=root,goal=null,halt=null,n=0,cuts=0,frames=0,transition=null,invalidTransitions=0;
   const t0=Date.now();let tLog=t0;
   while(n<iters&&Date.now()-t0<minutes*60000&&!goal&&!halt){
     const c=pickCell(list,rand,P.scrollBonus);c.chosen++;n++;
@@ -101,7 +105,11 @@ async function explore(seed,iters,minutes,from){
       const f=c.frame+k,res=board.lab.advanceTo(f);frames+=P.evalEvery;
       if(res.status!=='FRAMES_DONE'){halt={frame:f,...res};break;}
       if(fatalAt){cuts++;break;}
-      const s=view(),cand={...s,key:cellKey(s),frame:f},old=cells.get(cand.key);
+      const s=view(),outcome=from?phaseOutcome(s0.phase,s.phase,s.weapon,policy):'UNCHANGED';
+      if(from&&s.phase!==s0.phase&&!progressionCandidate(outcome)){
+        invalidTransitions++;cuts++;break; // rollback or incorrect weapon: never a goal
+      }
+      const cand={...s,key:cellKey(s),frame:f},old=cells.get(cand.key);
       if(better(cand,old)){
         const cell={...cand,masks:cur.slice(0,f-START),snap:board.lab.save(),chosen:old?.chosen??0};
         if(old)Object.assign(old,cell);else{cells.set(cell.key,cell);list.push(cell);}
@@ -131,10 +139,12 @@ async function explore(seed,iters,minutes,from){
   const tapeFile=join(OUT,'tape-'+(from?'s2-':'')+'s'+seed+'-'+win.frame+tag+'.json');
   const extra=from?{from:source,bossLife:win.boss,transitionFrame:transition}:{};
   writeFileSync(tapeFile,JSON.stringify({...metadata,sha256:tapeSha,h3:{probe,bundle:GEN,seed,params,
-    iters:n,goalFrame:win.frame,signal,livesStart:s0.lives,...extra,ramSha:sha256(ram(board,0x3000))}})+'\n',{mode:0o600});
-  const result=halt?'STOP_HALT':goal?from?'GO_PHASE':'GO_ARENA':'NOT_REACHED';
+    iters:n,goalFrame:win.frame,signal,livesStart:s0.lives,...extra,
+    ...policy?{progressionPolicy:policy.id,progressionStatus:'UNVERIFIED'}:{},
+    ramSha:sha256(ram(board,0x3000))}})+'\n',{mode:0o600});
+  const result=halt?'STOP_HALT':goal?from?policy?'GO_PROGRESSION_CANDIDATE':'GO_PHASE':'GO_ARENA':'NOT_REACHED';
   console.log('H3_EXPLORE_RESULT '+result+' iters='+n+' cells='+list.length+' cuts='+cuts+' frames='+frames+
-    ' seconds='+seconds.toFixed(1)+' maxX='+Math.max(...list.map(c=>c.x))+' maxScroll='+Math.max(...list.map(c=>c.scroll))+
+    ' invalidTransitions='+invalidTransitions+' seconds='+seconds.toFixed(1)+' maxX='+Math.max(...list.map(c=>c.x))+' maxScroll='+Math.max(...list.map(c=>c.scroll))+
     ' win='+JSON.stringify({frame:win.frame,...signal,boss:win.boss,transition})+(halt?' halt='+JSON.stringify(halt):''));
   console.log('H3_EXPLORE_CELLS='+cellsFile+' sha256='+sha256(cellsText));
   console.log('H3_EXPLORE_TAPE='+tapeFile+' sha256='+tapeSha);
