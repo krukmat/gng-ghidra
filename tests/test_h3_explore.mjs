@@ -100,5 +100,7 @@ test('orden de la mejor celda: X por defecto, altura con armadura en H3_RANK=y',
   assert.deepEqual(bestRank(true,'y')(c),[4,-0,735,-28760]);
   // Armour kept outranks a higher cell without it.
   assert.ok(bestRank(true,'y')(c)[1]>bestRank(true,'y')({...c,y:881,armor:1})[1]);
+  assert.deepEqual(bestRank(true,'height')(c),[4,735,-0,-28760]);
+  assert.ok(bestRank(true,'height')({...c,y:881,armor:1})[1]>bestRank(true,'height')(c)[1]);
   assert.throws(()=>bestRank(true,'z'),/H3_RANK_INVALID/);
 });

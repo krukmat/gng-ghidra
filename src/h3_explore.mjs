@@ -107,10 +107,12 @@ export const better=(c,old)=>!old||c.armor<old.armor||c.armor===old.armor&&c.fra
 
 /** Best-cell order (4 keys, higher wins). S1: scroll, then X. S2 (`from`):
  * phase, less boss life, then X; mode 'y' (H3_RANK=y, vertical stretches
- * where X and scroll stop growing): phase, armour kept, then height Y. */
+ * where X and scroll stop growing): phase, armour kept, then height Y.
+ * 'height' puts height before armour, so a pickup cannot hide higher cells. */
 export function bestRank(from,mode='x'){
-  if(mode!=='x'&&mode!=='y')throw Error('H3_RANK_INVALID '+mode);
+  if(!['x','y','height'].includes(mode))throw Error('H3_RANK_INVALID '+mode);
   if(!from)return c=>[c.phase===0?c.scroll:-1,c.x,-c.frame,0];
+  if(mode==='height')return c=>[c.phase,c.y,-c.armor,-c.frame];
   return mode==='y'?c=>[c.phase,-c.armor,c.y,-c.frame]:c=>[c.phase,-c.boss,c.x,-c.frame];
 }
 

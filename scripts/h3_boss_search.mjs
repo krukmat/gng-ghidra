@@ -11,9 +11,10 @@
  * were completed that way (02/11/2026; docs/go-explore/README.md).
  * Success: 0x72 advances (boss defeated, key taken, gate crossed).
  * Usage: [H3_POKE=...|H3_SEED=<tape>] node scripts/h3_boss_search.mjs <phase> [start=2200] [step=60] [end=9000]
- * Env: H3_SEED earlier tape to resume from, H3_WX/H3_WY/H3_WS/H3_WU progress weights (x, max y, score, climb = start y - min y),
+ * Env: H3_SEED earlier tape to resume from, H3_WX/H3_WY/H3_WCY/H3_WS/H3_WU progress weights (x, max y, current y, score, climb = start y - min y),
  * H3_WB health penalty; H3_BOSS_LIFE comma-separated RAM health addresses (default 0xe76),
- * H3_LAST save the last beam head instead of the best, H3_WA armour-loss penalty, H3_XCAP x cap (boss arena), H3_WIDTH beam width.
+ * H3_LAST save the last beam head instead of the best, H3_WA armour-loss penalty,
+ * H3_XCAP/H3_YCAP x/current-y caps (boss arena), H3_WIDTH beam width.
  * H3_STEP overrides the positional segment length. H3_BACKTRACK=N enables
  * backtracking N segments when every live branch dies; H3_BACKTRACK_LIMIT caps
  * the number of retries (unlimited by default). Without these variables the
@@ -45,9 +46,11 @@ const K=Number(process.env.H3_STEP??ARG_K);
 const WIDTH=Number(process.env.H3_WIDTH??8);
 const BACKTRACK=Number(process.env.H3_BACKTRACK??0);
 const BACKTRACK_LIMIT=process.env.H3_BACKTRACK_LIMIT===undefined?Infinity:Number(process.env.H3_BACKTRACK_LIMIT);
-const WX=Number(process.env.H3_WX??1),WY=Number(process.env.H3_WY??0),WS=Number(process.env.H3_WS??0.02);
+const WX=Number(process.env.H3_WX??1),WY=Number(process.env.H3_WY??0),
+  WCY=Number(process.env.H3_WCY??0),WS=Number(process.env.H3_WS??0.02);
 const WU=Number(process.env.H3_WU??0),WA=Number(process.env.H3_WA??2000),
-  WB=Number(process.env.H3_WB??0),XCAP=Number(process.env.H3_XCAP??65535);
+  WB=Number(process.env.H3_WB??0),XCAP=Number(process.env.H3_XCAP??65535),
+  YCAP=Number(process.env.H3_YCAP??65535);
 const LIFE_ADDRS=(process.env.H3_BOSS_LIFE??'0xe76').split(',').map(Number);
 if(!LIFE_ADDRS.length||LIFE_ADDRS.some(a=>!Number.isInteger(a)||a<0||a>=0x3000))
   throw Error('H3_BOSS_LIFE_INVALID');
@@ -98,7 +101,8 @@ console.log('H3_BOSS_START '+JSON.stringify(s0));
 if(s0.phase!==phase)throw Error('H3_BOSS_START_PHASE '+s0.phase);
 // XCAP stops rewarding x in a boss arena.
 const value=(s,maxX,maxY,minY)=>s.phase!==phase?1e9:
-  WX*Math.min(maxX,XCAP)+WY*maxY+WU*(s0.y-minY)+WS*s.score-WA*s.armor-WB*s.boss;
+  WX*Math.min(maxX,XCAP)+WY*maxY+WCY*Math.min(s.y,YCAP)+
+  WU*(s0.y-minY)+WS*s.score-WA*s.armor-WB*s.boss;
 let branches=0,halts=0;
 let beam=[{snap:board.lab.save(),events:[],s:s0,maxX:s0.x,maxY:s0.y,minY:s0.y,v:0,route:[]}],best=beam[0],done=null;
 let depth=0,backtracks=0;

@@ -17,6 +17,7 @@
  * coin and Start). It then explores with the cyclops life in the cell; the
  * prefix is part of the new tape. H3_RANK=y (only with --from) saves the
  * highest cell (armour kept first) instead of the furthest one, for climbs.
+ * H3_RANK=height prioritises height before armour.
  * import turns a live tape (app or lab recording) into a live-recording B3
  * tape at frame starts, replays it on this bundle and requires the record
  * hash of the tape's check (--unverified accepts a tape without one). It also
@@ -111,7 +112,7 @@ async function explore(seed,iters,minutes,from){
     }
     if(Date.now()-tLog>=30000){tLog=Date.now();
       console.log('H3_EXPLORE_PROGRESS s='+Math.round((tLog-t0)/1000)+' iters='+n+' cells='+list.length+
-        ' fps='+Math.round(frames/((tLog-t0)/1000))+' best='+JSON.stringify({x:best.x,scroll:best.scroll,frame:best.frame,armor:best.armor,boss:best.boss}));}
+        ' fps='+Math.round(frames/((tLog-t0)/1000))+' best='+JSON.stringify({x:best.x,y:best.y,scroll:best.scroll,frame:best.frame,armor:best.armor,boss:best.boss}));}
   }
   const seconds=(Date.now()-t0)/1000;
   mkdirSync(OUT,{recursive:true,mode:0o700});

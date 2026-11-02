@@ -1,6 +1,6 @@
 # Go-Explore y exploración H3 — entrada canónica
 
-**Estado (2026-11-02):** fases visibles 1–5 completadas desde reset con cintas de solo entradas, replay `MATCH`, vídeo y métricas. La fase visible 6 no tiene encargo todavía. V2–V4 del [plan del bot de control](../plan-bot-control-jugabilidad-2026-11-01.md) no iniciados.
+**Estado (2026-11-02):** fases visibles 1–5 completadas desde reset con cintas de solo entradas, replay `MATCH`, vídeo y métricas. Fase visible 6 aparcada: el primer intento derrotó a los dos jefes, pero el juego exigió el escudo y devolvió a la fase visible 5. V2–V4 del [plan del bot de control](../plan-bot-control-jugabilidad-2026-11-01.md) no iniciados.
 
 Este documento es la referencia vigente para ejecutar, reproducir y verificar las herramientas de exploración H3. Los handoffs y planes enlazados en [§9](#9-documentos-históricos) conservan la evidencia y el razonamiento de cada etapa, pero sus instrucciones ya no están vigentes.
 
@@ -82,7 +82,7 @@ node scripts/h3_explore.mjs import <live-tape.json> [frame] [--unverified]
 
 - **explore** (0 GO, 2 sin objetivo, 3 fallo):
   - Sin `--from`, arranca con `titleCoinStart` y las máscaras P1 empiezan en el frame 1200. El objetivo es `0x72=0` y `scroll ≥ 3072` (arena del jefe de la fase 1).
-  - Con `--from`, reproduce la cinta hasta `h3.goalFrame` y exige `h3.ramSha` igual. Si la cinta tiene `inputsLive=false`, se niega a arrancar. El objetivo es `0x72 ≠` la fase inicial. `H3_RANK=y` ordena la mejor celda por altura, para subidas ([§6](#6-criterios-de-búsqueda)).
+  - Con `--from`, reproduce la cinta hasta `h3.goalFrame` y exige `h3.ramSha` igual. Si la cinta tiene `inputsLive=false`, se niega a arrancar. El objetivo es `0x72 ≠` la fase inicial. `H3_RANK=y` ordena por armadura y después altura; `H3_RANK=height` prioriza altura ([§6](#6-criterios-de-búsqueda)).
   - Escribe `out/h3/explore/cells-[s2-]s<seed>-i<iters>.json` (sin snapshots) y `tape-[s2-]s<seed>-<frame>-{arena|phase|best}.json`, con `frames = goalFrame + 60`. El prefijo `s2-` indica `--from`, sea cual sea la fase. La cinta suelta todos los controles en `goalFrame`, así que un haz que continúe desde ella empieza en `goalFrame + 1`.
 - **replay** (0 `MATCH`/`NO_REFERENCE`, 1 `MISMATCH`, 3 parada): reproduce desde reset sin restore hasta `h3.goalFrame`. Compara `ramSha`, `signal` y, si existe, `transitionFrame`.
 - **import**: produce `tape-live-<nombre>-<frame>.json` y fija `inputsLive`. Termina con código 3 si `check.record_sha256` falla, o si no hay check y falta `--unverified`.
@@ -95,7 +95,7 @@ node scripts/h3_explore.mjs import <live-tape.json> [frame] [--unverified]
 
 - `<fase-RAM>` es el valor de `0x72` que debe tener la placa en `start`; si no coincide, falla con `H3_BOSS_START_PHASE`.
 - En cada profundidad prueba las 14 acciones desde cada miembro del haz. Poda las ramas muertas o con vidas perdidas, deduplica por posición, armadura, handler, puntuación y scroll, y se queda con `H3_WIDTH` ramas.
-- Valor de una rama: `WX·min(maxX, XCAP) + WY·maxY + WU·(y0 − minY) + WS·score − WA·armor − WB·Σvida`.
+- Valor de una rama: `WX·min(maxX, XCAP) + WY·maxY + WCY·min(Y, YCAP) + WU·(y0 − minY) + WS·score − WA·armor − WB·Σvida`.
 - Escribe `out/h3/boss/search-p<fase>-<frame>.json` con `frames = frame + 300` y `h3:{poke, route, ...}` (0 `PHASE_ADVANCED`, 2 sin avance). Sin `H3_POKE`, `h3` añade `goalFrame` (la cabeza guardada), `signal` y `ramSha`: `replay` la verifica y `explore --from` continúa desde ella. Estos campos no cambian el SHA de la cinta.
 
 ### `h3_boss_maneuver.mjs`
@@ -159,13 +159,14 @@ node scripts/h3_tape.mjs selftest | selftest-rewind | record | convert <journal.
 | `H3_STEP` | boss_search / maneuver | posicional / 23 | Longitud del segmento en frames. |
 | `H3_WIDTH` | boss_search | 8 | Ancho del haz. |
 | `H3_WX`, `H3_WY`, `H3_WU`, `H3_WS` | boss_search | 1, 0, 0, 0.02 | Pesos de X máxima, Y máxima, subida (`y0 − minY`) y puntuación. |
+| `H3_WCY`, `H3_YCAP` | boss_search | 0, 65535 | Peso de Y actual y su tope; evita premiar una altura ya abandonada. |
 | `H3_WA` | boss_search | 2000 | Penalización por perder la armadura. |
 | `H3_WB`, `H3_BOSS_LIFE` | boss_search | 0, `0xe76` | Peso y direcciones de vida sumadas. Ver [§8](#8-limitaciones-reales). |
 | `H3_XCAP` | boss_search | 65535 | Tope de X premiada (arenas). |
 | `H3_LAST` | boss_search | — | Guarda la cabeza final del haz en lugar de la mejor. |
 | `H3_BACKTRACK`, `H3_BACKTRACK_LIMIT` | boss_search | 0, ilimitado | Retrocede N segmentos cuando mueren todas las ramas. |
 | `H3_DEBUG` | boss_search | — | Registra cada rama podada. |
-| `H3_RANK` | explore | `x` | Solo con `--from`: `y` guarda como mejor celda la más alta (antes, la que conserva la armadura) en lugar de la de más X. Para subidas en las que X y scroll no crecen. |
+| `H3_RANK` | explore | `x` | Solo con `--from`: `y` ordena por armadura y luego altura; `height`, por altura y luego armadura. Para subidas en las que X y scroll no crecen. |
 | `H3_HORIZON` | maneuver | 240 (máx.) | Horizonte de cada ruta. |
 | `H3_MANEUVER_REF` | maneuver | — | `<ram.bin>:<firstRecord>` de una traza para comparar el control. |
 | `H3_TRACE_WATCH`, `H3_TRACE_BASELINE` | trace | `0x510:2`, — | Rango vigilado y comparación con una salida de inspect. |
@@ -192,7 +193,7 @@ node scripts/h3_tape.mjs selftest | selftest-rewind | record | convert <journal.
   - Cada celda guarda la trayectoria que conserva la armadura y, a igualdad, la que tarda menos frames.
   - Selección: peso `(1 + scrollBonus·min(scroll, 3072)/3072)/√(1+elegida)`.
   - Exploración: 120 frames de acciones pegajosas, generadas con mulberry32 de semilla fija y evaluadas cada 4 frames. La rama se corta al primer estado fatal. Un impacto con armadura no corta; genera otra celda.
-  - Mejor celda en S1: scroll y luego X. Con `--from`: fase, luego menos vida y luego X. Con `H3_RANK=y`: fase, armadura conservada y luego altura Y.
+  - Mejor celda en S1: scroll y luego X. Con `--from`: fase, luego menos vida y luego X. Con `H3_RANK=y`: fase, armadura conservada y luego altura Y. Con `H3_RANK=height`: fase, altura y luego armadura; permite continuar desde una planta superior aunque una recogida de armadura deje una celda mejor equipada más abajo.
 - **Haz.** Macros fijas (`right`, `right_fire`, `right_jump`, `right_fire_jump`, `right_late_jump`, `fire`, `jump`, `duck_fire`, `left`, `left_fire`, `left_jump`, `up`, `up_fire`, `down`) con el valor de §3. Sirvió para avanzar en las fases 2 y 3 con segmentos de 120 frames en tramos abiertos y de 60 junto a peligros. En la torre de la fase 5, el valor por `maxY` engaña cuando la siguiente escalera queda lejos del máximo. Allí se alternó Go-Explore con `H3_RANK=y` (escaleras) y el haz con `H3_WY=3 H3_WS=1` (enemigos y jefe).
 - **Maniobras.** Rutas cortas escritas a mano tras una observación (por ejemplo, ir a por la llave y esperar la transición). No buscan: comparan como máximo tres variantes contra el control.
 - **Cierre de fase.** Matar al jefe no cierra la fase: en las fases 1–5 hubo que esperar a que apareciera la llave y recogerla. Premiar la X deja al bot esperando en el extremo derecho. El criterio de cierre es siempre la transición RAM `0x72`, comprobada en el replay y en el vídeo.
@@ -242,6 +243,8 @@ Conservan la evidencia de cada etapa en su documento de origen. Sus instruccione
 ## 10. Resultados verificados
 
 Todas las cintas son de solo entradas, sin poke y sobre el bundle g6. El 2026-11-02 se repitieron `replay` de las cuatro cintas (todas `MATCH`) y `h3_video.mjs check` en el frame 22380 (`PASS`, RGBA `e9e8fe44…`). No se regeneraron vídeos ni se repitieron búsquedas.
+
+**Fase visible 6, aparcada.** El intento reproducible `out/h3/boss/search-p5-45828.json` (SHA-256 `67dc51ddfd05334a3978f8355b2b04ecb1f482facfe1e495ea0571e9ebe99d77`) derrota a los dos jefes, pero lleva `0x73=4`. El juego muestra `THIS WEAPON HAS NOT EFFECT... TRY AGAIN!! GET A` junto al escudo y cambia `0x72:5→4` en el frame 45814; por tanto no cumple el objetivo `5→6` ni constituye un segundo ciclo. Su replay da `MATCH`. El vídeo diagnóstico `out/h3/video/search-p5-45828-67dc51dd-36091-45828.mp4` cubre los frames 36091–45828, pasa la decodificación completa y la paridad RGBA en el frame 45528; SHA-256 `3f4d6abd8bc4617501918a586102f4e7e4b3b72ba64920f4ab289d7663cf71da`. La continuación queda aparcada hasta determinar una ruta de solo entradas que obtenga el escudo (`0x73=3`). No existe todavía cinta final, `fase6.mp4` ni gate de aceptación.
 
 | Fase visible | `0x72` | Transición | Cinta final (`out/h3/explore/`) | SHA-256 cinta | RAM en `goalFrame` |
 | --- | --- | --- | --- | --- | --- |
