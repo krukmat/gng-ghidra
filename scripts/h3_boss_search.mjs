@@ -11,6 +11,7 @@
  * Success: 0x72 advances (boss defeated, key taken, gate crossed).
  * Usage: H3_POKE=... node scripts/h3_boss_search.mjs <phase> [start=2200] [step=60] [end=9000]
  * Env: H3_SEED earlier tape to resume from, H3_WX/H3_WY/H3_WS/H3_WU progress weights (x, max y, score, climb = start y - min y),
+ * H3_WB health penalty; H3_BOSS_LIFE comma-separated RAM health addresses (default 0xe76),
  * H3_LAST save the last beam head instead of the best, H3_WA armour-loss penalty, H3_XCAP x cap (boss arena), H3_WIDTH beam width.
  * H3_STEP overrides the positional segment length. H3_BACKTRACK=N enables
  * backtracking N segments when every live branch dies; H3_BACKTRACK_LIMIT caps
@@ -42,7 +43,12 @@ const WIDTH=Number(process.env.H3_WIDTH??8);
 const BACKTRACK=Number(process.env.H3_BACKTRACK??0);
 const BACKTRACK_LIMIT=process.env.H3_BACKTRACK_LIMIT===undefined?Infinity:Number(process.env.H3_BACKTRACK_LIMIT);
 const WX=Number(process.env.H3_WX??1),WY=Number(process.env.H3_WY??0),WS=Number(process.env.H3_WS??0.02);
-const WU=Number(process.env.H3_WU??0),WA=Number(process.env.H3_WA??2000),XCAP=Number(process.env.H3_XCAP??65535);
+const WU=Number(process.env.H3_WU??0),WA=Number(process.env.H3_WA??2000),
+  WB=Number(process.env.H3_WB??0),XCAP=Number(process.env.H3_XCAP??65535);
+const LIFE_ADDRS=(process.env.H3_BOSS_LIFE??'0xe76').split(',').map(Number);
+if(!LIFE_ADDRS.length||LIFE_ADDRS.some(a=>!Number.isInteger(a)||a<0||a>=0x3000))
+  throw Error('H3_BOSS_LIFE_INVALID');
+const LOOK_BYTES=Math.max(0xe77,...LIFE_ADDRS.map(a=>a+1));
 if(!Number.isInteger(K)||K<1)throw Error('H3_STEP_INVALID '+K);
 if(!Number.isInteger(WIDTH)||WIDTH<1)throw Error('H3_WIDTH_INVALID '+WIDTH);
 if(!Number.isInteger(BACKTRACK)||BACKTRACK<0)throw Error('H3_BACKTRACK_INVALID '+BACKTRACK);
@@ -69,7 +75,8 @@ function segment(start,action){
 }
 const bcd=b=>[0x68,0x69,0x6a,0x6b].reduce((v,a)=>v*100+(b[a]>>4)*10+(b[a]&15),0);
 const look=b=>({phase:b[0x72],cp:b[0x81],loop:b[0x71],lives:b[0x60],x:b[0xa0]<<8|b[0xa1],y:b[0xa2]<<8|b[0xa3],
-  handler:b[0x510]<<8|b[0x511],armor:b[0xac],score:bcd(b),scroll:b[0x58]<<8|b[0x59]});
+  handler:b[0x510]<<8|b[0x511],armor:b[0xac],score:bcd(b),scroll:b[0x58]<<8|b[0x59],
+  boss:LIFE_ADDRS.reduce((sum,a)=>sum+b[a],0)});
 let schedule=defineInputSchedule(base),dead=false,board;
 board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
   manifest.files['gngb_runtime.mjs'],code,blocks,{frames:END,
@@ -79,15 +86,16 @@ board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
       board.state.records[i-1]=null;
       applyLabPokes(POKES,board.state,i);
       const h=r.record[0x510]<<8|r.record[0x511];
-      if(i>START&&(h<0x6000||r.record[0xac]&&(h===0x8e05||h===0x9c64||(h&0xffe0)===0x9c40)))dead=true;
+      if(i>START&&(h<0x6000||r.record[0xac]&&
+        (r.record[0x503]===3||h===0x8e05||h===0x9c64||(h&0xffe0)===0x9c40)))dead=true;
     }});
 if(board.lab.advanceTo(START).status!=='FRAMES_DONE')throw Error('H3_BOSS_START_FAILED');
-const s0=look(board.state.ramBytes(0,0x600).bytes);
+const s0=look(board.state.ramBytes(0,LOOK_BYTES).bytes);
 console.log('H3_BOSS_START '+JSON.stringify(s0));
 if(s0.phase!==phase)throw Error('H3_BOSS_START_PHASE '+s0.phase);
 // XCAP stops rewarding x in a boss arena.
 const value=(s,maxX,maxY,minY)=>s.phase!==phase?1e9:
-  WX*Math.min(maxX,XCAP)+WY*maxY+WU*(s0.y-minY)+WS*s.score-WA*s.armor;
+  WX*Math.min(maxX,XCAP)+WY*maxY+WU*(s0.y-minY)+WS*s.score-WA*s.armor-WB*s.boss;
 let branches=0,halts=0;
 let beam=[{snap:board.lab.save(),events:[],s:s0,maxX:s0.x,maxY:s0.y,minY:s0.y,v:0,route:[]}],best=beam[0],done=null;
 let depth=0,backtracks=0;
@@ -101,7 +109,7 @@ while(START+(depth+1)*K<=END&&!done){
     schedule=defineInputSchedule([...base,...events]);
     const res=board.lab.advanceTo(frame+K);branches++;
     if(res.status!=='FRAMES_DONE'){halts++;console.log('H3_BOSS_HALT '+frame+' '+a+' '+res.status+' pc='+res.pc);continue;}
-    const s=look(board.state.ramBytes(0,0x600).bytes);
+    const s=look(board.state.ramBytes(0,LOOK_BYTES).bytes);
     if(s.phase===phase&&(dead||s.lives<p.s.lives)){
       if(process.env.H3_DEBUG)console.log('H3_BOSS_PRUNE f='+frame+' '+a+' dead='+dead+' '+JSON.stringify(s));
       continue;}

@@ -42,6 +42,16 @@ for(const m of maneuvers){
   if(m.events.some(e=>e.cycle>=(END+1)*CYCLES_PER_FRAME))throw Error('H3_MANEUVER_PAST_HORIZON '+m.name);
 }
 const prefix=tape.events.filter(e=>e.cycle<cut);
+const held=new Set();
+for(const e of prefix)if(e.pressed)held.add(e.control);else held.delete(e.control);
+const replaceTail=events=>{
+  const starting=new Set(events.filter(e=>e.cycle===cut&&e.pressed).map(e=>e.control));
+  return [
+    ...[...held].filter(control=>!starting.has(control))
+      .map(control=>({cycle:cut,control,pressed:false})),
+    ...events.filter(e=>!(e.cycle===cut&&e.pressed&&held.has(e.control)))
+  ].sort((a,b)=>a.cycle-b.cycle||a.control.localeCompare(b.control));
+};
 const pokes=parseLabPokes(raw.h3?.poke??'');
 const selected=selectB3Bundle(ROOT);
 if(!selected)throw Error('V3_B3_NO_CERTIFIED_BUNDLE');
@@ -79,14 +89,15 @@ const out=join(ROOT,'out/h3/boss/f2');
 mkdirSync(out,{recursive:true,mode:0o700});
 for(const v of runs){
   board.lab.restore(pre);rows=[];hash=createHash('sha256');checking=v.name==='control'&&!!ref;
-  schedule=defineInputSchedule([...prefix,...v.events]);
+  const tail=v.name==='control'?v.events:replaceTail(v.events);
+  schedule=defineInputSchedule([...prefix,...tail]);
   v.status=board.lab.advanceTo(END).status;
   v.recordsSha256=hash.digest('hex');
   v.outcome=maneuverOutcome(rows,{lives:start.lives});
   v.rows=rows;
   if(v.name!=='control'){
-    const metadata={schema:raw.schema,profile:raw.profile,frames:END,
-      events:defineInputSchedule([...prefix,...v.events]).events};
+    const metadata={schema:raw.schema,profile:raw.profile,frames:END+1,
+      events:defineInputSchedule([...prefix,...tail]).events};
     v.tapeSha256=createHash('sha256').update(JSON.stringify(metadata)).digest('hex');
     v.tape=join(out,`maneuver-${P}-${v.name}.json`).slice(ROOT.length+1);
     writeFileSync(join(ROOT,v.tape),JSON.stringify({...metadata,sha256:v.tapeSha256,
