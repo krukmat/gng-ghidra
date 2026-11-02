@@ -122,13 +122,17 @@ export function bestRank(from,mode='x',policy=null){
 }
 
 /** Weighted pick: rarely chosen cells first, slight bonus for scroll. */
-export function pickCell(cells,rand,scrollBonus=EXPLORE_DEFAULTS.scrollBonus){
-  let total=0;const w=cells.map(c=>{
+export function pickCell(cells,rand,scrollBonus=EXPLORE_DEFAULTS.scrollBonus,policy=null){
+  // Once Shield/Cross has been acquired, devote 80% of picks to equipped
+  // cells while reserving 20% for alternate item routes. No change elsewhere.
+  const armed=policy?cells.filter(c=>weaponPriority(c,policy)):null;
+  const pool=armed?.length&&rand()<0.8?armed:cells;
+  let total=0;const w=pool.map(c=>{
     const v=(1+scrollBonus*Math.min(c.scroll,3072)/3072)/Math.sqrt(1+c.chosen);
     total+=v;return v;});
   let r=rand()*total;
-  for(let i=0;i<cells.length;i++){r-=w[i];if(r<0)return cells[i];}
-  return cells.at(-1);
+  for(let i=0;i<pool.length;i++){r-=w[i];if(r<0)return pool[i];}
+  return pool.at(-1);
 }
 
 export const sha256=x=>createHash('sha256').update(x).digest('hex');
