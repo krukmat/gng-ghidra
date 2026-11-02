@@ -39,7 +39,7 @@ import {resolveB3LabTape} from '../src/v3_b3_external_tape.mjs';
 import {LIVE_TAPE_SCHEMA} from '../src/v3_b3_live_tape.mjs';
 import {liveToEvents} from '../src/h3_live_import.mjs';
 import {EXPLORE_DEFAULTS as P,P1_BITS,prng,chunkMasks,extendMasks,masksToEvents,eventsToMasks,look,lookBoss,BOSS_LIFE,
-  isFatal,cellKey,better,bestRank,pickCell,sha256,cellsListing} from '../src/h3_explore.mjs';
+  isFatal,cellKey,better,bestRank,pickCell,sha256,cellsListing,ITEM_COUNTER,itemStage,CARRIER_COUNTDOWN,shieldLost} from '../src/h3_explore.mjs';
 import {weaponPolicyForPhase,phaseOutcome,progressionCandidate} from '../src/h3_weapon_policy.mjs';
 import {selectExploreGoal,exploreGoalSatisfied,WEAPON_GOAL} from '../src/h3_weapon_goal.mjs';
 
@@ -49,7 +49,7 @@ if(!selected)throw Error('V3_B3_NO_CERTIFIED_BUNDLE');
 const GEN=basename(dirname(selected.dir));
 const {manifest,code}=loadFrozen(selected.dir);
 const {blocks}=await import(pathToFileURL(join(selected.dir,'program.mjs')).href);
-const START=1200,ARENA=3072,MAX_FRAMES=60000;
+const START=1200,ARENA=3072,MAX_FRAMES=120000; // phase 6 needs the stage-5 replay after the shield rollback
 const OUT=join(ROOT,'out/h3/explore');
 
 async function makeBoard(portRead,perFrame){
@@ -75,6 +75,9 @@ async function explore(seed,iters,minutes,from){
   let fatalAt=0,livesRef=null,phaseRef=null,phaseAt=0;
   let previousWeapon=null,weaponAtTransition=null,weaponPickupFrame=null;
   let objectivePhase=null;
+  // H3_RANK=items: item spawns (0x7d changes) along the restored trajectory.
+  // A Shield/Cross item that leaves the slot unpicked ends the branch (lostAt).
+  let spawnCount=0,itemPrev=null,trackItems=false,slotPrev=null,lostAt=0;
   const board=await makeBoard((addr,cycle)=>addr===0x3001&&cycle>=START*CPF?
     0xff^cur[Math.floor(cycle/CPF)-START]:readScheduledPort(base,addr,cycle),
   (i,rec)=>{const s=look(rec);
@@ -86,7 +89,10 @@ async function explore(seed,iters,minutes,from){
     if(objectivePhase===s.phase&&previousWeapon!==null&&
       previousWeapon!==rec[0x73]&&rec[0x73]===3&&weaponPickupFrame===null)
       weaponPickupFrame=i;
-    previousWeapon=rec[0x73];});
+    previousWeapon=rec[0x73];
+    if(itemPrev!==null&&rec[ITEM_COUNTER]!==itemPrev)spawnCount++;
+    itemPrev=rec[ITEM_COUNTER];
+    if(trackItems){if(slotPrev&&!lostAt&&shieldLost(slotPrev,rec))lostAt=i;slotPrev={[0x15d2]:rec[0x15d2],[0x15d4]:rec[0x15d4]};}});
   let prefix=new Uint8Array(0),source=null;
   if(from){
     prefix=eventsToMasks(START,seedCut,src);
@@ -96,8 +102,9 @@ async function explore(seed,iters,minutes,from){
     if(meta.inputsLive===false)fail('H3_EXPLORE_FROM_INPUTS_IGNORED');
     source={file:basename(from),sha256:tape.sha256,goalFrame:first,ramSha:meta.ramSha};
   }else if(board.lab.advanceTo(START).status!=='FRAMES_DONE')fail('H3_EXPLORE_START_FAILED');
-  const view=from?()=>lookBoss(ram(board,BOSS_LIFE+1)):()=>look(ram(board));
-  const s0=view();phaseRef=from?s0.phase:null;
+  const rankMode=process.env.H3_RANK??'x',items=!!from&&rankMode==='items';
+  const view=from?()=>({...lookBoss(ram(board,BOSS_LIFE+1)),...items?{spawns:spawnCount,...(b=>({item:itemStage(b),gen:b[CARRIER_COUNTDOWN]}))(ram(board,0x15d6))}:{}}):()=>look(ram(board));
+  spawnCount=0;trackItems=items;const s0=view();phaseRef=from?s0.phase:null; // spawns count from the seed cut
   const policy=from?weaponPolicyForPhase(s0.phase):null;
   const requestedGoal=process.env.H3_GOAL??'phase';
   if(!from&&requestedGoal!==WEAPON_GOAL&&requestedGoal!=='phase')
@@ -112,7 +119,7 @@ async function explore(seed,iters,minutes,from){
   const root={...s0,key:cellKey(s0),frame:first,masks:prefix,snap:board.lab.save(),chosen:0};
   const cells=new Map([[root.key,root]]),list=[root];
   // S1: scroll to the arena. S2: phase, then less boss life, then X (H3_RANK=y: armour, then height).
-  const rankMode=process.env.H3_RANK??'x',rank=bestRank(from,rankMode,policy);
+  const rank=bestRank(from,rankMode,policy);
   const isGoal=s=>exploreGoalSatisfied(objective,from?s0:null,s,weaponAtTransition);
   const ahead=(a,b)=>{const x=rank(a),y=rank(b);for(let i=0;i<x.length;i++)
     if(x[i]!==y[i])return x[i]>y[i];return false;};
@@ -120,8 +127,10 @@ async function explore(seed,iters,minutes,from){
   let acquiredFrame=null;
   const t0=Date.now();let tLog=t0;
   while(n<iters&&Date.now()-t0<minutes*60000&&!goal&&!halt){
-    const c=pickCell(list,rand,P.scrollBonus,policy);c.chosen++;n++;
+    const c=pickCell(list,rand,P.scrollBonus,policy,items?P.spawnBias:1);c.chosen++;n++;
     board.lab.restore(c.snap);fatalAt=0;phaseAt=0;weaponAtTransition=null;
+    spawnCount=c.spawns??0;itemPrev=items?ram(board,ITEM_COUNTER+1)[ITEM_COUNTER]:null;
+    slotPrev=items?(b=>({[0x15d2]:b[0x15d2],[0x15d4]:b[0x15d4]}))(ram(board,0x15d6)):null;lostAt=0;
     weaponPickupFrame=null;
     previousWeapon=c.weapon??null;livesRef=c.lives;
     const len=c.masks.length;
@@ -129,7 +138,7 @@ async function explore(seed,iters,minutes,from){
     for(let k=P.evalEvery;k<=P.chunk;k+=P.evalEvery){
       const f=c.frame+k,res=board.lab.advanceTo(f);frames+=P.evalEvery;
       if(res.status!=='FRAMES_DONE'){halt={frame:f,...res};break;}
-      if(fatalAt){cuts++;break;}
+      if(fatalAt||lostAt){cuts++;break;}
       const s=view(),outcome=from?phaseOutcome(s0.phase,s.phase,
         weaponAtTransition??s.weapon,policy):'UNCHANGED';
       if(from&&s.phase!==s0.phase&&!progressionCandidate(outcome)){
@@ -154,7 +163,7 @@ async function explore(seed,iters,minutes,from){
     }
     if(Date.now()-tLog>=30000){tLog=Date.now();
       console.log('H3_EXPLORE_PROGRESS s='+Math.round((tLog-t0)/1000)+' iters='+n+' cells='+list.length+
-        ' fps='+Math.round(frames/((tLog-t0)/1000))+' best='+JSON.stringify({x:best.x,y:best.y,scroll:best.scroll,frame:best.frame,armor:best.armor,boss:best.boss}));}
+        ' fps='+Math.round(frames/((tLog-t0)/1000))+' best='+JSON.stringify({x:best.x,y:best.y,scroll:best.scroll,frame:best.frame,armor:best.armor,boss:best.boss,spawns:best.spawns,item:best.item,gen:best.gen,weapon:best.weapon}));}
   }
   const seconds=(Date.now()-t0)/1000;
   mkdirSync(OUT,{recursive:true,mode:0o700});

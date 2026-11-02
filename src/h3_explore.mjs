@@ -32,7 +32,9 @@ export function prng(seed){
 export const EXPLORE_DEFAULTS=Object.freeze({chunk:120,evalEvery:4,
   // none,right,left,down,up: biased to the right, ladders still reachable.
   dirWeights:Object.freeze([0.12,0.55,0.15,0.08,0.10]),holdMin:4,holdMax:32,
-  fireRate:0.08,fireMin:2,fireMax:5,jumpRate:0.05,jumpMin:2,jumpMax:8,scrollBonus:1});
+  fireRate:0.08,fireMin:2,fireMax:5,jumpRate:0.05,jumpMin:2,jumpMax:8,scrollBonus:1,
+  // H3_RANK=items only: selection weight factor per item spawn on the trajectory.
+  spawnBias:4});
 
 /** `n` sticky masks after `prev`: a direction is held several frames; fire
  * and jump are presses of a few frames, always followed by a released
@@ -104,7 +106,24 @@ export const lookBoss=b=>({...look(b),boss:b[BOSS_LIFE],weapon:b[0x73]});
 export const isFatal=(s,lives)=>maneuverFatal(s,lives);
 /** S1 key; with lookBoss() (S2) the boss life is one more component. */
 export const cellKey=s=>[s.phase,s.cp,s.x>>4,s.y>>3,s.armor,...'boss' in s?[s.boss]:[],
-  ...s.phase===5&&'weapon' in s?[s.weapon]:[]].join(':');
+  ...s.phase===5&&'weapon' in s?[s.weapon]:[],...'spawns' in s?['i'+s.spawns+'.'+s.item+'.'+s.gen]:[]].join(':');
+/** Item-spawn counter 0x7d (ROM 0xebd7, cycle 0..6; classes 2 and 6 draw a
+ * weapon from the 0x78..0x7c accumulator). H3_RANK=items counts its changes
+ * along a trajectory: read only, a progress measure towards a later draw. */
+export const ITEM_COUNTER=0x7d;
+/** Item slot 0x15d2 (state 0x15d5, carrier pointer 0x15f0): 0 while its
+ * carrier waits off-screen, 1 once the carrier is active (or the item
+ * dropped), 2 when the slot is free again for the next spawn. */
+export const itemStage=b=>b[0x15d2]===0?2:b[0x15d4]===SHIELD_ITEM?3+Math.min(b[0x15d5],2):b[0x15d5]===0?0:1;
+/** Item type of Shield/Cross in 0x15d4 (pickup ROM 0xe7b7: weapon = type-1).
+ * In the slot it ranks above a free slot: 3 waiting, 4 carried, 5 dropped. */
+export const SHIELD_ITEM=4;
+/** True when the Shield/Cross item has just left the slot without a pickup. */
+export const shieldLost=(prev,b)=>prev[0x15d2]===1&&prev[0x15d4]===SHIELD_ITEM&&
+  !(b[0x15d2]===1&&b[0x15d4]===SHIELD_ITEM)&&b[0x73]!==3;
+/** Enemies left before the next carrier (0xb0, ROM 0xebba: 6..1, reloaded to 6
+ * when the generator spawns a carrier; the item needs the slot free then). */
+export const CARRIER_COUNTDOWN=0xb0;
 /** True when `c` beats `old` for the same cell (armour first, then frames). */
 export const better=(c,old)=>!old||c.armor<old.armor||c.armor===old.armor&&c.frame<old.frame;
 
@@ -113,8 +132,9 @@ export const better=(c,old)=>!old||c.armor<old.armor||c.armor===old.armor&&c.fra
  * where X and scroll stop growing): phase, armour kept, then height Y.
  * 'height' puts height before armour, so a pickup cannot hide higher cells. */
 export function bestRank(from,mode='x',policy=null){
-  if(!['x','y','height'].includes(mode))throw Error('H3_RANK_INVALID '+mode);
+  if(!['x','y','height','items'].includes(mode))throw Error('H3_RANK_INVALID '+mode);
   const base=!from?c=>[c.phase===0?c.scroll:-1,c.x,-c.frame,0]:
+    mode==='items'?c=>[c.phase,c.spawns??0,c.item??0,-(c.gen??0),c.y,-c.frame]:
     mode==='height'?c=>[c.phase,c.y,-c.armor,-c.frame]:
     mode==='y'?c=>[c.phase,-c.armor,c.y,-c.frame]:
     c=>[c.phase,-c.boss,c.x,-c.frame];
@@ -122,13 +142,13 @@ export function bestRank(from,mode='x',policy=null){
 }
 
 /** Weighted pick: rarely chosen cells first, slight bonus for scroll. */
-export function pickCell(cells,rand,scrollBonus=EXPLORE_DEFAULTS.scrollBonus,policy=null){
+export function pickCell(cells,rand,scrollBonus=EXPLORE_DEFAULTS.scrollBonus,policy=null,spawnBias=1){
   // Once Shield/Cross has been acquired, devote 80% of picks to equipped
   // cells while reserving 20% for alternate item routes. No change elsewhere.
   const armed=policy?cells.filter(c=>weaponPriority(c,policy)):null;
   const pool=armed?.length&&rand()<0.8?armed:cells;
   let total=0;const w=pool.map(c=>{
-    const v=(1+scrollBonus*Math.min(c.scroll,3072)/3072)/Math.sqrt(1+c.chosen);
+    const v=(1+scrollBonus*Math.min(c.scroll,3072)/3072)*spawnBias**((c.spawns??0)+(c.item??0)/2+(c.item===2?(6-(c.gen??6))/12:0))/Math.sqrt(1+c.chosen);
     total+=v;return v;});
   let r=rand()*total;
   for(let i=0;i<pool.length;i++){r-=w[i];if(r<0)return pool[i];}
@@ -139,5 +159,5 @@ export const sha256=x=>createHash('sha256').update(x).digest('hex');
 /** Canonical cell listing (no snapshots), stable for determinism checks. */
 export const cellsListing=cells=>[...cells].sort((a,b)=>a.key<b.key?-1:a.key>b.key?1:0)
   .map(c=>({key:c.key,frame:c.frame,armor:c.armor,x:c.x,y:c.y,scroll:c.scroll,boss:c.boss,
-    ...c.phase===5&&'weapon' in c?{weapon:c.weapon}:{},
+    ...c.phase===5&&'weapon' in c?{weapon:c.weapon}:{},...'spawns' in c?{spawns:c.spawns,item:c.item,gen:c.gen}:{},
     chosen:c.chosen,masks:sha256(c.masks)}));

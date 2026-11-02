@@ -27,7 +27,7 @@ if(!(/^[a-f0-9]{64}$/).test(raw.h3?.ramSha??''))
 if(raw.h3?.poke)throw Error('H3_WEAPON_PROBE_POKE_FORBIDDEN');
 const tape=resolveB3LabTape(file);
 const selected=selectB3Bundle(ROOT);
-if(selected?.generation!=='g6')throw Error('H3_WEAPON_PROBE_G6_REQUIRED');
+if(selected?.generation!==6)throw Error('H3_WEAPON_PROBE_G6_REQUIRED');
 const {manifest,code}=loadFrozen(selected.dir);
 const {blocks}=await import(pathToFileURL(join(selected.dir,'program.mjs')).href);
 let previous=null,first=null,last=null,changes=[],phases=[];
