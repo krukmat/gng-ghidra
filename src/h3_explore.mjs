@@ -4,6 +4,7 @@
  * only inputs. Cells are (phase, checkpoint, X>>4, Y>>3, armour); a cell
  * keeps the trajectory that preserves the armour and, at equal armour,
  * reaches it in fewer frames. Everything is a pure function of the seed.
+ * Phase RAM=5 also distinguishes current weapon (0x73) in its cell key.
  * S2 (from the arena) adds the cyclops life to the cell: object slot 0x0E50,
  * life byte +0x26 = 0x0E76, 5 at the arena, one less per lance hit, 0 on the
  * kill (+2000 points, slot state 0x0E50 1->2); unchanged without fire.
@@ -12,6 +13,7 @@ import {createHash} from 'node:crypto';
 import {CYCLES_PER_FRAME} from './gngb_runtime.mjs';
 import {maneuverFatal} from './h3_lab_maneuver.mjs';
 import {look,BOSS_LIFE} from '../games/gngb/state.mjs';
+import {weaponPriority} from './h3_weapon_policy.mjs';
 
 export const P1_BITS=Object.freeze({'p1.right':1,'p1.left':2,'p1.down':4,'p1.up':8,
   'p1.button1':16,'p1.button2':32});
@@ -98,10 +100,11 @@ export function eventsToMasks(start,end,events){
 /** RAM labels (read only) of one 0x600-byte view, owned by the game. */
 export {look,BOSS_LIFE};
 /** look() plus the cyclops life; `b` must cover BOSS_LIFE. */
-export const lookBoss=b=>({...look(b),boss:b[BOSS_LIFE]});
+export const lookBoss=b=>({...look(b),boss:b[BOSS_LIFE],weapon:b[0x73]});
 export const isFatal=(s,lives)=>maneuverFatal(s,lives);
 /** S1 key; with lookBoss() (S2) the boss life is one more component. */
-export const cellKey=s=>[s.phase,s.cp,s.x>>4,s.y>>3,s.armor,...'boss' in s?[s.boss]:[]].join(':');
+export const cellKey=s=>[s.phase,s.cp,s.x>>4,s.y>>3,s.armor,...'boss' in s?[s.boss]:[],
+  ...s.phase===5&&'weapon' in s?[s.weapon]:[]].join(':');
 /** True when `c` beats `old` for the same cell (armour first, then frames). */
 export const better=(c,old)=>!old||c.armor<old.armor||c.armor===old.armor&&c.frame<old.frame;
 
@@ -109,11 +112,13 @@ export const better=(c,old)=>!old||c.armor<old.armor||c.armor===old.armor&&c.fra
  * phase, less boss life, then X; mode 'y' (H3_RANK=y, vertical stretches
  * where X and scroll stop growing): phase, armour kept, then height Y.
  * 'height' puts height before armour, so a pickup cannot hide higher cells. */
-export function bestRank(from,mode='x'){
+export function bestRank(from,mode='x',policy=null){
   if(!['x','y','height'].includes(mode))throw Error('H3_RANK_INVALID '+mode);
-  if(!from)return c=>[c.phase===0?c.scroll:-1,c.x,-c.frame,0];
-  if(mode==='height')return c=>[c.phase,c.y,-c.armor,-c.frame];
-  return mode==='y'?c=>[c.phase,-c.armor,c.y,-c.frame]:c=>[c.phase,-c.boss,c.x,-c.frame];
+  const base=!from?c=>[c.phase===0?c.scroll:-1,c.x,-c.frame,0]:
+    mode==='height'?c=>[c.phase,c.y,-c.armor,-c.frame]:
+    mode==='y'?c=>[c.phase,-c.armor,c.y,-c.frame]:
+    c=>[c.phase,-c.boss,c.x,-c.frame];
+  return policy?c=>[weaponPriority(c,policy),...base(c)]:base;
 }
 
 /** Weighted pick: rarely chosen cells first, slight bonus for scroll. */
@@ -130,4 +135,5 @@ export const sha256=x=>createHash('sha256').update(x).digest('hex');
 /** Canonical cell listing (no snapshots), stable for determinism checks. */
 export const cellsListing=cells=>[...cells].sort((a,b)=>a.key<b.key?-1:a.key>b.key?1:0)
   .map(c=>({key:c.key,frame:c.frame,armor:c.armor,x:c.x,y:c.y,scroll:c.scroll,boss:c.boss,
+    ...c.phase===5&&'weapon' in c?{weapon:c.weapon}:{},
     chosen:c.chosen,masks:sha256(c.masks)}));
