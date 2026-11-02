@@ -207,6 +207,17 @@ node scripts/h3_tape.mjs selftest | selftest-rewind | record | convert <journal.
 - **No impedir disparos sin el escudo:** son necesarios para abrir vasijas y obtener drops. Aún no existe una señal RAM fiable de inicio del encuentro para bloquear únicamente el combate contra los dos jefes. Tampoco se supone una fase 7 ni se infiere el segundo ciclo de un cambio en `0x72`.
 - Validación local T5 (2026-11-02): tests dirigidos **13/13 PASS**, suite `tests/test_h3_*.mjs` **25/25 PASS** y sintaxis de los cuatro módulos **PASS**. En bundle g6, semilla y candidata dieron `MATCH`; la candidata reportó `H3_REPLAY_PHASE_GUARD` con `45814: 5→4`, `weaponAtExit=4` e `INVALID_WEAPON_ROLLBACK`. Los comandos están en `out/h3/phase6/commands.log`. No ejecutar `finalize` ni `verify_h3_phase.sh 6` sin prueba de un final real.
 
+### GE-W2 — localización del escudo (rama `feature/ge-w2-shield-acquisition`)
+
+**Estado:** herramientas y tests preparados; no se ha ejecutado una nueva exploración con los archivos privados ni se ha demostrado un pickup. GE-W1 sigue certificado; fase visible 6 sigue pendiente.
+
+1. **Auditar primero la ruta histórica**, sin búsqueda ni alteraciones: `bash scripts/h3_run_logged.sh 6 node scripts/h3_weapon_probe.mjs out/h3/boss/search-p5-45828.json 36091`. Reproduce desde reset con g6, exige `ramSha` y `H3_POKE` vacío, y guarda `out/h3/phase6/weapon-probe-search-p5-45828.json` con cambios de arma (`0x73`), fase, X/Y y frame exacto. Una transición de RAM no prueba por sí sola dónde apareció el objeto; correlacionar con vídeo/sprites cuando haya candidatos.
+2. **Buscar y detenerse en la adquisición**, no en el combate final: `H3_GOAL=weapon H3_RANK=height bash scripts/h3_run_logged.sh 6 node scripts/h3_explore.mjs explore --from out/h3/explore/tape-fase5-completa-36091.json 1 6000 30`. `H3_GOAL=weapon` solo acepta una semilla de fase RAM 5 que todavía no tenga arma 3. La meta es `phase=5 && weapon=3`; genera `tape-...-weapon.json` con `h3.objective=WEAPON_ACQUIRED`, `weaponPickupFrame`, `goalFrame` y `ramSha`. Siempre exige replay `MATCH` desde reset antes de aprovechar esa cinta. **No es una finalización de fase.**
+3. Si la búsqueda no consigue el escudo, conserva `*-best.json` y `cells-*.json` para análisis; no inventes la ubicación, no asumas un segundo ciclo, no uses `H3_POKE` ni promociones `fase6`.
+4. Para continuar tras el pickup, verificar que `0x73=3` en el `goalFrame` y usar esa nueva cinta como semilla de `explore --from` (sin `H3_GOAL=weapon`) o del haz, según las condiciones. La transición de sala final sigue siendo `PROGRESSION_CANDIDATE` hasta vídeo, RAM y código.
+
+Tests puramente lógicos: `node --test tests/test_h3_weapon_goal.mjs tests/test_h3_weapon_policy.mjs tests/test_h3_explore.mjs`. El probe requiere el bundle g6, la ROM y las cintas privadas locales. Cada comando ejecutado debe registrarse con `h3_run_logged.sh`.
+
 ## 7. Determinismo y snapshots de laboratorio
 
 - El motor es determinista: la misma cinta da la misma RAM. Los snapshots (`lab.save`/`restore`) solo sirven para saltar entre ramas. Nunca escriben RAM ni entran en la cinta. La cinta final se valida reproduciéndola desde reset, sin restore.
