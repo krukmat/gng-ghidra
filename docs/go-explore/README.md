@@ -222,6 +222,7 @@ Conservan la evidencia de cada etapa en su documento de origen. Sus instruccione
 | [`agents/h3-phase2-first-hit-task.md`](../agents/h3-phase2-first-hit-task.md) | H3-F2 cerrada (27/10). Causa del impacto en X≈5464, con poke de laboratorio. |
 | [`agents/h3-phase3-bot-video-handoff.md`](../agents/h3-phase3-bot-video-handoff.md) | Encargo de la fase 3, cumplido (02/11). |
 | [`agents/h3-phase3-local-agent-kit.md`](../agents/h3-phase3-local-agent-kit.md) | Ejecución de la fase 3 (P0–P5) y defectos corregidos. |
+| [`agents/h3-phase4-bot-task.md`](../agents/h3-phase4-bot-task.md) | **Vigente:** encargo de la fase 4 (pendiente). Remite a este README. |
 | [`plan-bot-control-jugabilidad-2026-11-01.md`](../plan-bot-control-jugabilidad-2026-11-01.md) | **Vigente** como lista de tareas (V2–V4) y registro de V1. Los detalles operativos remiten aquí. |
 
 ## 10. Resultados verificados
