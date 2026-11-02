@@ -1,6 +1,6 @@
 # H3 fase 4 — bot, cinta y vídeo
 
-**Estado:** pendiente. Referencia operativa única: [docs/go-explore/README.md](../go-explore/README.md). Este encargo solo fija el objetivo, el punto de partida y la entrega; los comandos, las variables y los límites se consultan allí.
+**Estado:** cumplido (02/11/2026); evidencia en README §10. Referencia operativa única: [docs/go-explore/README.md](../go-explore/README.md). Este encargo solo fija el objetivo, el punto de partida y la entrega; los comandos, las variables y los límites se consultan allí.
 
 ## Objetivo
 

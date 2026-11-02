@@ -1,6 +1,6 @@
 # Go-Explore y exploración H3 — entrada canónica
 
-**Estado (2026-11-02):** fases visibles 1–3 completadas desde reset con cintas de solo entradas, replay `MATCH`, vídeo y métricas. Siguiente trabajo: V2–V4 del [plan del bot de control](../plan-bot-control-jugabilidad-2026-11-01.md) (no iniciado).
+**Estado (2026-11-02):** fases visibles 1–4 completadas desde reset con cintas de solo entradas, replay `MATCH`, vídeo y métricas. Siguiente trabajo: V2–V4 del [plan del bot de control](../plan-bot-control-jugabilidad-2026-11-01.md) (no iniciado).
 
 Este documento es la referencia vigente para ejecutar, reproducir y verificar las herramientas de exploración H3. Los handoffs y planes enlazados en [§9](#9-documentos-históricos) conservan la evidencia y el razonamiento de cada etapa, pero sus instrucciones ya no están vigentes.
 
@@ -51,9 +51,9 @@ No todas las herramientas usan Go-Explore. Hay cuatro métodos de búsqueda dist
 | [`scripts/h3_boss_maneuver.mjs`](../../scripts/h3_boss_maneuver.mjs) | **Maniobras dirigidas**: control más ≤3 rutas desde un prefijo, ≤240 frames. | Vigente |
 | [`scripts/h3_finish_phase.mjs`](../../scripts/h3_finish_phase.mjs) | **Continuación acotada** tras el jefe de la fase 1: pulsaciones izquierda/derecha de duración fija. | Especializada (fase 1) |
 | [`scripts/h3_finalize_phase3.mjs`](../../scripts/h3_finalize_phase3.mjs) | Sella una continuación como cinta final verificable. | Especializada (fase 3) |
-| [`scripts/h3_finalize_phase.mjs`](../../scripts/h3_finalize_phase.mjs) + [`src/h3_phase_contract.mjs`](../../src/h3_phase_contract.mjs) | Sellado genérico, comprueba prefijo y transición fase N. | Incorporado; requiere validación g6 local |
-| [`scripts/verify_h3_phase.sh`](../../scripts/verify_h3_phase.sh) | Gate genérico, exporta y renombra `faseN` tras PASS. | Incorporado; requiere validación g6 local |
-| [`scripts/h3_run_logged.sh`](../../scripts/h3_run_logged.sh) | Registra cada comando, salida y código de retorno en `out/h3/phaseN/commands.log`. | Incorporado |
+| [`scripts/h3_finalize_phase.mjs`](../../scripts/h3_finalize_phase.mjs) + [`src/h3_phase_contract.mjs`](../../src/h3_phase_contract.mjs) | Sellado genérico, comprueba prefijo y transición fase N. | Vigente (validado en g6 con la fase 4) |
+| [`scripts/verify_h3_phase.sh`](../../scripts/verify_h3_phase.sh) | Gate genérico, exporta y renombra `faseN` tras PASS. | Vigente (validado en g6 con la fase 4) |
+| [`scripts/h3_run_logged.sh`](../../scripts/h3_run_logged.sh) | Registra las variables `H3_*`, cada comando, su salida y el código de retorno en `out/h3/phaseN/commands.log`. | Vigente |
 | [`scripts/verify_h3_phase3.sh`](../../scripts/verify_h3_phase3.sh) | Gate de aceptación: prefijo, replays, paridad RGBA, exportación y ffprobe. | Especializada (fase 3) |
 | [`scripts/h3_video.mjs`](../../scripts/h3_video.mjs) | Cinta → paridad RGBA con la app, MP4 y JSON de métricas. | Vigente |
 | [`scripts/h3_boss_inspect.mjs`](../../scripts/h3_boss_inspect.mjs) | Etiquetas y sprites visibles en frames concretos. | Diagnóstico |
@@ -124,7 +124,7 @@ bash scripts/h3_run_logged.sh <fase-visible> <comando> [args...] # log privado d
 - El gate histórico de fase 3 vuelve a exportar el vídeo y escribe logs en `/tmp/h3-phase3-*.log`.
 - `finalize_phase` usa la fase visible N, la cinta inicial y el frame de corte de `h3.goalFrame`; exige g6, prefijo exacto, solo entradas P1 nuevas, controles liberados y una transición RAM N−1→N. No altera `finalize_phase3`.
 - `verify_h3_phase.sh` recibe fase N, semilla y cinta final; comprueba hashes, replay MATCH de ambas, RGBA, MP4, `ffprobe`, `ramVerified=true` y exactamente un evento de fase. Tras PASS renombra los archivos a `faseN.{mp4,json}`. La fase 3 conserva su gate antiguo e interfaz.
-- `h3_run_logged.sh` envuelve cada comando que contribuya a la cinta: registra argumentos, salida y código de retorno en `out/h3/phaseN/commands.log`; usarlo en cada búsqueda, maniobra, sellado y gate. **No** copiar comandos sin ejecución a §10 como si fueran resultados.
+- `h3_run_logged.sh` envuelve cada comando que contribuya a la cinta: registra las variables `H3_*` del entorno, argumentos, salida y código de retorno en `out/h3/phaseN/commands.log`; usarlo en cada búsqueda, maniobra, sellado y gate. **No** copiar comandos sin ejecución a §10 como si fueran resultados.
 
 ### `h3_video.mjs`
 
@@ -214,8 +214,9 @@ node scripts/h3_tape.mjs selftest | selftest-rewind | record | convert <journal.
   - el `bossKill` de `replay` solo tiene sentido en la fase 1.
   - `0xc66,0xcf6` se usaron en la fase 2 como vida conjunta de los guardianes; no consta su validación.
   - La fase 3 se completó con `H3_WB=0`, sin ningún contador de jefe. **No hay contador de jefe validado para las fases 2 y 3.**
+- **Poda del haz:** `h3_boss_search.mjs` solo poda por handler, impacto sin armadura o vidas perdidas al final del segmento. Una caída a un foso no cambia el handler hasta que se pierde la vida (en la fase 4, unos 120 frames después), así que con `H3_LAST` la cabeza guardada puede ser una rama ya condenada. Revisar el final de cada cinta de búsqueda con un export corto o `inspect`, y reanudar desde un frame anterior a la caída.
 - `maneuverOutcome` calcula `advance` y `aboveLimit` con `limit=5464`, que es la geometría de H3-F2. En otros tramos esos campos no significan nada.
-- `h3_finish_phase.mjs` está pensado para el primer jefe. `h3_finalize_phase3.mjs` y `verify_h3_phase3.sh` tienen fijados la cinta, los hashes y el frame 16980 de la fase 3. Para otra fase hay que generalizarlos, sin cambiar su interfaz.
+- `h3_finish_phase.mjs` está pensado para el primer jefe. `h3_finalize_phase3.mjs` y `verify_h3_phase3.sh` tienen fijados la cinta, los hashes y el frame 16980 de la fase 3. Para las fases 4 en adelante se usan `h3_finalize_phase.mjs` y `verify_h3_phase.sh`.
 - La secuencia de comandos de la fase 2 **no quedó registrada**. Solo queda la procedencia en la cinta (ver §10). Reproducirla exactamente está pendiente.
 - La paridad MAME (S3) de las fases completadas está pendiente. Solo se comparó con MAME el estancamiento de S2 (`PASS_ALL_FRAMES_MATCH`).
 
@@ -231,7 +232,7 @@ Conservan la evidencia de cada etapa en su documento de origen. Sus instruccione
 | [`agents/h3-phase2-first-hit-task.md`](../agents/h3-phase2-first-hit-task.md) | H3-F2 cerrada (27/10). Causa del impacto en X≈5464, con poke de laboratorio. |
 | [`agents/h3-phase3-bot-video-handoff.md`](../agents/h3-phase3-bot-video-handoff.md) | Encargo de la fase 3, cumplido (02/11). |
 | [`agents/h3-phase3-local-agent-kit.md`](../agents/h3-phase3-local-agent-kit.md) | Ejecución de la fase 3 (P0–P5) y defectos corregidos. |
-| [`agents/h3-phase4-bot-task.md`](../agents/h3-phase4-bot-task.md) | **Vigente:** encargo de la fase 4 (pendiente). Remite a este README. |
+| [`agents/h3-phase4-bot-task.md`](../agents/h3-phase4-bot-task.md) | Encargo de la fase 4, cumplido (02/11). Evidencia en §10. |
 | [`plan-bot-control-jugabilidad-2026-11-01.md`](../plan-bot-control-jugabilidad-2026-11-01.md) | **Vigente** como lista de tareas (V2–V4) y registro de V1. Los detalles operativos remiten aquí. |
 
 ## 10. Resultados verificados
@@ -243,22 +244,25 @@ Todas las cintas son de solo entradas, sin poke y sobre el bundle g6. El 2026-11
 | 1 | 0→1 | **5890** | `tape-s2-phase-5950.json` (goal 5950) | `620200d77aabac60c8193a31b4985c5f7dc1399b9c55b39a5ec62e286ec40763` | `d5854d01bee9ad809f4992a3684f1267c9e88b9825a271a3f6f5485b602a24ff` |
 | 2 | 1→2 | **16566** | `tape-fase2-completa-16980.json` (goal 16980) | `1b77dd6ba5e2798428edb97318b66c106f6bd297fc1fbf15ecffe248df65ccf5` | `825a13d0af28a906b43942f46d2f8088d225691fa4466b658b7983f7fbffa004` |
 | 3 | 2→3 | **22029** | `tape-fase3-completa-22380.json` (goal 22380) | `9feecfa49b269ad0a0c6cb2e2b96b0e684d1ae7c1f76efef33c3ca96a552b1ed` | `00f267b13bfbb90b500cb493c25005dbeb81bba964ac6a2f5f3f1a682fcc59b5` |
+| 4 | 3→4 | **27849** | `tape-fase4-completa-28260.json` (goal 28260) | `ca3be0033ff46cbe28e2b10870b698369505725de352253b7ec183ded62926ac` | `182df0da9c2a2451bf157d088b42c528af6f4771fed00c43ac3984e66c0a61dd` |
 
 Las señales finales de replay de esta sesión coinciden con `h3.signal`:
 
 - 5950: `phase=1`, X=3373, 3 vidas, armadura puesta.
 - 16980: `phase=2`, X=80, Y=574, 4 vidas, armadura puesta.
 - 22380: `phase=3`, X=3632, Y=591, scroll=3584, 4 vidas, armadura puesta, `firstFatal=null`.
+- 28260 (fase 4, replay del 02/11 dentro del gate): `phase=4`, `cp=0`, X=6736, Y=575, scroll=6656, 4 vidas, armadura puesta; en el tramo 22380–28260, `minLives=4` y `firstFatal=null`.
 
 El replay completo desde reset da `minLives=3`.
 
-**Vídeos y métricas locales** (`out/h3/video/`). Cada exportación se renombró a `faseN.{mp4,json}`; el campo `video` del JSON conserva el nombre original. Los SHA-256 de los MP4 coinciden con `videoSha256`, y los tres tienen `ramVerified=true`.
+**Vídeos y métricas locales** (`out/h3/video/`). Cada exportación se renombró a `faseN.{mp4,json}`; el campo `video` del JSON conserva el nombre original. Los SHA-256 de los MP4 coinciden con `videoSha256`, y los cuatro tienen `ramVerified=true`.
 
 | Vídeo | Frames | Duración | Eventos `phase` | SHA-256 MP4 |
 | --- | --- | --- | --- | --- |
 | `fase1.mp4` | 1–5950 (5950) | 99,77 s | 0→1 en 5890 | `bc893b3f7b213b8202a23140bcbd1b1e71ce7e583331110d66864e636a2109bc` |
 | `fase2.mp4` | 5950–16980 (11031) | 184,97 s | 1→2 en 16566 | `96a8131fbd701d20c70a67f0959c2be85bebe51805e8b4bfcb41995daed30b3d` |
 | `fase3.mp4` (export `tape-fase3-completa-22380-9feecfa4-16980-22380`) | 16980–22380 (5401) | 90,56 s | 2→3 en 22029 (único) | `45767e6590d69154d46bbeafdf554d0736d05e78d1b94af49af1c2dd68319e8e` |
+| `fase4.mp4` (export `tape-fase4-completa-28260-ca3be003-22380-28260`) | 22380–28260 (5881) | 98,61 s | 3→4 en 27849 (único) | `ededc65212aa29e7ff96b18cbbf9b8e4a0196b1f24e3a20d21f08c3f8f941f87` |
 
 En el frame 22380 la fila de métricas marca `inGame=true`, `phase=3`, 4 vidas y armadura puesta. El handoff de la fase 3 registra ese frame como inicio jugable y visible de la fase 4. ffprobe de `fase3.mp4` (repetido hoy): h264, 256×224, 5401 frames, 90,56 s. El gate `verify_h3_phase3.sh` dio `H3_PHASE3_ACCEPTANCE=PASS` al cerrar la fase; no se repitió porque vuelve a exportar el vídeo.
 
@@ -292,7 +296,28 @@ bash scripts/verify_h3_phase3.sh out/h3/explore/tape-fase3-completa-22380.json
 
 La tercera búsqueda termina en `end=20520`, pero su cabeza final (`H3_LAST`) se guarda como `search-p2-20460.json`, que es lo que lee la cuarta. Todos los intermedios siguen en `out/h3/boss/`. La llave se vio en pantalla después de que desapareciera el enemigo; la maniobra a la izquierda la recogió y activó la transición automática.
 
-**Fase 4 — ejecución pendiente de evidencia local.** El encargo usa `tape-fase3-completa-22380.json` (goal 22380) y exige `0x72:3→4`. El sellador/gate genéricos y el registrador ya están disponibles, pero **ninguna transición, búsqueda ni vídeo de la fase 4 se ha verificado** desde esta sesión. Registrar la secuencia de comandos real de `out/h3/phase4/commands.log` aquí al completar la fase, junto con el frame de transición, hashes y vídeo; no sustituirla por comandos hipotéticos.
+**Fase 4.** Secuencia registrada en `out/h3/phase4/commands.log` (con variables `H3_*`); cada paso lee la salida del anterior:
+
+```sh
+node scripts/h3_explore.mjs replay out/h3/explore/tape-fase3-completa-22380.json                     # MATCH
+H3_SEED=out/h3/explore/tape-fase3-completa-22380.json H3_WIDTH=8 H3_STEP=120 H3_LAST=1 H3_WX=1 H3_WS=0 H3_WA=500 node scripts/h3_boss_search.mjs 3 22380 120 23580
+H3_SEED=out/h3/boss/search-p3-23460.json H3_WIDTH=16 H3_STEP=60 H3_LAST=1 H3_WX=1 H3_WS=0 H3_WA=2000 H3_BACKTRACK=2 H3_BACKTRACK_LIMIT=30 node scripts/h3_boss_search.mjs 3 23220 60 24420
+H3_SEED=out/h3/boss/search-p3-23700.json H3_WIDTH=16 H3_STEP=60 H3_LAST=1 H3_WX=1 H3_WY=3 H3_WS=0 H3_WA=2000 H3_BACKTRACK=2 H3_BACKTRACK_LIMIT=40 node scripts/h3_boss_search.mjs 3 23340 60 24540
+H3_SEED=out/h3/boss/search-p3-24540.json H3_WIDTH=24 H3_STEP=60 H3_LAST=1 H3_WX=1 H3_WY=1 H3_WS=1 H3_WA=100000 H3_BACKTRACK=3 H3_BACKTRACK_LIMIT=40 node scripts/h3_boss_search.mjs 3 24180 60 25380
+H3_SEED=out/h3/boss/search-p3-25380.json H3_WIDTH=24 H3_STEP=60 H3_LAST=1 H3_WX=1 H3_WY=1 H3_WS=1 H3_WA=100000 H3_BACKTRACK=3 H3_BACKTRACK_LIMIT=40 node scripts/h3_boss_search.mjs 3 25380 60 27780
+H3_HORIZON=240 H3_STEP=60 node scripts/h3_boss_maneuver.mjs out/h3/boss/search-p3-27780.json 27480 keyleft=left,left,left,left
+H3_HORIZON=240 H3_STEP=60 node scripts/h3_boss_maneuver.mjs out/h3/boss/f2/maneuver-27480-keyleft.json 27720 wait4=idle,idle,idle,idle
+H3_HORIZON=240 H3_STEP=60 node scripts/h3_boss_maneuver.mjs out/h3/boss/f2/maneuver-27720-wait4.json 27960 wait4=idle,idle,idle,idle
+H3_HORIZON=240 H3_STEP=60 node scripts/h3_boss_maneuver.mjs out/h3/boss/f2/maneuver-27960-wait4.json 28200 wait4=idle,idle,idle,idle
+node scripts/h3_finalize_phase.mjs 4 out/h3/explore/tape-fase3-completa-22380.json out/h3/boss/f2/maneuver-28200-wait4.json 28260
+bash scripts/verify_h3_phase.sh 4 out/h3/explore/tape-fase3-completa-22380.json out/h3/explore/tape-fase4-completa-28260.json
+```
+
+- Las búsquedas terminan con código 2 (`NOT_ADVANCED`): cada una es un tramo, no la transición. Las tres primeras se quedaron sin ramas vivas o acabaron en una caída a un foso (ver §8 «Poda del haz»), así que la siguiente reanuda unos frames antes del final de la anterior; la quinta continúa justo en el final de la cuarta (25380).
+- Tramo: plataformas flotantes y muro de roca (necesitó `H3_WY`), demonio rojo volador hacia 24200 (abatido con `H3_WS=1` y `H3_WA=100000`), checkpoint `cp` 0→1 en 25138, puente de lava y jefe abatido hacia 27180. Aparece «TAKE A KEY FOR COMING IN!»; `keyleft` recoge la llave en X≈6445 y la transición llega sola en 27849, sin más entradas. La fase 5 se dibuja hacia 28195 y el reloj corre desde 28220.
+- Gate (`out/h3/phase4/gate.log`): `H3_PHASE_PREFIX=PASS`, replay `MATCH` de las dos cintas, `H3_VIDEO_CHECK=PASS` en 28260 (RGBA `a39323dae179ab555bdb3c9d4c3f506f8f0d7e0f55e77efe81e1b8dd71eea73f`), ffprobe h264 256×224 5881 frames y `H3_PHASE4_ACCEPTANCE=PASS`. `fase4.mp4` ocupa 13.078.458 bytes.
+- La secuencia se repitió entera desde la semilla, con el registrador ya corregido: los cinco tramos, las cuatro maniobras y la cinta final salieron idénticos byte a byte (archivo `77b06535…`). Copias de los intermedios en `out/h3/phase4/steps/`. Los comandos de diagnóstico (exports cortos e `inspect`) y las maniobras descartadas (`keyleft3`, `return`) están en el log pero no contribuyen a la cinta.
+- El frame 22380 de `fase4.mp4` coincide en métricas RAM con el último de `fase3.mp4`; en píxeles decodificados difiere por la recodificación H.264 (PSNR ≈ 40 dB).
 
 **Otras cintas útiles:**
 
