@@ -1,6 +1,6 @@
 # Bot estándar de control de jugabilidad — tareas
 
-**Fecha:** 2026-11-01 · **Estado:** E0 en main (`e7b2f2b`); V1 implementada y verificada en el árbol de trabajo; segunda fase completada con vídeo y métricas (2026-11-02); siguiente: V2.
+**Fecha:** 2026-11-02 · **Estado:** E0 y V1 implementadas; fases 1–3 completadas con vídeo y métricas; siguiente: V2.
 
 **Objetivo del operador:** un bot estándar que juegue y produzca un video con métricas, para controlar la jugabilidad tras futuros cambios y en otros juegos. El audio no es relevante; lo que importa es la fidelidad visual. No hace falta un bot en vivo ni uno que juegue solo con píxeles.
 
@@ -34,7 +34,9 @@ Antes de empezar cada tarea, estimar su coste en la ventana de 5 h y en el seman
     - `out/h3/video/fase2.mp4` y `fase2.json`: frames 5950–16980, 11031 frames, 184,97 s, H.264 a 256×224. Primer frame idéntico al último de `fase1.json`; el JSON fecha la transición en frame 16566 y verifica la huella RAM final (`ramVerified: true`). Paridad RGBA con la app: `PASS` en frame 16980.
     - La búsqueda admite `H3_BOSS_LIFE=0xc66,0xcf6` para evaluar la vida conjunta de los dos guardianes, con `H3_WB` como peso. El contador predeterminado `0xe76` sirve para el primer jefe y puede corresponder a otro enemigo en fases posteriores.
   - [x] Clip del hotel: `search-p1-14161-826fb4d7-11007-14161.mp4` y su JSON en `out/h3/video/`; 3155 frames, 52,90 s, 256×224. Métricas: X=5449→5767, mínimo 3 vidas, fase 1 durante todo el tramo. Primer frame compartido con el final del clip anterior; aún no acredita terminar la fase.
-  - [ ] Continuación fase 3: programar el bot desde la cinta verificada del frame 16980 hasta la transición RAM 2→3; entregar vídeo completo, métricas y entrada visible en la fase 4. Instrucciones y estado inicial en [el handoff](agents/h3-phase3-bot-video-handoff.md).
+  - [x] Continuación fase 3: cinta privada `out/h3/explore/tape-fase3-completa-22380.json`, de solo entradas y sin pokes, con prefijo y RAM del frame 16980 idénticos a la cinta de fase 2. Transición RAM `0x72:2→3` en frame **22029**; frame 22380: inicio jugable y visible de la fase 4, 4 vidas y armadura (`0xAC=0`). Replay desde reset `MATCH`, paridad RGBA `PASS`, sin muertes en el tramo. `bash scripts/verify_h3_phase3.sh out/h3/explore/tape-fase3-completa-22380.json` da `H3_PHASE3_ACCEPTANCE=PASS`.
+    - Vídeo y métricas privados: `out/h3/video/tape-fase3-completa-22380-9feecfa4-16980-22380.{mp4,json}`. H.264, 256×224, 5401 frames (16980–22380), 90,56 s, `ramVerified: true`; el JSON registra exactamente un evento `2→3` en 22029. El primer frame se comparte con el final del vídeo de la fase 2.
+    - Búsqueda reproducible: `H3_SEED` sobre la cinta inicial, `H3_WIDTH=8 H3_STEP=120 H3_LAST=1 H3_WX=1 H3_WS=0 H3_WA=500` para tramos 16980→17580→19020→20460; luego `H3_WIDTH=24 H3_STEP=60 H3_WA=5000 H3_WS=0.1` desde 20460 hasta 21660. `h3_boss_maneuver.mjs` con `H3_HORIZON=240 H3_STEP=60` prueba cuatro segmentos `left` para recoger la llave (21660→21900), cuatro `right` (21900→22140) y cuatro `idle` (22140→22380). `node scripts/h3_finalize_phase3.mjs out/h3/boss/f2/maneuver-22140-wait4.json 22380` sella la cinta final. Los nombres concretos de ramas y parámetros se conservan en [el kit local](agents/h3-phase3-local-agent-kit.md).
 - [ ] **V2 — Suite de cintas de referencia.** Reproducirlas en cada build y reportar el frame de divergencia, con video.
 - [ ] **V3 — Explorador genérico con un adaptador por juego.**
   - Separar `scripts/h3_explore.mjs` y `src/h3_explore.mjs` en un núcleo y un adaptador.

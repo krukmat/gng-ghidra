@@ -2,10 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CYCLES_PER_FRAME as CPF} from '../src/gngb_runtime.mjs';
 import {defineInputSchedule} from '../src/gngb_input_contract.mjs';
-import {prng,chunkMasks,masksToEvents,eventsToMasks,lookBoss,BOSS_LIFE,isFatal,cellKey,better,
+import {prng,chunkMasks,extendMasks,masksToEvents,eventsToMasks,lookBoss,BOSS_LIFE,isFatal,cellKey,better,
   pickCell,cellsListing} from '../src/h3_explore.mjs';
 
 const f=e=>e.map(x=>`${x.cycle/CPF}:${x.control}${x.pressed?'+':'-'}`);
+
+test('la extensión conserva el prefijo y la nueva trayectoria',()=>{
+  const scratch=Uint8Array.from([9,9,9,9,9,9]);
+  assert.deepEqual([...extendMasks(scratch,Uint8Array.from([1,2]),Uint8Array.from([3,4])).slice(0,4)],
+    [1,2,3,4]);
+  assert.deepEqual([...extendMasks(scratch,Uint8Array.from([7,8,6]),Uint8Array.from([5,2])).slice(0,5)],
+    [7,8,6,5,2]);
+  assert.throws(()=>extendMasks(scratch,new Uint8Array(5),new Uint8Array(2)),/MASK_CAPACITY/);
+});
 
 test('máscaras pegajosas: misma semilla, misma cinta; cada pulsación se suelta',()=>{
   const a=chunkMasks(prng(5),600,0),b=chunkMasks(prng(5),600,0);

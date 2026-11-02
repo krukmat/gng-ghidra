@@ -35,7 +35,7 @@ import {labCreateBoard} from '../src/v3_b3_lab_board.mjs';
 import {resolveB3LabTape} from '../src/v3_b3_external_tape.mjs';
 import {LIVE_TAPE_SCHEMA} from '../src/v3_b3_live_tape.mjs';
 import {liveToEvents} from '../src/h3_live_import.mjs';
-import {EXPLORE_DEFAULTS as P,P1_BITS,prng,chunkMasks,masksToEvents,eventsToMasks,look,lookBoss,BOSS_LIFE,
+import {EXPLORE_DEFAULTS as P,P1_BITS,prng,chunkMasks,extendMasks,masksToEvents,eventsToMasks,look,lookBoss,BOSS_LIFE,
   isFatal,cellKey,better,pickCell,sha256,cellsListing} from '../src/h3_explore.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
@@ -93,7 +93,7 @@ async function explore(seed,iters,minutes,from){
     const c=pickCell(list,rand,P.scrollBonus);c.chosen++;n++;
     board.lab.restore(c.snap);fatalAt=0;phaseAt=0;livesRef=c.lives;
     const len=c.masks.length;
-    cur.set(c.masks);cur.set(chunkMasks(rand,P.chunk,len?c.masks[len-1]:0,P),len);cur.fill(0,len+P.chunk);
+    extendMasks(cur,c.masks,chunkMasks(rand,P.chunk,len?c.masks[len-1]:0,P));
     for(let k=P.evalEvery;k<=P.chunk;k+=P.evalEvery){
       const f=c.frame+k,res=board.lab.advanceTo(f);frames+=P.evalEvery;
       if(res.status!=='FRAMES_DONE'){halt={frame:f,...res};break;}
@@ -141,11 +141,13 @@ async function explore(seed,iters,minutes,from){
 async function replay(path,every){
   const tape=resolveB3LabTape(path),meta=JSON.parse(readFileSync(path,'utf8')).h3??null;
   const end=meta?.goalFrame??tape.frames;
-  let lives0=null,firstFatal=null,maxX=0,maxScroll=0,minLives=99,phase0=null,transition=null,bossKill=null;
+  let lives0=null,firstFatal=null,maxX=0,maxScroll=0,minLives=99,phase0=null,previousPhase=null,transition=null,bossKill=null;
   const board=await makeBoard(tape.read,(i,rec)=>{
     const s=lookBoss(rec);
     if(i===START){lives0=s.lives;phase0=s.phase;}
-    if(i>START&&transition===null&&s.phase!==phase0)transition=i;
+    if(i>START&&transition===null&&(meta?.transitionFrom===undefined?
+      s.phase!==phase0:previousPhase===meta.transitionFrom&&s.phase===meta.transitionFrom+1))transition=i;
+    previousPhase=s.phase;
     if(meta?.from&&i>meta.from.goalFrame&&bossKill===null&&s.boss===0)bossKill=i;
     if(i>=START){maxX=Math.max(maxX,s.x);maxScroll=Math.max(maxScroll,s.scroll);minLives=Math.min(minLives,s.lives);
       if(i>START&&firstFatal===null&&isFatal(s,lives0))firstFatal={frame:i,...s};}

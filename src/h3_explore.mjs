@@ -58,6 +58,16 @@ export function chunkMasks(rand,n,prev=0,p=EXPLORE_DEFAULTS){
   return out;
 }
 
+/** Replace the scratch trajectory tail while preserving the selected cell's masks. */
+export function extendMasks(scratch,prefix,next){
+  const end=prefix.length+next.length;
+  if(end>scratch.length)throw Error('H3_EXPLORE_MASK_CAPACITY');
+  scratch.fill(0,prefix.length,end);
+  scratch.set(prefix);
+  scratch.set(next,prefix.length);
+  return scratch;
+}
+
 /** Port events of masks applied from frame `start` (P1 held before it:
  * `prev`), all released at the end. */
 export function masksToEvents(start,masks,prev=0){

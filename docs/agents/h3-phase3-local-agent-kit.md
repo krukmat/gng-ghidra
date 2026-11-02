@@ -20,12 +20,30 @@ Leer primero todos los AGENTS.md aplicables del workspace y los documentos docs/
 4. La muerte del jefe NO cierra la fase. Después puede requerirse esperar/recoger una llave. Verificar transición RAM y fase 4 visible.
 
 ## Trabajo por etapas
-- [ ] P0 Preflight g6, cinta original y replay MATCH.
-- [ ] P1 Corrección mínima del explorador y tests. No tocar motor.
-- [ ] P2 Exploración determinista reanudable. Segmentos ~60–120 frames en tramo seguro y 8–12 cerca de riesgos; registrar estado, progreso, vidas, armadura y checkpoints. Detectar vida del jefe mediante evidencia, no suposiciones. Evitar stalls sin límite.
-- [ ] P3 Derrotar obstáculos, recoger llave si aparece, detectar frame exacto 2->3 y continuar hasta fase 4 visible.
-- [ ] P4 Escribir cinta final con h3.goalFrame, h3.signal, h3.ramSha, h3.transitionFrame y liberación de controles; exportar con node scripts/h3_video.mjs export FINAL END 16980.
-- [ ] P5 Ejecutar node scripts/h3_explore.mjs replay FINAL (MATCH); node scripts/h3_video.mjs check FINAL END (PASS); bash scripts/verify_h3_phase3.sh FINAL (PASS). ffprobe debe confirmar H.264, 256x224, END-16980+1 frames, JSON ramVerified=true y evento 2->3 en frame exacto. Solo entonces marcar [x] en el plan.
+- [x] P0 Preflight g6, cinta original y replay MATCH.
+- [x] P1 Corrección mínima del explorador y tests. No se tocó el motor.
+- [x] P2 Exploración determinista reanudable. El tramo de salida se resolvió con segmentos de 120 y 60 frames y una maniobra dirigida a la llave. No se usó ningún contador de vida del jefe sin validar ni se ponderó `H3_WB`.
+- [x] P3 Obstáculos superados, llave recogida, transición `2→3` en frame 22029 e inicio jugable de la fase 4 visible en frame 22380.
+- [x] P4 Cinta final sellada con `h3.goalFrame`, `h3.signal`, `h3.ramSha`, `h3.transitionFrom=2`, `h3.transitionFrame` y controles liberados. MP4 exportado desde frame 16980.
+- [x] P5 Replay `MATCH`, paridad RGBA `PASS` y `H3_PHASE3_ACCEPTANCE=PASS`. ffprobe: H.264, 256×224, 5401 frames, 90,56 s. JSON: `ramVerified=true`, evento `2→3` en 22029.
+
+## Reproducción de la continuación
+
+Todas las cintas y resultados siguientes permanecen en `out/`. Cada búsqueda parte de la cinta indicada por `H3_SEED` y guarda su resultado reanudable en `out/h3/boss/`.
+
+```sh
+H3_SEED=out/h3/explore/tape-fase2-completa-16980.json H3_WIDTH=8 H3_STEP=120 H3_LAST=1 H3_WX=1 H3_WS=0 H3_WA=500 node scripts/h3_boss_search.mjs 2 16980 120 17580
+H3_SEED=out/h3/boss/search-p2-17580.json H3_WIDTH=8 H3_STEP=120 H3_LAST=1 H3_WX=1 H3_WS=0 H3_WA=500 node scripts/h3_boss_search.mjs 2 17580 120 19020
+H3_SEED=out/h3/boss/search-p2-19020.json H3_WIDTH=8 H3_STEP=120 H3_LAST=1 H3_WX=1 H3_WS=0 H3_WA=500 node scripts/h3_boss_search.mjs 2 19020 120 20520
+H3_SEED=out/h3/boss/search-p2-20460.json H3_WIDTH=24 H3_STEP=60 H3_LAST=1 H3_WX=1 H3_WS=0.1 H3_WA=5000 node scripts/h3_boss_search.mjs 2 20460 60 21660
+H3_HORIZON=240 H3_STEP=60 node scripts/h3_boss_maneuver.mjs out/h3/boss/search-p2-21660.json 21660 keyleft=left,left,left,left
+H3_HORIZON=240 H3_STEP=60 node scripts/h3_boss_maneuver.mjs out/h3/boss/f2/maneuver-21660-keyleft.json 21900 return=right,right,right,right
+H3_HORIZON=240 H3_STEP=60 node scripts/h3_boss_maneuver.mjs out/h3/boss/f2/maneuver-21900-return.json 22140 wait4=idle,idle,idle,idle
+node scripts/h3_finalize_phase3.mjs out/h3/boss/f2/maneuver-22140-wait4.json 22380
+bash scripts/verify_h3_phase3.sh out/h3/explore/tape-fase3-completa-22380.json
+```
+
+La cinta final privada es `out/h3/explore/tape-fase3-completa-22380.json`. El vídeo y el JSON son `out/h3/video/tape-fase3-completa-22380-9feecfa4-16980-22380.{mp4,json}`. La búsqueda con `H3_WB=0` avanzó sin asumir que `0xe76` o los contadores de guardianes de la fase 2 describieran al jefe de esta fase. La llave se observó visualmente tras desaparecer el enemigo; la maniobra a la izquierda la recogió y activó la transición automática.
 
 No modificar motor congelado, AOT, runtime, bundle, ROM o RAM; prohibido H3_POKE. Snapshots de laboratorio solo entre ramas. No subir roms/, out/, cfg/ ni bundles privados; navegador y MAME sin ventanas ni capturar el foco.
 
