@@ -124,7 +124,7 @@ test('GE-W1: preserve the required weapon across best-cell ranking and listing',
     assert.ok(rank(shield)[0]>rank(base)[0]);
     assert.equal(rank(shield).length,5);
   }
-  const cells=[base,shield].map(s=>({...s,key:cellKey(s),masks:new Uint8Array(0),chosen:0}));
+  const cells=[base,{...base,weapon:3}].map(s=>({...s,key:cellKey(s),masks:new Uint8Array(0),chosen:0}));
   assert.notEqual(cells[0].key,cells[1].key);
   assert.deepEqual(cellsListing(cells).map(c=>c.weapon),[3,4]);
   // The default rank and lower phases keep their historic shape.
