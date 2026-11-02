@@ -41,6 +41,7 @@ import {liveToEvents} from '../src/h3_live_import.mjs';
 import {EXPLORE_DEFAULTS as P,P1_BITS,prng,chunkMasks,extendMasks,masksToEvents,eventsToMasks,look,lookBoss,BOSS_LIFE,
   isFatal,cellKey,better,bestRank,pickCell,sha256,cellsListing} from '../src/h3_explore.mjs';
 import {weaponPolicyForPhase,phaseOutcome,progressionCandidate} from '../src/h3_weapon_policy.mjs';
+import {selectExploreGoal,exploreGoalSatisfied,WEAPON_GOAL} from '../src/h3_weapon_goal.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const selected=selectB3Bundle(ROOT);
@@ -68,7 +69,8 @@ async function explore(seed,iters,minutes,from){
   const base=defineInputSchedule(src),p1Before=eventsToMasks(START,START+1,src.filter(e=>e.cycle<START*CPF))[0];
   const cur=new Uint8Array(MAX_FRAMES);
   let fatalAt=0,livesRef=null,phaseRef=null,phaseAt=0;
-  let previousWeapon=null,weaponAtTransition=null;
+  let previousWeapon=null,weaponAtTransition=null,weaponPickupFrame=null;
+  let objectivePhase=null;
   const board=await makeBoard((addr,cycle)=>addr===0x3001&&cycle>=START*CPF?
     0xff^cur[Math.floor(cycle/CPF)-START]:readScheduledPort(base,addr,cycle),
   (i,rec)=>{const s=look(rec);
@@ -77,6 +79,9 @@ async function explore(seed,iters,minutes,from){
       phaseAt=i;
       weaponAtTransition=previousWeapon??rec[0x73];
     }
+    if(objectivePhase===s.phase&&previousWeapon!==null&&
+      previousWeapon!==rec[0x73]&&rec[0x73]===3&&weaponPickupFrame===null)
+      weaponPickupFrame=i;
     previousWeapon=rec[0x73];});
   let prefix=new Uint8Array(0),source=null;
   if(from){
@@ -90,21 +95,28 @@ async function explore(seed,iters,minutes,from){
   const view=from?()=>lookBoss(ram(board,BOSS_LIFE+1)):()=>look(ram(board));
   const s0=view();phaseRef=from?s0.phase:null;
   const policy=from?weaponPolicyForPhase(s0.phase):null;
+  const requestedGoal=process.env.H3_GOAL??'phase';
+  if(!from&&requestedGoal!==WEAPON_GOAL&&requestedGoal!=='phase')
+    throw Error('H3_GOAL_INVALID '+requestedGoal);
+  const objective=selectExploreGoal(requestedGoal,from?s0:null);
+  objectivePhase=objective.kind===WEAPON_GOAL?objective.phase:null;
+  if(objective.kind===WEAPON_GOAL&&meta?.poke)
+    throw Error('H3_GOAL_WEAPON_POKE_SEED_FORBIDDEN');
   console.log('H3_EXPLORE_START gen='+GEN+' seed='+seed+' from='+(from??'reset')+' '+JSON.stringify(s0));
   const root={...s0,key:cellKey(s0),frame:first,masks:prefix,snap:board.lab.save(),chosen:0};
   const cells=new Map([[root.key,root]]),list=[root];
   // S1: scroll to the arena. S2: phase, then less boss life, then X (H3_RANK=y: armour, then height).
   const rankMode=process.env.H3_RANK??'x',rank=bestRank(from,rankMode,policy);
-  const isGoal=from?s=>progressionCandidate(phaseOutcome(s0.phase,s.phase,
-    weaponAtTransition??s.weapon,policy)):
-    s=>s.phase===0&&s.scroll>=ARENA;
+  const isGoal=s=>exploreGoalSatisfied(objective,from?s0:null,s,weaponAtTransition);
   const ahead=(a,b)=>{const x=rank(a),y=rank(b);for(let i=0;i<x.length;i++)
     if(x[i]!==y[i])return x[i]>y[i];return false;};
   let best=root,goal=null,halt=null,n=0,cuts=0,frames=0,transition=null,invalidTransitions=0;
+  let acquiredFrame=null;
   const t0=Date.now();let tLog=t0;
   while(n<iters&&Date.now()-t0<minutes*60000&&!goal&&!halt){
     const c=pickCell(list,rand,P.scrollBonus,policy);c.chosen++;n++;
     board.lab.restore(c.snap);fatalAt=0;phaseAt=0;weaponAtTransition=null;
+    weaponPickupFrame=null;
     previousWeapon=c.weapon??null;livesRef=c.lives;
     const len=c.masks.length;
     extendMasks(cur,c.masks,chunkMasks(rand,P.chunk,len?c.masks[len-1]:0,P));
@@ -123,7 +135,11 @@ async function explore(seed,iters,minutes,from){
         if(old)Object.assign(old,cell);else{cells.set(cell.key,cell);list.push(cell);}
         const kept=old??cell;
         if(ahead(kept,best))best=kept;
-        if(isGoal(s)){goal=kept;transition=phaseAt||null;break;}
+        if(isGoal(s)){
+          goal=kept;transition=phaseAt||null;
+          if(objective.kind===WEAPON_GOAL)acquiredFrame=weaponPickupFrame??f;
+          break;
+        }
       }
     }
     if(Date.now()-tLog>=30000){tLog=Date.now();
@@ -143,17 +159,23 @@ async function explore(seed,iters,minutes,from){
     events:defineInputSchedule([...src.filter(e=>!Object.hasOwn(P1_BITS,e.control)||e.cycle<START*CPF),
       ...masksToEvents(START,win.masks,p1Before)].sort((a,b)=>a.cycle-b.cycle)).events};
   const tapeSha=sha256(JSON.stringify(metadata));
-  const probe=from?'h3-s2':'h3-s1',tag=goal?from?'-phase':'-arena':'-best';
+  const probe=from?'h3-s2':'h3-s1',
+    tag=goal?(objective.kind===WEAPON_GOAL?'-weapon':from?'-phase':'-arena'):'-best';
   const tapeFile=join(OUT,'tape-'+(from?'s2-':'')+'s'+seed+'-'+win.frame+tag+'.json');
   const extra=from?{from:source,bossLife:win.boss,transitionFrame:transition}:{};
   writeFileSync(tapeFile,JSON.stringify({...metadata,sha256:tapeSha,h3:{probe,bundle:GEN,seed,params,
     iters:n,goalFrame:win.frame,signal,livesStart:s0.lives,...extra,
     ...policy?{progressionPolicy:policy.id,progressionStatus:'UNVERIFIED'}:{},
+    ...objective.kind===WEAPON_GOAL?{objective:'WEAPON_ACQUIRED',targetWeapon:objective.weapon,
+      weaponPickupFrame:acquiredFrame,weaponAtGoal:win.weapon}:{},
     ramSha:sha256(ram(board,0x3000))}})+'\n',{mode:0o600});
-  const result=halt?'STOP_HALT':goal?from?policy?'GO_PROGRESSION_CANDIDATE':'GO_PHASE':'GO_ARENA':'NOT_REACHED';
+  const result=halt?'STOP_HALT':goal?
+    objective.kind===WEAPON_GOAL?'GO_WEAPON_ACQUIRED':
+    from?policy?'GO_PROGRESSION_CANDIDATE':'GO_PHASE':'GO_ARENA':'NOT_REACHED';
   console.log('H3_EXPLORE_RESULT '+result+' iters='+n+' cells='+list.length+' cuts='+cuts+' frames='+frames+
     ' invalidTransitions='+invalidTransitions+' seconds='+seconds.toFixed(1)+' maxX='+Math.max(...list.map(c=>c.x))+' maxScroll='+Math.max(...list.map(c=>c.scroll))+
-    ' win='+JSON.stringify({frame:win.frame,...signal,boss:win.boss,transition})+(halt?' halt='+JSON.stringify(halt):''));
+    ' win='+JSON.stringify({frame:win.frame,...signal,boss:win.boss,transition,
+      ...objective.kind===WEAPON_GOAL?{weapon:win.weapon,pickupFrame:acquiredFrame}:{}})+(halt?' halt='+JSON.stringify(halt):''));
   console.log('H3_EXPLORE_CELLS='+cellsFile+' sha256='+sha256(cellsText));
   console.log('H3_EXPLORE_TAPE='+tapeFile+' sha256='+tapeSha);
   process.exitCode=goal?0:2;
