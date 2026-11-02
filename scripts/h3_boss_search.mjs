@@ -35,6 +35,7 @@ import {B3_TAPE_SCHEMA,b3Tape} from '../src/v3_b3_tapes.mjs';
 import {labCreateBoard} from '../src/v3_b3_lab_board.mjs';
 import {parseLabPokes,applyLabPokes} from '../src/h3_lab_poke.mjs';
 import {resolveB3LabTape} from '../src/v3_b3_external_tape.mjs';
+import {weaponPolicyForPhase,phaseOutcome,progressionCandidate,weaponPriority} from '../src/h3_weapon_policy.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const selected=selectB3Bundle(ROOT);
@@ -43,6 +44,7 @@ const {manifest,code}=loadFrozen(selected.dir);
 const {blocks}=await import(pathToFileURL(join(selected.dir,'program.mjs')).href);
 const [phase,START,ARG_K,END]=[0,2200,60,9000].map((d,i)=>Number(process.argv[2+i]??d));
 const K=Number(process.env.H3_STEP??ARG_K);
+const policy=weaponPolicyForPhase(phase);
 const WIDTH=Number(process.env.H3_WIDTH??8);
 const BACKTRACK=Number(process.env.H3_BACKTRACK??0);
 const BACKTRACK_LIMIT=process.env.H3_BACKTRACK_LIMIT===undefined?Infinity:Number(process.env.H3_BACKTRACK_LIMIT);
@@ -81,7 +83,8 @@ function segment(start,action){
 }
 const bcd=b=>[0x68,0x69,0x6a,0x6b].reduce((v,a)=>v*100+(b[a]>>4)*10+(b[a]&15),0);
 const look=b=>({phase:b[0x72],cp:b[0x81],loop:b[0x71],lives:b[0x60],x:b[0xa0]<<8|b[0xa1],y:b[0xa2]<<8|b[0xa3],
-  handler:b[0x510]<<8|b[0x511],armor:b[0xac],score:bcd(b),scroll:b[0x58]<<8|b[0x59],
+  handler:b[0x510]<<8|b[0x511],armor:b[0xac],weapon:b[0x73],
+  score:bcd(b),scroll:b[0x58]<<8|b[0x59],
   boss:LIFE_ADDRS.reduce((sum,a)=>sum+b[a],0)});
 let schedule=defineInputSchedule(base),dead=false,board;
 board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
@@ -101,9 +104,10 @@ console.log('H3_BOSS_START '+JSON.stringify(s0));
 if(s0.phase!==phase)throw Error('H3_BOSS_START_PHASE '+s0.phase);
 // XCAP stops rewarding x in a boss arena.
 const value=(s,maxX,maxY,minY)=>s.phase!==phase?1e9:
+  1000000*weaponPriority(s,policy)+
   WX*Math.min(maxX,XCAP)+WY*maxY+WCY*Math.min(s.y,YCAP)+
   WU*(s0.y-minY)+WS*s.score-WA*s.armor-WB*s.boss;
-let branches=0,halts=0;
+let branches=0,halts=0,invalidTransitions=0;
 let beam=[{snap:board.lab.save(),events:[],s:s0,maxX:s0.x,maxY:s0.y,minY:s0.y,v:0,route:[]}],best=beam[0],done=null;
 let depth=0,backtracks=0;
 const history=new Map();
@@ -117,12 +121,19 @@ while(START+(depth+1)*K<=END&&!done){
     const res=board.lab.advanceTo(frame+K);branches++;
     if(res.status!=='FRAMES_DONE'){halts++;console.log('H3_BOSS_HALT '+frame+' '+a+' '+res.status+' pc='+res.pc);continue;}
     const s=look(board.state.ramBytes(0,LOOK_BYTES).bytes);
+    const outcome=phaseOutcome(phase,s.phase,s.weapon,policy);
+    if(s.phase!==phase&&!progressionCandidate(outcome)){
+      invalidTransitions++;
+      if(process.env.H3_DEBUG)console.log('H3_BOSS_PRUNE_PHASE f='+(frame+K)+
+        ' action='+a+' outcome='+outcome+' '+JSON.stringify(s));
+      continue;
+    }
     if(s.phase===phase&&(dead||s.lives<p.s.lives)){
       if(process.env.H3_DEBUG)console.log('H3_BOSS_PRUNE f='+frame+' '+a+' dead='+dead+' '+JSON.stringify(s));
       continue;}
     const c={snap:board.lab.save(),events,s,maxX:Math.max(p.maxX,s.x),maxY:Math.max(p.maxY,s.y),minY:Math.min(p.minY,s.y),route:[...p.route,a]};
     c.v=value(s,c.maxX,c.maxY,c.minY);next.push(c);
-    if(s.phase!==phase){done=c;break;}
+    if(s.phase!==phase&&progressionCandidate(outcome)){done=c;break;}
   }
   if(done)break;
   if(!next.length){
@@ -142,7 +153,8 @@ while(START+(depth+1)*K<=END&&!done){
   next.sort((a,b)=>b.v-a.v);
   const seen=new Set(),ranked=[];
   for(const c of next){
-    const key=[c.s.x,c.s.y,c.s.armor,c.s.handler,c.s.score,c.snap.hardware.scroll.join(',')].join(':');
+    const key=[c.s.x,c.s.y,c.s.armor,...policy?[c.s.weapon]:[],
+      c.s.handler,c.s.score,c.snap.hardware.scroll.join(',')].join(':');
     if(seen.has(key))continue;seen.add(key);ranked.push(c);
     if(!BACKTRACK&&ranked.length===WIDTH)break;
   }
@@ -172,8 +184,12 @@ if(!POKES.length){
   anchor={goalFrame:win.snap.recordCount,signal:{phase:w.phase,cp:w.cp,x:w.x,y:w.y,scroll:w.scroll,lives:w.lives,armor:w.armor},
     ramSha:createHash('sha256').update(r).digest('hex')};
 }
-writeFileSync(file,JSON.stringify({...metadata,sha256,h3:{poke:process.env.H3_POKE??'',route:win.route,...search,...anchor}})+'\n',{mode:0o600});
+writeFileSync(file,JSON.stringify({...metadata,sha256,h3:{poke:process.env.H3_POKE??'',route:win.route,
+  ...policy?{progressionPolicy:policy.id,requiredWeapon:policy.requiredWeapon,
+    progressionStatus:'UNVERIFIED'}:{},...search,...anchor}})+'\n',{mode:0o600});
 const retryResult=BACKTRACK?' backtracks='+backtracks:'';
-console.log('H3_BOSS_RESULT '+(done?'PHASE_ADVANCED':'NOT_ADVANCED')+' frame='+win.snap.recordCount+' branches='+branches+' halts='+halts+retryResult+' '+JSON.stringify(win.s));
+console.log('H3_BOSS_RESULT '+(done?policy?'PROGRESSION_CANDIDATE':'PHASE_ADVANCED':'NOT_ADVANCED')+
+  ' frame='+win.snap.recordCount+' branches='+branches+' halts='+halts+
+  ' invalidTransitions='+invalidTransitions+retryResult+' '+JSON.stringify(win.s));
 console.log('H3_BOSS_TAPE='+file);
 process.exitCode=done?0:2;
