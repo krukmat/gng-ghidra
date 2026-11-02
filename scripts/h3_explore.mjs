@@ -103,6 +103,8 @@ async function explore(seed,iters,minutes,from){
   if(!from&&requestedGoal!==WEAPON_GOAL&&requestedGoal!=='phase')
     throw Error('H3_GOAL_INVALID '+requestedGoal);
   const objective=selectExploreGoal(requestedGoal,from?s0:null);
+  if(objective.kind===WEAPON_GOAL&&GEN!=='g6')
+    throw Error('H3_GOAL_WEAPON_REQUIRES_G6');
   objectivePhase=objective.kind===WEAPON_GOAL?objective.phase:null;
   if(objective.kind===WEAPON_GOAL&&meta?.poke)
     throw Error('H3_GOAL_WEAPON_POKE_SEED_FORBIDDEN');
