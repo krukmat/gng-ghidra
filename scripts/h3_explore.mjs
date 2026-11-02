@@ -169,6 +169,21 @@ async function explore(seed,iters,minutes,from){
     events:defineInputSchedule([...src.filter(e=>!Object.hasOwn(P1_BITS,e.control)||e.cycle<START*CPF),
       ...masksToEvents(START,win.masks,p1Before)].sort((a,b)=>a.cycle-b.cycle)).events};
   const tapeSha=sha256(JSON.stringify(metadata));
+  const winRamSha=sha256(ram(board,0x3000));
+  // A weapon-acquisition goal is accepted only after a fresh reset-to-goal
+  // replay of the exact serialized input schedule. Never trust snapshots alone.
+  if(goal&&objective.kind===WEAPON_GOAL){
+    const scheduled=defineInputSchedule(metadata.events);
+    const shadow=await makeBoard((addr,cycle)=>readScheduledPort(scheduled,addr,cycle),()=>{});
+    const check=shadow.lab.advanceTo(win.frame);
+    if(check.status!=='FRAMES_DONE')throw Error('H3_WEAPON_SELF_REPLAY_HALTED');
+    if(sha256(ram(shadow,0x3000))!==winRamSha)
+      throw Error('H3_WEAPON_SELF_REPLAY_RAM_MISMATCH');
+    const actual=lookBoss(ram(shadow,BOSS_LIFE+1));
+    if(!exploreGoalSatisfied(objective,s0,actual))
+      throw Error('H3_WEAPON_SELF_REPLAY_PICKUP_MISSING');
+    console.log('H3_WEAPON_SELF_REPLAY=MATCH frame='+win.frame+' ram='+winRamSha);
+  }
   const probe=from?'h3-s2':'h3-s1',
     tag=goal?(objective.kind===WEAPON_GOAL?'-weapon':from?'-phase':'-arena'):'-best';
   const tapeFile=join(OUT,'tape-'+(from?'s2-':'')+'s'+seed+'-'+win.frame+tag+'.json');
@@ -181,7 +196,7 @@ async function explore(seed,iters,minutes,from){
     ...policy?{progressionPolicy:policy.id,progressionStatus:'UNVERIFIED'}:{},
     ...objective.kind===WEAPON_GOAL?{objective:'WEAPON_ACQUIRED',targetWeapon:objective.weapon,
       weaponPickupFrame:acquiredFrame,weaponAtGoal:win.weapon}:{},
-    ramSha:sha256(ram(board,0x3000))}})+'\n',{mode:0o600});
+    ramSha:winRamSha}})+'\n',{mode:0o600});
   const result=halt?'STOP_HALT':goal?
     objective.kind===WEAPON_GOAL?'GO_WEAPON_ACQUIRED':
     from?policy?'GO_PROGRESSION_CANDIDATE':'GO_PHASE':'GO_ARENA':'NOT_REACHED';
