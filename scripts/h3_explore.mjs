@@ -162,7 +162,10 @@ async function explore(seed,iters,minutes,from){
   const probe=from?'h3-s2':'h3-s1',
     tag=goal?(objective.kind===WEAPON_GOAL?'-weapon':from?'-phase':'-arena'):'-best';
   const tapeFile=join(OUT,'tape-'+(from?'s2-':'')+'s'+seed+'-'+win.frame+tag+'.json');
-  const extra=from?{from:source,bossLife:win.boss,transitionFrame:transition}:{};
+  // Weapon acquisition is not a phase transition. A null transitionFrame
+  // would be compared against the historic first transition (0->1) by replay.
+  const extra=from?{from:source,bossLife:win.boss,
+    ...objective.kind===WEAPON_GOAL?{}:{transitionFrame:transition}}:{};
   writeFileSync(tapeFile,JSON.stringify({...metadata,sha256:tapeSha,h3:{probe,bundle:GEN,seed,params,
     iters:n,goalFrame:win.frame,signal,livesStart:s0.lives,...extra,
     ...policy?{progressionPolicy:policy.id,progressionStatus:'UNVERIFIED'}:{},
