@@ -130,3 +130,16 @@ test('GE-W1: preserve the required weapon across best-cell ranking and listing',
   // The default rank and lower phases keep their historic shape.
   assert.equal(bestRank(true,'y')({...base,phase:4}).length,4);
 });
+
+test('GE-W1: shield-ready cells dominate selection while retaining alternatives',()=>{
+  const policy=weaponPolicyForPhase(5);
+  const cells=Array.from({length:30},(_,i)=>({key:String(i),weapon:4,scroll:7424,chosen:0}));
+  cells.push({key:'shield',weapon:3,scroll:7424,chosen:0});
+  const rng=prng(77);let shield=0,other=0;
+  for(let i=0;i<200;i++){
+    const selected=pickCell(cells,rng,1,policy);
+    if(selected.weapon===3)shield++;else other++;
+  }
+  assert.ok(shield>120,'most exploration should expand from shield-equipped cells');
+  assert.ok(other>0,'reserve a fraction for alternate item routes');
+});
