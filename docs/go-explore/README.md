@@ -198,6 +198,14 @@ node scripts/h3_tape.mjs selftest | selftest-rewind | record | convert <journal.
 - **Maniobras.** Rutas cortas escritas a mano tras una observación (por ejemplo, ir a por la llave y esperar la transición). No buscan: comparan como máximo tres variantes contra el control.
 - **Cierre de fase.** Matar al jefe no cierra la fase: en las fases 1–5 hubo que esperar a que apareciera la llave y recogerla. Premiar la X deja al bot esperando en el extremo derecho. El criterio de cierre es siempre la transición RAM `0x72`, comprobada en el replay y en el vídeo.
 
+### GE-W1 — guarda de arma en el encuentro final (rama `feature/ge-w1-weapon-aware-progression`)
+
+- El contrato de `src/h3_weapon_policy.mjs` se activa **solo** al empezar una búsqueda con `RAM[0x72]=5` (fase visible 6): arma `RAM[0x73]=3` (Shield/Cross). Sin precondición cumplida, una transición hacia adelante no es éxito; `5→4` con arma distinta de 3 se clasifica `INVALID_WEAPON_ROLLBACK` y se poda.
+- `src/h3_explore.mjs` añade el arma a la clave de celda solo en RAM fase 5, por lo que las rutas con armas diferentes no se fusionan. `explore --from` da prioridad a las celdas con escudo, ignora retrocesos como objetivos y reporta `GO_PROGRESSION_CANDIDATE` si detecta avance con el arma correcta.
+- `h3_boss_search.mjs` observa la misma dirección, conserva rutas con diferentes armas en la deduplicación y añade una bonificación de prioridad al escudo. Poda cambios de fase inválidos (contabilizados en `invalidTransitions`); con la política activa informa `PROGRESSION_CANDIDATE`, nunca una sala final certificada.
+- **No impedir disparos sin el escudo:** son necesarios para abrir vasijas y obtener drops. Aún no existe una señal RAM fiable de inicio del encuentro para bloquear únicamente el combate contra los dos jefes. Tampoco se supone una fase 7 ni se infiere el segundo ciclo de un cambio en `0x72`.
+- Validación unitaria: `node --test tests/test_h3_weapon_policy.mjs tests/test_h3_explore.mjs`. Regresión pendiente en el Mac con los archivos privados de §10: replay semilla/candidata `MATCH`, frame 45814 y trazas de arma, más tests sobre bundle g6. No ejecutar `finalize` ni `verify_h3_phase.sh 6` sin prueba de un final real.
+
 ## 7. Determinismo y snapshots de laboratorio
 
 - El motor es determinista: la misma cinta da la misma RAM. Los snapshots (`lab.save`/`restore`) solo sirven para saltar entre ramas. Nunca escriben RAM ni entran en la cinta. La cinta final se valida reproduciéndola desde reset, sin restore.
