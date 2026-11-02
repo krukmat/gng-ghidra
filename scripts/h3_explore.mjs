@@ -68,11 +68,16 @@ async function explore(seed,iters,minutes,from){
   const base=defineInputSchedule(src),p1Before=eventsToMasks(START,START+1,src.filter(e=>e.cycle<START*CPF))[0];
   const cur=new Uint8Array(MAX_FRAMES);
   let fatalAt=0,livesRef=null,phaseRef=null,phaseAt=0;
+  let previousWeapon=null,weaponAtTransition=null;
   const board=await makeBoard((addr,cycle)=>addr===0x3001&&cycle>=START*CPF?
     0xff^cur[Math.floor(cycle/CPF)-START]:readScheduledPort(base,addr,cycle),
   (i,rec)=>{const s=look(rec);
     if(livesRef!==null&&!fatalAt&&isFatal(s,livesRef))fatalAt=i;
-    if(phaseRef!==null&&!phaseAt&&s.phase!==phaseRef)phaseAt=i;});
+    if(phaseRef!==null&&!phaseAt&&s.phase!==phaseRef){
+      phaseAt=i;
+      weaponAtTransition=previousWeapon??rec[0x73];
+    }
+    previousWeapon=rec[0x73];});
   let prefix=new Uint8Array(0),source=null;
   if(from){
     prefix=eventsToMasks(START,first,src);
@@ -90,7 +95,8 @@ async function explore(seed,iters,minutes,from){
   const cells=new Map([[root.key,root]]),list=[root];
   // S1: scroll to the arena. S2: phase, then less boss life, then X (H3_RANK=y: armour, then height).
   const rankMode=process.env.H3_RANK??'x',rank=bestRank(from,rankMode,policy);
-  const isGoal=from?s=>progressionCandidate(phaseOutcome(s0.phase,s.phase,s.weapon,policy)):
+  const isGoal=from?s=>progressionCandidate(phaseOutcome(s0.phase,s.phase,
+    weaponAtTransition??s.weapon,policy)):
     s=>s.phase===0&&s.scroll>=ARENA;
   const ahead=(a,b)=>{const x=rank(a),y=rank(b);for(let i=0;i<x.length;i++)
     if(x[i]!==y[i])return x[i]>y[i];return false;};
@@ -98,14 +104,16 @@ async function explore(seed,iters,minutes,from){
   const t0=Date.now();let tLog=t0;
   while(n<iters&&Date.now()-t0<minutes*60000&&!goal&&!halt){
     const c=pickCell(list,rand,P.scrollBonus);c.chosen++;n++;
-    board.lab.restore(c.snap);fatalAt=0;phaseAt=0;livesRef=c.lives;
+    board.lab.restore(c.snap);fatalAt=0;phaseAt=0;weaponAtTransition=null;
+    previousWeapon=c.weapon??null;livesRef=c.lives;
     const len=c.masks.length;
     extendMasks(cur,c.masks,chunkMasks(rand,P.chunk,len?c.masks[len-1]:0,P));
     for(let k=P.evalEvery;k<=P.chunk;k+=P.evalEvery){
       const f=c.frame+k,res=board.lab.advanceTo(f);frames+=P.evalEvery;
       if(res.status!=='FRAMES_DONE'){halt={frame:f,...res};break;}
       if(fatalAt){cuts++;break;}
-      const s=view(),outcome=from?phaseOutcome(s0.phase,s.phase,s.weapon,policy):'UNCHANGED';
+      const s=view(),outcome=from?phaseOutcome(s0.phase,s.phase,
+        weaponAtTransition??s.weapon,policy):'UNCHANGED';
       if(from&&s.phase!==s0.phase&&!progressionCandidate(outcome)){
         invalidTransitions++;cuts++;break; // rollback or incorrect weapon: never a goal
       }
