@@ -1,6 +1,6 @@
 # Go-Explore y exploración H3 — entrada canónica
 
-**Estado (2026-11-02):** fases visibles 1–4 completadas desde reset con cintas de solo entradas, replay `MATCH`, vídeo y métricas. Siguiente trabajo: V2–V4 del [plan del bot de control](../plan-bot-control-jugabilidad-2026-11-01.md) (no iniciado).
+**Estado (2026-11-02):** fases visibles 1–4 completadas desde reset con cintas de solo entradas, replay `MATCH`, vídeo y métricas. **Siguiente encargo: fase visible 5** (pendiente). V2–V4 del [plan del bot de control](../plan-bot-control-jugabilidad-2026-11-01.md) no iniciados.
 
 Este documento es la referencia vigente para ejecutar, reproducir y verificar las herramientas de exploración H3. Los handoffs y planes enlazados en [§9](#9-documentos-históricos) conservan la evidencia y el razonamiento de cada etapa, pero sus instrucciones ya no están vigentes.
 
@@ -176,13 +176,13 @@ node scripts/h3_tape.mjs selftest | selftest-rewind | record | convert <journal.
 
 1. **Preflight.** Comprobar que existen `node`, `ffmpeg`/`ffprobe`, `roms/gng.zip` y el bundle certificado g6. Después, reproducir la cinta semilla y exigir `MATCH`:
    ```sh
-   node scripts/h3_explore.mjs replay out/h3/explore/tape-fase3-completa-22380.json
+   node scripts/h3_explore.mjs replay out/h3/explore/tape-fase4-completa-28260.json
    ```
 2. **Semilla.** Elegir una de tres: reset (`explore` sin `--from`), una cinta final con `h3.goalFrame` y `h3.ramSha` (`--from` o `H3_SEED`), o una cinta en vivo importada (`import`). Para ramificar, el prefijo debe tener los controles liberados en el punto de corte; si no, usar `h3_boss_maneuver.mjs`, que los libera.
 3. **Exploración y búsqueda.** El método depende del tramo ([§6](#6-criterios-de-búsqueda)). Cada búsqueda guarda una cinta reanudable, que se encadena con `H3_SEED` o pasándola a `h3_boss_maneuver.mjs`.
-4. **Cinta final.** Sellarla con `h3.goalFrame`, `h3.signal`, `h3.ramSha` y `h3.transitionFrom`/`transitionFrame`, sin poke. `explore` y `finish_phase` ya lo hacen; para la fase 3 se usa `finalize_phase3`. No sobrescribir la cinta de entrada.
+4. **Cinta final.** Sellarla con `h3.goalFrame`, `h3.signal`, `h3.ramSha` y `h3.transitionFrom`/`transitionFrame`, sin poke. Para las fases visibles 4 y posteriores usar `h3_finalize_phase.mjs` con fase N, semilla, candidata y `goalFrame`. Para fase 3 se mantiene `finalize_phase3`. No sobrescribir la cinta de entrada.
 5. **Replay.** `h3_explore.mjs replay <final>` debe dar `MATCH`.
-6. **Vídeo y aceptación.** Comprobar con `h3_video.mjs check <final> <goalFrame>` y exportar con `h3_video.mjs export <final> <goalFrame> <inicio>`, compartiendo el primer frame con el vídeo anterior. Revisar con ffprobe el códec, el tamaño, el número de frames, el evento `phase` y `ramVerified=true`. Para la fase 3, `verify_h3_phase3.sh` hace todo esto.
+6. **Vídeo y aceptación.** Comprobar con `h3_video.mjs check <final> <goalFrame>` y exportar con `h3_video.mjs export <final> <goalFrame> <inicio>`, compartiendo el primer frame con el vídeo anterior. Revisar con ffprobe el códec, el tamaño, el número de frames, el evento `phase` y `ramVerified=true`. Para las fases visibles 4 y posteriores, `verify_h3_phase.sh` hace todo esto (incluido el renombrado tras PASS); la fase 3 conserva `verify_h3_phase3.sh`.
 
 ## 6. Criterios de búsqueda
 
@@ -233,6 +233,7 @@ Conservan la evidencia de cada etapa en su documento de origen. Sus instruccione
 | [`agents/h3-phase3-bot-video-handoff.md`](../agents/h3-phase3-bot-video-handoff.md) | Encargo de la fase 3, cumplido (02/11). |
 | [`agents/h3-phase3-local-agent-kit.md`](../agents/h3-phase3-local-agent-kit.md) | Ejecución de la fase 3 (P0–P5) y defectos corregidos. |
 | [`agents/h3-phase4-bot-task.md`](../agents/h3-phase4-bot-task.md) | Encargo de la fase 4, cumplido (02/11). Evidencia en §10. |
+| [`agents/h3-phase5-bot-task.md`](../agents/h3-phase5-bot-task.md) | **Vigente:** fase visible 5 pendiente, RAM 4→5, cinta y vídeo. |
 | [`plan-bot-control-jugabilidad-2026-11-01.md`](../plan-bot-control-jugabilidad-2026-11-01.md) | **Vigente** como lista de tareas (V2–V4) y registro de V1. Los detalles operativos remiten aquí. |
 
 ## 10. Resultados verificados
@@ -318,6 +319,8 @@ bash scripts/verify_h3_phase.sh 4 out/h3/explore/tape-fase3-completa-22380.json 
 - Gate (`out/h3/phase4/gate.log`): `H3_PHASE_PREFIX=PASS`, replay `MATCH` de las dos cintas, `H3_VIDEO_CHECK=PASS` en 28260 (RGBA `a39323dae179ab555bdb3c9d4c3f506f8f0d7e0f55e77efe81e1b8dd71eea73f`), ffprobe h264 256×224 5881 frames y `H3_PHASE4_ACCEPTANCE=PASS`. `fase4.mp4` ocupa 13.078.458 bytes.
 - La secuencia se repitió entera desde la semilla, con el registrador ya corregido: los cinco tramos, las cuatro maniobras y la cinta final salieron idénticos byte a byte (archivo `77b06535…`). Copias de los intermedios en `out/h3/phase4/steps/`. Los comandos de diagnóstico (exports cortos e `inspect`) y las maniobras descartadas (`keyleft3`, `return`) están en el log pero no contribuyen a la cinta.
 - El frame 22380 de `fase4.mp4` coincide en métricas RAM con el último de `fase3.mp4`; en píxeles decodificados difiere por la recodificación H.264 (PSNR ≈ 40 dB).
+
+**Fase 5 — pendiente, todavía NO verificada.** Semilla `tape-fase4-completa-28260.json`, SHA canónico `ca3be0033ff46cbe28e2b10870b698369505725de352253b7ec183ded62926ac`, RAM SHA `182df0da9c2a2451bf157d088b42c528af6f4771fed00c43ac3984e66c0a61dd` en frame 28260. Objetivo RAM `4→5` y comienzo jugable de fase 6. No hay aún cinta ni MP4 finales. Al cerrar, registrar **en esta sección** la fila de evidencia (hashes, transición, vídeo, gate) y los comandos reales de `out/h3/phase5/commands.log`. No insertar salidas hipotéticas. [Tarea](../agents/h3-phase5-bot-task.md).
 
 **Otras cintas útiles:**
 
