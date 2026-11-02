@@ -4,6 +4,7 @@ import {CYCLES_PER_FRAME as CPF} from '../src/gngb_runtime.mjs';
 import {defineInputSchedule} from '../src/gngb_input_contract.mjs';
 import {prng,chunkMasks,extendMasks,masksToEvents,eventsToMasks,lookBoss,BOSS_LIFE,isFatal,cellKey,better,
   bestRank,pickCell,cellsListing} from '../src/h3_explore.mjs';
+import {weaponPolicyForPhase} from '../src/h3_weapon_policy.mjs';
 
 const f=e=>e.map(x=>`${x.cycle/CPF}:${x.control}${x.pressed?'+':'-'}`);
 
@@ -73,6 +74,12 @@ test('S2: la vida del cíclope entra en la celda; S1 no cambia',()=>{
   assert.equal(cellKey(s),'0:1:216:11:1:3');
   const {boss,...s1}=s;
   assert.equal(cellKey(s1),'0:1:216:11:1');
+  // Final arena keeps weapon variants distinct without changing phases 1-5.
+  b[0x72]=5;b[0x73]=4;
+  const final=lookBoss(b);
+  assert.equal(final.weapon,4);
+  assert.equal(cellKey(final),'5:1:216:11:1:3:4');
+  assert.equal(cellKey({...final,weapon:3}),'5:1:216:11:1:3:3');
   // S1 listings (and so their hashes) keep no boss field.
   assert.ok(!JSON.stringify(cellsListing([{...s1,key:'k',chosen:0,masks:new Uint8Array(0)}])).includes('boss'));
 });
@@ -103,4 +110,23 @@ test('orden de la mejor celda: X por defecto, altura con armadura en H3_RANK=y',
   assert.deepEqual(bestRank(true,'height')(c),[4,735,-0,-28760]);
   assert.ok(bestRank(true,'height')({...c,y:881,armor:1})[1]>bestRank(true,'height')(c)[1]);
   assert.throws(()=>bestRank(true,'z'),/H3_RANK_INVALID/);
+});
+
+test('GE-W1: preserve the required weapon across best-cell ranking and listing',()=>{
+  const policy=weaponPolicyForPhase(5);
+  const base={phase:5,cp:0,boss:4,x:7600,y:1700,frame:45100,armor:0,
+    scroll:7424,weapon:4};
+  const shield={...base,weapon:3,x:7400,frame:45000};
+  for(const mode of ['x','y','height']){
+    const rank=bestRank(true,mode,policy);
+    assert.equal(rank(shield)[0],1);
+    assert.equal(rank(base)[0],0);
+    assert.ok(rank(shield)[0]>rank(base)[0]);
+    assert.equal(rank(shield).length,5);
+  }
+  const cells=[base,shield].map(s=>({...s,key:cellKey(s),masks:new Uint8Array(0),chosen:0}));
+  assert.notEqual(cells[0].key,cells[1].key);
+  assert.deepEqual(cellsListing(cells).map(c=>c.weapon),[3,4]);
+  // The default rank and lower phases keep their historic shape.
+  assert.equal(bestRank(true,'y')({...base,phase:4}).length,4);
 });
