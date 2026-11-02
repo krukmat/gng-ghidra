@@ -289,6 +289,22 @@ La tercera búsqueda termina en `end=20520`, pero su cabeza final (`H3_LAST`) se
 
 ## 11. Mantenimiento
 
+### Convención de nombres (obligatoria desde la fase 4)
+
+Los artefactos de una fase completada siguen el patrón de las fases 2 y 3. `N` es la fase **visible**, no el valor de `0x72`; por ejemplo, la fase 4 cierra con `0x72: 3→4`.
+
+| Artefacto | Nombre | Ejemplo (fase 3) |
+| --- | --- | --- |
+| Cinta final | `out/h3/explore/tape-faseN-completa-<goalFrame>.json` | `tape-fase3-completa-22380.json` |
+| Vídeo | `out/h3/video/faseN.mp4` | `fase3.mp4` |
+| Métricas | `out/h3/video/faseN.json` | `fase3.json` |
+
+- `h3_video.mjs export` escribe con el nombre largo (`<cinta>-<sha8>-<inicio>-<fin>`), que es el que comprueba el gate de aceptación. Cuando el gate da `PASS`, ese par MP4/JSON se renombra a `faseN.{mp4,json}`. El campo `video` del JSON conserva el nombre original, y `videoSha256` debe coincidir con el MP4 renombrado.
+- El vídeo `faseN` empieza en el frame final del vídeo `fase(N−1)` y termina en el `goalFrame` de la cinta, que debe mostrar el inicio jugable de la fase N+1.
+- `faseN` queda reservado para la fase completa y aceptada. Los tramos parciales conservan el nombre largo de la exportación. `fase-2-incomplete.{mp4,json}` es anterior a esta regla y se mantiene como histórico.
+- La fase 1 también es anterior: su cinta se llama `tape-s2-phase-5950.json` y no se renombra, porque hay cintas, scripts y documentos que la citan por ese nombre.
+- Una herramienta nueva de sellado para la fase N escribe directamente `tape-faseN-completa-<goalFrame>.json`, igual que hace `h3_finalize_phase3.mjs`.
+
 - Los resultados nuevos (cintas, hashes, vídeos) se registran en §10, y su estado de tarea en el plan del bot. Los handoffs futuros deben remitir a este README en lugar de copiar instrucciones.
 - Si cambia una interfaz o una variable, actualizar §3–§4 y el comentario de cabecera del script en el mismo commit.
 - No subir `roms/`, `out/`, `cfg/`, `gng-ghidra/`, cintas, capturas ni vídeos. No modificar motor, AOT, runtime ni bundles.
