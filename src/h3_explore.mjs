@@ -105,6 +105,15 @@ export const cellKey=s=>[s.phase,s.cp,s.x>>4,s.y>>3,s.armor,...'boss' in s?[s.bo
 /** True when `c` beats `old` for the same cell (armour first, then frames). */
 export const better=(c,old)=>!old||c.armor<old.armor||c.armor===old.armor&&c.frame<old.frame;
 
+/** Best-cell order (4 keys, higher wins). S1: scroll, then X. S2 (`from`):
+ * phase, less boss life, then X; mode 'y' (H3_RANK=y, vertical stretches
+ * where X and scroll stop growing): phase, armour kept, then height Y. */
+export function bestRank(from,mode='x'){
+  if(mode!=='x'&&mode!=='y')throw Error('H3_RANK_INVALID '+mode);
+  if(!from)return c=>[c.phase===0?c.scroll:-1,c.x,-c.frame,0];
+  return mode==='y'?c=>[c.phase,-c.armor,c.y,-c.frame]:c=>[c.phase,-c.boss,c.x,-c.frame];
+}
+
 /** Weighted pick: rarely chosen cells first, slight bonus for scroll. */
 export function pickCell(cells,rand,scrollBonus=EXPLORE_DEFAULTS.scrollBonus){
   let total=0;const w=cells.map(c=>{

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {CYCLES_PER_FRAME as CPF} from '../src/gngb_runtime.mjs';
 import {defineInputSchedule} from '../src/gngb_input_contract.mjs';
 import {prng,chunkMasks,extendMasks,masksToEvents,eventsToMasks,lookBoss,BOSS_LIFE,isFatal,cellKey,better,
-  pickCell,cellsListing} from '../src/h3_explore.mjs';
+  bestRank,pickCell,cellsListing} from '../src/h3_explore.mjs';
 
 const f=e=>e.map(x=>`${x.cycle/CPF}:${x.control}${x.pressed?'+':'-'}`);
 
@@ -91,4 +91,14 @@ test('cinta en vivo: un valor por puerto y frame, al inicio del frame',async()=>
   assert.throws(()=>liveToEvents([[0,at(5),0xff],[0,at(4),0xff]]),/H3_LIVE_TAPE_INVALID/);
   // P1 held before START is not pressed again by the explorer's masks.
   assert.deepEqual(f(masksToEvents(1200,Uint8Array.from([1]),1)),['1201:p1.right-']);
+});
+
+test('orden de la mejor celda: X por defecto, altura con armadura en H3_RANK=y',()=>{
+  const c={phase:4,boss:4,x:7000,y:735,frame:28760,armor:0,scroll:6656};
+  assert.deepEqual(bestRank(false)(c),[-1,7000,-28760,0]);
+  assert.deepEqual(bestRank(true)(c),[4,-4,7000,-28760]);
+  assert.deepEqual(bestRank(true,'y')(c),[4,-0,735,-28760]);
+  // Armour kept outranks a higher cell without it.
+  assert.ok(bestRank(true,'y')(c)[1]>bestRank(true,'y')({...c,y:881,armor:1})[1]);
+  assert.throws(()=>bestRank(true,'z'),/H3_RANK_INVALID/);
 });

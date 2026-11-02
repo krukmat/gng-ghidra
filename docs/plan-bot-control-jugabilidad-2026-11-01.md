@@ -1,6 +1,6 @@
 # Bot estándar de control de jugabilidad — tareas
 
-**Fecha:** 2026-11-02 · **Estado:** E0 y V1 implementadas; fases 1–4 completadas; fase 5 pendiente, V2–V4 pospuestas.
+**Fecha:** 2026-11-02 · **Estado:** E0 y V1 implementadas; fases 1–5 completadas; V2–V4 pospuestas.
 
 **Referencia operativa:** comandos, variables, flujo y resultados verificados de las herramientas H3 están en [docs/go-explore/README.md](go-explore/README.md). Este plan mantiene las tareas y su cierre.
 
@@ -38,7 +38,7 @@ Antes de empezar cada tarea, estimar su coste en la ventana de 5 h y en el seman
     - Vídeo y métricas privados: `out/h3/video/tape-fase3-completa-22380-9feecfa4-16980-22380.{mp4,json}`. H.264, 256×224, 5401 frames (16980–22380), 90,56 s, `ramVerified: true`; el JSON registra exactamente un evento `2→3` en 22029. El primer frame se comparte con el final del vídeo de la fase 2.
     - Búsqueda reproducible: secuencia completa de comandos en [el README de Go-Explore §10](go-explore/README.md#10-resultados-verificados).
   - [x] **Continuación fase 4.** Transición RAM `0x72:3→4` en frame **27849**; cinta `out/h3/explore/tape-fase4-completa-28260.json` (solo entradas, sin pokes, prefijo 22380 intacto), frame 28260 con la fase 5 jugable, 4 vidas y armadura. Replay `MATCH`, RGBA `PASS`, `fase4.{mp4,json}` y `H3_PHASE4_ACCEPTANCE=PASS`; secuencia reproducida byte a byte. Evidencia en [README §10](go-explore/README.md#10-resultados-verificados). [Tarea](agents/h3-phase4-bot-task.md).
-  - [ ] **Continuación fase 5.** Desde `out/h3/explore/tape-fase4-completa-28260.json` (RAM phase=4, 4 vidas, armadura), completar RAM `0x72:4→5` y mostrar inicio jugable de fase 6. Cinta `tape-fase5-completa-<goalFrame>.json`, vídeo y métricas `fase5.{mp4,json}`, replay `MATCH`, RGBA `PASS` y gate `H3_PHASE5_ACCEPTANCE=PASS`; comandos exactos en `out/h3/phase5/commands.log` y evidencia en README §10. No marcar hasta gate PASS. [Tarea](agents/h3-phase5-bot-task.md).
+  - [x] **Continuación fase 5.** Transición RAM `0x72:4→5` en frame **35680**; cinta `out/h3/explore/tape-fase5-completa-36091.json` (solo entradas, sin pokes, prefijo 28260 intacto), frame 36091 con la fase 6 jugable, 5 vidas y armadura. Replay `MATCH`, RGBA `PASS`, `fase5.{mp4,json}` y `H3_PHASE5_ACCEPTANCE=PASS`. La secuencia se reprodujo desde la semilla: mismas cintas, y la cinta final y el MP4 idénticos byte a byte. Nuevo `H3_RANK=y` para subidas. Evidencia en [README §10](go-explore/README.md#10-resultados-verificados). [Tarea](agents/h3-phase5-bot-task.md).
 - [ ] **V2 — Suite de cintas de referencia.** Reproducirlas en cada build y reportar el frame de divergencia, con video.
 - [ ] **V3 — Explorador genérico con un adaptador por juego.**
   - Separar `scripts/h3_explore.mjs` y `src/h3_explore.mjs` en un núcleo y un adaptador.

@@ -18,7 +18,9 @@
  * backtracking N segments when every live branch dies; H3_BACKTRACK_LIMIT caps
  * the number of retries (unlimited by default). Without these variables the
  * original beam-only behaviour is unchanged. H3_DEBUG logs every pruned branch.
- * Output: out/h3/boss/search-p<phase>-<frame>.json (inputs only, private).
+ * Output: out/h3/boss/search-p<phase>-<frame>.json (inputs only, private);
+ * without H3_POKE its h3 also has goalFrame (the saved head), signal and ramSha,
+ * so `h3_explore.mjs replay` verifies it and `explore --from` continues from it.
  */
 import {createHash} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
@@ -158,7 +160,15 @@ const out=join(ROOT,'out/h3/boss');mkdirSync(out,{recursive:true,mode:0o700});
 const file=join(out,'search-p'+phase+'-'+win.snap.recordCount+'.json');
 const search=BACKTRACK?{step:K,backtrack:BACKTRACK,
   backtrackLimit:Number.isFinite(BACKTRACK_LIMIT)?BACKTRACK_LIMIT:'unlimited',backtracks}:{};
-writeFileSync(file,JSON.stringify({...metadata,sha256,h3:{poke:process.env.H3_POKE??'',route:win.route,...search}})+'\n',{mode:0o600});
+// Input-only heads also carry goalFrame/signal/ramSha, so replay checks them and explore --from resumes.
+let anchor={};
+if(!POKES.length){
+  board.lab.restore(win.snap);
+  const r=board.state.ramBytes(0,0x3000).bytes,w=look(r);
+  anchor={goalFrame:win.snap.recordCount,signal:{phase:w.phase,cp:w.cp,x:w.x,y:w.y,scroll:w.scroll,lives:w.lives,armor:w.armor},
+    ramSha:createHash('sha256').update(r).digest('hex')};
+}
+writeFileSync(file,JSON.stringify({...metadata,sha256,h3:{poke:process.env.H3_POKE??'',route:win.route,...search,...anchor}})+'\n',{mode:0o600});
 const retryResult=BACKTRACK?' backtracks='+backtracks:'';
 console.log('H3_BOSS_RESULT '+(done?'PHASE_ADVANCED':'NOT_ADVANCED')+' frame='+win.snap.recordCount+' branches='+branches+' halts='+halts+retryResult+' '+JSON.stringify(win.s));
 console.log('H3_BOSS_TAPE='+file);

@@ -15,7 +15,8 @@
  * --from replays the tape up to its goalFrame (its RAM hash must match):
  * other ports, and P1 before frame 1200, come from that tape (a human's own
  * coin and Start). It then explores with the cyclops life in the cell; the
- * prefix is part of the new tape.
+ * prefix is part of the new tape. H3_RANK=y (only with --from) saves the
+ * highest cell (armour kept first) instead of the furthest one, for climbs.
  * import turns a live tape (app or lab recording) into a live-recording B3
  * tape at frame starts, replays it on this bundle and requires the record
  * hash of the tape's check (--unverified accepts a tape without one). It also
@@ -37,7 +38,7 @@ import {resolveB3LabTape} from '../src/v3_b3_external_tape.mjs';
 import {LIVE_TAPE_SCHEMA} from '../src/v3_b3_live_tape.mjs';
 import {liveToEvents} from '../src/h3_live_import.mjs';
 import {EXPLORE_DEFAULTS as P,P1_BITS,prng,chunkMasks,extendMasks,masksToEvents,eventsToMasks,look,lookBoss,BOSS_LIFE,
-  isFatal,cellKey,better,pickCell,sha256,cellsListing} from '../src/h3_explore.mjs';
+  isFatal,cellKey,better,bestRank,pickCell,sha256,cellsListing} from '../src/h3_explore.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const selected=selectB3Bundle(ROOT);
@@ -84,8 +85,8 @@ async function explore(seed,iters,minutes,from){
   console.log('H3_EXPLORE_START gen='+GEN+' seed='+seed+' from='+(from??'reset')+' '+JSON.stringify(s0));
   const root={...s0,key:cellKey(s0),frame:first,masks:prefix,snap:board.lab.save(),chosen:0};
   const cells=new Map([[root.key,root]]),list=[root];
-  // S1: scroll to the arena. S2: phase, then less boss life, then X.
-  const rank=from?c=>[c.phase,-c.boss,c.x,-c.frame]:c=>[c.phase===0?c.scroll:-1,c.x,-c.frame,0];
+  // S1: scroll to the arena. S2: phase, then less boss life, then X (H3_RANK=y: armour, then height).
+  const rankMode=process.env.H3_RANK??'x',rank=bestRank(from,rankMode);
   const isGoal=from?s=>s.phase!==s0.phase:s=>s.phase===0&&s.scroll>=ARENA;
   const ahead=(a,b)=>{const x=rank(a),y=rank(b);for(let i=0;i<4;i++)if(x[i]!==y[i])return x[i]>y[i];return false;};
   let best=root,goal=null,halt=null,n=0,cuts=0,frames=0,transition=null;
@@ -114,7 +115,7 @@ async function explore(seed,iters,minutes,from){
   }
   const seconds=(Date.now()-t0)/1000;
   mkdirSync(OUT,{recursive:true,mode:0o700});
-  const params={...P,start:START,arena:ARENA,...from?{bossLife:BOSS_LIFE}:{}};
+  const params={...P,start:START,arena:ARENA,...from?{bossLife:BOSS_LIFE}:{},...rankMode!=='x'?{rank:rankMode}:{}};
   const cellsText=JSON.stringify({seed,params,iters:n,cells:cellsListing(list)})+'\n';
   const cellsFile=join(OUT,'cells-'+(from?'s2-':'')+'s'+seed+'-i'+n+'.json');
   writeFileSync(cellsFile,cellsText,{mode:0o600});
