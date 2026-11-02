@@ -163,12 +163,18 @@ async function replay(path,every){
   const tape=resolveB3LabTape(path),meta=JSON.parse(readFileSync(path,'utf8')).h3??null;
   const end=meta?.goalFrame??tape.frames;
   let lives0=null,firstFatal=null,maxX=0,maxScroll=0,minLives=99,phase0=null,previousPhase=null,transition=null,bossKill=null;
+  let previousWeapon=null;
+  const phaseGuardEvents=[];
   const board=await makeBoard(tape.read,(i,rec)=>{
     const s=lookBoss(rec);
     if(i===START){lives0=s.lives;phase0=s.phase;}
     if(i>START&&transition===null&&(meta?.transitionFrom===undefined?
       s.phase!==phase0:previousPhase===meta.transitionFrom&&s.phase===meta.transitionFrom+1))transition=i;
-    previousPhase=s.phase;
+    if(previousPhase!==null&&previousPhase!==s.phase&&weaponPolicyForPhase(previousPhase)){
+      phaseGuardEvents.push({frame:i,from:previousPhase,to:s.phase,weaponAtExit:previousWeapon,
+        outcome:phaseOutcome(previousPhase,s.phase,previousWeapon)});
+    }
+    previousPhase=s.phase;previousWeapon=s.weapon;
     if(meta?.from&&i>meta.from.goalFrame&&bossKill===null&&s.boss===0)bossKill=i;
     if(i>=START){maxX=Math.max(maxX,s.x);maxScroll=Math.max(maxScroll,s.scroll);minLives=Math.min(minLives,s.lives);
       if(i>START&&firstFatal===null&&isFatal(s,lives0))firstFatal={frame:i,...s};}
@@ -184,6 +190,7 @@ async function replay(path,every){
     ' tape='+tape.sha256+' ram='+ramSha+' signal='+JSON.stringify(signal)+' maxX='+maxX+' maxScroll='+maxScroll+
     ' lives0='+lives0+' minLives='+minLives+' firstFatal='+JSON.stringify(firstFatal)+
     ' transition='+transition+(meta?.from?' bossKill='+bossKill:''));
+  if(phaseGuardEvents.length)console.log('H3_REPLAY_PHASE_GUARD '+JSON.stringify(phaseGuardEvents));
   process.exitCode=match===false?1:0;
 }
 
