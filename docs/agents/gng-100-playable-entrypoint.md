@@ -8,6 +8,7 @@ la [tarea contra el estancamiento](gng-bot-antistuck-task.md) está pendiente.
 Investigación externa preparada: [BT-R1 — ChatGPT Investigación avanzada](gng-bot-external-research-task.md).
 **Plan de dependencias y aceptación:** [G0–G7 / H0–H6](../plan-100pct-jugable-2026-10-26.md).
 **Plan de contenido H3→H4 (27/10/2026):** [fases, cobertura estática y cintas humanas desde reset](../plan-contenido-h3-h4-2026-10-27.md).
+**Go-Explore / exploración H3 (vigente, 02/11/2026):** [herramientas, flujo y resultados de las fases 1–3](../go-explore/README.md).
 
 > **MANDATO INVARIABLE: lograr el 100% de jugabilidad auténtica de Ghosts ’n Goblins.**
 > **TODO ESTE PLAN ES SUGERIDO Y MODIFICABLE:** el modelo sucesor puede cambiar fases, dependencias, tareas, algoritmos, herramientas y orden de ejecución cuando la evidencia demuestre una vía mejor. NO puede sacrificar la jugabilidad real ni declarar éxito sin verificarlo.

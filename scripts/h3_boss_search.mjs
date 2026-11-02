@@ -7,16 +7,17 @@
  * Arthur dies (handler 0x0510 in the bank window, 0x47xx/0x4Bxx, or a hit
  * handler 0x9C5C/0x9C64/0x8E05 while already without armour) or lives drop are
  * pruned; losing the armour (0x00AC=1, cleared by the respawn at 0x6D25) is penalised.
- * DEFERRED (27/10/2026): not validated after the 0x00AC fix; no boss defeated yet.
+ * Without H3_POKE, H3_SEED continues an input-only tape instead: phases 2 and 3
+ * were completed that way (02/11/2026; docs/go-explore/README.md).
  * Success: 0x72 advances (boss defeated, key taken, gate crossed).
- * Usage: H3_POKE=... node scripts/h3_boss_search.mjs <phase> [start=2200] [step=60] [end=9000]
+ * Usage: [H3_POKE=...|H3_SEED=<tape>] node scripts/h3_boss_search.mjs <phase> [start=2200] [step=60] [end=9000]
  * Env: H3_SEED earlier tape to resume from, H3_WX/H3_WY/H3_WS/H3_WU progress weights (x, max y, score, climb = start y - min y),
  * H3_WB health penalty; H3_BOSS_LIFE comma-separated RAM health addresses (default 0xe76),
  * H3_LAST save the last beam head instead of the best, H3_WA armour-loss penalty, H3_XCAP x cap (boss arena), H3_WIDTH beam width.
  * H3_STEP overrides the positional segment length. H3_BACKTRACK=N enables
  * backtracking N segments when every live branch dies; H3_BACKTRACK_LIMIT caps
  * the number of retries (unlimited by default). Without these variables the
- * original beam-only behaviour is unchanged.
+ * original beam-only behaviour is unchanged. H3_DEBUG logs every pruned branch.
  * Output: out/h3/boss/search-p<phase>-<frame>.json (inputs only, private).
  */
 import {createHash} from 'node:crypto';

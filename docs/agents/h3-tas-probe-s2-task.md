@@ -1,5 +1,9 @@
 # H3-S2 — Sonda TAS: vida del cíclope y paso a la fase 2
 
+> **Histórico (2026-11-02).** Instrucciones vigentes, herramientas y resultados de las fases 1–3: [docs/go-explore/README.md](../go-explore/README.md). Este documento conserva la evidencia de su etapa.
+
+> El STOP se superó después: con el jefe a 0 (`tape-s2-s1-5528-best.json`), `h3_finish_phase.mjs` recogió la llave y la fase 1 terminó (`0x72` 0→1 en el frame 5890).
+
 **Estado:** STOP (28/10/2026): `0x72` no cambia en 30 min; vida del jefe en `0x0E76`; MAME confirma el mismo comportamiento (ver el plan). Sigue a [H3-S1](h3-tas-probe-s1-task.md) (GO).
 Pertenece al [plan de contenido](../plan-contenido-h3-h4-2026-10-27.md).
 

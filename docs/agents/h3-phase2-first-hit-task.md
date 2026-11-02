@@ -1,5 +1,7 @@
 # H3-F2 — Diagnosticar el primer impacto cerca de X=5464
 
+> **Histórico (2026-11-02).** Instrucciones vigentes, herramientas y resultados de las fases 1–3: [docs/go-explore/README.md](../go-explore/README.md). Este documento conserva la evidencia de su etapa.
+
 **Estado:** CERRADA (27/10/2026): causa demostrada, mejora local y sin avance.
 El `right_jump` de 7221 eleva a Arthur hasta un objeto de tipo 3 que cae en
 X=5444. El impacto llega en 7233 y `0x9c64`, 58 frames después. La maniobra

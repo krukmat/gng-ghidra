@@ -1,5 +1,9 @@
 # Handoff: bot y vídeo de la fase 3
 
+> **Histórico (2026-11-02).** Instrucciones vigentes, herramientas y resultados de las fases 1–3: [docs/go-explore/README.md](../go-explore/README.md). Este documento conserva la evidencia de su etapa.
+
+> **CUMPLIDO (2026-11-02):** transición `0x72:2→3` en el frame 22029, fase 4 visible en el 22380 y `H3_PHASE3_ACCEPTANCE=PASS`. Ver la ejecución en el [kit local](h3-phase3-local-agent-kit.md).
+
 ## Objetivo y criterio de cierre
 
 Programar una continuación reproducible del bot desde el inicio de la tercera fase hasta completarla. Entregar una cinta de entradas, MP4 y JSON con métricas que muestren el recorrido completo de esa fase, su conclusión y el inicio visible de la cuarta. No cerrar con un clip parcial o solo con la muerte del jefe: verificar la transición RAM `0x72` de **2 a 3**.

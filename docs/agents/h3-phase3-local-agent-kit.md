@@ -1,5 +1,7 @@
 # H3 fase 3 — handoff para agente local
 
+> **Histórico (2026-11-02).** Instrucciones vigentes, herramientas y resultados de las fases 1–3: [docs/go-explore/README.md](../go-explore/README.md). Este documento conserva la evidencia de su etapa.
+
 ## Objetivo
 
 Trabajar en /Users/matias/gng-ghidra. Continuar desde out/h3/explore/tape-fase2-completa-16980.json, frame 16980, phase=2, 4 vidas y armadura puesta (0xAC=0). Preservar el prefijo completo y generar una cinta de solo entradas verificable desde reset. Detectar el frame exacto de RAM 0x72: 2 -> 3 y continuar hasta mostrar la fase 4. Exportar el MP4 completo desde 16980 inclusive y el JSON de métricas.
@@ -29,19 +31,7 @@ Leer primero todos los AGENTS.md aplicables del workspace y los documentos docs/
 
 ## Reproducción de la continuación
 
-Todas las cintas y resultados siguientes permanecen en `out/`. Cada búsqueda parte de la cinta indicada por `H3_SEED` y guarda su resultado reanudable en `out/h3/boss/`.
-
-```sh
-H3_SEED=out/h3/explore/tape-fase2-completa-16980.json H3_WIDTH=8 H3_STEP=120 H3_LAST=1 H3_WX=1 H3_WS=0 H3_WA=500 node scripts/h3_boss_search.mjs 2 16980 120 17580
-H3_SEED=out/h3/boss/search-p2-17580.json H3_WIDTH=8 H3_STEP=120 H3_LAST=1 H3_WX=1 H3_WS=0 H3_WA=500 node scripts/h3_boss_search.mjs 2 17580 120 19020
-H3_SEED=out/h3/boss/search-p2-19020.json H3_WIDTH=8 H3_STEP=120 H3_LAST=1 H3_WX=1 H3_WS=0 H3_WA=500 node scripts/h3_boss_search.mjs 2 19020 120 20520
-H3_SEED=out/h3/boss/search-p2-20460.json H3_WIDTH=24 H3_STEP=60 H3_LAST=1 H3_WX=1 H3_WS=0.1 H3_WA=5000 node scripts/h3_boss_search.mjs 2 20460 60 21660
-H3_HORIZON=240 H3_STEP=60 node scripts/h3_boss_maneuver.mjs out/h3/boss/search-p2-21660.json 21660 keyleft=left,left,left,left
-H3_HORIZON=240 H3_STEP=60 node scripts/h3_boss_maneuver.mjs out/h3/boss/f2/maneuver-21660-keyleft.json 21900 return=right,right,right,right
-H3_HORIZON=240 H3_STEP=60 node scripts/h3_boss_maneuver.mjs out/h3/boss/f2/maneuver-21900-return.json 22140 wait4=idle,idle,idle,idle
-node scripts/h3_finalize_phase3.mjs out/h3/boss/f2/maneuver-22140-wait4.json 22380
-bash scripts/verify_h3_phase3.sh out/h3/explore/tape-fase3-completa-22380.json
-```
+La secuencia de comandos ejecutada (búsquedas `H3_SEED`, tres maniobras, sellado y gate) está ahora en [docs/go-explore/README.md §10](../go-explore/README.md#10-resultados-verificados).
 
 La cinta final privada es `out/h3/explore/tape-fase3-completa-22380.json`. El vídeo y el JSON son `out/h3/video/tape-fase3-completa-22380-9feecfa4-16980-22380.{mp4,json}`. La búsqueda con `H3_WB=0` avanzó sin asumir que `0xe76` o los contadores de guardianes de la fase 2 describieran al jefe de esta fase. La llave se observó visualmente tras desaparecer el enemigo; la maniobra a la izquierda la recogió y activó la transición automática.
 

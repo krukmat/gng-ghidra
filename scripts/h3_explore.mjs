@@ -9,8 +9,9 @@
  *   node scripts/h3_explore.mjs explore [--from <tape.json>] [seed=1] [iters=Infinity] [minutes=30]
  *   node scripts/h3_explore.mjs replay <tape.json> [every=0]
  *   node scripts/h3_explore.mjs import <live-tape.json> [frame] [--unverified]
- * explore writes out/h3/explore/cells-s<seed>-i<iters>.json (no snapshots)
- * and the best tape (inputs only, sha256, seed and parameters); exit 0 on GO.
+ * explore writes out/h3/explore/cells-[s2-]s<seed>-i<iters>.json (no snapshots)
+ * and tape-[s2-]s<seed>-<frame>-{arena|phase|best}.json (inputs only, sha256,
+ * seed and parameters; s2- with --from); exit 0 on GO. Reference: docs/go-explore/README.md.
  * --from replays the tape up to its goalFrame (its RAM hash must match):
  * other ports, and P1 before frame 1200, come from that tape (a human's own
  * coin and Start). It then explores with the cyclops life in the cell; the

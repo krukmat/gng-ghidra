@@ -1,5 +1,7 @@
 # Go-Explore — consolidación de scripts y documentación
 
+**Estado:** COMPLETADA (2026-11-02). Entrada canónica: [docs/go-explore/README.md](../go-explore/README.md).
+
 ## Objetivo y alcance
 
 Trabajar autónomamente en `/Users/matias/gng-ghidra`. Consolidar el conocimiento sobre Go-Explore y la exploración H3 en un punto de entrada canónico, con instrucciones reproducibles y sin documentación operativa duplicada. La base al redactar esta tarea es `main`, commit `b2b9f6a`.
@@ -22,14 +24,14 @@ Ampliar este inventario mediante búsquedas acotadas y referencias/imports. Dist
 
 ## Tareas
 
-- [ ] Inventariar scripts, documentación, dependencias y consumidores; identificar instrucciones vigentes, duplicadas e históricas.
-- [ ] Crear `docs/go-explore/README.md` como entrada canónica. Incluir arquitectura, inventario enlazado, propósito de cada herramienta, interfaces, dependencias, variables de entorno y comandos comprobados contra el código. Si se necesitan documentos auxiliares, mantenerlos bajo `docs/go-explore/` y enlazarlos desde ese índice.
-- [ ] Documentar el flujo completo: reset o cinta semilla → exploración/búsqueda → cinta final → replay → vídeo y aceptación. Explicar determinismo, snapshots de laboratorio, criterios de búsqueda y limitaciones reales.
-- [ ] Registrar los resultados verificados de las fases 1–3, diferenciando la fase visible del valor RAM. Preservar comandos, hashes y evidencia existente. La fase 3 terminó con transición RAM `0x72:2→3` en frame `22029`, fase 4 visible en `22380` y aceptación `PASS`; contrastarlo con el handoff y las métricas locales si están disponibles.
-- [ ] Centralizar las instrucciones vigentes y sustituir duplicados por enlaces. Conservar la evidencia histórica en su documento de origen y marcar claramente su estado; no copiar análisis históricos extensos al índice.
-- [ ] Actualizar el índice principal de documentación existente para facilitar el acceso. Evitar crear índices paralelos que compitan entre sí.
-- [ ] Mantener inicialmente los scripts en sus rutas actuales. Refactorizar duplicación real solo si se preservan interfaces y reproducibilidad; actualizar todos los consumidores si algún cambio de ruta resulta necesario.
-- [ ] Verificar enlaces, rutas y ejemplos. Ejecutar las pruebas pertinentes únicamente si cambia comportamiento. Revisar el diff y hacer commit/push de los archivos seguros.
+- [x] Inventariar scripts, documentación, dependencias y consumidores; identificar instrucciones vigentes, duplicadas e históricas.
+- [x] Crear `docs/go-explore/README.md` como entrada canónica. Incluir arquitectura, inventario enlazado, propósito de cada herramienta, interfaces, dependencias, variables de entorno y comandos comprobados contra el código. Si se necesitan documentos auxiliares, mantenerlos bajo `docs/go-explore/` y enlazarlos desde ese índice.
+- [x] Documentar el flujo completo: reset o cinta semilla → exploración/búsqueda → cinta final → replay → vídeo y aceptación. Explicar determinismo, snapshots de laboratorio, criterios de búsqueda y limitaciones reales.
+- [x] Registrar los resultados verificados de las fases 1–3, diferenciando la fase visible del valor RAM. Preservar comandos, hashes y evidencia existente. La fase 3 terminó con transición RAM `0x72:2→3` en frame `22029`, fase 4 visible en `22380` y aceptación `PASS`; contrastarlo con el handoff y las métricas locales si están disponibles.
+- [x] Centralizar las instrucciones vigentes y sustituir duplicados por enlaces. Conservar la evidencia histórica en su documento de origen y marcar claramente su estado; no copiar análisis históricos extensos al índice.
+- [x] Actualizar el índice principal de documentación existente para facilitar el acceso. Evitar crear índices paralelos que compitan entre sí.
+- [x] Mantener inicialmente los scripts en sus rutas actuales. Refactorizar duplicación real solo si se preservan interfaces y reproducibilidad; actualizar todos los consumidores si algún cambio de ruta resulta necesario.
+- [x] Verificar enlaces, rutas y ejemplos. Ejecutar las pruebas pertinentes únicamente si cambia comportamiento. Revisar el diff y hacer commit/push de los archivos seguros.
 
 ## Restricciones
 
