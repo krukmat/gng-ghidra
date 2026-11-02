@@ -103,7 +103,7 @@ async function explore(seed,iters,minutes,from){
   let best=root,goal=null,halt=null,n=0,cuts=0,frames=0,transition=null,invalidTransitions=0;
   const t0=Date.now();let tLog=t0;
   while(n<iters&&Date.now()-t0<minutes*60000&&!goal&&!halt){
-    const c=pickCell(list,rand,P.scrollBonus);c.chosen++;n++;
+    const c=pickCell(list,rand,P.scrollBonus,policy);c.chosen++;n++;
     board.lab.restore(c.snap);fatalAt=0;phaseAt=0;weaponAtTransition=null;
     previousWeapon=c.weapon??null;livesRef=c.lives;
     const len=c.masks.length;
