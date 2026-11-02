@@ -65,7 +65,11 @@ async function explore(seed,iters,minutes,from){
   const rand=prng(seed),tape=from?resolveB3LabTape(from):null,meta=from?JSON.parse(readFileSync(from,'utf8')).h3:null;
   const first=from?meta.goalFrame:START;
   // Ports other than P1, and P1 before START, follow the source tape up to first.
-  const src=from?tape.events.filter(e=>e.cycle<first*CPF):b3Tape('titleCoinStart').events;
+  // A shield checkpoint includes the input actually consumed at goalFrame.
+  // Historic phase checkpoints keep their existing exclusive-cut semantics.
+  const inclusiveSeed=from&&meta?.objective==='WEAPON_ACQUIRED';
+  const seedCut=first+(inclusiveSeed?1:0);
+  const src=from?tape.events.filter(e=>e.cycle<seedCut*CPF):b3Tape('titleCoinStart').events;
   const base=defineInputSchedule(src),p1Before=eventsToMasks(START,START+1,src.filter(e=>e.cycle<START*CPF))[0];
   const cur=new Uint8Array(MAX_FRAMES);
   let fatalAt=0,livesRef=null,phaseRef=null,phaseAt=0;
@@ -85,7 +89,7 @@ async function explore(seed,iters,minutes,from){
     previousWeapon=rec[0x73];});
   let prefix=new Uint8Array(0),source=null;
   if(from){
-    prefix=eventsToMasks(START,first,src);
+    prefix=eventsToMasks(START,seedCut,src);
     cur.set(prefix);
     if(board.lab.advanceTo(first).status!=='FRAMES_DONE')fail('H3_EXPLORE_PREFIX_FAILED');
     if(sha256(ram(board,0x3000))!==meta.ramSha)fail('H3_EXPLORE_PREFIX_MISMATCH');
@@ -131,7 +135,11 @@ async function explore(seed,iters,minutes,from){
       }
       const cand={...s,key:cellKey(s),frame:f},old=cells.get(cand.key);
       if(better(cand,old)){
-        const cell={...cand,masks:cur.slice(0,f-START),snap:board.lab.save(),chosen:old?.chosen??0};
+        // For weapon checkpoints preserve the sampled frame's P1 mask.
+        // Otherwise releasing controls at goalFrame may change the pickup
+        // on replay. Historic checkpoints retain their old mask cut.
+        const maskEnd=f-START+(objective.kind===WEAPON_GOAL?1:0);
+        const cell={...cand,masks:cur.slice(0,maskEnd),snap:board.lab.save(),chosen:old?.chosen??0};
         if(old)Object.assign(old,cell);else{cells.set(cell.key,cell);list.push(cell);}
         const kept=old??cell;
         if(ahead(kept,best))best=kept;
