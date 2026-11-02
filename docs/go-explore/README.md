@@ -302,7 +302,7 @@ Los artefactos de una fase completada siguen el patrón de las fases 2 y 3. `N` 
 - `h3_video.mjs export` escribe con el nombre largo (`<cinta>-<sha8>-<inicio>-<fin>`), que es el que comprueba el gate de aceptación. Cuando el gate da `PASS`, ese par MP4/JSON se renombra a `faseN.{mp4,json}`. El campo `video` del JSON conserva el nombre original, y `videoSha256` debe coincidir con el MP4 renombrado.
 - El vídeo `faseN` empieza en el frame final del vídeo `fase(N−1)` y termina en el `goalFrame` de la cinta, que debe mostrar el inicio jugable de la fase N+1.
 - `faseN` queda reservado para la fase completa y aceptada. Los tramos parciales conservan el nombre largo de la exportación. `fase-2-incomplete.{mp4,json}` es anterior a esta regla y se mantiene como histórico.
-- La fase 1 también es anterior: su cinta se llama `tape-s2-phase-5950.json` y no se renombra, porque hay cintas, scripts y documentos que la citan por ese nombre.
+- La fase 1 también es anterior: su cinta se llama `tape-s2-phase-5950.json` y no se renombra, porque la cinta de la fase 2 (`h3.prefix`) y varios documentos la citan por ese nombre.
 - Una herramienta nueva de sellado para la fase N escribe directamente `tape-faseN-completa-<goalFrame>.json`, igual que hace `h3_finalize_phase3.mjs`.
 
 - Los resultados nuevos (cintas, hashes, vídeos) se registran en §10, y su estado de tarea en el plan del bot. Los handoffs futuros deben remitir a este README en lugar de copiar instrucciones.
