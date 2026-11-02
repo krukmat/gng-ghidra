@@ -143,3 +143,19 @@ test('GE-W1: shield-ready cells dominate selection while retaining alternatives'
   assert.ok(shield>120,'most exploration should expand from shield-equipped cells');
   assert.ok(other>0,'reserve a fraction for alternate item routes');
 });
+
+test('GE-W2: weapon checkpoint retains P1 at goalFrame on replay and resume',()=>{
+  const start=1200,goal=1202;
+  const masks=Uint8Array.from([1,0x11,0x10]);
+  const tapeEvents=masksToEvents(start,masks);
+  assert.deepEqual([...eventsToMasks(start,goal+1,
+    tapeEvents.filter(e=>e.cycle<(goal+1)*CPF))],[1,0x11,0x10]);
+  const scratch=new Uint8Array(8);
+  const replayPrefix=eventsToMasks(start,goal+1,
+    tapeEvents.filter(e=>e.cycle<(goal+1)*CPF));
+  extendMasks(scratch,replayPrefix,Uint8Array.from([2]));
+  assert.deepEqual([...scratch.slice(0,4)],[1,0x11,0x10,2]);
+  // The legacy exclusive-cut behavior is retained for old phase checkpoints.
+  assert.deepEqual([...eventsToMasks(start,goal,
+    tapeEvents.filter(e=>e.cycle<goal*CPF))],[1,0x11]);
+});
