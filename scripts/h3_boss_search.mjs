@@ -87,6 +87,7 @@ const look=b=>({phase:b[0x72],cp:b[0x81],loop:b[0x71],lives:b[0x60],x:b[0xa0]<<8
   score:bcd(b),scroll:b[0x58]<<8|b[0x59],
   boss:LIFE_ADDRS.reduce((sum,a)=>sum+b[a],0)});
 let schedule=defineInputSchedule(base),dead=false,board;
+let previousFramePhase=null,previousFrameWeapon=null,weaponAtTransition=null;
 board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
   manifest.files['gngb_runtime.mjs'],code,blocks,{frames:END,
     portRead:(addr,cycle)=>readScheduledPort(schedule,addr,cycle),
@@ -94,6 +95,9 @@ board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
       const i=board.state.records.length;
       board.state.records[i-1]=null;
       applyLabPokes(POKES,board.state,i);
+      if(previousFramePhase===phase&&r.record[0x72]!==phase&&weaponAtTransition===null)
+        weaponAtTransition=previousFrameWeapon??r.record[0x73];
+      previousFramePhase=r.record[0x72];previousFrameWeapon=r.record[0x73];
       const h=r.record[0x510]<<8|r.record[0x511];
       if(i>START&&(h<0x6000||r.record[0xac]&&
         (r.record[0x503]===3||h===0x8e05||h===0x9c64||(h&0xffe0)===0x9c40)))dead=true;
@@ -116,16 +120,18 @@ while(START+(depth+1)*K<=END&&!done){
   const next=[];
   for(const p of beam)for(const a of actions){
     board.lab.restore(p.snap);dead=false;
+    previousFramePhase=p.s.phase;previousFrameWeapon=p.s.weapon;weaponAtTransition=null;
     const events=[...p.events,...segment(frame,a)];
     schedule=defineInputSchedule([...base,...events]);
     const res=board.lab.advanceTo(frame+K);branches++;
     if(res.status!=='FRAMES_DONE'){halts++;console.log('H3_BOSS_HALT '+frame+' '+a+' '+res.status+' pc='+res.pc);continue;}
     const s=look(board.state.ramBytes(0,LOOK_BYTES).bytes);
-    const outcome=phaseOutcome(phase,s.phase,s.weapon,policy);
+    const outcome=phaseOutcome(phase,s.phase,weaponAtTransition??s.weapon,policy);
     if(s.phase!==phase&&!progressionCandidate(outcome)){
       invalidTransitions++;
       if(process.env.H3_DEBUG)console.log('H3_BOSS_PRUNE_PHASE f='+(frame+K)+
-        ' action='+a+' outcome='+outcome+' '+JSON.stringify(s));
+        ' action='+a+' outcome='+outcome+' weaponAtExit='+(weaponAtTransition??s.weapon)+
+        ' '+JSON.stringify(s));
       continue;
     }
     if(s.phase===phase&&(dead||s.lives<p.s.lives)){
