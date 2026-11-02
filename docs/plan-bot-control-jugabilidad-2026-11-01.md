@@ -1,6 +1,6 @@
 # Bot estándar de control de jugabilidad — tareas
 
-**Fecha:** 2026-11-02 · **Estado:** E0 y V1 implementadas; fases 1–3 completadas con vídeo y métricas; siguiente: V2.
+**Fecha:** 2026-11-02 · **Estado:** E0 y V1 implementadas; fases 1–3 completadas; continuación de fase 4 en curso antes de V2.
 
 **Referencia operativa:** comandos, variables, flujo y resultados verificados de las herramientas H3 están en [docs/go-explore/README.md](go-explore/README.md). Este plan mantiene las tareas y su cierre.
 
@@ -37,6 +37,7 @@ Antes de empezar cada tarea, estimar su coste en la ventana de 5 h y en el seman
   - [x] Continuación fase 3: cinta privada `out/h3/explore/tape-fase3-completa-22380.json`, de solo entradas y sin pokes, con prefijo y RAM del frame 16980 idénticos a la cinta de fase 2. Transición RAM `0x72:2→3` en frame **22029**; frame 22380: inicio jugable y visible de la fase 4, 4 vidas y armadura (`0xAC=0`). Replay desde reset `MATCH`, paridad RGBA `PASS`, sin muertes en el tramo. `bash scripts/verify_h3_phase3.sh out/h3/explore/tape-fase3-completa-22380.json` da `H3_PHASE3_ACCEPTANCE=PASS`.
     - Vídeo y métricas privados: `out/h3/video/tape-fase3-completa-22380-9feecfa4-16980-22380.{mp4,json}`. H.264, 256×224, 5401 frames (16980–22380), 90,56 s, `ramVerified: true`; el JSON registra exactamente un evento `2→3` en 22029. El primer frame se comparte con el final del vídeo de la fase 2.
     - Búsqueda reproducible: secuencia completa de comandos en [el README de Go-Explore §10](go-explore/README.md#10-resultados-verificados).
+  - [ ] **Continuación fase 4.** Partir de `tape-fase3-completa-22380.json` con replay MATCH; transición RAM `0x72:3→4`, primer frame jugable de fase 5, cinta final y `fase4.{mp4,json}`. Usar el sellador y gate genéricos, registrar comandos en `out/h3/phase4/commands.log`, documentar evidencia real en README §10 y cerrar solo con gate PASS. [Tarea](agents/h3-phase4-bot-task.md).
 - [ ] **V2 — Suite de cintas de referencia.** Reproducirlas en cada build y reportar el frame de divergencia, con video.
 - [ ] **V3 — Explorador genérico con un adaptador por juego.**
   - Separar `scripts/h3_explore.mjs` y `src/h3_explore.mjs` en un núcleo y un adaptador.
