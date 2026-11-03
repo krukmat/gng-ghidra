@@ -40,3 +40,5 @@ El alcance de este gate es **salir de la fase visible 6 (`0x72=5`) y llegar a la
 5. Investigar después el segundo recorrido y el final verdadero con cinta propia y gate separado; no inferirlos de `fase6` ni del valor `0x72=0` aislado. Mantener `roms/`, `out/`, `cfg/`, `gng-ghidra/`, cintas, capturas y vídeos fuera de commits y push.
 
 **Verificación de esta entrega:** `node --test tests/test_h3_*.mjs` → 34/34 PASS. No se modificó código ejecutable.
+
+**Contraste con replay (03/11, g6).** Confirmado: objetivo `0x74b1` con `dx=7`, `dy=0` y `0x503≠2` → `5→6` en 52080 con `0x73=3`; `0x08=0` en la escena y `0x08=1`, `0x71=2` desde 52793 (el modo principal de `games/gngb/state.mjs`, `0x02`, es otro byte). Ajuste del gate: la pérdida de vida solo se rechaza desde el cambio de fase, porque las fases 4–5 ya toleran muertes durante la fase. Resultado en `docs/go-explore/README.md` §10.

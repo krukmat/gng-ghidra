@@ -48,6 +48,7 @@ test('Phase 6 needs shield before 5→6 and a playable rest window',()=>{
  assert.throws(()=>phase6Evidence(p6(170),{transition:120,end:170}),/REST_SHORT/);
  assert.throws(()=>phase6Evidence(p6(200,{200:{mode:2}}),{transition:120,end:200}),/NOT_PLAYABLE/);
  assert.throws(()=>phase6Evidence(p6(200,{190:{lives:3}}),{transition:120,end:200}),/LIFE_LOST/);
+ assert.equal(phase6Evidence(p6(200,{100:{lives:5}}),{transition:120,end:200}).restFrames,41);
  assert.throws(()=>phase6Evidence(p6(200),{transition:120,end:201}),/ROWS_MISSING/);
  assert.equal(phase6Evidence(p6(200,{170:{phase:5}}),{transition:120,end:200}).firstPlayableRoomFrame,171);
 });

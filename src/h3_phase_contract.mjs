@@ -50,7 +50,7 @@ export function phase6Evidence(rows,{transition,end}){
   const at=f=>rows.find(r=>r.frame===f),before=at(transition-1);
   if(!before||!at(end))throw Error('H3_PHASE6_ROWS_MISSING');
   if(before.phase!==5||before.weapon!==PHASE6.shield)throw Error('H3_PHASE6_NO_SHIELD');
-  if(rows.some(r=>r.lives<rows[0].lives))throw Error('H3_PHASE6_LIFE_LOST');
+  if(rows.some(r=>r.frame>=transition&&r.frame<=end&&r.lives<before.lives))throw Error('H3_PHASE6_LIFE_LOST');
   let rest=null;
   for(const r of rows)if(r.frame>transition&&r.frame<=end)
     rest=r.phase===6&&r.mode===PHASE6.playable?rest??r.frame:null;
