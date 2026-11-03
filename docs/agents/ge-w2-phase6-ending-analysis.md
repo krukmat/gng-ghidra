@@ -42,3 +42,16 @@ El alcance de este gate es **salir de la fase visible 6 (`0x72=5`) y llegar a la
 **Verificación de esta entrega:** `node --test tests/test_h3_*.mjs` → 34/34 PASS. No se modificó código ejecutable.
 
 **Contraste con replay (03/11, g6).** Confirmado: objetivo `0x74b1` con `dx=7`, `dy=0` y `0x503≠2` → `5→6` en 52080 con `0x73=3`; `0x08=0` en la escena y `0x08=1`, `0x71=2` desde 52793 (el modo principal de `games/gngb/state.mjs`, `0x02`, es otro byte). Ajuste del gate: la pérdida de vida solo se rechaza desde el cambio de fase, porque las fases 4–5 ya toleran muertes durante la fase. Resultado en `docs/go-explore/README.md` §10.
+
+## Fase final: sala `0x72=6` (análisis local 03/11, g6)
+
+Semilla: `tape-fase6-completa-52900.json`, frame 52900. Estado: `0x72=6`, `0x08=1`, `0x71=2`, `0x7f=0`, `0xb6=1`, 4 vidas y tiempo 2:00.
+
+- **Contenido.** Es la sala del jefe final: un demonio en el trono, la princesa a la derecha y el rótulo «RESOLVE YOUR BATTLE!». El jefe es el objeto `X=0xfe0`, con manejador en `0xdad9–0xddd3`. Su X de mundo es `0xff3` (8160) y Arthur está en 8024.
+- **Vida del jefe, candidata `0xff6`.** Vale 10 y está en el desplazamiento `+0x16`, el mismo que `0xe76` en el jefe de la fase 1. Sin validar: ningún disparo de las pruebas impactó.
+- **Cierre de la sala.** `0x6ed7` pone `0xb6=1` al entrar (52793). La muerte del jefe sale por `0xddb5: JMP 0xe844`, que hace `DEC <$b6`; si llega a 0 y `0x72==6`, `LDB #2; STB <$08` (`0xe851`). Las demás fases pasan antes por `0x7a66`. En la fase visible 6 se comprobó el mismo contador: `0xb6=2` (dos gemelos), decrementos en 50751 y 51735 por `0xbed5→0xc38a→0xc3a0→0xe844`, y `0x08=2` en 51735.
+- **Dificultad.** Con reposo, disparo o avance a la derecha, Arthur recibe un impacto hacia 52940 (`0x503=3`) y muere hacia 53203–53232 (`0x08=3`). Con el escudo no avanza más allá de x≈8031 y la vida del jefe sigue en 10. Una cinta guionizada no basta: hace falta una búsqueda con esquiva.
+- **Primera vuelta.** Con `0x7f=0` y `0x71=2` en la entrada, el cierre debería tomar `0x736d→0x73fe→0x7444`, que deja `0x7f=1`, `0x71=1`, `0x72=0` (segunda vuelta). Falta registrarlo en el frame de la rama.
+- **Final verdadero.** `0x7fb5` (`0x7f=2`, `CLR <$0b`) es el paso 4 de una máquina de estados. `0x7efc` despacha por `<$0b` a `0x7f05` (pone a cero `$13,X` y `$15b5`, `INC <$0b`) y a `0x7f0f`. `0x7f0f` despacha por `$13,X` a la tabla `0x7f17`: `7f21, 7f45, 7f61, 7f95, 7fb5`. No hay referencia estática a `0x7efc` (ni absoluta ni relativa, tampoco en bancos), así que se entra por dirección calculada. Es plausible que sea la escena de la sala 6 en la segunda vuelta (`0x7f=1`), pero no está demostrado.
+
+**Siguiente paso.** Lanzar `h3_boss_search` desde la semilla 52900 con `H3_BOSS_LIFE=0xff6`, sin pérdida de vida tras la semilla, con objetivo `0x08:1→2` y `0x72=6`. Validar `0xff6` con el primer impacto. Después, un gate «fin de primera vuelta»: rama `0x73fe/0x7444`, `0x7f=1`, `0x71=1`, `0x72=0` y pantalla. El final verdadero (`0x7efc/0x7fb5`, `0xde=1`) exige recorrer la segunda vuelta completa con otra cinta.
