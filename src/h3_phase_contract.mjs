@@ -41,3 +41,23 @@ export function transitionObserver(from,start){
     result(){return {transition,count,otherChanges};}
   };
 }
+/** Visible phase 6 (RAM 5→6) extra evidence, per docs/agents/ge-w2-phase6-ending-analysis.md.
+ * Bytes are static-analysis labels; 0x71/0x7f/0xde are recorded, not required, until replay confirms them. */
+export const PHASE6=Object.freeze({shield:3,playable:1,minRest:30});
+export const phase6Sample=(frame,b)=>({frame,phase:b[0x72],weapon:b[0x73],mode:b[0x08],
+  loop:b[0x71],f7f:b[0x7f],de:b[0xde],lives:b[0x60]});
+export function phase6Evidence(rows,{transition,end}){
+  const at=f=>rows.find(r=>r.frame===f),before=at(transition-1);
+  if(!before||!at(end))throw Error('H3_PHASE6_ROWS_MISSING');
+  if(before.phase!==5||before.weapon!==PHASE6.shield)throw Error('H3_PHASE6_NO_SHIELD');
+  if(rows.some(r=>r.lives<rows[0].lives))throw Error('H3_PHASE6_LIFE_LOST');
+  let rest=null;
+  for(const r of rows)if(r.frame>transition&&r.frame<=end)
+    rest=r.phase===6&&r.mode===PHASE6.playable?rest??r.frame:null;
+  if(rest===null)throw Error('H3_PHASE6_ROOM_NOT_PLAYABLE');
+  const restFrames=end-rest+1;
+  if(restFrames<PHASE6.minRest)throw Error('H3_PHASE6_REST_SHORT');
+  const seen=k=>[...new Set(rows.filter(r=>r.frame>=rest&&r.frame<=end).map(r=>r[k]))];
+  return {weaponAtTransition:before.weapon,firstPlayableRoomFrame:rest,restFrames,
+    loop:seen('loop'),f7f:seen('f7f'),de:seen('de')};
+}

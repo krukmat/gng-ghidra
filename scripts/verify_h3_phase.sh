@@ -50,6 +50,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {phase6Evidence} from './src/h3_phase_contract.mjs';
 const [n,file,s,e]=process.argv.slice(2),phase=Number(n),start=Number(s),end=Number(e);
 const final=JSON.parse(fs.readFileSync(file,'utf8'));
 const stem=path.basename(file,'.json').replace(/[^a-zA-Z0-9_-]/g,'_')+'-'+final.sha256.slice(0,8)+'-'+start+'-'+end;
@@ -66,6 +67,8 @@ const last=m.rows.at(-1);
 assert.equal(last?.frame,end);
 assert.equal(last?.inGame,true,'final frame must be playable');
 assert.equal(last?.phase,phase,'final frame must show phase N+1');
+if(phase===6)assert.deepEqual(phase6Evidence(m.rows.map(r=>r.ram),
+ {transition:final.h3.transitionFrame,end}),final.h3.phase6,'phase 6 room evidence');
 const info=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','v:0','-show_entries',
  'stream=codec_name,width,height,nb_frames','-of','json',video],{encoding:'utf8'})).streams[0];
 assert.equal(info.codec_name,'h264');assert.equal(info.width,256);assert.equal(info.height,224);

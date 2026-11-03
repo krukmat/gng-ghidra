@@ -12,7 +12,7 @@ import {resolveB3LabTape} from '../src/v3_b3_external_tape.mjs';
 import {labCreateBoard} from '../src/v3_b3_lab_board.mjs';
 import {B3_TAPE_SCHEMA} from '../src/v3_b3_tapes.mjs';
 import {look} from '../src/h3_explore.mjs';
-import {assertPhaseCandidate,transitionObserver} from '../src/h3_phase_contract.mjs';
+import {assertPhaseCandidate,transitionObserver,phase6Sample,phase6Evidence} from '../src/h3_phase_contract.mjs';
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const [phaseArg,initialArg,candidateArg,endArg]=process.argv.slice(2);
 if(!phaseArg||!initialArg||!candidateArg||!endArg)throw Error('H3_PHASE_FINALIZE_USAGE');
@@ -30,6 +30,7 @@ const {manifest,code}=loadFrozen(selected.dir);
 const {blocks}=await import(pathToFileURL(join(selected.dir,'program.mjs')).href);
 const observer=transitionObserver(from,start);
 let minLives=99,firstFatal=null;
+const p6Rows=visiblePhase===6?[]:null;
 const board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
   manifest.files['gngb_runtime.mjs'],code,blocks,{frames:1,portRead:tape.read,
     onFrame:r=>{
@@ -38,6 +39,7 @@ const board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
       if(frame>=start){
         minLives=Math.min(minLives,b[0x60]);
         if(firstFatal===null&&b[0x60]<initial.h3.signal.lives)firstFatal=frame;
+        if(p6Rows&&frame<=end)p6Rows.push(phase6Sample(frame,b));
       }
       board.state.records[frame-1]=null;
     }});
@@ -53,14 +55,17 @@ const s=look(board.state.ramBytes(0,0x600).bytes);
 const {transition,count,otherChanges}=observer.result();
 if(s.phase!==to||count!==1||!transition||otherChanges.length)
   throw Error('H3_PHASE_TRANSITION_INVALID '+JSON.stringify({s:s.phase,count,transition,otherChanges}));
+const phase6=p6Rows&&phase6Evidence(p6Rows,{transition,end});
 const signal={phase:s.phase,cp:s.cp,x:s.x,y:s.y,scroll:s.scroll,lives:s.lives,armor:s.armor};
 const metadata={schema:B3_TAPE_SCHEMA,profile:candidate.profile,frames:end+1,events:candidate.events};
 const out=join(ROOT,'out/h3/explore/tape-fase'+visiblePhase+'-completa-'+end+'.json');
 const final={...metadata,sha256:sha256(JSON.stringify(metadata)),h3:{probe:'h3-phase'+visiblePhase,
   bundle:'g6',from:{file:basename(initialArg),sha256:initial.sha256,goalFrame:start,
     ramSha:initial.h3.ramSha},goalFrame:end,transitionFrom:from,transitionFrame:transition,
-    signal,ramSha:sha256(board.state.ramBytes(0,0x3000).bytes),minLives,firstFatal}};
+    signal,ramSha:sha256(board.state.ramBytes(0,0x3000).bytes),minLives,firstFatal,
+    ...(phase6&&{phase6})}};
 mkdirSync(join(ROOT,'out/h3/explore'),{recursive:true,mode:0o700});
 writeFileSync(out,JSON.stringify(final)+'\n',{mode:0o600});
 console.log('H3_PHASE'+visiblePhase+'_FINAL=PASS transition='+transition+' end='+end+
-  ' minLives='+minLives+' firstFatal='+firstFatal+' tape='+out);
+  ' minLives='+minLives+' firstFatal='+firstFatal+
+  (phase6?' phase6='+JSON.stringify(phase6):'')+' tape='+out);

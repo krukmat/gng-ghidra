@@ -20,6 +20,7 @@ import {rendererInputs} from '../src/gngb_render_inputs.mjs';
 import {CYCLES_PER_FRAME} from '../src/gngb_runtime.mjs';
 import {gngbGraphics} from './r35_t5_render_check.mjs';
 import {look,observeGameState} from '../games/gngb/state.mjs';
+import {phase6Sample} from '../src/h3_phase_contract.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const OUT=join(ROOT,'out/h3/video');
@@ -67,7 +68,7 @@ async function main(){
           x:state?.x??null,y:state?.y??null,scroll:state?.scroll??null,
           lives:state?.lives??null,phase:state?.phase??null,
           stage:state?.stage??null,cp:state?.cp??null,
-          armor:state?.armor??null,mode:state?.mode??null};
+          armor:state?.armor??null,mode:state?.mode??null,ram:phase6Sample(index,f.record)};
         if(index<start){
           board.state.records[index-1]=null;
           board.state.events.length=0;
