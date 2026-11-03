@@ -19,6 +19,9 @@
  * backtracking N segments when every live branch dies; H3_BACKTRACK_LIMIT caps
  * the number of retries (unlimited by default). Without these variables the
  * original beam-only behaviour is unchanged. H3_DEBUG logs every pruned branch.
+ * H3_GOAL=<addr:value,...> also succeeds on the first frame, still in
+ * <phase>, where every listed RAM byte matches (e.g. 0x08:2,0xb6:0 for the
+ * final room, whose exit is a backward 6→0 change).
  * H3_FOLLOW=<tape>:<shift> reuses a donor route (src/h3_follow.mjs): START
  * is matched to donor frame START-shift, and each branch to the nearest donor
  * position around its parent's match; 'follow' (one more action) replays the
@@ -65,6 +68,9 @@ const WU=Number(process.env.H3_WU??0),WA=Number(process.env.H3_WA??2000),
 const LIFE_ADDRS=(process.env.H3_BOSS_LIFE??'0xe76').split(',').map(Number);
 if(!LIFE_ADDRS.length||LIFE_ADDRS.some(a=>!Number.isInteger(a)||a<0||a>=0x3000))
   throw Error('H3_BOSS_LIFE_INVALID');
+const GOAL=(process.env.H3_GOAL??'').split(',').filter(Boolean).map(g=>g.split(':').map(Number));
+if(GOAL.some(([a,v])=>!Number.isInteger(a)||a<0||a>=0x3000||!Number.isInteger(v)||v<0||v>255))
+  throw Error('H3_GOAL_INVALID');
 const LOOK_BYTES=Math.max(0xe77,...LIFE_ADDRS.map(a=>a+1));
 if(!Number.isInteger(K)||K<1)throw Error('H3_STEP_INVALID '+K);
 if(!Number.isInteger(WIDTH)||WIDTH<1)throw Error('H3_WIDTH_INVALID '+WIDTH);
@@ -110,7 +116,7 @@ const look=b=>({phase:b[0x72],cp:b[0x81],loop:b[0x71],lives:b[0x60],x:b[0xa0]<<8
   handler:b[0x510]<<8|b[0x511],armor:b[0xac],weapon:b[0x73],
   score:bcd(b),scroll:b[0x58]<<8|b[0x59],
   boss:LIFE_ADDRS.reduce((sum,a)=>sum+b[a],0)});
-let schedule=defineInputSchedule(base),dead=false,board;
+let schedule=defineInputSchedule(base),dead=false,goal=false,board;
 let previousFramePhase=null,previousFrameWeapon=null,weaponAtTransition=null;
 board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
   manifest.files['gngb_runtime.mjs'],code,blocks,{frames:END,
@@ -123,6 +129,7 @@ board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
         weaponAtTransition=previousFrameWeapon??r.record[0x73];
       previousFramePhase=r.record[0x72];previousFrameWeapon=r.record[0x73];
       const h=r.record[0x510]<<8|r.record[0x511];
+      if(GOAL.length&&i>START&&r.record[0x72]===phase&&GOAL.every(([a,v])=>r.record[a]===v))goal=true;
       if(i>START&&(h<0x6000||r.record[0xac]&&
         (r.record[0x503]===3||h===0x8e05||h===0x9c64||(h&0xffe0)===0x9c40)))dead=true;
     }});
@@ -162,7 +169,7 @@ while(START+(depth+1)*K<=END&&!done){
   const frame=START+depth*K;
   const next=[];
   for(const p of beam)for(const a of actions){
-    board.lab.restore(p.snap);dead=false;
+    board.lab.restore(p.snap);dead=false;goal=false;
     previousFramePhase=p.s.phase;previousFrameWeapon=p.s.weapon;weaponAtTransition=null;
     const seg=a==='follow'?followEvents(follow.masks,follow.lo,p.k,frame,K,p.mask):
       {events:p.mask?joinEvents(frame,p.mask,segment(frame,a)):segment(frame,a),mask:0};
@@ -172,6 +179,7 @@ while(START+(depth+1)*K<=END&&!done){
     if(res.status!=='FRAMES_DONE'){halts++;console.log('H3_BOSS_HALT '+frame+' '+a+' '+res.status+' pc='+res.pc);continue;}
     const s=look(board.state.ramBytes(0,LOOK_BYTES).bytes);
     const outcome=phaseOutcome(phase,s.phase,weaponAtTransition??s.weapon,policy);
+    if(goal){done={snap:board.lab.save(),events,s,route:[...p.route,a],mask:seg.mask,k:p.k,d:p.d,goal};break;}
     if(s.phase!==phase&&!progressionCandidate(outcome)){
       invalidTransitions++;
       if(process.env.H3_DEBUG)console.log('H3_BOSS_PRUNE_PHASE f='+(frame+K)+
@@ -247,7 +255,7 @@ writeFileSync(file,JSON.stringify({...metadata,sha256,h3:{poke:process.env.H3_PO
   // The head's donor match: continue with H3_FOLLOW=<donor>:<START-k>.
   ...follow?{follow:{donor:follow.tape.sha256,shift:FOLLOW.shift,k:win.k,d:win.d}}:{}}})+'\n',{mode:0o600});
 const retryResult=BACKTRACK?' backtracks='+backtracks:'';
-console.log('H3_BOSS_RESULT '+(done?policy?'PROGRESSION_CANDIDATE':'PHASE_ADVANCED':'NOT_ADVANCED')+
+console.log('H3_BOSS_RESULT '+(done?done.goal?'GOAL_REACHED':policy?'PROGRESSION_CANDIDATE':'PHASE_ADVANCED':'NOT_ADVANCED')+
   ' frame='+win.snap.recordCount+' branches='+branches+' halts='+halts+
   ' invalidTransitions='+invalidTransitions+retryResult+' '+JSON.stringify(win.s)+
   (follow?' k='+win.k+' d='+win.d+' follows='+win.route.filter(a=>a==='follow').length+'/'+win.route.length:''));

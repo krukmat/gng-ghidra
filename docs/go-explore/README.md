@@ -162,6 +162,7 @@ node scripts/h3_tape.mjs selftest | selftest-rewind | record | convert <journal.
 | `H3_WCY`, `H3_YCAP` | boss_search | 0, 65535 | Peso de Y actual y su tope; evita premiar una altura ya abandonada. |
 | `H3_WA` | boss_search | 2000 | Penalización por perder la armadura. |
 | `H3_WB`, `H3_BOSS_LIFE` | boss_search | 0, `0xe76` | Peso y direcciones de vida sumadas. Ver [§8](#8-limitaciones-reales). |
+| `H3_GOAL` | boss_search | — | `addr:valor,…`: éxito en el primer frame, aún en la fase, en que todos los bytes coinciden (sala final: `0x08:2`). |
 | `H3_XCAP` | boss_search | 65535 | Tope de X premiada (arenas). |
 | `H3_LAST` | boss_search | — | Guarda la cabeza final del haz en lugar de la mejor. |
 | `H3_BACKTRACK`, `H3_BACKTRACK_LIMIT` | boss_search | 0, ilimitado | Retrocede N segmentos cuando mueren todas las ramas. |
