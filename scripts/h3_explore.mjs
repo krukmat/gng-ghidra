@@ -51,6 +51,9 @@ const {manifest,code}=loadFrozen(selected.dir);
 const {blocks}=await import(pathToFileURL(join(selected.dir,'program.mjs')).href);
 const START=1200,ARENA=3072,MAX_FRAMES=120000; // phase 6 needs the stage-5 replay after the shield rollback
 const OUT=join(ROOT,'out/h3/explore');
+// H3_GUARD=<life byte,...> (only with --from): hits dealt to them along the trajectory join the cell (dmg).
+const GUARD=process.env.H3_GUARD?process.env.H3_GUARD.split(',').map(Number):null;
+if(GUARD&&!GUARD.every(a=>Number.isInteger(a)&&a>=0&&a<0x3000))throw Error('H3_GUARD_INVALID');
 
 async function makeBoard(portRead,perFrame){
   const board=await labCreateBoard(join(selected.dir,'gngb_runtime.mjs'),
@@ -78,6 +81,8 @@ async function explore(seed,iters,minutes,from){
   // H3_RANK=items: item spawns (0x7d changes) along the restored trajectory.
   // A Shield/Cross item that leaves the slot unpicked ends the branch (lostAt).
   let spawnCount=0,itemPrev=null,trackItems=false,slotPrev=null,lostAt=0;
+  // H3_GUARD: a drop of 1-2 is a hit; a refill (next boss in the slot) is not.
+  let damage=0,guardPrev=[];
   const board=await makeBoard((addr,cycle)=>addr===0x3001&&cycle>=START*CPF?
     0xff^cur[Math.floor(cycle/CPF)-START]:readScheduledPort(base,addr,cycle),
   (i,rec)=>{const s=look(rec);
@@ -92,6 +97,7 @@ async function explore(seed,iters,minutes,from){
     previousWeapon=rec[0x73];
     if(itemPrev!==null&&rec[ITEM_COUNTER]!==itemPrev)spawnCount++;
     itemPrev=rec[ITEM_COUNTER];
+    if(GUARD)GUARD.forEach((a,j)=>{const v=rec[a],q=guardPrev[j];if(q!==undefined&&v<q&&q-v<=2)damage+=q-v;guardPrev[j]=v;});
     if(trackItems){if(slotPrev&&!lostAt&&shieldLost(slotPrev,rec))lostAt=i;slotPrev={[0x15d2]:rec[0x15d2],[0x15d4]:rec[0x15d4]};}});
   let prefix=new Uint8Array(0),source=null;
   if(from){
@@ -103,8 +109,9 @@ async function explore(seed,iters,minutes,from){
     source={file:basename(from),sha256:tape.sha256,goalFrame:first,ramSha:meta.ramSha};
   }else if(board.lab.advanceTo(START).status!=='FRAMES_DONE')fail('H3_EXPLORE_START_FAILED');
   const rankMode=process.env.H3_RANK??'x',items=!!from&&rankMode==='items';
-  const view=from?()=>({...lookBoss(ram(board,BOSS_LIFE+1)),...items?{spawns:spawnCount,...(b=>({item:itemStage(b),gen:b[CARRIER_COUNTDOWN]}))(ram(board,0x15d6))}:{}}):()=>look(ram(board));
-  spawnCount=0;trackItems=items;const s0=view();phaseRef=from?s0.phase:null; // spawns count from the seed cut
+  const view=from?()=>({...lookBoss(ram(board,BOSS_LIFE+1)),...GUARD!==null?{dmg:damage}:{},...items?{spawns:spawnCount,...(b=>({item:itemStage(b),gen:b[CARRIER_COUNTDOWN]}))(ram(board,0x15d6))}:{}}):()=>look(ram(board));
+  if(GUARD!==null&&!from)fail('H3_GUARD_NEEDS_FROM');
+  spawnCount=0;damage=0;trackItems=items;const s0=view();phaseRef=from?s0.phase:null; // spawns count from the seed cut
   const policy=from?weaponPolicyForPhase(s0.phase):null;
   const requestedGoal=process.env.H3_GOAL??'phase';
   if(!from&&requestedGoal!==WEAPON_GOAL&&requestedGoal!=='phase')
@@ -127,8 +134,9 @@ async function explore(seed,iters,minutes,from){
   let acquiredFrame=null;
   const t0=Date.now();let tLog=t0;
   while(n<iters&&Date.now()-t0<minutes*60000&&!goal&&!halt){
-    const c=pickCell(list,rand,P.scrollBonus,policy,items?P.spawnBias:1);c.chosen++;n++;
+    const c=pickCell(list,rand,P.scrollBonus,policy,items?P.spawnBias:1,GUARD!==null?P.guardBias:1);c.chosen++;n++;
     board.lab.restore(c.snap);fatalAt=0;phaseAt=0;weaponAtTransition=null;
+    damage=c.dmg??0;guardPrev=GUARD?(b=>GUARD.map(a=>b[a]))(ram(board,Math.max(...GUARD)+1)):[];
     spawnCount=c.spawns??0;itemPrev=items?ram(board,ITEM_COUNTER+1)[ITEM_COUNTER]:null;
     slotPrev=items?(b=>({[0x15d2]:b[0x15d2],[0x15d4]:b[0x15d4]}))(ram(board,0x15d6)):null;lostAt=0;
     weaponPickupFrame=null;
@@ -163,11 +171,11 @@ async function explore(seed,iters,minutes,from){
     }
     if(Date.now()-tLog>=30000){tLog=Date.now();
       console.log('H3_EXPLORE_PROGRESS s='+Math.round((tLog-t0)/1000)+' iters='+n+' cells='+list.length+
-        ' fps='+Math.round(frames/((tLog-t0)/1000))+' best='+JSON.stringify({x:best.x,y:best.y,scroll:best.scroll,frame:best.frame,armor:best.armor,boss:best.boss,spawns:best.spawns,item:best.item,gen:best.gen,weapon:best.weapon}));}
+        ' fps='+Math.round(frames/((tLog-t0)/1000))+' best='+JSON.stringify({x:best.x,y:best.y,scroll:best.scroll,frame:best.frame,armor:best.armor,boss:best.boss,dmg:best.dmg,spawns:best.spawns,item:best.item,gen:best.gen,weapon:best.weapon}));}
   }
   const seconds=(Date.now()-t0)/1000;
   mkdirSync(OUT,{recursive:true,mode:0o700});
-  const params={...P,start:START,arena:ARENA,...from?{bossLife:BOSS_LIFE}:{},...rankMode!=='x'?{rank:rankMode}:{}};
+  const params={...P,start:START,arena:ARENA,...from?{bossLife:BOSS_LIFE}:{},...rankMode!=='x'?{rank:rankMode}:{},...GUARD!==null?{guard:GUARD}:{}};
   const cellsText=JSON.stringify({seed,params,iters:n,cells:cellsListing(list)})+'\n';
   const cellsFile=join(OUT,'cells-'+(from?'s2-':'')+'s'+seed+'-i'+n+'.json');
   writeFileSync(cellsFile,cellsText,{mode:0o600});

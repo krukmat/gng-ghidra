@@ -8,6 +8,10 @@
  * S2 (from the arena) adds the cyclops life to the cell: object slot 0x0E50,
  * life byte +0x26 = 0x0E76, 5 at the arena, one less per lance hit, 0 on the
  * kill (+2000 points, slot state 0x0E50 1->2); unchanged without fire.
+ * H3_GUARD (S2) adds the hits dealt to some life bytes along the trajectory
+ * (`dmg`): the phase-2 guardians are two objects (0x0CD0 and 0x0D30, life
+ * +0x26 = 0x0CF6 and 0x0D56, 10 each) that both have to die, so neither life
+ * alone is a progress measure.
  */
 import {createHash} from 'node:crypto';
 import {CYCLES_PER_FRAME} from './gngb_runtime.mjs';
@@ -34,7 +38,9 @@ export const EXPLORE_DEFAULTS=Object.freeze({chunk:120,evalEvery:4,
   dirWeights:Object.freeze([0.12,0.55,0.15,0.08,0.10]),holdMin:4,holdMax:32,
   fireRate:0.08,fireMin:2,fireMax:5,jumpRate:0.05,jumpMin:2,jumpMax:8,scrollBonus:1,
   // H3_RANK=items only: selection weight factor per item spawn on the trajectory.
-  spawnBias:4});
+  spawnBias:4,
+  // H3_GUARD only: selection weight factor per hit on the trajectory.
+  guardBias:2});
 
 /** `n` sticky masks after `prev`: a direction is held several frames; fire
  * and jump are presses of a few frames, always followed by a released
@@ -106,7 +112,7 @@ export const lookBoss=b=>({...look(b),boss:b[BOSS_LIFE],weapon:b[0x73]});
 export const isFatal=(s,lives)=>maneuverFatal(s,lives);
 /** S1 key; with lookBoss() (S2) the boss life is one more component. */
 export const cellKey=s=>[s.phase,s.cp,s.x>>4,s.y>>3,s.armor,...'boss' in s?[s.boss]:[],
-  ...s.phase===5&&'weapon' in s?[s.weapon]:[],...'spawns' in s?['i'+s.spawns+'.'+s.item+'.'+s.gen]:[]].join(':');
+  ...s.phase===5&&'weapon' in s?[s.weapon]:[],...'spawns' in s?['i'+s.spawns+'.'+s.item+'.'+s.gen]:[],...'dmg' in s?['d'+s.dmg]:[]].join(':');
 /** Item-spawn counter 0x7d (ROM 0xebd7, cycle 0..6; classes 2 and 6 draw a
  * weapon from the 0x78..0x7c accumulator). H3_RANK=items counts its changes
  * along a trajectory: read only, a progress measure towards a later draw. */
@@ -137,18 +143,18 @@ export function bestRank(from,mode='x',policy=null){
     mode==='items'?c=>[c.phase,c.spawns??0,c.item??0,-(c.gen??0),c.y,-c.frame]:
     mode==='height'?c=>[c.phase,c.y,-c.armor,-c.frame]:
     mode==='y'?c=>[c.phase,-c.armor,c.y,-c.frame]:
-    c=>[c.phase,-c.boss,c.x,-c.frame];
+    c=>[c.phase,...'dmg' in c?[c.dmg]:[],-c.boss,c.x,-c.frame];
   return policy?c=>[weaponPriority(c,policy),...base(c)]:base;
 }
 
 /** Weighted pick: rarely chosen cells first, slight bonus for scroll. */
-export function pickCell(cells,rand,scrollBonus=EXPLORE_DEFAULTS.scrollBonus,policy=null,spawnBias=1){
+export function pickCell(cells,rand,scrollBonus=EXPLORE_DEFAULTS.scrollBonus,policy=null,spawnBias=1,guardBias=1){
   // Once Shield/Cross has been acquired, devote 80% of picks to equipped
   // cells while reserving 20% for alternate item routes. No change elsewhere.
   const armed=policy?cells.filter(c=>weaponPriority(c,policy)):null;
   const pool=armed?.length&&rand()<0.8?armed:cells;
   let total=0;const w=pool.map(c=>{
-    const v=(1+scrollBonus*Math.min(c.scroll,3072)/3072)*spawnBias**((c.spawns??0)+(c.item??0)/2+(c.item===2?(6-(c.gen??6))/12:0))/Math.sqrt(1+c.chosen);
+    const v=(1+scrollBonus*Math.min(c.scroll,3072)/3072)*spawnBias**((c.spawns??0)+(c.item??0)/2+(c.item===2?(6-(c.gen??6))/12:0))*guardBias**(c.dmg??0)/Math.sqrt(1+c.chosen);
     total+=v;return v;});
   let r=rand()*total;
   for(let i=0;i<pool.length;i++){r-=w[i];if(r<0)return pool[i];}
@@ -159,5 +165,5 @@ export const sha256=x=>createHash('sha256').update(x).digest('hex');
 /** Canonical cell listing (no snapshots), stable for determinism checks. */
 export const cellsListing=cells=>[...cells].sort((a,b)=>a.key<b.key?-1:a.key>b.key?1:0)
   .map(c=>({key:c.key,frame:c.frame,armor:c.armor,x:c.x,y:c.y,scroll:c.scroll,boss:c.boss,
-    ...c.phase===5&&'weapon' in c?{weapon:c.weapon}:{},...'spawns' in c?{spawns:c.spawns,item:c.item,gen:c.gen}:{},
+    ...c.phase===5&&'weapon' in c?{weapon:c.weapon}:{},...'spawns' in c?{spawns:c.spawns,item:c.item,gen:c.gen}:{},...'dmg' in c?{dmg:c.dmg}:{},
     chosen:c.chosen,masks:sha256(c.masks)}));

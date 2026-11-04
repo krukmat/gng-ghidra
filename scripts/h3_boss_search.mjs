@@ -65,6 +65,8 @@ const WX=Number(process.env.H3_WX??1),WY=Number(process.env.H3_WY??0),
 const WU=Number(process.env.H3_WU??0),WA=Number(process.env.H3_WA??2000),
   WB=Number(process.env.H3_WB??0),XCAP=Number(process.env.H3_XCAP??65535),
   YCAP=Number(process.env.H3_YCAP??65535);
+// H3_KEEP_WEAPON=<0x73 value>: prune branches holding another weapon (the shield must reach the final encounter).
+const KEEP_WEAPON=process.env.H3_KEEP_WEAPON?Number(process.env.H3_KEEP_WEAPON):null;
 const LIFE_ADDRS=(process.env.H3_BOSS_LIFE??'0xe76').split(',').map(Number);
 if(!LIFE_ADDRS.length||LIFE_ADDRS.some(a=>!Number.isInteger(a)||a<0||a>=0x3000))
   throw Error('H3_BOSS_LIFE_INVALID');
@@ -161,7 +163,7 @@ let branches=0,halts=0,invalidTransitions=0;
 // released by the next macro); the start is matched on the trail too.
 const m0=follow?match(s0,follow.k0):{k:0,d:0};
 let beam=[{snap:board.lab.save(),events:[],s:s0,maxX:s0.x,maxY:s0.y,minY:s0.y,v:0,route:[],
-  mask:follow?heldMask(base):0,k:m0.k,d:m0.d}],best=beam[0],done=null;
+  mask:heldMask(base),k:m0.k,d:m0.d}],best=beam[0],done=null;
 if(follow)console.log('H3_FOLLOW_START k0='+follow.k0+' match='+m0.k+' d='+m0.d+' trail='+follow.lo+'..'+follow.hi+' held='+beam[0].mask);
 let depth=0,backtracks=0;
 const history=new Map();
@@ -187,6 +189,7 @@ while(START+(depth+1)*K<=END&&!done){
         ' '+JSON.stringify(s));
       continue;
     }
+    if(KEEP_WEAPON!==null&&s.weapon!==KEEP_WEAPON)continue;
     if(s.phase===phase&&(dead||s.lives<p.s.lives)){
       if(process.env.H3_DEBUG)console.log('H3_BOSS_PRUNE f='+frame+' '+a+' dead='+dead+' '+JSON.stringify(s));
       continue;}
