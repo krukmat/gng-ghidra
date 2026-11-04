@@ -31,7 +31,7 @@ Leer primero todos los AGENTS.md aplicables del workspace y los documentos docs/
 
 ## Reproducción de la continuación
 
-La secuencia de comandos ejecutada (búsquedas `H3_SEED`, tres maniobras, sellado y gate) está ahora en [docs/go-explore/README.md §10](../go-explore/README.md#10-resultados-verificados).
+La secuencia de comandos ejecutada (búsquedas `H3_SEED`, tres maniobras, sellado y gate) está ahora en [docs/go-explore/README.md §10](../go-explore/README.md#10-verified-results).
 
 La cinta final privada es `out/h3/explore/tape-fase3-completa-22380.json`. El vídeo y el JSON son `out/h3/video/tape-fase3-completa-22380-9feecfa4-16980-22380.{mp4,json}`. La búsqueda con `H3_WB=0` avanzó sin asumir que `0xe76` o los contadores de guardianes de la fase 2 describieran al jefe de esta fase. La llave se observó visualmente tras desaparecer el enemigo; la maniobra a la izquierda la recogió y activó la transición automática.
 
