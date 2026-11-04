@@ -1,6 +1,6 @@
 # Go-Explore y exploración H3 — entrada canónica
 
-**Estado (2026-11-02):** fases visibles 1–5 completadas desde reset con cintas de solo entradas, replay `MATCH`, vídeo y métricas. Fase visible 6 aparcada: el primer intento derrotó a los dos jefes, pero el juego exigió el escudo y devolvió a la fase visible 5. V2–V4 del [plan del bot de control](../plan-bot-control-jugabilidad-2026-11-01.md) no iniciados.
+**Estado (2026-11-04):** final verdadero alcanzado desde reset con una sola cinta de solo entradas (`out/h3/loop2/l2-ending-96340.json`, 96400 frames): las seis fases visibles y la sala final de las dos vueltas, gate RAM [`h3_verify_ending.mjs`](../../scripts/h3_verify_ending.mjs) en PASS y vídeo con `ramVerified=true` ([§10](#10-resultados-verificados)). La receta y las lecciones de la segunda vuelta están resumidas en el artifact privado [Cuaderno Go-Explore H3](https://claude.ai/artifact/VFgvo4SAfhkz57YXU3N7nv); este README sigue siendo la referencia. V2–V4 del [plan del bot de control](../plan-bot-control-jugabilidad-2026-11-01.md) no iniciados.
 
 Este documento es la referencia vigente para ejecutar, reproducir y verificar las herramientas de exploración H3. Los handoffs y planes enlazados en [§9](#9-documentos-históricos) conservan la evidencia y el razonamiento de cada etapa, pero sus instrucciones ya no están vigentes.
 
@@ -54,6 +54,9 @@ No todas las herramientas usan Go-Explore. Hay cuatro métodos de búsqueda dist
 | [`scripts/h3_finalize_phase.mjs`](../../scripts/h3_finalize_phase.mjs) + [`src/h3_phase_contract.mjs`](../../src/h3_phase_contract.mjs) | Sellado genérico, comprueba prefijo y transición fase N. | Vigente (validado en g6 con las fases 4, 5 y 6; en N=6 añade `phase6Evidence`) |
 | [`scripts/verify_h3_phase.sh`](../../scripts/verify_h3_phase.sh) | Gate genérico, exporta y renombra `faseN` tras PASS. | Vigente (validado en g6 con las fases 4, 5 y 6; en N=6 añade `phase6Evidence`) |
 | [`scripts/h3_run_logged.sh`](../../scripts/h3_run_logged.sh) | Registra las variables `H3_*`, cada comando, su salida y el código de retorno en `out/h3/phaseN/commands.log`. | Vigente |
+| [`scripts/h3_verify_loop1.mjs`](../../scripts/h3_verify_loop1.mjs) | Gate de solo RAM del fin de la primera vuelta: sala final con `0x7f=0`, jefe `0xff6` a 0 y salida `6→0`. | Vigente (vuelta 1) |
+| [`scripts/h3_verify_ending.mjs`](../../scripts/h3_verify_ending.mjs) | Gate de solo RAM del final verdadero: sala final de la vuelta 2 (`0x7f=1`), `0x7f` 1→2, una salida `6→0` con `0x71=0` y `0xde=1`, reinicio jugable y ninguna vida perdida. Escribe `out/h3/phase7/ending-gate.json`. | Vigente |
+| [`src/h3_follow.mjs`](../../src/h3_follow.mjs) | Ruta donante del haz (`H3_FOLLOW`): empareja cada rama con la posición más cercana de otra cinta. | Vigente |
 | [`scripts/verify_h3_phase3.sh`](../../scripts/verify_h3_phase3.sh) | Gate de aceptación: prefijo, replays, paridad RGBA, exportación y ffprobe. | Especializada (fase 3) |
 | [`scripts/h3_video.mjs`](../../scripts/h3_video.mjs) | Cinta → paridad RGBA con la app, MP4 y JSON de métricas. | Vigente |
 | [`scripts/h3_boss_inspect.mjs`](../../scripts/h3_boss_inspect.mjs) | Etiquetas y sprites visibles en frames concretos. | Diagnóstico |
@@ -96,7 +99,8 @@ node scripts/h3_explore.mjs import <live-tape.json> [frame] [--unverified]
 - `<fase-RAM>` es el valor de `0x72` que debe tener la placa en `start`; si no coincide, falla con `H3_BOSS_START_PHASE`.
 - En cada profundidad prueba las 14 acciones desde cada miembro del haz. Poda las ramas muertas o con vidas perdidas, deduplica por posición, armadura, handler, puntuación y scroll, y se queda con `H3_WIDTH` ramas.
 - Valor de una rama: `WX·min(maxX, XCAP) + WY·maxY + WCY·min(Y, YCAP) + WU·(y0 − minY) + WS·score − WA·armor − WB·Σvida`.
-- Escribe `out/h3/boss/search-p<fase>-<frame>.json` con `frames = frame + 300` y `h3:{poke, route, ...}` (0 `PHASE_ADVANCED`, 2 sin avance). Sin `H3_POKE`, `h3` añade `goalFrame` (la cabeza guardada), `signal` y `ramSha`: `replay` la verifica y `explore --from` continúa desde ella. Estos campos no cambian el SHA de la cinta.
+- Con `H3_FOLLOW=<cinta>:<desfase>` hay una acción más, `follow`, que repite las entradas P1 de la cinta donante desde el punto emparejado, y el valor suma `WF·(frames donantes avanzados − WD·(|dx|+|dy|))`. Con `H3_KEEP_WEAPON` se poda toda rama cuya arma `0x73` sea otra. La máscara inicial es la de los controles que la semilla mantiene pulsados en `start`, haya o no `H3_FOLLOW`.
+- Escribe `out/h3/boss/search-p<fase>-<frame>[-<H3_TAG>].json` con `frames = frame + 300` y `h3:{poke, route, ...}` (0 `PHASE_ADVANCED`, 2 sin avance). Sin `H3_POKE`, `h3` añade `goalFrame` (la cabeza guardada), `signal` y `ramSha`: `replay` la verifica y `explore --from` continúa desde ella. Estos campos no cambian el SHA de la cinta.
 
 ### `h3_boss_maneuver.mjs`
 
@@ -163,11 +167,15 @@ node scripts/h3_tape.mjs selftest | selftest-rewind | record | convert <journal.
 | `H3_WA` | boss_search | 2000 | Penalización por perder la armadura. |
 | `H3_WB`, `H3_BOSS_LIFE` | boss_search | 0, `0xe76` | Peso y direcciones de vida sumadas. Ver [§8](#8-limitaciones-reales). |
 | `H3_GOAL` | boss_search | — | `addr:valor,…`: éxito en el primer frame, aún en la fase, en que todos los bytes coinciden (sala final: `0x08:2`). |
+| `H3_KEEP_WEAPON` | boss_search | — | Valor de `0x73` que debe conservar toda rama (escudo: 3). |
+| `H3_FOLLOW`, `H3_WF`, `H3_WD` | boss_search | —, 1, 1 | Ruta donante `<cinta>:<desfase>` (desfase = frame actual − frame equivalente de la donante), peso del avance sobre ella y de la distancia. |
+| `H3_TAG` | boss_search | — | Sufijo `[a-z0-9-]` del archivo de salida. Obligatorio si hay corridas en paralelo: sin él, dos haces con el mismo frame final se sobrescriben. |
 | `H3_XCAP` | boss_search | 65535 | Tope de X premiada (arenas). |
 | `H3_LAST` | boss_search | — | Guarda la cabeza final del haz en lugar de la mejor. |
 | `H3_BACKTRACK`, `H3_BACKTRACK_LIMIT` | boss_search | 0, ilimitado | Retrocede N segmentos cuando mueren todas las ramas. |
 | `H3_DEBUG` | boss_search | — | Registra cada rama podada. |
 | `H3_RANK` | explore | `x` | Solo con `--from`: `y` ordena por armadura y luego altura; `height`, por altura y luego armadura. Para subidas en las que X y scroll no crecen. |
+| `H3_GUARD` | explore | — | Solo con `--from`: `addr,…` de vidas. Suma las caídas de 1–2 a lo largo de la trayectoria (`dmg`) y las añade a la celda, al ranking (antes que la vida del jefe) y a la selección (`guardBias`=2 por impacto). Fase 2: `0xcf6,0xd56`. |
 | `H3_HORIZON` | maneuver | 240 (máx.) | Horizonte de cada ruta. |
 | `H3_MANEUVER_REF` | maneuver | — | `<ram.bin>:<firstRecord>` de una traza para comparar el control. |
 | `H3_TRACE_WATCH`, `H3_TRACE_BASELINE` | trace | `0x510:2`, — | Rango vigilado y comparación con una salida de inspect. |
@@ -196,8 +204,11 @@ node scripts/h3_tape.mjs selftest | selftest-rewind | record | convert <journal.
   - Exploración: 120 frames de acciones pegajosas, generadas con mulberry32 de semilla fija y evaluadas cada 4 frames. La rama se corta al primer estado fatal. Un impacto con armadura no corta; genera otra celda.
   - Mejor celda en S1: scroll y luego X. Con `--from`: fase, luego menos vida y luego X. Con `H3_RANK=y`: fase, armadura conservada y luego altura Y. Con `H3_RANK=height`: fase, altura y luego armadura; permite continuar desde una planta superior aunque una recogida de armadura deje una celda mejor equipada más abajo.
 - **Haz.** Macros fijas (`right`, `right_fire`, `right_jump`, `right_fire_jump`, `right_late_jump`, `fire`, `jump`, `duck_fire`, `left`, `left_fire`, `left_jump`, `up`, `up_fire`, `down`) con el valor de §3. Sirvió para avanzar en las fases 2 y 3 con segmentos de 120 frames en tramos abiertos y de 60 junto a peligros. En la torre de la fase 5, el valor por `maxY` engaña cuando la siguiente escalera queda lejos del máximo. Allí se alternó Go-Explore con `H3_RANK=y` (escaleras) y el haz con `H3_WY=3 H3_WS=1` (enemigos y jefe).
+- **Gradiente del jefe.** Si la puntuación solo sube al matar, el haz no tiene gradiente durante el combate y no golpea al jefe. Antes de buscar, localizar el byte de vida (diff de RAM por impacto en una cinta donde ese jefe ya muere) y usar `H3_BOSS_LIFE=<byte> H3_WB≥1000 H3_GOAL=<byte>:0`. Con varios enemigos vivos a la vez, ninguna vida sola mide progreso: `H3_GUARD` en `explore`.
+- **Ruta donante.** La segunda vuelta repite la geometría de la primera: `H3_FOLLOW` con la cinta de la vuelta 1 y el desfase de frames reoptimiza solo donde la rama se separa. Con el escudo puesto, `H3_KEEP_WEAPON=3` (otra arma condena la fase 6).
+- **Semillas.** Las cabezas más avanzadas de una búsqueda cortada por tiempo suelen estar condenadas. Avanza más recortar la cinta unos frames antes, con los controles libres, y relanzar desde ahí.
 - **Maniobras.** Rutas cortas escritas a mano tras una observación (por ejemplo, ir a por la llave y esperar la transición). No buscan: comparan como máximo tres variantes contra el control.
-- **Cierre de fase.** Matar al jefe no cierra la fase: en las fases 1–5 hubo que esperar a que apareciera la llave y recogerla. Premiar la X deja al bot esperando en el extremo derecho. El criterio de cierre es siempre la transición RAM `0x72`, comprobada en el replay y en el vídeo.
+- **Cierre de fase.** Matar al jefe no cierra la fase: en las fases 1–5 hubo que esperar a que apareciera la llave y recogerla. Premiar la X deja al bot esperando en el extremo derecho. El criterio de cierre es siempre la transición RAM `0x72`, comprobada en el replay y en el vídeo. En la fase 6, el cierre (`0x74b1`) exige a Arthur quieto (`0x503≠2`) a ±8 de X=`[0x5a]−0x30+0x55` y de la Y de `0x550` (X=7717 en la vuelta 2); el haz sigue saltando, así que se cierra con una maniobra `settle` (izquierda y soltar). En la sala final basta con llegar a `0x08:2` y no pulsar nada: el desenlace corre solo.
 
 ### GE-W1 — guarda de arma en el encuentro final (rama `feature/ge-w1-weapon-aware-progression`)
 
@@ -210,7 +221,7 @@ node scripts/h3_tape.mjs selftest | selftest-rewind | record | convert <journal.
 
 ### GE-W2 — localización del escudo (rama `feature/ge-w2-shield-acquisition`)
 
-**Estado:** herramientas y tests preparados; no se ha ejecutado una nueva exploración con los archivos privados ni se ha demostrado un pickup. GE-W1 sigue certificado; fase visible 6 sigue pendiente.
+**Estado:** herramientas y tests preparados; no se ha ejecutado una nueva exploración con los archivos privados ni se ha demostrado un pickup. GE-W1 sigue certificado. La fase visible 6 se completó después (03/11) y el final verdadero el 04/11; ver §10.
 
 1. **Auditar primero la ruta histórica**, sin búsqueda ni alteraciones: `bash scripts/h3_run_logged.sh 6 node scripts/h3_weapon_probe.mjs out/h3/boss/search-p5-45828.json 36091`. Reproduce desde reset con g6, exige `ramSha` y `H3_POKE` vacío, y guarda `out/h3/phase6/weapon-probe-search-p5-45828.json` con cambios de arma (`0x73`), fase, X/Y y frame exacto. Una transición de RAM no prueba por sí sola dónde apareció el objeto; correlacionar con vídeo/sprites cuando haya candidatos.
 2. **Buscar y detenerse en la adquisición**, no en el combate final: `H3_GOAL=weapon H3_RANK=height bash scripts/h3_run_logged.sh 6 node scripts/h3_explore.mjs explore --from out/h3/explore/tape-fase5-completa-36091.json 1 6000 30`. `H3_GOAL=weapon` solo acepta una semilla de fase RAM 5 que todavía no tenga arma 3. La meta es `phase=5 && weapon=3`; genera `tape-...-weapon.json` con `h3.objective=WEAPON_ACQUIRED`, `weaponPickupFrame`, `goalFrame` y `ramSha`. Antes de emitir `GO_WEAPON_ACQUIRED`, el explorador realiza un replay interno nuevo desde reset de la cinta generada y exige `H3_WEAPON_SELF_REPLAY=MATCH` (RAM SHA y arma). Si falla, detiene el proceso sin guardar una cinta de éxito. El checkpoint del arma conserva también las entradas P1 del propio `goalFrame` y libera controles en el siguiente frame; `explore --from` reconoce esos checkpoints y preserva su corte inclusivo para evitar divergencias en RAM. La cinta de objetivo arma **omite** `h3.transitionFrame` porque obtener el escudo no implica cambiar de fase; así `replay MATCH` valida RAM y señal sin exigir la transición histórica 0→1. Siempre exige replay `MATCH` desde reset antes de aprovechar esa cinta. **No es una finalización de fase.**
@@ -236,14 +247,15 @@ Tests puramente lógicos: `node --test tests/test_h3_weapon_goal.mjs tests/test_
   - `explore --from` la incluye en la celda sea cual sea la fase;
   - `finish_phase` la exige a 0;
   - el `bossKill` de `replay` solo tiene sentido en la fase 1.
-  - `0xc66,0xcf6` se usaron en la fase 2 como vida conjunta de los guardianes; no consta su validación.
-  - Las fases 3, 4 y 5 se completaron con `H3_WB=0`, sin ningún contador de jefe. En la fase 5, `0x0E76` vale 4 en todo el tramo. **No hay contador de jefe validado para las fases 2–5.**
+  - `0xc66,0xcf6` se usaron en la fase 2 de la vuelta 1 como vida conjunta de los guardianes, sin validación. En la vuelta 2 los guardianes resultaron ser dos objetos vivos a la vez (`0x0CD0` y `0x0D30`, vida `0x0CF6` y `0x0D56`, 10 cada uno): con esos dos bytes en `H3_GUARD` la fase cerró en segundos.
+  - En la vuelta 1, las fases 3, 4 y 5 se completaron con `H3_WB=0`, sin contador de jefe (en la fase 5, `0x0E76` vale 4 en todo el tramo). Localizadas en la vuelta 2 (04/11): jefe de la fase 5 `0x0D54` (objeto `0x0D30`; `H3_GOAL=0xd54:0` coincide con la muerte), jefes de la fase 6 `0x0D84` y `0x0DB4`, jefe final `0x0FF6` (10 al aparecer; lo comprueba `h3_verify_ending.mjs`). **Las fases 3 y 4 siguen sin contador de jefe validado.**
 - **Poda del haz:** `h3_boss_search.mjs` solo poda por handler, impacto sin armadura o vidas perdidas al final del segmento. Una caída a un foso no cambia el handler hasta que se pierde la vida (en la fase 4, unos 120 frames después), así que con `H3_LAST` la cabeza guardada puede ser una rama ya condenada. Revisar el final de cada cinta de búsqueda con un export corto o `inspect`, y reanudar desde un frame anterior a la caída. En la fase 5, la cabeza de 34470 recibía un impacto sin armadura en 34600. Repetir el tramo con un `end` más lejano (35670) lo evitó: el haz siguió más allá de 34470, podó las ramas golpeadas y conservó las vivas, sin retrocesos.
-- **Reloj de fase (3:00):** no tiene dirección RAM validada; se vigila en el HUD de los exports cortos. En la fase 5, el jefe cayó con 1:14 restantes.
+- **Reloj de fase (3:00):** `0x00AB` vale 180 al empezar la fase y baja 1 cada 64 frames (observado en la vuelta 2, sin gate). Mientras no tenga gate, se vigila también en el HUD de los exports cortos. En la fase 5, el jefe cayó con 1:14 restantes.
 - `maneuverOutcome` calcula `advance` y `aboveLimit` con `limit=5464`, que es la geometría de H3-F2. En otros tramos esos campos no significan nada.
 - `h3_finish_phase.mjs` está pensado para el primer jefe. `h3_finalize_phase3.mjs` y `verify_h3_phase3.sh` tienen fijados la cinta, los hashes y el frame 16980 de la fase 3. Para las fases 4 en adelante se usan `h3_finalize_phase.mjs` y `verify_h3_phase.sh`.
 - La secuencia de comandos de la fase 2 **no quedó registrada**. Solo queda la procedencia en la cinta (ver §10). Reproducirla exactamente está pendiente.
 - La paridad MAME (S3) de las fases completadas está pendiente. Solo se comparó con MAME el estancamiento de S2 (`PASS_ALL_FRAMES_MATCH`).
+- Las búsquedas de la vuelta 2 no pasaron por `h3_run_logged.sh` y varias exploraciones pararon por tiempo (fases 2 y 5). La cinta final se verifica sola, pero repetir la cadena no da los mismos bytes. El recorte de cintas a un `goalFrame` anterior (`stamp`) se hizo con un script temporal que no está en `scripts/`.
 
 ## 9. Documentos históricos
 
@@ -298,6 +310,22 @@ El replay completo desde reset da `minLives=3`.
 | `fase6.mp4` (export `tape-fase6-completa-52900-870565cc-36091-52900`) | 36091–52900 (16810) | 281,87 s | 5→6 en 52080 (único); jugable desde 52793 | `bf4ef1e91a124f3fe5142e21c93531ff99284fe03b23d20da2aff2cf6cc79ce2` |
 
 En el frame 22380 la fila de métricas marca `inGame=true`, `phase=3`, 4 vidas y armadura puesta. El handoff de la fase 3 registra ese frame como inicio jugable y visible de la fase 4. ffprobe de `fase3.mp4` (repetido hoy): h264, 256×224, 5401 frames, 90,56 s. El gate `verify_h3_phase3.sh` dio `H3_PHASE3_ACCEPTANCE=PASS` al cerrar la fase; no se repitió porque vuelve a exportar el vídeo.
+
+**Segunda vuelta y final verdadero (04/11).** Cinta `out/h3/loop2/l2-ending-96340.json`: SHA `98fd8d7fd2cbedc1297f715b0ec81ca38ff55366574bf16d6ab2cbcc032b1987`, 96400 frames, `goalFrame` 96340, RAM `4393524905d47c4be186a86f2b3e8b8d70ec7b121c05f9213afaac40184d0511`. Solo entradas, sin poke, g6. Parte del fin de la primera vuelta (`out/h3/phase7/loop1-end-54460.json`, `6→0` en 54091), recortado en 54459. `node scripts/h3_verify_ending.mjs out/h3/loop2/l2-ending-96340.json` da **PASS** (`out/h3/phase7/ending-gate.json`).
+
+| Fase visible | `0x72` | Transición | Método que cerró el tramo |
+| --- | --- | --- | --- |
+| 1 | 0→1 | **59128** | `explore --from` (semilla 201), terminó por objetivo. |
+| 2 | 1→2 | **65654** | `explore --from` hasta la arena; en ella, `H3_GUARD=0xcf6,0xd56` (semilla 261, 2–5 s). |
+| 3 | 2→3 | **72009** | Haz encadenado como en la vuelta 1 (ancho 8, paso 120, `WX=1 WS=0 WA=500`) y `keyleft` en 71640. |
+| 4 | 3→4 | **78144** | Haz con retroceso, `WY`/`WCY`, pasos 60→30→20, y `keyleft` en 77756. |
+| 5 | 4→5 | **87009** | Haz con `H3_KEEP_WEAPON=3`, `explore` `H3_RANK=height` en la torre, haz con `H3_BOSS_LIFE=0xd54` hasta la muerte del jefe (86652) y `keyleft`. |
+| 6 | 5→6 | **93103** | Haz `H3_FOLLOW=out/h3/boss/search-p5-45828.json:50918` con `H3_KEEP_WEAPON=3` y vidas `0xd84,0xdb4`; `settle` (izquierda ×3, paso 70) en 92738. |
+| Sala final | 6→0 | **95818** | Haz `H3_BOSS_LIFE=0xff6 H3_GOAL=0x08:2` desde 93823; después, ninguna entrada. |
+
+- Sala final: jugable en 93816 (`0x08=1`, `0x7f=1`, `0x71=2`), jefe en 93856 (`0xff6=10`), cierre `0x08:1→2` en 94521, `0x7f` 1→2 en 94680, salida `6→0` en 95818 con `0x7f=0`, `0x71=0` y `0xde=1` (rama `0x7389`), juego jugable otra vez en la fase 1 en 96335. Pantalla de final con «CONGRATULATION».
+- Vidas: 4 al empezar la vuelta, 6 desde 91623 (por puntuación), ninguna muerte. Escudo (`0x73=3`) en las fases 5, 6 y la sala final.
+- Vídeo: `out/h3/video/l2-ending-96340-98fd8d7f-54091-96340.mp4` (54091–96340, 42250 frames, 708,46 s, `ramVerified=true`, SHA `c081012a843081494c3987e25215c9834a336c0ec9a351180b8a17bc993813a6`, 68 MB). Para verlo hay cuatro cortes por frame, recodificados a crf 18: `l2-fases1-2-54091-65653.mp4`, `l2-fases3-4-65654-78143.mp4`, `l2-fases5-6-78144-93102.mp4` y `l2-sala-final-93103-96340.mp4`.
 
 ### Procedencia y reproducción
 
@@ -391,6 +419,21 @@ bash scripts/verify_h3_phase.sh 6 out/h3/explore/tape-fase5-completa-36091.json 
   - `tape-s2-s1-29076-best.json` recupera `h3.from` = semilla. Un `explore` de diagnóstico lanzado desde ella misma la había sobrescrito con las mismas entradas.
 - Copias de los intermedios regenerados en `out/h3/phase5/steps/`, con `SHA256SUMS`. El log también contiene lo que no contribuye a la cinta: los comandos de diagnóstico (exports cortos e `inspect`) y las búsquedas descartadas (haz por X desde 28260 que cae al foso, haz por Y estancado, `explore` sin `H3_RANK` y la cabeza condenada de 34470).
 - El frame 28260 de `fase5.mp4` coincide en métricas RAM con el último de `fase4.mp4`.
+
+**Segunda vuelta.** Sin `commands.log` (ver §8); los logs de cada búsqueda están en `out/h3/loop2/{explore-s*,beam-*}.log` y las cintas intermedias en `out/h3/loop2/l2-*.json`, cada una con su `h3.goalFrame`, `h3.route` y `h3.ramSha`. Los comandos que decidieron cada cierre fueron:
+
+```sh
+H3_GUARD=0xcf6,0xd56 node scripts/h3_explore.mjs explore --from out/h3/loop2/l2-f2-arena-64380.json 261 Infinity 25   # fase 2 → 65654
+C="H3_KEEP_WEAPON=3 H3_SEED=out/h3/loop2/l2-f5-head-86352.json H3_LAST=1 H3_WA=0 H3_WS=1 H3_WX=0 H3_WY=3 H3_BOSS_LIFE=0xd54 H3_WB=1000 H3_GOAL=0xd54:0"
+env ${=C} H3_BACKTRACK=8 H3_BACKTRACK_LIMIT=150 H3_STEP=30 H3_WIDTH=24 H3_TAG=l2d node scripts/h3_boss_search.mjs 4 86112 30 88752   # jefe fase 5 en 86652
+H3_HORIZON=240 H3_STEP=60 node scripts/h3_boss_maneuver.mjs out/h3/loop2/l2-f5-kill-86652.json 86652 keyleft=left,left,left,left   # 4→5 en 87009
+C="H3_KEEP_WEAPON=3 H3_FOLLOW=out/h3/boss/search-p5-45828.json:50918 H3_SEED=out/h3/loop2/l2-f6-seed-87356.json H3_LAST=1 H3_WS=0.1 H3_WX=0 H3_WY=0 H3_BOSS_LIFE=0xd84,0xdb4 H3_WB=10000"
+env ${=C} H3_WA=3000 H3_BACKTRACK=5 H3_BACKTRACK_LIMIT=150 H3_STEP=20 H3_WIDTH=24 H3_TAG=l2f6a node scripts/h3_boss_search.mjs 5 87356 20 97800   # jefes fase 6
+C="H3_SEED=out/h3/loop2/l2-f6-done-settle.json H3_BOSS_LIFE=0xff6 H3_GOAL=0x08:2 H3_WS=1 H3_WX=-1"
+env ${=C} H3_BACKTRACK=5 H3_BACKTRACK_LIMIT=150 H3_WB=10000 H3_WIDTH=24 H3_TAG=l2fb node scripts/h3_boss_search.mjs 6 93823 20 97023   # cierre de la sala final
+```
+
+`env ${=C}` es la forma zsh de partir la lista de variables. Los tramos intermedios sin `H3_TAG` se sobrescribieron entre corridas paralelas, así que su cadena exacta se reconstruye por los metadatos de cada cinta, no por los nombres de los logs.
 
 **Otras cintas útiles:**
 
