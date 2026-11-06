@@ -1,0 +1,346 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1100 656" width="1100" height="656" role="img" aria-label="Go-Explore. Why it works: with five doors passed 1 time in 10, random play without saves needs about 100,000 attempts; saving after each door needs about 50. One round: pick a place from the archive, return to it by loading its saved state, explore at random until death, save the new places, and repeat until the goal.">
+<style>svg{--paper:#f1f4f2;--panel:#ffffff;--ink:#16201d;--ink-2:#4b5a55;--rule:#c4cec9;--grid:#edf1ef;--base:#1c5db3;--base-soft:#e6eefa;--game:#93570b;--game-soft:#f7ecdb;--ok:#23764a;--stop:#b0281f;--stop-soft:#fae6e3;--oracle:#6a707b;--screen:#0e1413;--screen-ink:#d6e2dd;--f-ui:"Helvetica Neue",Helvetica,Arial,sans-serif;--f-mono:"SF Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace}
+.dg text{font-family:var(--f-ui);font-size:13px;fill:var(--ink)}
+.dg .t{font-size:13.5px;font-weight:650}
+.dg .m{font-family:var(--f-mono);font-size:11px}
+.dg .s{font-size:11.5px;fill:var(--ink-2)}
+.dg .n{font-size:12.5px}
+.dg .lbl{font-size:11px;fill:var(--ink-2)}
+.dg .cap{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;fill:var(--ink-2)}
+.dg .b{font-weight:700}
+.dg .tb{fill:var(--base)}
+.dg .tg{fill:var(--game)}
+.dg .tx{fill:var(--stop)}
+.dg .to{fill:var(--oracle)}
+.dg .scr{fill:var(--screen-ink)}
+.dg .box{fill:var(--panel);stroke:var(--ink-2);stroke-width:1.2}
+.dg .box.b{fill:var(--base-soft);stroke:var(--base)}
+.dg .box.g{fill:var(--game-soft);stroke:var(--game)}
+.dg .box.x{fill:var(--stop-soft);stroke:var(--stop)}
+.dg .box.o{fill:var(--panel);stroke:var(--oracle);stroke-dasharray:5 4}
+.dg .box.k{stroke-width:2}
+.dg .e{fill:none;stroke:var(--ink-2);stroke-width:1.4}
+.dg .e.b{stroke:var(--base);stroke-width:1.8}
+.dg .e.g{stroke:var(--game);stroke-width:1.8}
+.dg .e.x{stroke:var(--stop);stroke-width:1.6;stroke-dasharray:6 4}
+.dg .e.o{stroke:var(--oracle);stroke-dasharray:5 4}
+.dg .ah{fill:var(--ink-2)}
+.dg .ah.b{fill:var(--base)}
+.dg .ah.g{fill:var(--game)}
+.dg .ah.x{fill:var(--stop)}
+.dg .ah.o{fill:var(--oracle)}
+.dg .zone{fill:none;stroke:var(--ink-2);stroke-width:1.2;stroke-dasharray:8 6}
+.dg .gh{fill:none;stroke:var(--rule);stroke-width:1.5}
+.dg .bus{stroke:var(--ink-2);stroke-width:3}
+.dg .tick{stroke:var(--rule);stroke-width:1.2}
+.dg .row{fill:var(--panel);stroke:var(--rule);stroke-width:1}
+.dg .row.v{fill:var(--base-soft)}
+.dg .row.c{fill:var(--game-soft)}
+.dg .frame{fill:none;stroke:var(--ink-2);stroke-width:1.2}
+.dg .screen{fill:var(--screen);stroke:var(--ink-2)}
+.dg .sq-x{fill:var(--stop)}
+.dg .sq-ok{fill:var(--ok)}
+.dg .fl{fill:var(--panel);stroke:var(--rule);stroke-width:1}
+.dg .ge{fill:var(--base)} .dg .fresh{fill:var(--stop);fill-opacity:.28}
+.dg .wall{stroke:var(--ink);stroke-width:3;stroke-linecap:square;fill:none}
+.dg .halo{paint-order:stroke;stroke:#fff;stroke-width:3.5px;stroke-linejoin:round}
+.dg .door{fill:var(--ink-2)} .dg .big{font-size:30px;font-weight:700} .dg .tok{fill:var(--ok)}
+.dg .run{stroke:var(--ink-2);stroke-width:2} .dg .hot{stroke:var(--stop);stroke-width:2.6;fill:none;stroke-linejoin:round}
+.dg .ring{fill:none;stroke:var(--stop);stroke-width:3} .dg .dot{fill:var(--stop);stroke:#fff;stroke-width:2}
+.dg .ok{stroke:var(--base);stroke-width:2.6}</style>
+<rect width="100%" height="100%" rx="10" fill="#ffffff"/>
+<defs><marker id="g-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah" d="M0 1L10 5L0 9z"/></marker><marker id="g-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah b" d="M0 1L10 5L0 9z"/></marker></defs>
+<text class="cap" x="36" y="40" text-anchor="start">WHY IT WORKS · ADD, DON&#8217;T MULTIPLY</text>
+<text class="s" x="36" y="62" text-anchor="start">Five doors. Random play gets through each one 1 time in 10, and a failed attempt dies.</text>
+<text class="t" x="36" y="118" text-anchor="start">No saves</text>
+<text class="s" x="36" y="136" text-anchor="start">every attempt starts</text>
+<text class="s" x="36" y="152" text-anchor="start">at the start</text>
+<line class="e" x1="250" y1="104" x2="250" y2="144"/><text class="lbl" x="250" y="96" text-anchor="middle">Start</text>
+<line class="e o" x1="780" y1="104" x2="780" y2="144"/><text class="lbl" x="780" y="96" text-anchor="middle">Goal</text>
+<line class="run" x1="250" y1="110" x2="325" y2="110"/><path class="hot" d="M326 107l6 6m0 -6l-6 6"/>
+<line class="run" x1="250" y1="117" x2="325" y2="117"/><path class="hot" d="M326 114l6 6m0 -6l-6 6"/>
+<line class="run" x1="250" y1="124" x2="415" y2="124"/><path class="hot" d="M416 121l6 6m0 -6l-6 6"/>
+<line class="run" x1="250" y1="131" x2="325" y2="131"/><path class="hot" d="M326 128l6 6m0 -6l-6 6"/>
+<line class="run" x1="250" y1="138" x2="505" y2="138"/><path class="hot" d="M506 135l6 6m0 -6l-6 6"/>
+<rect class="door" x="336" y="104" width="8" height="40" rx="1.5"/><text class="lbl" x="340" y="96" text-anchor="middle">1</text>
+<rect class="door" x="426" y="104" width="8" height="40" rx="1.5"/><text class="lbl" x="430" y="96" text-anchor="middle">2</text>
+<rect class="door" x="516" y="104" width="8" height="40" rx="1.5"/><text class="lbl" x="520" y="96" text-anchor="middle">3</text>
+<rect class="door" x="606" y="104" width="8" height="40" rx="1.5"/><text class="lbl" x="610" y="96" text-anchor="middle">4</text>
+<rect class="door" x="696" y="104" width="8" height="40" rx="1.5"/><text class="lbl" x="700" y="96" text-anchor="middle">5</text>
+<text class="big" x="840" y="130" text-anchor="start">100,000</text>
+<text class="s" x="840" y="150" text-anchor="start">attempts</text>
+<text class="m" x="840" y="168" text-anchor="start">10 × 10 × 10 × 10 × 10</text>
+<text class="t" x="36" y="224" text-anchor="start">With saves</text>
+<text class="s" x="36" y="242" text-anchor="start">every attempt starts</text>
+<text class="s" x="36" y="258" text-anchor="start">at the last save</text>
+<line class="e" x1="250" y1="210" x2="250" y2="250"/><text class="lbl" x="250" y="202" text-anchor="middle">Start</text>
+<line class="e o" x1="780" y1="210" x2="780" y2="250"/><text class="lbl" x="780" y="202" text-anchor="middle">Goal</text>
+<line class="ok" x1="250" y1="230" x2="774" y2="230" marker-end="url(#g-b)"/>
+<text class="lbl tb" x="295" y="222" text-anchor="middle">~10</text>
+<text class="lbl tb" x="393" y="222" text-anchor="middle">~10</text>
+<text class="lbl tb" x="483" y="222" text-anchor="middle">~10</text>
+<text class="lbl tb" x="573" y="222" text-anchor="middle">~10</text>
+<text class="lbl tb" x="663" y="222" text-anchor="middle">~10</text>
+<rect class="door" x="336" y="210" width="8" height="40" rx="1.5"/><text class="lbl" x="340" y="202" text-anchor="middle">1</text>
+<rect class="box b" x="348" y="223" width="14" height="14" rx="2"/>
+<rect class="door" x="426" y="210" width="8" height="40" rx="1.5"/><text class="lbl" x="430" y="202" text-anchor="middle">2</text>
+<rect class="box b" x="438" y="223" width="14" height="14" rx="2"/>
+<rect class="door" x="516" y="210" width="8" height="40" rx="1.5"/><text class="lbl" x="520" y="202" text-anchor="middle">3</text>
+<rect class="box b" x="528" y="223" width="14" height="14" rx="2"/>
+<rect class="door" x="606" y="210" width="8" height="40" rx="1.5"/><text class="lbl" x="610" y="202" text-anchor="middle">4</text>
+<rect class="box b" x="618" y="223" width="14" height="14" rx="2"/>
+<rect class="door" x="696" y="210" width="8" height="40" rx="1.5"/><text class="lbl" x="700" y="202" text-anchor="middle">5</text>
+<rect class="box b" x="708" y="223" width="14" height="14" rx="2"/>
+<text class="lbl tb" x="355" y="266" text-anchor="middle">save</text>
+<text class="big tok" x="840" y="236" text-anchor="start">≈ 50</text>
+<text class="s" x="840" y="256" text-anchor="start">attempts</text>
+<text class="m" x="840" y="274" text-anchor="start">10 + 10 + 10 + 10 + 10</text>
+<line class="tick" x1="36" y1="178" x2="1064" y2="178"/><line class="tick" x1="36" y1="290" x2="1064" y2="290"/>
+<text class="cap" x="36" y="326" text-anchor="start">ONE ROUND · REPEATED UNTIL THE GOAL</text>
+<text class="s" x="36" y="348" text-anchor="start">The archive holds every place reached so far, each with a saved state that returns there. Blue: in the archive. Red: this round.</text>
+<text class="t" x="36" y="378" text-anchor="start">1 · Pick</text>
+<rect class="fl" x="36" y="392" width="26" height="26"/>
+<rect class="fl" x="62" y="392" width="26" height="26"/>
+<rect class="fl" x="88" y="392" width="26" height="26"/>
+<rect class="fl" x="114" y="392" width="26" height="26"/>
+<rect class="fl" x="140" y="392" width="26" height="26"/>
+<rect class="fl" x="166" y="392" width="26" height="26"/>
+<rect class="fl" x="192" y="392" width="26" height="26"/>
+<rect class="fl" x="218" y="392" width="26" height="26"/>
+<rect class="fl" x="36" y="418" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.57" x="36" y="418" width="26" height="26"/>
+<rect class="fl" x="62" y="418" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.64" x="62" y="418" width="26" height="26"/>
+<rect class="fl" x="88" y="418" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.75" x="88" y="418" width="26" height="26"/>
+<rect class="fl" x="114" y="418" width="26" height="26"/>
+<rect class="fl" x="140" y="418" width="26" height="26"/>
+<rect class="fl" x="166" y="418" width="26" height="26"/>
+<rect class="fl" x="192" y="418" width="26" height="26"/>
+<rect class="fl" x="218" y="418" width="26" height="26"/>
+<rect class="fl" x="36" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.42" x="36" y="444" width="26" height="26"/>
+<rect class="fl" x="62" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.50" x="62" y="444" width="26" height="26"/>
+<rect class="fl" x="88" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.64" x="88" y="444" width="26" height="26"/>
+<rect class="fl" x="114" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="1.00" x="114" y="444" width="26" height="26"/>
+<rect class="fl" x="140" y="444" width="26" height="26"/>
+<rect class="fl" x="166" y="444" width="26" height="26"/>
+<rect class="fl" x="192" y="444" width="26" height="26"/>
+<rect class="fl" x="218" y="444" width="26" height="26"/>
+<rect class="fl" x="36" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.57" x="36" y="470" width="26" height="26"/>
+<rect class="fl" x="62" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.64" x="62" y="470" width="26" height="26"/>
+<rect class="fl" x="88" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.75" x="88" y="470" width="26" height="26"/>
+<rect class="fl" x="114" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="1.00" x="114" y="470" width="26" height="26"/>
+<rect class="fl" x="140" y="470" width="26" height="26"/>
+<rect class="fl" x="166" y="470" width="26" height="26"/>
+<rect class="fl" x="192" y="470" width="26" height="26"/>
+<rect class="fl" x="218" y="470" width="26" height="26"/>
+<rect class="fl" x="36" y="496" width="26" height="26"/>
+<rect class="fl" x="62" y="496" width="26" height="26"/>
+<rect class="fl" x="88" y="496" width="26" height="26"/>
+<rect class="fl" x="114" y="496" width="26" height="26"/>
+<rect class="fl" x="140" y="496" width="26" height="26"/>
+<rect class="fl" x="166" y="496" width="26" height="26"/>
+<rect class="fl" x="192" y="496" width="26" height="26"/>
+<rect class="fl" x="218" y="496" width="26" height="26"/>
+<path class="wall" d="M114 392v52M62 496h78M192 392v52M140 470h52"/><rect class="wall" x="36" y="392" width="208" height="130"/>
+<text class="t halo" x="49" y="462" text-anchor="middle">S</text>
+<rect class="ring" x="112.0" y="442.0" width="30" height="30" rx="3"/>
+<text class="s" x="36" y="548" text-anchor="start">Draw a place from the archive.</text>
+<text class="s" x="36" y="566" text-anchor="start">Less-picked places (darker blue)</text>
+<text class="s" x="36" y="584" text-anchor="start">get a better chance.</text>
+<line class="e" x1="254" y1="457.0" x2="298" y2="457.0" marker-end="url(#g-a)"/>
+<text class="t" x="308" y="378" text-anchor="start">2 · Return</text>
+<rect class="fl" x="308" y="392" width="26" height="26"/>
+<rect class="fl" x="334" y="392" width="26" height="26"/>
+<rect class="fl" x="360" y="392" width="26" height="26"/>
+<rect class="fl" x="386" y="392" width="26" height="26"/>
+<rect class="fl" x="412" y="392" width="26" height="26"/>
+<rect class="fl" x="438" y="392" width="26" height="26"/>
+<rect class="fl" x="464" y="392" width="26" height="26"/>
+<rect class="fl" x="490" y="392" width="26" height="26"/>
+<rect class="fl" x="308" y="418" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.57" x="308" y="418" width="26" height="26"/>
+<rect class="fl" x="334" y="418" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.64" x="334" y="418" width="26" height="26"/>
+<rect class="fl" x="360" y="418" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.75" x="360" y="418" width="26" height="26"/>
+<rect class="fl" x="386" y="418" width="26" height="26"/>
+<rect class="fl" x="412" y="418" width="26" height="26"/>
+<rect class="fl" x="438" y="418" width="26" height="26"/>
+<rect class="fl" x="464" y="418" width="26" height="26"/>
+<rect class="fl" x="490" y="418" width="26" height="26"/>
+<rect class="fl" x="308" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.42" x="308" y="444" width="26" height="26"/>
+<rect class="fl" x="334" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.50" x="334" y="444" width="26" height="26"/>
+<rect class="fl" x="360" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.64" x="360" y="444" width="26" height="26"/>
+<rect class="fl" x="386" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.75" x="386" y="444" width="26" height="26"/>
+<rect class="fl" x="412" y="444" width="26" height="26"/>
+<rect class="fl" x="438" y="444" width="26" height="26"/>
+<rect class="fl" x="464" y="444" width="26" height="26"/>
+<rect class="fl" x="490" y="444" width="26" height="26"/>
+<rect class="fl" x="308" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.57" x="308" y="470" width="26" height="26"/>
+<rect class="fl" x="334" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.64" x="334" y="470" width="26" height="26"/>
+<rect class="fl" x="360" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.75" x="360" y="470" width="26" height="26"/>
+<rect class="fl" x="386" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="1.00" x="386" y="470" width="26" height="26"/>
+<rect class="fl" x="412" y="470" width="26" height="26"/>
+<rect class="fl" x="438" y="470" width="26" height="26"/>
+<rect class="fl" x="464" y="470" width="26" height="26"/>
+<rect class="fl" x="490" y="470" width="26" height="26"/>
+<rect class="fl" x="308" y="496" width="26" height="26"/>
+<rect class="fl" x="334" y="496" width="26" height="26"/>
+<rect class="fl" x="360" y="496" width="26" height="26"/>
+<rect class="fl" x="386" y="496" width="26" height="26"/>
+<rect class="fl" x="412" y="496" width="26" height="26"/>
+<rect class="fl" x="438" y="496" width="26" height="26"/>
+<rect class="fl" x="464" y="496" width="26" height="26"/>
+<rect class="fl" x="490" y="496" width="26" height="26"/>
+<path class="wall" d="M386 392v52M334 496h78M464 392v52M412 470h52"/><rect class="wall" x="308" y="392" width="208" height="130"/>
+<text class="t halo" x="321" y="462" text-anchor="middle">S</text>
+<rect class="ring" x="384.0" y="442.0" width="30" height="30" rx="3"/>
+<line class="e o" x1="330.0" y1="457.0" x2="390.0" y2="457.0"/><circle class="dot" cx="399.0" cy="457.0" r="7"/>
+<text class="s" x="308" y="548" text-anchor="start">Load the saved state there.</text>
+<text class="s" x="308" y="566" text-anchor="start">The path (dotted) is not replayed.</text>
+<line class="e" x1="526" y1="457.0" x2="570" y2="457.0" marker-end="url(#g-a)"/>
+<text class="t" x="580" y="378" text-anchor="start">3 · Explore</text>
+<rect class="fl" x="580" y="392" width="26" height="26"/>
+<rect class="fl" x="606" y="392" width="26" height="26"/>
+<rect class="fl" x="632" y="392" width="26" height="26"/>
+<rect class="fl" x="658" y="392" width="26" height="26"/>
+<rect class="fl" x="684" y="392" width="26" height="26"/>
+<rect class="fl" x="710" y="392" width="26" height="26"/>
+<rect class="fl" x="736" y="392" width="26" height="26"/>
+<rect class="fl" x="762" y="392" width="26" height="26"/>
+<rect class="fl" x="580" y="418" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.57" x="580" y="418" width="26" height="26"/>
+<rect class="fl" x="606" y="418" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.64" x="606" y="418" width="26" height="26"/>
+<rect class="fl" x="632" y="418" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.75" x="632" y="418" width="26" height="26"/>
+<rect class="fl" x="658" y="418" width="26" height="26"/>
+<rect class="fl" x="684" y="418" width="26" height="26"/>
+<rect class="fresh" x="684" y="418" width="26" height="26"/>
+<rect class="fl" x="710" y="418" width="26" height="26"/>
+<rect class="fresh" x="710" y="418" width="26" height="26"/>
+<rect class="fl" x="736" y="418" width="26" height="26"/>
+<rect class="fl" x="762" y="418" width="26" height="26"/>
+<rect class="fl" x="580" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.42" x="580" y="444" width="26" height="26"/>
+<rect class="fl" x="606" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.50" x="606" y="444" width="26" height="26"/>
+<rect class="fl" x="632" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.64" x="632" y="444" width="26" height="26"/>
+<rect class="fl" x="658" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.75" x="658" y="444" width="26" height="26"/>
+<rect class="fl" x="684" y="444" width="26" height="26"/>
+<rect class="fresh" x="684" y="444" width="26" height="26"/>
+<rect class="fl" x="710" y="444" width="26" height="26"/>
+<rect class="fresh" x="710" y="444" width="26" height="26"/>
+<rect class="fl" x="736" y="444" width="26" height="26"/>
+<rect class="fresh" x="736" y="444" width="26" height="26"/>
+<rect class="fl" x="762" y="444" width="26" height="26"/>
+<rect class="fl" x="580" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.57" x="580" y="470" width="26" height="26"/>
+<rect class="fl" x="606" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.64" x="606" y="470" width="26" height="26"/>
+<rect class="fl" x="632" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.75" x="632" y="470" width="26" height="26"/>
+<rect class="fl" x="658" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="1.00" x="658" y="470" width="26" height="26"/>
+<rect class="fl" x="684" y="470" width="26" height="26"/>
+<rect class="fl" x="710" y="470" width="26" height="26"/>
+<rect class="fl" x="736" y="470" width="26" height="26"/>
+<rect class="fl" x="762" y="470" width="26" height="26"/>
+<rect class="fl" x="580" y="496" width="26" height="26"/>
+<rect class="fl" x="606" y="496" width="26" height="26"/>
+<rect class="fl" x="632" y="496" width="26" height="26"/>
+<rect class="fl" x="658" y="496" width="26" height="26"/>
+<rect class="fl" x="684" y="496" width="26" height="26"/>
+<rect class="fl" x="710" y="496" width="26" height="26"/>
+<rect class="fl" x="736" y="496" width="26" height="26"/>
+<rect class="fl" x="762" y="496" width="26" height="26"/>
+<path class="wall" d="M658 392v52M606 496h78M736 392v52M684 470h52"/><rect class="wall" x="580" y="392" width="208" height="130"/>
+<text class="t halo" x="593" y="462" text-anchor="middle">S</text>
+<rect class="ring" x="656.0" y="442.0" width="30" height="30" rx="3"/>
+<polyline class="hot" points="671,457 697,457 697,431 723,431 723,457 749,457 749,477"/><path class="hot" d="M744 478l10 10m0 -10l-10 10"/>
+<text class="s" x="580" y="548" text-anchor="start">Play at random until death (✕)</text>
+<text class="s" x="580" y="566" text-anchor="start">or the time limit. New places</text>
+<text class="s" x="580" y="584" text-anchor="start">are shown in red.</text>
+<line class="e" x1="798" y1="457.0" x2="842" y2="457.0" marker-end="url(#g-a)"/>
+<text class="t" x="852" y="378" text-anchor="start">4 · Save</text>
+<rect class="fl" x="852" y="392" width="26" height="26"/>
+<rect class="fl" x="878" y="392" width="26" height="26"/>
+<rect class="fl" x="904" y="392" width="26" height="26"/>
+<rect class="fl" x="930" y="392" width="26" height="26"/>
+<rect class="fl" x="956" y="392" width="26" height="26"/>
+<rect class="fl" x="982" y="392" width="26" height="26"/>
+<rect class="fl" x="1008" y="392" width="26" height="26"/>
+<rect class="fl" x="1034" y="392" width="26" height="26"/>
+<rect class="fl" x="852" y="418" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.57" x="852" y="418" width="26" height="26"/>
+<rect class="fl" x="878" y="418" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.64" x="878" y="418" width="26" height="26"/>
+<rect class="fl" x="904" y="418" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.75" x="904" y="418" width="26" height="26"/>
+<rect class="fl" x="930" y="418" width="26" height="26"/>
+<rect class="fl" x="956" y="418" width="26" height="26"/>
+<rect class="ge" x="956" y="418" width="26" height="26"/>
+<rect class="fl" x="982" y="418" width="26" height="26"/>
+<rect class="ge" x="982" y="418" width="26" height="26"/>
+<rect class="fl" x="1008" y="418" width="26" height="26"/>
+<rect class="fl" x="1034" y="418" width="26" height="26"/>
+<rect class="fl" x="852" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.42" x="852" y="444" width="26" height="26"/>
+<rect class="fl" x="878" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.50" x="878" y="444" width="26" height="26"/>
+<rect class="fl" x="904" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.64" x="904" y="444" width="26" height="26"/>
+<rect class="fl" x="930" y="444" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.75" x="930" y="444" width="26" height="26"/>
+<rect class="fl" x="956" y="444" width="26" height="26"/>
+<rect class="ge" x="956" y="444" width="26" height="26"/>
+<rect class="fl" x="982" y="444" width="26" height="26"/>
+<rect class="ge" x="982" y="444" width="26" height="26"/>
+<rect class="fl" x="1008" y="444" width="26" height="26"/>
+<rect class="ge" x="1008" y="444" width="26" height="26"/>
+<rect class="fl" x="1034" y="444" width="26" height="26"/>
+<rect class="fl" x="852" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.57" x="852" y="470" width="26" height="26"/>
+<rect class="fl" x="878" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.64" x="878" y="470" width="26" height="26"/>
+<rect class="fl" x="904" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="0.75" x="904" y="470" width="26" height="26"/>
+<rect class="fl" x="930" y="470" width="26" height="26"/>
+<rect class="ge" fill-opacity="1.00" x="930" y="470" width="26" height="26"/>
+<rect class="fl" x="956" y="470" width="26" height="26"/>
+<rect class="fl" x="982" y="470" width="26" height="26"/>
+<rect class="fl" x="1008" y="470" width="26" height="26"/>
+<rect class="fl" x="1034" y="470" width="26" height="26"/>
+<rect class="fl" x="852" y="496" width="26" height="26"/>
+<rect class="fl" x="878" y="496" width="26" height="26"/>
+<rect class="fl" x="904" y="496" width="26" height="26"/>
+<rect class="fl" x="930" y="496" width="26" height="26"/>
+<rect class="fl" x="956" y="496" width="26" height="26"/>
+<rect class="fl" x="982" y="496" width="26" height="26"/>
+<rect class="fl" x="1008" y="496" width="26" height="26"/>
+<rect class="fl" x="1034" y="496" width="26" height="26"/>
+<path class="wall" d="M930 392v52M878 496h78M1008 392v52M956 470h52"/><rect class="wall" x="852" y="392" width="208" height="130"/>
+<text class="t halo" x="865" y="462" text-anchor="middle">S</text>
+<text class="s" x="852" y="548" text-anchor="start">New places join the archive:</text>
+<text class="s" x="852" y="566" text-anchor="start">11 → 16 places. Back to step 1.</text>
+<path class="e" d="M956 606V624H140V608" marker-end="url(#g-a)"/><text class="lbl" x="550" y="640" text-anchor="middle">repeat until the goal</text>
+</svg>
