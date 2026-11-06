@@ -2,7 +2,7 @@
 
 **Status (2026-11-04): true ending reached.** One input-only tape plays from reset through all six visible phases and the final room of both loops: `out/h3/loop2/l2-ending-96340.json`, 96400 frames. The RAM gate [`h3_verify_ending.mjs`](../../scripts/h3_verify_ending.mjs) passes, and the video has `ramVerified=true` ([§10](#10-verified-results)).
 
-The story, the lessons and the token cost are in the private artifact [Cuaderno Go-Explore H3](https://claude.ai/artifact/VFgvo4SAfhkz57YXU3N7nv). This README stays the reference. Command sequences and per-phase evidence are in [PROVENANCE.md](PROVENANCE.md). Steps V2–V4 of the [gameplay-control bot plan](../plan-bot-control-jugabilidad-2026-11-01.md) have not started.
+A visual explanation of the method, plus the story, the lessons and the token cost, is in the private artifact [Go-Explore, en simple](https://claude.ai/artifact/VFgvo4SAfhkz57YXU3N7nv). This README stays the reference. Command sequences and per-phase evidence are in [PROVENANCE.md](PROVENANCE.md). Steps V2–V4 of the [gameplay-control bot plan](../plan-bot-control-jugabilidad-2026-11-01.md) have not started.
 
 Use this document to run, reproduce and verify the H3 exploration tools. The handoffs and plans in [§9](#9-historical-documents) keep the evidence and reasoning of each stage, but their instructions are no longer current.
 
@@ -17,6 +17,46 @@ Everything runs from the repo root, on the local certified bundle (g6), headless
 - **Cell:** a Go-Explore archive entry: a coarse game state with the shortest tape that reaches it.
 - **Beam:** a search that keeps the best N branches and extends each one with 14 short macros.
 - **Donor route:** an earlier tape that the beam follows and only re-optimizes where it diverges.
+
+## How Go-Explore works
+
+Go-Explore ([Ecoffet et al., 2019](https://arxiv.org/abs/1901.10995); [*Nature*, 2021](https://www.nature.com/articles/s41586-020-03157-9)) is playing with save games. Each time it reaches a new place, it saves. Then it loads one of the saves it has used least and plays at random for a short while from there. It repeats this until it reaches the goal.
+
+Nothing gained is ever lost: an attempt that dies does not send the search back to the start.
+
+**The loop:**
+
+1. **Pick** a save from the archive, at random. Saves that were loaded fewer times get a better chance.
+2. **Load** it. In H3 this is `lab.restore(snap)`, so the path is not replayed.
+3. **Play at random** for one chunk: 120 frames, about 2 s.
+4. **Save** every new place reached. A known place is replaced only if it was reached better (less armor lost, or an earlier frame).
+
+**Toy example.** A track of nine squares. Random play moves one or two squares and then dies. Each number under the track is how many times that save has been loaded. `[#]` is saved, `[+]` is new this round, `( )` is the save being loaded.
+
+```text
+             Start  1    2    3    4    5    6    7   Goal
+Round 1     ( # )  [+]  [+]   .    .    .    .    .    .     load Start, save 1 and 2
+loads          1    0    0
+Round 2      [#]  [#]  ( # ) [+]  [+]   .    .    .    .     draw → 2, save 3 and 4
+loads          1    0    1    0    0
+Round 3      [#]  ( # ) [#]  [#]  [#]   .    .    .    .     draw → 1, nothing new (no loss)
+loads          1    1    1    0    0
+Round 4      [#]  [#]  [#]  [#]  ( # ) [+]  [+]  [+]  [+]    draw → 4, goal reached
+
+No saves     4 attempts, all from Start: none gets past square 3
+```
+
+**Three choices decide whether it works:**
+
+- **What counts as a "new place" (the cell).** A cell is a coarse summary of the state. If it is too fine, the archive fills with near-copies. If it is too coarse, real progress does not change it and is never saved. In H3 the cell is phase, checkpoint, position in 16×8-pixel squares, armor and boss life. Without boss life, hitting the boss was not "new" and the search did not keep at it.
+- **Which save to load.** The weight is `1/√(1 + times loaded)`. A new save weighs 1.0 and one loaded 99 times weighs 0.1. New saves sit at the frontier, so the search moves forward without dropping side paths. H3 adds small bonuses; see [§6](#6-search-criteria).
+- **When to stop.** A goal: a new phase, reaching the boss, picking up the shield.
+
+**Requirements and limits:**
+
+- **Loading must be cheap.** The H3 engine is deterministic and the lab saves and restores the full state.
+- **The result needs a separate proof.** Restores are a shortcut, so a result counts only if the input-only tape, replayed from reset, reaches the same place (the gate).
+- **It is weak on narrow paths** such as corridors with enemies or boss fights. There the beam, which extends only the best branches, does better. In H3, Go-Explore opened each hard stretch, the beam refined it, and a short hand-written maneuver finished it.
 
 ## 1. Architecture
 
