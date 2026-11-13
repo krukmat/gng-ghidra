@@ -65,17 +65,21 @@ The repository name comes from the first approach, decompiling with Ghidra, whic
 
 ## 5. Playing it to the end: a Go-Explore bot
 
-To check that the translated game runs all the way through, a bot plays it headless, pressing only buttons. It found one input-only tape of 96,400 frames (about 27 minutes of play) that goes from power-on through every stage of both loops to the true ending. Replaying that tape from power-on, with no saved states, reaches the ending again.
+To check that the translated game runs all the way through, a bot running without a display produced a recording of button inputs covering 96,400 frames (about 27 minutes). It starts at power-on, passes every stage in both loops, and reaches the true ending after the second loop. Replaying those inputs from power-on reaches the ending again without restoring a saved state.
 
-The bot uses Go-Explore ([Ecoffet et al., 2019](https://arxiv.org/abs/1901.10995)). It works like playing with save games: it saves every new place it reaches, then loads one of the places it has tried least and plays at random from there. Random play alone rarely gets far, because one attempt has to get every hard step right in a row; saving turns that product into a sum.
+To find that route, the bot used Go-Explore ([Ecoffet et al., 2019](https://arxiv.org/abs/1901.10995)). During the search, it saves each new place it reaches, restores a place it has tried relatively few times, and presses random buttons from there. Those saved states speed up the search; the final recording contains only button inputs.
+
+For example, if five obstacles each have a one-in-ten chance of being passed, clearing all five in one attempt takes about 100,000 tries on average. Saving after each obstacle takes about 50 tries on average.
 
 ![Go-Explore: why saving works, and one round of the search](docs/img/go-explore.svg)
 
+[Open the diagram at full size](docs/img/go-explore.svg).
+
 - A **place** is a coarse summary of the game state: stage, checkpoint, position in 16×8-pixel squares, armor and boss life.
 - **Explore** means random buttons for up to 120 frames (about 2 s), stopping at the first fatal hit.
-- A known place is replaced only if it was reached **better**: with less damage, or earlier.
+- A saved place is replaced only when the bot reaches that same place with less damage or in fewer frames.
 
-Go-Explore opened each hard stretch; a beam search and short hand-written maneuvers finished the boss fights and the narrow passages. In total the search ran about 3.4 million rounds and 286 million game frames, in about 11 CPU hours. Commands, criteria and evidence: [docs/go-explore](docs/go-explore/README.md).
+Go-Explore found routes into difficult sections; a beam search and short scripted button sequences completed boss fights and narrow passages. In total, the search ran about 3.4 million rounds and 286 million game frames in about 11 CPU hours. Commands, criteria and evidence: [docs/go-explore](docs/go-explore/README.md).
 
 ## 6. The next game
 
