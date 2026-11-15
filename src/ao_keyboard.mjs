@@ -4,7 +4,7 @@
  * X jump, G save, C load; T exports the tape.
  */
 export const KEYS=Object.freeze({
-  Digit5:{pulse:'coin1'},Digit1:{pulse:'start1'},
+  Digit5:{pulse:'coin1'},Digit1:{pulse:'start1'},Digit2:{command:'twoPlayers'},
   ArrowUp:{hold:'p1.up'},ArrowDown:{hold:'p1.down'},
   ArrowLeft:{hold:'p1.left'},ArrowRight:{hold:'p1.right'},
   KeyZ:{hold:'p1.button1'},KeyX:{hold:'p1.button2'},

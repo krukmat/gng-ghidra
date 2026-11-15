@@ -49,9 +49,23 @@
   #coin{border-color:#8d7845;color:#f8d582}
   #start{border-color:#5c9b8b;color:#a4ead6}
   #menu{display:flex;flex-direction:column;gap:10px;width:100%}
-  #system-controls{display:flex;gap:6px;width:100%}
+  #system-controls{display:flex;flex-wrap:wrap;gap:6px;width:100%}
   #system-controls[hidden],#hint[hidden]{display:none}
   #system-controls button{flex:1;min-height:36px;font-size:12px;border-radius:10px}
+  #system-controls #two-players{flex-basis:100%;border-color:#6d5c9b;color:#cdbdf5}
+  /* Two-player games: whose turn it is, and the result at the end. */
+  #turn{position:absolute;top:12%;left:50%;transform:translateX(-50%);
+    padding:8px 16px;border-radius:12px;background:#090e13d9;border:1px solid #87e1c9;
+    font-weight:700;font-size:16px;white-space:nowrap;pointer-events:none}
+  #turn[hidden],#result[hidden]{display:none}
+  #result{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;
+    align-items:center;justify-content:center;padding:20px;background:#090e13e6;
+    text-align:center}
+  #result h2{margin:0;font-size:16px}
+  #result dl{display:grid;grid-template-columns:auto auto;gap:4px 18px;margin:0;font-size:15px}
+  #result dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+  #result-winner{margin:0;font-weight:700;color:#f8d582}
+  #result button{min-height:38px;padding:4px 22px;font-size:12px;border-radius:10px}
   #button-stack{position:absolute;left:max(12px,env(safe-area-inset-left));
     bottom:max(12px,env(safe-area-inset-bottom));display:flex;flex-direction:column;
     gap:8px;width:clamp(76px,10vw,96px);background:transparent}
@@ -113,6 +127,13 @@
   <div id="screen-wrap">
     <canvas id="screen" width="256" height="224" aria-label="Pantalla del juego"></canvas>
     <div id="halt" hidden role="alert"></div>
+    <div id="turn" hidden aria-live="polite"></div>
+    <div id="result" hidden role="alertdialog" aria-labelledby="result-title">
+      <h2 id="result-title">Fin de la partida a 2 jugadores</h2>
+      <dl><dt>Jugador 1</dt><dd id="result-p1"></dd><dt>Jugador 2</dt><dd id="result-p2"></dd></dl>
+      <p id="result-winner"></p>
+      <button id="result-ok">Aceptar</button>
+    </div>
   </div>
   <div id="button-stack" role="group" aria-label="Acciones del juego">
     <button id="attack" data-hold="p1.button1" disabled>Disparo</button>
@@ -123,9 +144,11 @@
       <div id="system-controls" role="group" aria-label="Moneda e inicio">
         <button id="coin" data-pulse="coin1" disabled>Moneda</button>
         <button id="start" data-pulse="start1" disabled>Start</button>
+        <button id="two-players" disabled
+          title="Dos jugadores por turnos con los mismos controles">2 Jugadores</button>
       </div>
       <p id="hint">Cargando el juego…</p>
-      <p id="keys">Teclado: 5 moneda · 1 start · flechas · Z disparo · X salto ·
+      <p id="keys">Teclado: 5 moneda · 1 start · 2 dos jugadores · flechas · Z disparo · X salto ·
         G guardar · C cargar · T cinta</p>
       <button id="sound" disabled aria-pressed="false"
         title="Preparando el sonido…">Sonido OFF</button>

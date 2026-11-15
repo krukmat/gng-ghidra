@@ -4,8 +4,9 @@
  */
 import {REC} from '../../boards/gng/frame-record.mjs';
 
-export const RAM=Object.freeze({mode:0x02,phase:0x05,credits:0x22,stage:0x52,
-  lives:0x60,world:0xa0,y:0xa2});
+export const RAM=Object.freeze({mode:0x02,phase:0x05,credits:0x22,
+  twoPlayers:0x26,turn:0x27,stage:0x52,lives:0x60,score:0x68,world:0xa0,y:0xa2,
+  waiting:0x440});
 export const BOSS_LIFE=0x0e76;
 
 function hasGameOver({record,known}){
@@ -23,6 +24,30 @@ function hasGameOver({record,known}){
   return false;
 }
 
+const bcd=(b,at,n)=>{
+  let v=0;
+  for(let i=0;i<n;i++){
+    const x=b[at+i];
+    if((x>>4)>9||(x&15)>9)return null;
+    v=v*100+(x>>4)*10+(x&15);
+  }
+  return v;
+};
+/** Two-player games alternate turns on the P1 controls (upright cabinet).
+ * RAM 0x26 is 1 in a two-player game and 0x27 the player whose turn it is
+ * (0 = P1). The player block 0x60-0x8F holds the current player's lives (+0)
+ * and score (+8, 4 BCD bytes); the other player's copy waits at 0x440. After
+ * the game the title (mode 1) keeps both scores until the demo starts. */
+function playerState({record:b,known:k}){
+  const {twoPlayers,turn,score,waiting}=RAM;
+  const bytes=[twoPlayers,turn,...[0,1,2,3].flatMap(i=>[score+i,waiting+8+i])];
+  if(!bytes.every(a=>k[a]===255))return {};
+  const players=b[twoPlayers]?2:1,turnOf=b[turn]&1;
+  const own=bcd(b,score,4),other=bcd(b,waiting+8,4);
+  return {players,player:turnOf+1,
+    scores:players===1?[own]:turnOf===0?[own,other]:[other,own]};
+}
+
 export function observeGameState(frame){
   const {mode:m,phase:p,credits:c}=RAM;
   if(![m,p,c,c+1].every(a=>frame.known[a]===255))return null;
@@ -30,8 +55,8 @@ export function observeGameState(frame){
   const credits=frame.record[c]*256+frame.record[c+1];
   const canContinue=mode===2&&phase===4;
   const gameOver=mode===2&&(phase>=2||hasGameOver(frame));
-  return {credits,canContinue,gameOver,inGame:mode>=2&&!gameOver,
-    readyToStart:credits>0&&(mode===1||canContinue)};
+  return {mode,credits,canContinue,gameOver,inGame:mode>=2&&!gameOver,
+    readyToStart:credits>0&&(mode===1||canContinue),...playerState(frame)};
 }
 
 /** Player position, lives and stage. `known` covers world, y and lives;

@@ -5,6 +5,7 @@ import {followBase,knobOffset,stickSector} from './lib/ao_stick.mjs';
 import {keyAction} from './lib/ao_keyboard.mjs';
 import {checkedCheckpointTape} from './lib/v3_b3_live_tape.mjs';
 import {DEFAULT_OPTIONS,gameOptions} from './games/gngb/options.mjs';
+import {createMatchTracker} from './lib/ao_match.mjs';
 
 const canvas=document.getElementById('screen');
 const ctx2d=canvas.getContext('2d',{alpha:false});
@@ -39,6 +40,11 @@ const describeOptions=o=>DIFFICULTY_NAMES[o.difficulty]+' · '+o.lives+' vidas �
   o.enemyPace+' %';
 const defaultOptions=o=>Object.keys(DEFAULT_OPTIONS).every(k=>o[k]===DEFAULT_OPTIONS[k]);
 let chosen=storedOptions(),current=null;
+// Two players alternate on the same controls (games/gngb/state.mjs).
+const twoButton=document.getElementById('two-players');
+const turnBanner=document.getElementById('turn'),resultBox=document.getElementById('result');
+const match=createMatchTracker();
+let twoPending=null,turnTimer=null; // since when 2 Jugadores waits for credits
 function storedOptions(){
   try{return gameOptions(JSON.parse(localStorage.getItem(OPTIONS_KEY)));}
   catch{return gameOptions();}
@@ -178,7 +184,45 @@ function enable(value){
   for(const button of buttons)button.disabled=!value||
     (button.dataset.pulse&&game.inGame)||
     (button.dataset.pulse==='start1'&&!game.readyToStart);
+  twoButton.disabled=!value||game.mode!==1||twoPending!==null;
   updateCheckpoint();
+}
+// 2 Jugadores: the coins still missing for two credits, then Start 2 once the
+// title counts them.
+function startTwoPlayers(){
+  if(twoButton.disabled)return;
+  resultBox.hidden=true;
+  for(let i=game.credits;i<2;i++)controls.pulse('coin1');
+  twoPending=performance.now();enable(playable);checkTwoPlayers();
+  setTimeout(()=>{checkTwoPlayers();enable(playable);},5100);
+}
+function checkTwoPlayers(){
+  if(twoPending===null)return;
+  if(game.mode===1&&game.credits>=2){twoPending=null;controls.pulse('start2');}
+  else if(performance.now()-twoPending>=5000){
+    twoPending=null;log('AO_TWO_PLAYERS_TIMEOUT',game);
+  }
+}
+function showTurn(player,first){
+  clearTimeout(turnTimer);
+  turnBanner.textContent=(first?'Empieza el Jugador ':'Turno del Jugador ')+player;
+  turnBanner.hidden=false;
+  turnTimer=setTimeout(()=>{turnBanner.hidden=true;},2500);
+}
+function matchEvents(state){
+  for(const e of match.update(state)){
+    log('AO_MATCH',e);
+    if(e.type==='start'){resultBox.hidden=true;showTurn(e.player,true);}
+    else if(e.type==='turn')showTurn(e.player,false);
+    else if(e.type==='result'){
+      const points=n=>n.toLocaleString('es');
+      document.getElementById('result-p1').textContent=points(e.scores[0]);
+      document.getElementById('result-p2').textContent=points(e.scores[1]);
+      document.getElementById('result-winner').textContent=
+        e.winner?'Gana el Jugador '+e.winner:'Empate';
+      turnBanner.hidden=true;resultBox.hidden=false;
+    }
+  }
 }
 function updateHint(){
   systemControls.hidden=game.inGame;
@@ -321,6 +365,8 @@ function start(checkpoint=null){
   if(ckSaving!==null){clearTimeout(ckSaving);ckSaving=null;}
   enable(false);closeSession();worker?.terminate();
   game={credits:0,readyToStart:false,inGame:false};current=null;
+  match.reset();twoPending=null;clearTimeout(turnTimer);
+  turnBanner.hidden=true;resultBox.hidden=true;
   pending=null;drawn=0;ctx2d.clearRect(0,0,256,224);halt.hidden=true;
   updateHint();status.textContent='cargando…';
   worker=new Worker(new URL('engine.worker.mjs'+location.search,import.meta.url),
@@ -346,7 +392,7 @@ function start(checkpoint=null){
       case 'audio-clock-lost':log('AO_AUDIO_CLOCK_LOST',data);break;
       case 'ready':log('AO_READY',data);current=data.options??null;updateHint();break;
       case 'game-state':
-        game=data;enable(playable);updateHint();break;
+        game=data;matchEvents(data);checkTwoPlayers();enable(playable);updateHint();break;
       case 'check':log('AO_CHECK',data);status.textContent='check '+data.frames;break;
       case 'input-probe':log('AO_INPUT',data);break;
       case 'halt':log('AO_HALT',data);stop('Motor detenido: '+data.status);break;
@@ -384,7 +430,8 @@ document.addEventListener('keydown',e=>{
   else if(action.pulse){
     const button=buttons.find(b=>b.dataset.pulse===action.pulse);
     if(!button.disabled)pulse(action.pulse);
-  }else if(action.command==='save')saveCheckpoint();
+  }else if(action.command==='twoPlayers')startTwoPlayers();
+  else if(action.command==='save')saveCheckpoint();
   else if(action.command==='load')loadCheckpoint();
   else saveCheckpoint(true);
 });
@@ -408,6 +455,8 @@ document.addEventListener('visibilitychange',()=>{
 });
 document.addEventListener('contextmenu',e=>e.preventDefault());
 document.getElementById('restart').addEventListener('click',()=>start());
+twoButton.addEventListener('click',startTwoPlayers);
+document.getElementById('result-ok').addEventListener('click',()=>{resultBox.hidden=true;});
 function openOptions(){
   releaseAll();
   for(const [name,value] of Object.entries(chosen))

@@ -44,3 +44,16 @@ test('unknown RAM, unknown characters and other font banks cannot claim Game Ove
   assert.equal(observeGameState(wrapped).inGame,true);
   f.known[5]=0;assert.equal(observeGameState(f),null);
 });
+
+test('players, turn and scores: the waiting player keeps a copy at 0x440',()=>{
+  const f=frame(2,1,0);
+  f.record[0x26]=1;f.record[0x27]=1;          // two players, P2's turn
+  f.record.set([0x00,0x00,0x14,0x00],0x68);   // P2 (current): 1400
+  f.record.set([0x00,0x00,0x46,0x00],0x448);  // P1 (waiting): 4600
+  assert.deepEqual(observeGameState(f),{mode:2,credits:0,canContinue:false,gameOver:false,
+    inGame:true,readyToStart:false,players:2,player:2,scores:[4600,1400]});
+  f.record[0x26]=0;f.record[0x27]=0;
+  assert.deepEqual(observeGameState(f).scores,[1400]);
+  f.record[0x6b]=0x0a;assert.deepEqual(observeGameState(f).scores,[null],'not BCD');
+  f.known[0x27]=0;assert.equal(observeGameState(f).players,undefined);
+});

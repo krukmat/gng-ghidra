@@ -8,7 +8,7 @@ export const PULSE_MS=100,PULSE_GAP_MS=200;
 export const isDirection=key=>/^p1\.(up|down|left|right)$/.test(key);
 const HOLDS=new Set(['p1.up','p1.down','p1.left','p1.right','p1.button1','p1.button2']);
 // The game names the Continue combination.
-const PULSES={coin1:['coin1'],start1:['start1'],continue1:CONTINUE_CONTROLS};
+const PULSES={coin1:['coin1'],start1:['start1'],start2:['start2'],continue1:CONTINUE_CONTROLS};
 const PORTS=['SYSTEM','P1','P2','DSW1','DSW2'];
 
 export function createTouchControls(onChange){
