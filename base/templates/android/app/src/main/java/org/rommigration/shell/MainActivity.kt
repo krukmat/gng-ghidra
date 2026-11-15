@@ -15,9 +15,11 @@ import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 
 // Serves the generated site from assets/ over a local https origin, keeps the
-// screen on and immersive, and forwards console messages to logcat.
+// screen on and immersive, forwards console messages to logcat, and lends the
+// page a Bluetooth line channel to a paired device (BluetoothLine).
 class MainActivity : Activity() {
     private lateinit var webView: WebView
+    private lateinit var bluetooth: BluetoothLine
 
     companion object {
         const val TAG = "WebShell"
@@ -54,6 +56,8 @@ class MainActivity : Activity() {
                 }
             }
         }
+        bluetooth = BluetoothLine(this, webView)
+        webView.addJavascriptInterface(bluetooth, "ShellBluetooth")
         setContentView(webView)
         webView.loadUrl("https://appassets.androidplatform.net/assets/index.html")
     }
@@ -83,7 +87,15 @@ class MainActivity : Activity() {
         webView.onResume()
     }
 
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == BluetoothLine.REQUEST_PERMISSION) bluetooth.announcePermission()
+    }
+
     override fun onDestroy() {
+        bluetooth.shutdown()
         webView.destroy()
         super.onDestroy()
     }

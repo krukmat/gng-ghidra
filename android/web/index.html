@@ -114,7 +114,6 @@
   #options-actions,.online-row{display:flex;gap:8px}
   #options-actions button,.online-row button{flex:1;min-height:38px;font-size:12px;border-radius:10px}
   /* Online play (app.mjs): a room on the relay, two phones by turns. */
-  #online label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#acbdcc}
   #online input{font:inherit;font-size:14px;color:#e7edf4;background:#0a1118;
     border:1px solid #425465;border-radius:10px;padding:8px 10px;min-width:0;
     user-select:text;-webkit-user-select:text;touch-action:auto}
@@ -124,7 +123,15 @@
     text-align:center;color:#f8d582}
   #online-room[hidden],#online-setup[hidden],#online-leave[hidden]{display:none}
   #online #online-status{font-size:12px;color:#e7edf4;min-height:1.3em}
-  #online-setup{display:flex;flex-direction:column;gap:8px}
+  /* Internet and Bluetooth side by side when there is room. */
+  #online-setup{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px 14px}
+  .online-col{display:flex;flex-direction:column;gap:8px}
+  #online-bt[hidden],#bt-permission[hidden]{display:none}
+  #online .online-way{font-size:12px;font-weight:650;color:#acbdcc}
+  #online select{font:inherit;font-size:13px;color:#e7edf4;background:#0a1118;
+    border:1px solid #425465;border-radius:10px;padding:8px;flex:1;min-width:0;
+    touch-action:auto}
+  #bt-host,#bt-join,#bt-permission{border-color:#4f7fa8;color:#b9dcf7}
   #options-apply{border-color:#5c9b8b;color:#a4ead6}
   @media(max-width:480px){.opt{flex-wrap:wrap}.opt-name{flex-basis:100%}}
   /* Desktop only: the keyboard drives the same controls. */
@@ -222,18 +229,31 @@
 <div id="online" hidden role="dialog" aria-modal="true" aria-labelledby="online-title">
   <div id="online-box">
     <h2 id="online-title">Jugar en línea</h2>
-    <p>Dos teléfonos por turnos, como 2 Jugadores. Quien crea la sala es el
-      Jugador 1 y elige las opciones de juego. Guardar y Cargar no se usan
-      en línea.</p>
+    <p>Dos teléfonos por turnos, como 2 Jugadores. Quien crea la partida es
+      el Jugador 1 y elige las opciones.</p>
     <div id="online-setup">
-      <label>Servidor<input id="online-url" type="url" inputmode="url"
-        autocomplete="off" spellcheck="false" placeholder="wss://servidor"></label>
+     <div class="online-col">
+      <p class="online-way">Por internet</p>
+      <input id="online-url" type="url" inputmode="url" autocomplete="off"
+        spellcheck="false" placeholder="Servidor: wss://…" aria-label="Servidor">
       <div class="online-row"><button type="button" id="online-host">Crear sala</button></div>
       <form id="online-join" class="online-row">
         <input id="online-code" maxlength="4" autocomplete="off" spellcheck="false"
           autocapitalize="characters" placeholder="Código" aria-label="Código de la sala">
         <button type="submit">Unirse</button>
       </form>
+     </div>
+      <div id="online-bt" class="online-col" hidden>
+        <p class="online-way">Por Bluetooth · vinculados en Ajustes</p>
+        <div class="online-row">
+          <button type="button" id="bt-permission" hidden>Permitir Bluetooth</button>
+          <button type="button" id="bt-host">Esperar por Bluetooth</button>
+        </div>
+        <div class="online-row">
+          <select id="bt-device" aria-label="Teléfono vinculado"></select>
+          <button type="button" id="bt-join">Conectar</button>
+        </div>
+      </div>
     </div>
     <p id="online-room" hidden></p>
     <p id="online-status" aria-live="polite"></p>
