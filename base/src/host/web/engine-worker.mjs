@@ -164,9 +164,10 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
       if(clockLost)post({type:'audio-clock-lost',frame:done});
       if(lateMs!==null)win.lateMs=Math.max(win.lateMs,lateMs);
       const c0=performance.now();
+      let waiting=false;
       for(;done<due;done++){
         const ran=step(done+1);
-        if(ran===null)break;
+        if(ran===null){waiting=true;break;}
         if(!ran)return;
         win.frames++;if(paced)win.audioFrames++;
       }
@@ -189,8 +190,9 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
         if(inputCheck)post({type:'input-probe',frame:done,...engine.probe()});
         win={since:c1,frames:0,rendered:0,cpuMs:0,renderMs:0,lateMs:0,audioFrames:0};
       }
+      // A waiting engine is overdue: retry soon, not in a busy loop.
       const wait=pacer.wait(performance.now(),done,audioDead);
-      setTimeout(guarded,Math.max(0,wait));
+      setTimeout(guarded,Math.max(waiting?4:0,wait));
     };
     const guarded=()=>{try{tick();}catch(e){fail(e);}};
     guarded();

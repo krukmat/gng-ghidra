@@ -7,6 +7,9 @@
  * loaded session starts cold from that state, like Reiniciar. 'boot' also
  * carries the game options (games/gngb/options.mjs: DIP lives/difficulty and
  * the enemy pace); a loaded session keeps the options it was saved with.
+ * `net` ({role: 'host'|'guest'}) plays a two-player game over a link
+ * (src/netplay_turns.mjs): from reset only, without saves; session messages
+ * go out as engine messages {type:'net', m} and come in the same way.
  */
 import {startEngineWorker} from './base/src/host/web/engine-worker.mjs';
 import {GNG_WEB_HOST} from './boards/gng/web-host-config.mjs';
@@ -16,20 +19,22 @@ async function bytes(name){
   if(!res.ok)throw Error('AO_FETCH_'+res.status+' '+name);
   return new Uint8Array(await res.arrayBuffer());
 }
-async function createGngEngine({checkpoint:checkpointText,ports,sink,options:chosen}){
+async function createGngEngine({checkpoint:checkpointText,ports,sink,options:chosen,net}){
   const [{blocks},{createBoard},{gngCode},
     {renderGngbRgba},
     {rendererInputs},{rendererUnknownCount},{INPUT_DEFAULTS},
     {unpackGfx},{createPortReadWitness},{observeGameState},
     {encodeCheckpoint,decodeCheckpoint},{createPortRecorder},
-    {gameOptions,optionDips,withEnemyPace}]=await Promise.all([
+    {gameOptions,optionDips,withEnemyPace},
+    {createTurnSession},{createGngTurnRule}]=await Promise.all([
     import('./bundle/program.mjs'),import('./boards/gng/runtime.mjs'),
     import('./boards/gng/bundle.mjs'),
     import('./lib/gngb_frame_renderer.mjs'),import('./lib/gngb_render_inputs.mjs'),
     import('./lib/v2_b1_observable.mjs'),import('./lib/gngb_input_contract.mjs'),
     import('./lib/ao_web_assets.mjs'),import('./lib/v3_b2c_port_witness.mjs'),
     import('./games/gngb/state.mjs'),import('./lib/checkpoint_format.mjs'),
-    import('./lib/v3_b3_live_tape.mjs'),import('./games/gngb/options.mjs')]);
+    import('./lib/v3_b3_live_tape.mjs'),import('./games/gngb/options.mjs'),
+    import('./lib/netplay_turns.mjs'),import('./games/gngb/netplay.mjs')]);
   const res=await fetch('bundle/manifest.json');
   if(!res.ok)throw Error('AO_FETCH_'+res.status+' manifest');
   const manifest=await res.json();
@@ -48,12 +53,19 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
   const recorder=createPortRecorder(),tape=restored?restored.tape.map(c=>[...c]):
     [[3,0,dips[0]],[4,0,dips[1]]];
   ports.set(INPUT_DEFAULTS);
+  if(net&&restored)throw Error('NET_FROM_RESET_ONLY');
+  const session=net?createTurnSession({role:net.role,ownerAfter:createGngTurnRule(),
+    defaults:INPUT_DEFAULTS.slice(0,3),send:m=>sink.post({type:'net',m}),
+    onEvent:e=>sink.post({type:'net-event',...e})}):null;
+  // In a session the frames the peer owns read its stream, not our controls.
+  const portRead=session?(addr,cycle)=>session.owns()?ports[addr-0x3000]:
+    session.read(addr-0x3000,cycle):addr=>ports[addr-0x3000];
   const witness=createPortReadWitness();
   const readPorts=new Uint8Array(3).fill(255);
   let last=null,stateKey=null,gameState=null;
   const cpu=createBoard(code,withEnemyPace(blocks,options.enemyPace),{
     frames:Number.MAX_SAFE_INTEGER,dips,
-    portRead:addr=>ports[addr-0x3000],
+    portRead,
     onPortRead:read=>{
       witness.observe(read);readPorts[read.addr-0x3000]=read.value;
       recorder.observe(read.addr,read.cycle,read.value);
@@ -79,23 +91,43 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
     resumeFrame:restored?restored.frame:0,
     // Z80, queued events and both YM2203 of the save, for the audio worker.
     audioState:restored?{audio:restored.audio,ym:restored.ym}:null,
-    ready:{blocks:blocks.size,options},
+    ready:{blocks:blocks.size,options,net:session?{role:session.role}:null},
     step(until){
+      // A frame the peer has not sent yet (or a session that ended) waits.
+      if(session&&!session.canRun(until))
+        return {status:'WAIT',frame:cpu.state.records.length,cycle:cpu.state.C};
       const result=cpu.run(until);
+      if(session&&result?.status==='FRAMES_DONE'){
+        // Drained when run returns: every read of this frame is in it.
+        const changes=recorder.drain();
+        for(const c of changes)tape.push(c);
+        session.frameEnd(until,last.record,changes);
+      }
       return {status:result?.status??null,frame:cpu.state.records.length,
         cycle:cpu.state.C};
+    },
+    message(m){
+      if(m?.type==='net')session?.receive(m.m);
+      else if(m?.type==='net-resend')session?.resend();
+      else if(m?.type==='net-leave')session?.leave();
     },
     render:frame=>renderGngbRgba(rendererInputs(frame.record,
       {scroll:frame.scroll,latch:frame.latch},gfx)),
     checkpointPart(frame){
+      // Runs inside cpu.run: a session's refusal waits for encodeCheckpoint,
+      // whose errors become checkpoint-failed.
+      if(session)return {frame,net:true};
       for(const c of recorder.drain())tape.push(c);
       return {frame,cpu:cpu.exportState(),tape:tape.map(c=>[...c])};
     },
-    encodeCheckpoint:(part,audio)=>encodeCheckpoint({programSha256,
+    encodeCheckpoint:(part,audio)=>part.net?
+      (()=>{const e=Error('NET_SESSION_NO_SAVE');e.code=e.message;throw e;})():
+      encodeCheckpoint({programSha256,
       frame:part.frame,cpu:part.cpu,audio:audio.audio,ym:audio.ym,tape:part.tape,
       options}),
     probe:()=>({witness:witness.snapshot(),ports:[...ports],reads:[...readPorts],
-      ram2:last?.record[2],ram5:last?.record[5],ram23:last?.record[0x23],gameState}),
+      ram2:last?.record[2],ram5:last?.record[5],ram23:last?.record[0x23],gameState,
+      net:session?.stats()??null}),
   };
 }
 startEngineWorker({config:GNG_WEB_HOST,createEngine:createGngEngine});
