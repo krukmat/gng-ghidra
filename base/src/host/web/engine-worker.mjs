@@ -10,11 +10,15 @@
  *
  * `config`: cpuHz, cyclesPerFrame, width, height, inputPortCount,
  * maxAudioBacklog, maxAudioEvents, heardCapacity and the pacer fields.
- * `createEngine({checkpoint, ports, sink})` loads the program and resolves to
- * {resumeFrame, audioState, ready, step(frame), render(frame),
- * checkpointPart(frame), encodeCheckpoint(part, audioState), probe()}; it
- * reports through sink.audioEvent(e), sink.audioFrame(frames),
- * sink.frame(frame, drawable) and sink.observe(state).
+ * `createEngine({checkpoint, ports, sink, options, net})` loads the program
+ * and resolves to {resumeFrame, audioState, ready, step(frame), render(frame),
+ * checkpointPart(frame), encodeCheckpoint(part, audioState), probe()} and an
+ * optional message(m); it reports through sink.audioEvent(e),
+ * sink.audioFrame(frames), sink.frame(frame, drawable), sink.observe(state)
+ * and sink.post(m). `options` and `net` come with 'boot' as the integration
+ * defines them; {type:'engine',message} reaches engine.message and
+ * sink.post answers the same way. step() may return status 'WAIT': the
+ * engine cannot advance yet (remote input), the tick ends and retries.
  */
 import {createFramePacer} from './frame-pacer.mjs';
 
@@ -30,8 +34,9 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
   const fail=e=>post({type:'error',message:String(e?.message??e),
     code:e?.code??null,stack:String(e?.stack??'').slice(0,2000)});
   scope.onmessage=({data})=>{
-    if(data?.type==='boot'&&!booted){booted=true;start(data.checkpoint??null).catch(fail);}
+    if(data?.type==='boot'&&!booted){booted=true;start(data).catch(fail);}
     else if(data?.type==='save')saveWanted=true;
+    else if(data?.type==='engine')engine?.message?.(data.message);
     else if(data?.type==='ports'&&data.ports?.length===ports.length)ports.set(data.ports);
     // Test only (?audioTest): block this worker, as a slow phone frame would.
     else if(data?.type==='test-stall'&&params.has('audioTest')){
@@ -66,7 +71,7 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
     }catch(e){post({type:'checkpoint-failed',code:e?.code??'CK_SAVE_FAILED'});}
   };
 
-  async function start(checkpoint){
+  async function start({checkpoint=null,options=null,net=null}){
     const t0=performance.now();
     let last=null,latest=null,audioEvents=[],audioFrames=0;
     const heard=[]; // newest drawable frames, for audio-paced presentation
@@ -105,8 +110,9 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
         }
       },
       observe:state=>post({type:'game-state',...state}),
+      post:message=>post({type:'engine',message}),
     };
-    engine=await createEngine({checkpoint,ports,sink});
+    engine=await createEngine({checkpoint,ports,sink,options,net});
     audioFrames=engine.resumeFrame;
     if(engine.audioState){
       audioAcked=engine.resumeFrame;
@@ -120,9 +126,11 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
         throw Error('HOST_RENDER_GEOMETRY');
       return image.rgba;
     };
+    // true: frame done; null: the engine waits (status WAIT); false: halted.
     const step=until=>{
       const result=engine.step(until);
       if(result?.status==='FRAMES_DONE')return true;
+      if(result?.status==='WAIT')return null;
       post({type:'halt',status:result?.status??null,frame:result?.frame??null,
         cycle:result?.cycle??null});
       return false;
@@ -133,7 +141,7 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
     if(check>0){
       const hashes=[],c0=performance.now();
       for(let k=1;k<=check;k++){
-        if(!step(k))return;
+        if(step(k)!==true)return;
         if(latest!==last){hashes.push(null);continue;}
         const digest=await crypto.subtle.digest('SHA-256',render(latest));
         hashes.push([...new Uint8Array(digest)]
@@ -157,7 +165,9 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
       if(lateMs!==null)win.lateMs=Math.max(win.lateMs,lateMs);
       const c0=performance.now();
       for(;done<due;done++){
-        if(!step(done+1))return;
+        const ran=step(done+1);
+        if(ran===null)break;
+        if(!ran)return;
         win.frames++;if(paced)win.audioFrames++;
       }
       const c1=performance.now();

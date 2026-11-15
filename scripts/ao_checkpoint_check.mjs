@@ -30,6 +30,7 @@ import {liveTapeReader} from '../src/v3_b3_live_tape.mjs';
 import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {prepareAudioBundle} from '../src/gngb_audio_bundle_overlay.mjs';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
+import {DEFAULT_OPTIONS,gameOptions} from '../games/gngb/options.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const ASSETS=join(ROOT,'out/android/assets'),CHECK=join(ROOT,'out/android/check');
@@ -82,6 +83,9 @@ async function fire(times){
 // and compares the board, the Z80 source and the YM bytes with the save.
 async function verify(text,rt){
   const c=decodeCheckpoint(text,{programSha256:rt.programSha256});
+  // The reference runtime knows no game options: this flow plays the defaults
+  // (paced and DIP replays: scripts/gng_options_check.mjs).
+  assert.deepStrictEqual({...gameOptions(c.options)},{...DEFAULT_OPTIONS},'default options');
   const source=await createAudioCommandSource(rt.rom);
   const ym=(await loadYm2203(rt.wasm)).create();
   let events=[],frames=0,got=null;

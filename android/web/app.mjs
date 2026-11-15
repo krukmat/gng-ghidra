@@ -4,6 +4,7 @@ import {createTouchControls} from './lib/ao_touch_controls.mjs';
 import {followBase,knobOffset,stickSector} from './lib/ao_stick.mjs';
 import {keyAction} from './lib/ao_keyboard.mjs';
 import {checkedCheckpointTape} from './lib/v3_b3_live_tape.mjs';
+import {DEFAULT_OPTIONS,gameOptions} from './games/gngb/options.mjs';
 
 const canvas=document.getElementById('screen');
 const ctx2d=canvas.getContext('2d',{alpha:false});
@@ -26,6 +27,22 @@ let worklet=null,audioNote='',av=[],latencyMs=0,recoveries=[];
 const RECOVER_MAX=5;
 const AUDIO_SAMPLES_PER_FRAME=1048;
 let game={credits:0,readyToStart:false,inGame:false};
+// Game options (games/gngb/options.mjs) for the next Reiniciar, kept in this
+// browser; `current` is what the running session plays with (a loaded
+// checkpoint keeps the options it was saved with).
+const OPTIONS_KEY='gng-options';
+const optionsDialog=document.getElementById('options');
+const optionsForm=document.getElementById('options-form');
+const optionsButton=document.getElementById('options-open');
+const DIFFICULTY_NAMES={easy:'Fácil',normal:'Normal',hard:'Difícil',hardest:'Muy difícil'};
+const describeOptions=o=>DIFFICULTY_NAMES[o.difficulty]+' · '+o.lives+' vidas · enemigos '+
+  o.enemyPace+' %';
+const defaultOptions=o=>Object.keys(DEFAULT_OPTIONS).every(k=>o[k]===DEFAULT_OPTIONS[k]);
+let chosen=storedOptions(),current=null;
+function storedOptions(){
+  try{return gameOptions(JSON.parse(localStorage.getItem(OPTIONS_KEY)));}
+  catch{return gameOptions();}
+}
 // One quick-save checkpoint (gng.checkpoint.v1) in IndexedDB; the engine
 // worker builds and checks it. Saving waits for the next frame boundary.
 const CK_DB='gng-checkpoint',CK_STORE='slot',CK_KEY='quick',CK_SAVE_MS=3000;
@@ -171,6 +188,10 @@ function updateHint(){
     'Tocá y mantené los controles':game.readyToStart?
     (game.canContinue?'2 · Continuar':'2 · Start'):
     game.credits>0?'Moneda lista · un momento…':'1 · Moneda     2 · Start';
+  if(playable&&current&&!defaultOptions(current))
+    hint.textContent+='\n'+describeOptions(current);
+  optionsButton.classList.toggle('custom',current!==null&&!defaultOptions(current));
+  optionsButton.title=current?describeOptions(current):'Opciones de juego';
 }
 function stop(message){
   enable(false);halt.textContent=message;halt.hidden=false;
@@ -299,7 +320,7 @@ function startAudio(){
 function start(checkpoint=null){
   if(ckSaving!==null){clearTimeout(ckSaving);ckSaving=null;}
   enable(false);closeSession();worker?.terminate();
-  game={credits:0,readyToStart:false,inGame:false};
+  game={credits:0,readyToStart:false,inGame:false};current=null;
   pending=null;drawn=0;ctx2d.clearRect(0,0,256,224);halt.hidden=true;
   updateHint();status.textContent='cargando…';
   worker=new Worker(new URL('engine.worker.mjs'+location.search,import.meta.url),
@@ -307,7 +328,7 @@ function start(checkpoint=null){
   // Reiniciar rebuilds the Z80 session and the chips with the engine.
   startAudio();
   // After the audio port: a loaded state restores the producer first.
-  worker.postMessage({type:'boot',checkpoint});
+  worker.postMessage({type:'boot',checkpoint,options:chosen});
   if(soundOn)openSession();
   worker.onmessage=({data})=>{
     switch(data?.type){
@@ -323,7 +344,7 @@ function start(checkpoint=null){
         drawn=0;audioStats();break;
       case 'audio-stop':audioDead=data.code;audioStop(data.code);break;
       case 'audio-clock-lost':log('AO_AUDIO_CLOCK_LOST',data);break;
-      case 'ready':log('AO_READY',data);break;
+      case 'ready':log('AO_READY',data);current=data.options??null;updateHint();break;
       case 'game-state':
         game=data;enable(playable);updateHint();break;
       case 'check':log('AO_CHECK',data);status.textContent='check '+data.frames;break;
@@ -352,6 +373,11 @@ const pulse=key=>controls.pulse(key==='start1'&&game.canContinue?'continue1':key
 const release=e=>{if(e.pointerId!==stick?.id)controls.release(e.pointerId);};
 // A held key is one more finger; Coin and Start obey their buttons' state.
 document.addEventListener('keydown',e=>{
+  // The options dialog keeps the keyboard; Escape closes it.
+  if(!optionsDialog.hidden){
+    if(e.key==='Escape'){e.preventDefault();closeOptions();}
+    return;
+  }
   const action=keyAction(e);if(!action)return;
   e.preventDefault();if(e.repeat)return;
   if(action.hold)controls.hold('key:'+e.code,action.hold);
@@ -382,6 +408,30 @@ document.addEventListener('visibilitychange',()=>{
 });
 document.addEventListener('contextmenu',e=>e.preventDefault());
 document.getElementById('restart').addEventListener('click',()=>start());
+function openOptions(){
+  releaseAll();
+  for(const [name,value] of Object.entries(chosen))
+    optionsForm.elements[name].value=String(value);
+  document.getElementById('options-current').textContent=
+    current?'Partida actual: '+describeOptions(current):'';
+  optionsDialog.hidden=false;
+  optionsForm.querySelector('input:checked')?.focus();
+}
+function closeOptions(){optionsDialog.hidden=true;optionsButton.focus();}
+optionsButton.addEventListener('click',openOptions);
+document.getElementById('options-cancel').addEventListener('click',closeOptions);
+optionsDialog.addEventListener('click',e=>{if(e.target===optionsDialog)closeOptions();});
+optionsForm.addEventListener('submit',e=>{
+  e.preventDefault();
+  const f=optionsForm.elements;
+  chosen=gameOptions({difficulty:f.difficulty.value,lives:Number(f.lives.value),
+    enemyPace:Number(f.enemyPace.value)});
+  try{localStorage.setItem(OPTIONS_KEY,JSON.stringify(chosen));}
+  catch(err){log('AO_OPTIONS_NOT_STORED',{message:String(err?.message??err)});}
+  log('AO_OPTIONS',chosen);
+  optionsDialog.hidden=true;
+  start();
+});
 ckSave.addEventListener('click',()=>saveCheckpoint());
 ckLoad.addEventListener('click',loadCheckpoint);
 ckRequest('readonly',store=>store.get(CK_KEY)).then(slot=>{

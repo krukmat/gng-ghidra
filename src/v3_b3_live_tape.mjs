@@ -70,8 +70,9 @@ function decodeTape(text){
   let programSha256;
   try{programSha256=JSON.parse(text)?.programSha256;}catch{} // decode reports it
   const c=decodeCheckpoint(text,{programSha256});
+  // The session's game options (games/gngb/options.mjs) travel with the tape.
   return {c,tape:{schema:LIVE_TAPE_SCHEMA,program_sha256:c.programSha256,frame:c.frame,
-    changes:c.tape}};
+    changes:c.tape,...(c.options?{options:c.options}:{})}};
 }
 
 /** A checkpoint's tape (port changes from reset) as a live tape file, the

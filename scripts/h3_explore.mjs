@@ -264,6 +264,8 @@ async function replay(path,every){
 async function importLive(path,frame,unverified){
   const text=readFileSync(path,'utf8'),live=JSON.parse(text);
   if(live?.schema!==LIVE_TAPE_SCHEMA||!Array.isArray(live.changes))fail('H3_IMPORT_NOT_LIVE_TAPE');
+  // The explorer replays the original game: an assisted session is another game.
+  if(live.options&&live.options.enemyPace!==100)fail('H3_IMPORT_ASSISTED_TAPE');
   const end=frame||live.check?.frame||live.frame;
   const metadata={schema:B3_TAPE_SCHEMA,profile:'live-recording',frames:end,
     events:defineInputSchedule(liveToEvents(live.changes,end)).events};

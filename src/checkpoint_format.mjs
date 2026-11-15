@@ -5,6 +5,8 @@
  *   ym    dual-YM2203 bytes from src/ym2203_checkpoint.h (native or WASM)
  *   tape  port changes [port,cycle,value] from reset, so the session stays
  *         reproducible from reset even after a load.
+ *   options  game options of the session (games/gngb/options.mjs); absent
+ *         in older saves, which used the defaults.
  * RAM holds copies of ROM code: the file is private and never published.
  */
 export const CHECKPOINT_SCHEMA='gng.checkpoint.v1';
@@ -34,7 +36,9 @@ function check(c){
      c.audio?.frontier!==c.frame*CYCLES_PER_FRAME||
      !(c.ym instanceof Uint8Array)||c.ym.length<36||
      String.fromCharCode(...c.ym.subarray(0,4))!=='GYM1'||
-     ymFirstSample(c.ym)!==c.frame*SAMPLES_PER_FRAME||!Array.isArray(c.tape))
+     ymFirstSample(c.ym)!==c.frame*SAMPLES_PER_FRAME||!Array.isArray(c.tape)||
+     c.options!==undefined&&(c.options===null||typeof c.options!=='object'||
+       Array.isArray(c.options)))
     fail('CK_STATE_INCONSISTENT');
   let prev=-1;
   for(const e of c.tape){
@@ -45,10 +49,10 @@ function check(c){
   return c;
 }
 
-export function encodeCheckpoint({programSha256,frame,cpu,audio,ym,tape,
+export function encodeCheckpoint({programSha256,frame,cpu,audio,ym,tape,options,
   savedAt=new Date().toISOString()}){
   const c=check({schema:CHECKPOINT_SCHEMA,programSha256,frame,savedAt,
-    cpu,audio,ym,tape});
+    cpu,audio,ym,tape,...(options===undefined?{}:{options})});
   return JSON.stringify(c,(k,v)=>v instanceof Uint8Array?{$u8:toBase64(v)}:v);
 }
 

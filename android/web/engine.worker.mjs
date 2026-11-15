@@ -4,7 +4,9 @@
  * input ports 0x3000-0x3004, the drawable rule (no unknown bytes), the
  * renderer, game-state observation (games/gngb/state.mjs) and gng.checkpoint.v1
  * (src/checkpoint_format.mjs): 'boot' carries the saved text or null and a
- * loaded session starts cold from that state, like Reiniciar.
+ * loaded session starts cold from that state, like Reiniciar. 'boot' also
+ * carries the game options (games/gngb/options.mjs: DIP lives/difficulty and
+ * the enemy pace); a loaded session keeps the options it was saved with.
  */
 import {startEngineWorker} from './base/src/host/web/engine-worker.mjs';
 import {GNG_WEB_HOST} from './boards/gng/web-host-config.mjs';
@@ -14,19 +16,20 @@ async function bytes(name){
   if(!res.ok)throw Error('AO_FETCH_'+res.status+' '+name);
   return new Uint8Array(await res.arrayBuffer());
 }
-async function createGngEngine({checkpoint:checkpointText,ports,sink}){
+async function createGngEngine({checkpoint:checkpointText,ports,sink,options:chosen}){
   const [{blocks},{createBoard},{gngCode},
     {renderGngbRgba},
     {rendererInputs},{rendererUnknownCount},{INPUT_DEFAULTS},
     {unpackGfx},{createPortReadWitness},{observeGameState},
-    {encodeCheckpoint,decodeCheckpoint},{createPortRecorder}]=await Promise.all([
+    {encodeCheckpoint,decodeCheckpoint},{createPortRecorder},
+    {gameOptions,optionDips,withEnemyPace}]=await Promise.all([
     import('./bundle/program.mjs'),import('./boards/gng/runtime.mjs'),
     import('./boards/gng/bundle.mjs'),
     import('./lib/gngb_frame_renderer.mjs'),import('./lib/gngb_render_inputs.mjs'),
     import('./lib/v2_b1_observable.mjs'),import('./lib/gngb_input_contract.mjs'),
     import('./lib/ao_web_assets.mjs'),import('./lib/v3_b2c_port_witness.mjs'),
     import('./games/gngb/state.mjs'),import('./lib/checkpoint_format.mjs'),
-    import('./lib/v3_b3_live_tape.mjs')]);
+    import('./lib/v3_b3_live_tape.mjs'),import('./games/gngb/options.mjs')]);
   const res=await fetch('bundle/manifest.json');
   if(!res.ok)throw Error('AO_FETCH_'+res.status+' manifest');
   const manifest=await res.json();
@@ -38,14 +41,18 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink}){
   const programSha256=manifest.files['program.mjs'];
   // Refused if made by another AOT program or inconsistent.
   const restored=checkpointText&&decodeCheckpoint(checkpointText,{programSha256});
-  // Port changes from reset: a loaded session continues the saved tape.
-  const recorder=createPortRecorder(),tape=restored?restored.tape.map(c=>[...c]):[];
+  const options=gameOptions(restored?restored.options:chosen),dips=optionDips(options);
+  // Port changes from reset: a loaded session continues the saved tape; a
+  // new one starts with its DIP bytes, which the board serves from `dips`
+  // (it only asks portRead for 0x3000-0x3002).
+  const recorder=createPortRecorder(),tape=restored?restored.tape.map(c=>[...c]):
+    [[3,0,dips[0]],[4,0,dips[1]]];
   ports.set(INPUT_DEFAULTS);
   const witness=createPortReadWitness();
   const readPorts=new Uint8Array(3).fill(255);
   let last=null,stateKey=null,gameState=null;
-  const cpu=createBoard(code,blocks,{
-    frames:Number.MAX_SAFE_INTEGER,
+  const cpu=createBoard(code,withEnemyPace(blocks,options.enemyPace),{
+    frames:Number.MAX_SAFE_INTEGER,dips,
     portRead:addr=>ports[addr-0x3000],
     onPortRead:read=>{
       witness.observe(read);readPorts[read.addr-0x3000]=read.value;
@@ -72,7 +79,7 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink}){
     resumeFrame:restored?restored.frame:0,
     // Z80, queued events and both YM2203 of the save, for the audio worker.
     audioState:restored?{audio:restored.audio,ym:restored.ym}:null,
-    ready:{blocks:blocks.size},
+    ready:{blocks:blocks.size,options},
     step(until){
       const result=cpu.run(until);
       return {status:result?.status??null,frame:cpu.state.records.length,
@@ -85,7 +92,8 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink}){
       return {frame,cpu:cpu.exportState(),tape:tape.map(c=>[...c])};
     },
     encodeCheckpoint:(part,audio)=>encodeCheckpoint({programSha256,
-      frame:part.frame,cpu:part.cpu,audio:audio.audio,ym:audio.ym,tape:part.tape}),
+      frame:part.frame,cpu:part.cpu,audio:audio.audio,ym:audio.ym,tape:part.tape,
+      options}),
     probe:()=>({witness:witness.snapshot(),ports:[...ports],reads:[...readPorts],
       ram2:last?.record[2],ram5:last?.record[5],ram23:last?.record[0x23],gameState}),
   };

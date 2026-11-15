@@ -22,10 +22,16 @@ export class GngbRuntimeError extends Error{
   constructor(code,detail){super(code);this.code=code;this.detail=detail;}
 }
 
+/** `dips` [DSW1, DSW2] replaces the default DIP bytes (game options); the
+ * CPU reads them like the cabinet's switches. Omitted: the defaults. */
 export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PER_FRAME,
-  portRead=null,onPortRead=null,onAudioEvent=null,onAudioComplete=null}={}){
+  portRead=null,onPortRead=null,onAudioEvent=null,onAudioComplete=null,dips=null}={}){
   if(!Number.isInteger(cyclesPerFrame)||cyclesPerFrame<1)
     throw Error('V2_B1_INVALID_IRQ_PERIOD');
+  if(dips!==null&&!(Array.isArray(dips)&&dips.length===2&&
+     dips.every(v=>Number.isInteger(v)&&v>=0&&v<=255)))
+    throw Error('GNG_DIPS_INVALID');
+  const portDefaults=dips===null?PORT_DEFAULTS:[...PORT_DEFAULTS.slice(0,3),...dips];
   if(portRead!==null&&typeof portRead!=='function')
     throw Error('V3_B2A_INVALID_PORT_READER');
   if(onPortRead!==null&&typeof onPortRead!=='function')
@@ -85,7 +91,7 @@ export function createBoard(code,blocks,{frames,onFrame,cyclesPerFrame=CYCLES_PE
         if(onPortRead)onPortRead({addr:a,cycle,pc:$.ipc,value});
         return value;
       }
-      return PORT_DEFAULTS[a-0x3000];
+      return portDefaults[a-0x3000];
     }
     if(a<0x4000)return 0; // write-only or unmapped: reads 0 (T4 native)
     return romByte(a);

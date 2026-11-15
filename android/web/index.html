@@ -60,16 +60,41 @@
   #attack{border-color:#c08558b3;background:#39291e55}
   #jump{border-color:#5e9eabb3;background:#1c303755}
   #button-stack button.held{background:#285c6199;border-color:#87e1c9;color:#fff}
-  #restart,#ck-save,#ck-load{min-height:32px;padding:4px 10px;font-size:11px;
+  #restart,#options-open,#ck-save,#ck-load{min-height:32px;padding:4px 10px;font-size:11px;
     color:#a7b9ca;background:transparent;border-color:#2e3d4b;border-radius:9px}
+  #options-open.custom{border-color:#8d7845;color:#f8d582}
   #sound{min-height:34px;font-size:12px;border-radius:10px;background:transparent}
   #footer{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
     justify-content:space-between;width:100%;padding-top:6px}
-  /* Restart on its own row, Save/Load share the next: three in a row overflow
-     the 126px side panel at 640x360. */
-  #footer button{flex:1 1 0;min-width:0;padding:4px 6px}
-  #footer #restart,#status{flex-basis:100%}
-  #hint{margin:0;text-align:center;font-size:12px;color:#acbdcc}
+  /* Two buttons per row (Restart/Options, Save/Load): three in a row
+     overflow the 126px side panel at 640x360. */
+  #footer button{flex:1 1 40%;min-width:0;padding:4px 6px}
+  #status{flex-basis:100%}
+  #hint{margin:0;text-align:center;font-size:12px;color:#acbdcc;white-space:pre-line}
+  /* Game options: applied by restarting (app.mjs). */
+  #options{position:fixed;inset:0;z-index:5;display:flex;align-items:center;
+    justify-content:center;background:#05080cd9;
+    padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right))
+    max(8px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+  #options[hidden]{display:none}
+  #options-form{display:flex;flex-direction:column;gap:8px;width:min(560px,100%);
+    max-height:100%;overflow:auto;touch-action:pan-y;padding:12px 14px;
+    background:#0f1821;border:1px solid #2e3d4b;border-radius:14px}
+  #options h2{margin:0;font-size:15px}
+  .opt{display:flex;gap:6px;align-items:center}
+  .opt-name{flex:0 0 108px;font-size:12px;color:#acbdcc}
+  .opt label{flex:1 1 0;min-width:0}
+  .opt input{position:absolute;opacity:0;pointer-events:none}
+  .opt label span{display:flex;align-items:center;justify-content:center;
+    min-height:34px;padding:4px;border:1px solid #425465;border-radius:10px;
+    background:#172330;font-weight:650;font-size:12px;text-align:center;cursor:pointer}
+  .opt input:checked+span{background:#285c61;border-color:#87e1c9;color:#fff}
+  .opt input:focus-visible+span{outline:2px solid #87e1c9;outline-offset:2px}
+  #options p{margin:0;font-size:11px;color:#8da0b3}
+  #options-actions{display:flex;gap:8px}
+  #options-actions button{flex:1;min-height:38px;font-size:12px;border-radius:10px}
+  #options-apply{border-color:#5c9b8b;color:#a4ead6}
+  @media(max-width:480px){.opt{flex-wrap:wrap}.opt-name{flex-basis:100%}}
   /* Desktop only: the keyboard drives the same controls. */
   #keys{display:none;margin:0;text-align:center;font-size:10px;color:#7f93a6}
   @media(hover:hover) and (pointer:fine){#keys{display:block}}
@@ -106,6 +131,7 @@
         title="Preparando el sonido…">Sonido OFF</button>
       <div id="footer">
         <button id="restart">Reiniciar</button>
+        <button id="options-open" title="Opciones de juego">Opciones</button>
         <button id="ck-save" disabled title="Guardar checkpoint">Guardar</button>
         <button id="ck-load" disabled title="Sin checkpoint guardado">Cargar</button>
         <output id="status">cargando…</output>
@@ -117,6 +143,39 @@
     <div id="stick-base"></div><div id="stick-knob"></div>
   </div>
 </main>
+<div id="options" hidden role="dialog" aria-modal="true" aria-labelledby="options-title">
+  <form id="options-form">
+    <h2 id="options-title">Opciones de juego</h2>
+    <div class="opt" role="radiogroup" aria-labelledby="o-difficulty">
+      <span class="opt-name" id="o-difficulty">Dificultad</span>
+      <label><input type="radio" name="difficulty" value="easy"><span>Fácil</span></label>
+      <label><input type="radio" name="difficulty" value="normal"><span>Normal</span></label>
+      <label><input type="radio" name="difficulty" value="hard"><span>Difícil</span></label>
+      <label><input type="radio" name="difficulty" value="hardest"><span>Muy difícil</span></label>
+    </div>
+    <div class="opt" role="radiogroup" aria-labelledby="o-lives">
+      <span class="opt-name" id="o-lives">Vidas</span>
+      <label><input type="radio" name="lives" value="3"><span>3</span></label>
+      <label><input type="radio" name="lives" value="4"><span>4</span></label>
+      <label><input type="radio" name="lives" value="5"><span>5</span></label>
+      <label><input type="radio" name="lives" value="7"><span>7</span></label>
+    </div>
+    <div class="opt" role="radiogroup" aria-labelledby="o-enemyPace">
+      <span class="opt-name" id="o-enemyPace">Velocidad de enemigos</span>
+      <label><input type="radio" name="enemyPace" value="100"><span>100 %</span></label>
+      <label><input type="radio" name="enemyPace" value="75"><span>75 %</span></label>
+      <label><input type="radio" name="enemyPace" value="50"><span>50 %</span></label>
+    </div>
+    <p>La velocidad de enemigos es una ayuda que el original no tiene: los
+      enemigos van más lentos y Arthur se mueve igual. Las opciones se aplican al
+      reiniciar; una partida cargada sigue con las suyas.</p>
+    <p id="options-current"></p>
+    <div id="options-actions">
+      <button type="button" id="options-cancel">Cancelar</button>
+      <button type="submit" id="options-apply">Reiniciar con estas opciones</button>
+    </div>
+  </form>
+</div>
 <script type="module" src="app.mjs"></script>
 </body>
 </html>
