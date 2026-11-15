@@ -6,6 +6,8 @@ import {keyAction} from './lib/ao_keyboard.mjs';
 import {checkedCheckpointTape} from './lib/v3_b3_live_tape.mjs';
 import {DEFAULT_OPTIONS,gameOptions} from './games/gngb/options.mjs';
 import {createMatchTracker} from './lib/ao_match.mjs';
+import {createRelayClient} from './lib/net_relay_client.mjs';
+import {NET_PROTOCOL} from './lib/netplay_turns.mjs';
 
 const canvas=document.getElementById('screen');
 const ctx2d=canvas.getContext('2d',{alpha:false});
@@ -45,6 +47,30 @@ const twoButton=document.getElementById('two-players');
 const turnBanner=document.getElementById('turn'),resultBox=document.getElementById('result');
 const match=createMatchTracker();
 let twoPending=null,turnTimer=null; // since when 2 Jugadores waits for credits
+// Online: a room on the relay (net_relay_client.mjs) pairs two phones that
+// play by turns (netplay_turns.mjs, in the engine worker). The host is
+// Jugador 1 and its options rule; both check they run the same program.
+// `online`: {client, role, code, phase:'connecting'|'playing', owner,
+// inbox (peer messages until the engine is ready), ready, started}.
+const RELAY_KEY='gng-relay';
+const onlineDialog=document.getElementById('online');
+const onlineButton=document.getElementById('online-open');
+const onlineUrl=document.getElementById('online-url');
+const onlineStatus=document.getElementById('online-status');
+const againButton=document.getElementById('result-again');
+let online=null,programSha=null;
+const netPlaying=()=>online?.phase==='playing';
+const myPlayer=()=>online?.role==='guest'?2:1;
+const RELAY_ERRORS={ROOM_NOT_FOUND:'No hay ninguna sala con ese código.',
+  ROOM_FULL:'Esa sala ya tiene dos jugadores.',RELAY_FULL:'El servidor está lleno.',
+  REJOIN_REFUSED:'La sala ya no existe.'};
+const CLOSED={unreachable:'No se pudo conectar con el servidor.',
+  'bad-url':'La dirección del servidor no es válida.',lost:'Se perdió la conexión con el servidor.'};
+const ENDED={desync:'Las dos partidas dejaron de coincidir.',
+  protocol:'El otro teléfono envió datos inválidos.','peer-left':'El rival salió de la sala.'};
+const REFUSED={protocol:'Los dos teléfonos tienen versiones distintas de la app.',
+  program:'Los dos teléfonos tienen versiones distintas del juego.',
+  options:'Las opciones de juego del Jugador 1 no son válidas.'};
 function storedOptions(){
   try{return gameOptions(JSON.parse(localStorage.getItem(OPTIONS_KEY)));}
   catch{return gameOptions();}
@@ -67,8 +93,8 @@ const ckRequest=(mode,run)=>new Promise((resolve,reject)=>{
   };
 });
 function updateCheckpoint(note=null){
-  ckSave.disabled=!playable||ckSaving!==null;
-  ckLoad.disabled=ckSaved===null||ckSaving!==null;
+  ckSave.disabled=!playable||ckSaving!==null||online!==null;
+  ckLoad.disabled=ckSaved===null||ckSaving!==null||online!==null;
   ckLoad.title=ckSaved?'Cargar el checkpoint del frame '+ckSaved.frame:
     'Sin checkpoint guardado';
   if(note){ckNote=note;ckNoteUntil=performance.now()+4000;status.textContent=note;}
@@ -178,19 +204,23 @@ for(const event of ['pointerup','pointercancel','lostpointercapture'])
   zone.addEventListener(event,e=>{if(e.pointerId===stick?.id)restStick();});
 window.addEventListener('resize',()=>{if(!stick)restStick();});
 function enable(value){
-  playable=value;controls.setEnabled(value);
-  zone.classList.toggle('disabled',!value);
-  if(!value)restStick();
-  for(const button of buttons)button.disabled=!value||
-    (button.dataset.pulse&&game.inGame)||
+  playable=value;
+  // Online, the controls only count in this phone's turns.
+  const active=value&&(!netPlaying()||online.owner===online.role);
+  controls.setEnabled(active);
+  zone.classList.toggle('disabled',!active);
+  if(!active)restStick();
+  for(const button of buttons)button.disabled=!active||
+    (button.dataset.pulse&&(game.inGame||netPlaying()))||
     (button.dataset.pulse==='start1'&&!game.readyToStart);
-  twoButton.disabled=!value||game.mode!==1||twoPending!==null;
+  twoButton.disabled=!value||online!==null||game.mode!==1||twoPending!==null;
+  againButton.disabled=!active||game.mode!==1||twoPending!==null;
   updateCheckpoint();
 }
 // 2 Jugadores: the coins still missing for two credits, then Start 2 once the
-// title counts them.
-function startTwoPlayers(){
-  if(twoButton.disabled)return;
+// title counts them. Online the host does it by itself at the title.
+function startTwoPlayers(){if(!twoButton.disabled)beginTwoPlayers();}
+function beginTwoPlayers(){
   resultBox.hidden=true;
   for(let i=game.credits;i<2;i++)controls.pulse('coin1');
   twoPending=performance.now();enable(playable);checkTwoPlayers();
@@ -205,7 +235,9 @@ function checkTwoPlayers(){
 }
 function showTurn(player,first){
   clearTimeout(turnTimer);
-  turnBanner.textContent=(first?'Empieza el Jugador ':'Turno del Jugador ')+player;
+  turnBanner.textContent=!netPlaying()?(first?'Empieza el Jugador ':'Turno del Jugador ')+player:
+    player===myPlayer()?(first?'Empezás vos':'Tu turno'):
+    (first?'Empieza el rival':'Turno del rival');
   turnBanner.hidden=false;
   turnTimer=setTimeout(()=>{turnBanner.hidden=true;},2500);
 }
@@ -218,17 +250,21 @@ function matchEvents(state){
       const points=n=>n.toLocaleString('es');
       document.getElementById('result-p1').textContent=points(e.scores[0]);
       document.getElementById('result-p2').textContent=points(e.scores[1]);
-      document.getElementById('result-winner').textContent=
-        e.winner?'Gana el Jugador '+e.winner:'Empate';
+      document.getElementById('result-winner').textContent=!e.winner?'Empate':
+        !netPlaying()?'Gana el Jugador '+e.winner:
+        e.winner===myPlayer()?'Ganaste':'Ganó el rival';
+      againButton.hidden=online?.role==='guest';
       turnBanner.hidden=true;resultBox.hidden=false;
     }
   }
 }
 function updateHint(){
-  systemControls.hidden=game.inGame;
+  systemControls.hidden=game.inGame||netPlaying();
   hint.hidden=game.inGame;
   startButton.textContent=game.canContinue?'Continuar':'Start';
-  hint.textContent=!playable?'Cargando el juego…':game.inGame?
+  hint.textContent=!playable?'Cargando el juego…':netPlaying()?
+    'En línea · Jugador '+myPlayer()+'\n'+(online.role==='host'?
+      'La partida empieza sola':'El Jugador 1 empieza la partida'):game.inGame?
     'Tocá y mantené los controles':game.readyToStart?
     (game.canContinue?'2 · Continuar':'2 · Start'):
     game.credits>0?'Moneda lista · un momento…':'1 · Moneda     2 · Start';
@@ -359,9 +395,126 @@ function startAudio(){
     audioDead='AUDIO_WORKER_ERROR';audioStop(audioDead,{message:e.message});
   };
 }
+const toEngine=message=>worker?.postMessage({type:'engine',message});
+const relayUrl=()=>{
+  const query=new URLSearchParams(location.search).get('relay');
+  try{return query??localStorage.getItem(RELAY_KEY)??'';}catch{return query??'';}
+};
+const program=()=>programSha??=fetch('bundle/manifest.json').then(r=>r.json())
+  .then(m=>m.files['program.mjs']);
+function updateOnline(note=null){
+  if(note!==null)onlineStatus.textContent=note;
+  document.getElementById('online-setup').hidden=online!==null;
+  document.getElementById('online-leave').hidden=online===null;
+  const room=document.getElementById('online-room');
+  room.hidden=!online?.code;room.textContent=online?.code??'';
+  onlineButton.classList.toggle('on',online!==null);
+  onlineButton.textContent=online?.code?'En línea · '+online.code:
+    online?'En línea…':'En línea';
+  for(const id of ['restart','options-open'])document.getElementById(id).disabled=online!==null;
+  enable(playable);
+}
+// A note over the game while the link is down (the follower's engine waits).
+function netNote(text){
+  clearTimeout(turnTimer);
+  turnBanner.textContent=text;turnBanner.hidden=!text;
+}
+function connect(action){
+  const url=onlineUrl.value.trim();
+  if(!/^wss?:\/\/\S+$/i.test(url))
+    return updateOnline('Escribí la dirección del servidor (wss://…).');
+  try{localStorage.setItem(RELAY_KEY,url);}catch{}
+  const o={client:null,role:null,code:null,phase:'connecting',owner:'host',
+    inbox:[],ready:false,started:false};
+  online=o;updateOnline('Conectando…');
+  o.client=createRelayClient(url,{onEvent:e=>{if(online===o)relayEvent(o,e);}});
+  if(online===o)action(o.client);
+}
+async function relayEvent(o,e){
+  if(e.type!=='message')log('AO_ONLINE',e);
+  switch(e.type){
+    case 'room':o.code=e.code;o.role='host';
+      updateOnline('Pasale este código al otro jugador. Esperando…');break;
+    case 'paired':
+      o.code=e.code;o.role=e.role;
+      if(e.again){
+        netNote('');updateOnline(netPlaying()?'':null);
+        if(o.ready)toEngine({type:'net-resend'});
+        if(o.phase==='connecting'&&o.role==='host')sendHello(o);
+      }else if(o.role==='host'){updateOnline('Rival conectado · preparando…');sendHello(o);}
+      else updateOnline('Conectado · esperando al Jugador 1…');
+      break;
+    case 'message':peerMessage(o,e.message);break;
+    case 'reconnecting':
+      if(o.phase==='playing')netNote('Reconectando…');else updateOnline('Reconectando…');break;
+    case 'peer-gone':
+      if(o.phase==='playing')netNote('El rival perdió la conexión · esperando…');
+      else updateOnline('El rival perdió la conexión · esperando…');
+      break;
+    case 'peer-left':endOnline(ENDED['peer-left']);break;
+    case 'error':endOnline(RELAY_ERRORS[e.code]??'Error del servidor: '+e.code);break;
+    case 'closed':endOnline(CLOSED[e.reason]??CLOSED.lost);break;
+  }
+}
+async function sendHello(o){
+  const sha=await program();
+  if(online===o)o.client.send({type:'hello',protocol:NET_PROTOCOL,program:sha,options:chosen});
+}
+async function peerMessage(o,m){
+  if(m?.type==='net'){
+    if(o.ready)toEngine({type:'net',m:m.m});else o.inbox.push(m.m);
+  }else if(m?.type==='hello'&&o.role==='guest'){
+    if(o.phase==='playing')return o.client.send({type:'hello-ok'}); // it was lost
+    const sha=await program();
+    if(online!==o)return;
+    let options=null;try{options=gameOptions(m.options);}catch{}
+    const refused=m.protocol!==NET_PROTOCOL?'protocol':m.program!==sha?'program':
+      options?null:'options';
+    if(refused){
+      o.client.send({type:'hello-refused',reason:refused});
+      return endOnline(REFUSED[refused]);
+    }
+    o.client.send({type:'hello-ok'});play(o,options);
+  }else if(m?.type==='hello-ok'&&o.role==='host'&&o.phase==='connecting')play(o,chosen);
+  else if(m?.type==='hello-refused')
+    endOnline(REFUSED[m.reason]??'El otro teléfono no aceptó la partida.');
+}
+// Both phones restart from reset with the host's options.
+function play(o,options){
+  o.phase='playing';log('AO_ONLINE_PLAY',{role:o.role,code:o.code,options});
+  onlineDialog.hidden=true;updateOnline('');
+  start(null,{role:o.role,options});
+}
+function engineMessage(m){
+  if(m?.type==='net')online?.client.send({type:'net',m:m.m});
+  else if(m?.type==='net-event'&&netPlaying()){
+    const e=m.event;
+    if(e.type==='owner'){online.owner=e.owner;enable(playable);}
+    else if(e.type==='end'){log('AO_NET_END',e);endOnline(ENDED[e.reason]??'');}
+  }
+}
+// The room is left; a session in play stays on screen, halted, until Reiniciar.
+function endOnline(message,restart=false){
+  const o=online;if(!o)return;
+  online=null;o.client?.leave();
+  log('AO_ONLINE_END',{phase:o.phase,message});
+  updateOnline(message);
+  if(o.phase!=='playing')return;
+  netNote('');
+  if(restart)start();
+  else{closeSession();worker?.terminate();stop(message||'La partida en línea terminó.');}
+}
+function openOnline(){
+  releaseAll();
+  if(!online){onlineUrl.value=relayUrl();if(!onlineStatus.textContent)updateOnline('');}
+  updateOnline();onlineDialog.hidden=false;
+  (online?document.getElementById('online-close'):
+    onlineUrl.value?document.getElementById('online-code'):onlineUrl).focus();
+}
+function closeOnline(){onlineDialog.hidden=true;onlineButton.focus();}
 // Reiniciar and Cargar: a cold engine and audio producer; checkpoint is the
-// saved text or null for the reset vector.
-function start(checkpoint=null){
+// saved text or null for the reset vector; net {role, options} plays online.
+function start(checkpoint=null,net=null){
   if(ckSaving!==null){clearTimeout(ckSaving);ckSaving=null;}
   enable(false);closeSession();worker?.terminate();
   game={credits:0,readyToStart:false,inGame:false};current=null;
@@ -374,7 +527,9 @@ function start(checkpoint=null){
   // Reiniciar rebuilds the Z80 session and the chips with the engine.
   startAudio();
   // After the audio port: a loaded state restores the producer first.
-  worker.postMessage({type:'boot',checkpoint,options:chosen});
+  worker.postMessage({type:'boot',checkpoint,options:net?.options??chosen,
+    net:net&&{role:net.role}});
+  if(online){online.ready=false;online.owner='host';}
   if(soundOn)openSession();
   worker.onmessage=({data})=>{
     switch(data?.type){
@@ -386,13 +541,26 @@ function start(checkpoint=null){
         log('AO_STATS',{...data,drawn});
         status.textContent=Math.round(drawn*1000/data.windowMs)+' fps'+
           (audioNote?' · '+audioNote:'')+
-          (performance.now()<ckNoteUntil?' · '+ckNote:'');
+          (performance.now()<ckNoteUntil?' · '+ckNote:'')+
+          (netPlaying()?' · en línea '+online.code:'');
         drawn=0;audioStats();break;
       case 'audio-stop':audioDead=data.code;audioStop(data.code);break;
       case 'audio-clock-lost':log('AO_AUDIO_CLOCK_LOST',data);break;
-      case 'ready':log('AO_READY',data);current=data.options??null;updateHint();break;
+      case 'ready':
+        log('AO_READY',data);current=data.options??null;
+        if(online&&data.net){
+          online.ready=true;
+          for(const m of online.inbox.splice(0))toEngine({type:'net',m});
+        }
+        updateHint();break;
+      case 'engine':engineMessage(data.message);break;
       case 'game-state':
-        game=data;matchEvents(data);checkTwoPlayers();enable(playable);updateHint();break;
+        game=data;matchEvents(data);checkTwoPlayers();
+        // Online the host puts the two credits in and starts, once.
+        if(netPlaying()&&online.role==='host'&&!online.started&&game.mode===1){
+          online.started=true;beginTwoPlayers();
+        }
+        enable(playable);updateHint();break;
       case 'check':log('AO_CHECK',data);status.textContent='check '+data.frames;break;
       case 'input-probe':log('AO_INPUT',data);break;
       case 'halt':log('AO_HALT',data);stop('Motor detenido: '+data.status);break;
@@ -419,14 +587,15 @@ const pulse=key=>controls.pulse(key==='start1'&&game.canContinue?'continue1':key
 const release=e=>{if(e.pointerId!==stick?.id)controls.release(e.pointerId);};
 // A held key is one more finger; Coin and Start obey their buttons' state.
 document.addEventListener('keydown',e=>{
-  // The options dialog keeps the keyboard; Escape closes it.
-  if(!optionsDialog.hidden){
-    if(e.key==='Escape'){e.preventDefault();closeOptions();}
+  // A dialog keeps the keyboard; Escape closes it.
+  if(!optionsDialog.hidden||!onlineDialog.hidden){
+    if(e.key==='Escape'){e.preventDefault();optionsDialog.hidden?closeOnline():closeOptions();}
     return;
   }
   const action=keyAction(e);if(!action)return;
   e.preventDefault();if(e.repeat)return;
   if(action.hold)controls.hold('key:'+e.code,action.hold);
+  else if(online)return; // online: only the game controls
   else if(action.pulse){
     const button=buttons.find(b=>b.dataset.pulse===action.pulse);
     if(!button.disabled)pulse(action.pulse);
@@ -453,10 +622,29 @@ document.addEventListener('visibilitychange',()=>{
       e=>audioStop('AUDIO_CONTEXT_FAILED',{message:String(e)}));
   }
 });
-document.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('contextmenu',e=>{if(!e.target.closest?.('input'))e.preventDefault();});
 document.getElementById('restart').addEventListener('click',()=>start());
 twoButton.addEventListener('click',startTwoPlayers);
 document.getElementById('result-ok').addEventListener('click',()=>{resultBox.hidden=true;});
+againButton.addEventListener('click',()=>{
+  if(againButton.disabled)return;
+  if(netPlaying())beginTwoPlayers();else startTwoPlayers();
+});
+onlineButton.addEventListener('click',openOnline);
+document.getElementById('online-close').addEventListener('click',closeOnline);
+onlineDialog.addEventListener('click',e=>{if(e.target===onlineDialog)closeOnline();});
+document.getElementById('online-host').addEventListener('click',()=>connect(c=>c.host()));
+document.getElementById('online-join').addEventListener('submit',e=>{
+  e.preventDefault();
+  const code=document.getElementById('online-code').value.trim();
+  if(!/^[a-z0-9]{4}$/i.test(code))return updateOnline('El código tiene cuatro letras o números.');
+  connect(c=>c.join(code));
+});
+document.getElementById('online-leave').addEventListener('click',()=>{
+  const playing=netPlaying();
+  endOnline('Saliste de la sala.',true);
+  if(playing)closeOnline();
+});
 function openOptions(){
   releaseAll();
   for(const [name,value] of Object.entries(chosen))

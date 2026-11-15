@@ -56,7 +56,7 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
   if(net&&restored)throw Error('NET_FROM_RESET_ONLY');
   const session=net?createTurnSession({role:net.role,ownerAfter:createGngTurnRule(),
     defaults:INPUT_DEFAULTS.slice(0,3),send:m=>sink.post({type:'net',m}),
-    onEvent:e=>sink.post({type:'net-event',...e})}):null;
+    onEvent:event=>sink.post({type:'net-event',event})}):null;
   // In a session the frames the peer owns read its stream, not our controls.
   const portRead=session?(addr,cycle)=>session.owns()?ports[addr-0x3000]:
     session.read(addr-0x3000,cycle):addr=>ports[addr-0x3000];
