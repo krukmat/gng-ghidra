@@ -20,10 +20,20 @@ android {
         targetSdk = 34
         versionCode = required("SHELL_VERSION_CODE").toInt()
         versionName = required("SHELL_VERSION_NAME")
+        // Launcher icon: mipmap/ic_launcher and ic_launcher_round from
+        // SHELL_RES_DIR when the project gives one, else the system default.
+        val icons = providers.gradleProperty("SHELL_RES_DIR").isPresent
+        manifestPlaceholders["appIcon"] =
+            if (icons) "@mipmap/ic_launcher" else "@android:drawable/sym_def_app_icon"
+        manifestPlaceholders["appRoundIcon"] =
+            if (icons) "@mipmap/ic_launcher_round" else "@android:drawable/sym_def_app_icon"
     }
 
     // Relative to the consuming project's root, which owns the assets.
     sourceSets.getByName("main").assets.srcDir(rootProject.file(required("SHELL_ASSETS_DIR")))
+    providers.gradleProperty("SHELL_RES_DIR").orNull?.let {
+        sourceSets.getByName("main").res.srcDir(rootProject.file(it))
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
