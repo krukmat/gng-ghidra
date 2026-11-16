@@ -2,7 +2,7 @@
 /** Private AO-4 check. Build assets first; Chromium stays headless.
  * Real touch events -> worker messages -> real MC6809 reads.
  * Five cold boots must accept Jugar without a visible coin control.
- * Add --gameover to wait for a real loss and verify free Continue.
+ * Add --gameover to spend the lives and verify a new game from the title.
  * Then the desktop keyboard after Reiniciar: 1 Jugar, arrows and Z
  * read by the CPU, and T exports the session tape (out/android/check) with
  * the record hash of its frame.
@@ -158,18 +158,21 @@ try{
     await page.screenshot({path:join(CHECK,'ao4-controls-compact.png')});
     await page.setViewportSize({width:900,height:400});
     if(checkGameOver){
-      const ended=await until(p=>p.frame>preview.frame&&p.gameState.canContinue,90000);
+      const ended=await until(p=>p.frame>preview.frame&&p.gameState.mode===1,90000);
       assert.equal(await page.locator('#system-controls').isVisible(),true);
       assert.equal(await page.locator('#start').isDisabled(),false);
       await page.screenshot({path:join(CHECK,'ao4-game-over.png')});
-      assert.equal(await page.locator('#start').textContent(),'Continuar');
-      await page.screenshot({path:join(CHECK,'ao4-continue.png')});
+      assert.equal(await page.locator('#start').textContent(),'Jugar');
+      assert.ok(probes.filter(p=>p.frame>=started.frame&&p.frame<=ended.frame)
+        .every(p=>!p.gameState.canContinue),'no Continue countdown');
+      assert.equal(ended.witness.activeSamples.coin1,preview.witness.activeSamples.coin1);
+      assert.equal(ended.witness.activeSamples.start1,preview.witness.activeSamples.start1);
       await page.locator('#start').tap();
       const resumed=await until(p=>p.frame>ended.frame&&p.ram2===2&&p.ram5===1&&
-        p.gameState.credits===0&&p.gameState.inGame);
+        p.gameState.credits===0&&p.gameState.inGame&&p.gameState.scores?.[0]===0);
       const delta=key=>resumed.witness.activeSamples[key]-ended.witness.activeSamples[key];
       assert.ok(delta('coin1')>0&&delta('coin1')<=12);
-      assert.ok(delta('start1')>0&&delta('p1.button1')>0);
+      assert.ok(delta('start1')>0);
       assert.equal(await page.locator('#system-controls').isVisible(),false);
       report.gameOver={status:'PASS',endedFrame:ended.frame,
         resumedFrame:resumed.frame,coinReads:delta('coin1'),
@@ -202,6 +205,7 @@ try{
   const manifest=JSON.parse(readFileSync(join(ASSETS,'bundle/manifest.json'),'utf8'));
   assert.equal(tape.schema,LIVE_TAPE_SCHEMA);
   assert.equal(tape.program_sha256,manifest.files['program.mjs']);
+  assert.equal(tape.options.continues,false);
   assert.ok(tape.frame>kbFree.frame&&tape.changes.length>0);
   // Record hash of the export frame, checked by a lab replay (h3_explore import).
   assert.equal(tape.check?.frame,tape.frame);

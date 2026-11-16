@@ -164,7 +164,7 @@
           title="Dos jugadores por turnos con los mismos controles">2 Jugadores</button>
       </div>
       <p id="hint">Cargando el juego…</p>
-      <p id="keys">Teclado: 1 jugar / continuar · 2 dos jugadores · flechas · Z disparo · X salto ·
+      <p id="keys">Teclado: 1 jugar · 2 dos jugadores · flechas · Z disparo · X salto ·
         G guardar · C cargar · T cinta</p>
       <button id="sound" disabled aria-pressed="false"
         title="Preparando el sonido…">Sonido OFF</button>
@@ -195,7 +195,7 @@
       <label><input type="radio" name="difficulty" value="hardest"><span>Muy difícil</span></label>
     </div>
     <div class="opt" role="radiogroup" aria-labelledby="o-lives">
-      <span class="opt-name" id="o-lives">Vidas por intento</span>
+      <span class="opt-name" id="o-lives">Vidas por partida</span>
       <label><input type="radio" name="lives" value="3"><span>3</span></label>
       <label><input type="radio" name="lives" value="4"><span>4</span></label>
       <label><input type="radio" name="lives" value="5"><span>5</span></label>
@@ -207,8 +207,9 @@
       <label><input type="radio" name="autofire" value="1"><span>Sí</span></label>
     </div>
     <p>En Fácil y Muy fácil, los enemigos también actúan más despacio.
-      Arthur mantiene su velocidad habitual. Jugar y Continuar son gratuitos;
-      cada intento empieza con las vidas elegidas. Normal conserva la dificultad
+      Arthur mantiene su velocidad habitual. Jugar es gratuito: las vidas elegidas
+      se juegan seguidas y, al agotarlas, termina la partida, sin continuar.
+      En dos jugadores, cada uno tiene sus propias vidas. Normal conserva la dificultad
       original. Con el disparo sostenido y el botón apretado, Arthur sigue
       disparando. El disparo sostenido se aplica al
       instante; las demás opciones, al reiniciar, y una partida cargada sigue con

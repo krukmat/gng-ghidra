@@ -23,19 +23,19 @@ import {createTurnSession} from '../src/netplay_turns.mjs';
 import {createGngTurnRule} from '../games/gngb/netplay.mjs';
 import {observeGameState} from '../games/gngb/state.mjs';
 import {createMatchTracker} from '../src/ao_match.mjs';
-import {gameOptions,optionDips,withEnemyPace} from '../games/gngb/options.mjs';
+import {gameOptions,optionDips,withGameOptions} from '../games/gngb/options.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const BUNDLE=resolve(ROOT,process.env.AO_BUNDLE??'out/rp4/build/bundle');
 const F=25152,FRAMES=14000,OUTAGE=[4000,4300];
-const OPTIONS=gameOptions({difficulty:'hard',enemyPace:75});
+const OPTIONS=gameOptions({difficulty:'hard',enemyPace:75,continues:false});
 const press=(f,control,n)=>[{cycle:f*F,control,pressed:true},
   {cycle:(f+n)*F,control,pressed:false}];
 const manifest=JSON.parse(readFileSync(join(BUNDLE,'manifest.json'),'utf8'));
 const code=gngCode(manifest,readFileSync(join(BUNDLE,'code.bin')),
   readFileSync(join(BUNDLE,'overlays.bin')));
 const {blocks:plain}=await import(pathToFileURL(join(BUNDLE,'program.mjs')).href);
-const blocks=withEnemyPace(plain,OPTIONS.enemyPace);
+const blocks=withGameOptions(plain,OPTIONS);
 
 // Host: two coins, Start 2, then P1 walks and fires. Guest: P2 walks,
 // jumps and fires on another rhythm.

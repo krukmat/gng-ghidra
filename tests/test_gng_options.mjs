@@ -53,6 +53,16 @@ test('legacy combinations remain exact and are identified as custom',()=>{
   assert.deepEqual(gameOptions(restored),options);
 });
 
+test('the life limit travels with saves while old sessions keep their rules',()=>{
+  const options=gameOptions({...DEFAULT_OPTIONS,continues:false});
+  assert.equal(options.continues,false);
+  assert.deepEqual(gameOptions(decodeCheckpoint(checkpoint(options),
+    {programSha256:SHA}).options),options);
+  assert.equal(gameOptions(DEFAULT_OPTIONS).continues,undefined);
+  for(const continues of [0,'false',null])
+    assert.throws(()=>gameOptions({continues}),/GNG_OPTIONS_INVALID/);
+});
+
 // A machine state that only knows what the paced block reads and writes.
 function machine(t){
   const calls=[];

@@ -51,9 +51,11 @@ const blockKey=(blocks,pc)=>blocks.has(pc)?pc:`fixed\u0000main\u00000\u0000${pc}
 export function gameOptions(o){
   const out={...DEFAULT_OPTIONS,...(o??{})},lives=Number(out.lives);
   if(!Object.hasOwn(LIVES,lives)||!Object.hasOwn(DIFFICULTIES,out.difficulty)||
-     !ENEMY_PACES.includes(out.enemyPace))
+     !ENEMY_PACES.includes(out.enemyPace)||
+     out.continues!==undefined&&typeof out.continues!=='boolean')
     throw Error('GNG_OPTIONS_INVALID');
-  return Object.freeze({lives,difficulty:out.difficulty,enemyPace:out.enemyPace});
+  return Object.freeze({lives,difficulty:out.difficulty,enemyPace:out.enemyPace,
+    ...(out.continues===undefined?{}:{continues:out.continues})});
 }
 export const optionDips=o=>dipSwitches(gameOptions(o));
 
@@ -71,4 +73,25 @@ export function withEnemyPace(blocks,pace){
     return call($);
   });
   return paced;
+}
+
+/** New app games finish after the player's lives run out. At 0x77E7 the
+ * ROM enters Game Over/Continue after the last death. Use its own expired
+ * Continue cleanup (0x78EE): it passes to the other player if they still
+ * have lives, otherwise returns to the title with the final scores.
+ * Older saves omit `continues` and retain their original execution. */
+export function withGameOptions(blocks,options){
+  const o=gameOptions(options),paced=withEnemyPace(blocks,o.enemyPace);
+  if(o.continues!==false)return paced;
+  const key=blockKey(paced,0x77e7),end=paced.get(key);
+  if(typeof end!=='function'||typeof paced.get(blockKey(paced,0x78ee))!=='function')
+    throw Error('GNG_GAME_OVER_BLOCK_MISSING');
+  const limited=new Map(paced);
+  limited.set(key,$=>{
+    if($.PC===0x77e7&&$.rd(0x02)===2&&$.rd(0x60)===0){
+      $.PC=0x78ee;return;
+    }
+    return end($);
+  });
+  return limited;
 }

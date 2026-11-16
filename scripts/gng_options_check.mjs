@@ -24,7 +24,7 @@ import {gngCode} from '../boards/gng/bundle.mjs';
 import {createBoard} from '../boards/gng/runtime.mjs';
 import {defineInputSchedule,readScheduledPort} from '../src/gngb_input_contract.mjs';
 import {createPortRecorder,liveTapeReader} from '../src/v3_b3_live_tape.mjs';
-import {gameOptions,optionDips,withEnemyPace} from '../games/gngb/options.mjs';
+import {gameOptions,optionDips,withGameOptions} from '../games/gngb/options.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const BUNDLE=resolve(ROOT,process.env.AO_BUNDLE??'out/rp4/build/bundle');
@@ -44,7 +44,7 @@ const {blocks}=await import(pathToFileURL(join(BUNDLE,'program.mjs')).href);
 
 function run(options,{frames,events,portRead,onPortRead,onFrame}){
   const o=gameOptions(options),schedule=events&&defineInputSchedule(events);
-  const board=createBoard(code,withEnemyPace(blocks,o.enemyPace),{frames,
+  const board=createBoard(code,withGameOptions(blocks,o),{frames,
     dips:optionDips(o),onPortRead,
     portRead:portRead??((a,c)=>readScheduledPort(schedule,a,c)),
     onFrame:r=>{

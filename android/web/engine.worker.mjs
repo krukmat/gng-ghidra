@@ -29,7 +29,7 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
     {rendererInputs},{rendererUnknownCount},{INPUT_DEFAULTS,INPUT_CONTROLS},
     {unpackGfx},{createPortReadWitness},{observeGameState},
     {encodeCheckpoint,decodeCheckpoint},{createPortRecorder},
-    {gameOptions,optionDips,withEnemyPace},
+    {gameOptions,optionDips,withGameOptions},
     {createTurnSession},{createGngTurnRule},
     {createInputShaper},{p1Shaper,P1_SHAPING}]=await Promise.all([
     import('./bundle/program.mjs'),import('./boards/gng/runtime.mjs'),
@@ -52,7 +52,8 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
   const programSha256=manifest.files['program.mjs'];
   // Refused if made by another AOT program or inconsistent.
   const restored=checkpointText&&decodeCheckpoint(checkpointText,{programSha256});
-  const options=gameOptions(restored?restored.options:chosen),dips=optionDips(options);
+  const options=gameOptions(restored?restored.options:{...chosen,continues:false}),
+    dips=optionDips(options);
   // Port changes from reset: a loaded session continues the saved tape; a
   // new one starts with its DIP bytes, which the board serves from `dips`
   // (it only asks portRead for 0x3000-0x3002).
@@ -73,7 +74,7 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
   const witness=createPortReadWitness();
   const readPorts=new Uint8Array(3).fill(255);
   let last=null,stateKey=null,gameState=null;
-  const cpu=createBoard(code,withEnemyPace(blocks,options.enemyPace),{
+  const cpu=createBoard(code,withGameOptions(blocks,options),{
     frames:Number.MAX_SAFE_INTEGER,dips,
     portRead,
     onPortRead:read=>{

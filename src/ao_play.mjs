@@ -1,4 +1,4 @@
-/** One user action starts or continues a game. Credit pulses stay internal;
+/** One user action starts a new game. Credit pulses stay internal;
  * Start waits for the ROM to count them. Cancel when leaving the session. */
 export function createPlayStarter({pulse,onChange=()=>{},onTimeout=()=>{}}){
   let pending=null;
@@ -9,11 +9,11 @@ export function createPlayStarter({pulse,onChange=()=>{},onTimeout=()=>{}}){
   const update=state=>{
     if(!pending)return;
     if(state.inGame){cancel();return;}
-    if(pending.continuing&&!state.canContinue){cancel();return;}
+    if(state.mode!==0&&state.mode!==1){cancel();return;}
     if(pending.sent)return;
-    if((state.mode===1||pending.continuing)&&state.credits>=pending.players){
+    if(state.mode===1&&state.credits>=pending.players){
       pending.sent=true;
-      if(pulse(pending.continuing?'continue1':pending.players===2?'start2':'start1')===false)
+      if(pulse(pending.players===2?'start2':'start1')===false)
         cancel();
     }
   };
@@ -21,8 +21,8 @@ export function createPlayStarter({pulse,onChange=()=>{},onTimeout=()=>{}}){
     get busy(){return pending!==null;},
     request(state,players=1){
       if(pending||state.inGame||![1,2].includes(players)||
-         !(state.mode===0||state.mode===1||players===1&&state.canContinue))return false;
-      pending={players,continuing:!!state.canContinue,sent:false,timer:setTimeout(()=>{
+         !(state.mode===0||state.mode===1))return false;
+      pending={players,sent:false,timer:setTimeout(()=>{
         cancel();onTimeout();
       },5000)};
       for(let n=state.credits;n<players;n++){

@@ -34,14 +34,12 @@ test('two players use only missing credits and start together',t=>{
   play.request({...title,credits:2},2);assert.deepEqual(calls,['start2']);
   play.cancel();
 });
-test('Continuar supplies a credit and uses the game continue combination',t=>{
+test('an exhausted game cannot buy another set of lives',t=>{
   const {play,calls}=setup(t),state={...title,mode:2,canContinue:true};
-  play.request(state);assert.deepEqual(calls,['coin1']);
-  play.update({...state,credits:1});assert.deepEqual(calls,['coin1','continue1']);
-  play.update({...state,credits:1});assert.equal(calls.length,2);
-  play.update({...state,inGame:true,canContinue:false});assert.equal(play.busy,false);
+  for(const players of [1,2])assert.equal(play.request(state,players),false);
+  play.update({...state,credits:1});assert.deepEqual(calls,[]);
 });
-test('cancel, timeout and an expired continue cannot start a later session',t=>{
+test('cancel, timeout and game transitions cannot start a later session',t=>{
   const {play,calls,timeouts}=setup(t);
   play.request(title);play.cancel();
   play.update({...title,credits:1});t.mock.timers.tick(6000);
@@ -49,7 +47,7 @@ test('cancel, timeout and an expired continue cannot start a later session',t=>{
   play.request(title);t.mock.timers.tick(5000);
   assert.equal(play.busy,false);assert.equal(timeouts.length,1);
   play.update({...title,credits:1});assert.equal(calls.length,2);
-  play.request({...title,mode:2,canContinue:true});
+  play.request(title);play.update({...title,mode:2,canContinue:true});
   play.update({...title,credits:1});assert.equal(play.busy,false);
   assert.deepEqual(calls,['coin1','coin1','coin1']);
 });

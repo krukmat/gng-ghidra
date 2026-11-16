@@ -230,14 +230,14 @@ function enable(value){
   for(const button of buttons)button.disabled=!active||
     (button.dataset.pulse&&(game.inGame||playStarter.busy))||
     (button.dataset.pulse==='start1'&&
-      !(game.mode===0||game.mode===1||game.canContinue))||
-    (button.dataset.pulse&&netPlaying()&&!game.canContinue);
+      !(game.mode===0||game.mode===1))||
+    (button.dataset.pulse&&netPlaying());
   twoButton.disabled=!value||online!==null||
     !(game.mode===0||game.mode===1)||playStarter.busy;
   againButton.disabled=!active||game.mode!==1||playStarter.busy;
   updateCheckpoint();
 }
-// The same credit/start sequence for one player, two players and Continue.
+// The same credit/start sequence for one player and two players.
 // Online the host starts two players automatically at the title.
 function startOnePlayer(){if(!startButton.disabled)playStarter.request(game);}
 function startTwoPlayers(){if(!twoButton.disabled)beginTwoPlayers();}
@@ -271,16 +271,15 @@ function matchEvents(state){
   }
 }
 function updateHint(){
-  systemControls.hidden=game.inGame||netPlaying()&&!game.canContinue;
+  systemControls.hidden=!(game.mode===0||game.mode===1)||netPlaying();
   twoButton.hidden=netPlaying();
   hint.hidden=game.inGame;
-  startButton.textContent=game.canContinue?'Continuar':'Jugar';
+  startButton.textContent='Jugar';
   hint.textContent=!playable?'Cargando el juego…':netPlaying()?
-    'Bluetooth · Jugador '+myPlayer()+'\n'+(game.canContinue?
-      (online.owner===online.role?'Tocá Continuar para seguir':'El otro jugador puede continuar'):
+    'Bluetooth · Jugador '+myPlayer()+'\n'+(game.gameOver?'Partida terminada':
       online.role==='host'?'La partida empieza sola':'El Jugador 1 empieza la partida'):
     playStarter.busy?'Preparando la partida…':game.inGame?
-    'Tocá y mantené los controles':game.canContinue?'Tocá Continuar para seguir':
+    'Tocá y mantené los controles':game.gameOver?'Partida terminada':
     game.mode===0||game.mode===1?'Tocá Jugar para empezar':'Un momento…';
   if(playable&&current&&!defaultOptions(current))
     hint.textContent+='\n'+describeOptions(current);
