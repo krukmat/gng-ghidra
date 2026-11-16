@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {createBluetoothClient,pairedDevices,bluetoothStatus}
+import {createBluetoothClient,pairedDevices,bluetoothStatus,BYE_MS}
   from '../src/net_bluetooth_client.mjs';
 
 // The shell's bridge as BluetoothLine.kt exposes it; events go out by hand.
@@ -85,6 +85,30 @@ test('leave disconnects once and stays quiet; devices and status are checked',()
   assert.equal(bluetoothStatus(s.bridge).state,'disconnected');
   assert.equal(bluetoothStatus({status:()=>{throw Error('gone');}}),null);
   assert.throws(()=>createBluetoothClient({onEvent:()=>{},bridge:null}),/NET_BLUETOOTH_UNAVAILABLE/);
+});
+
+test('a goodbye line: leaving sends it before the link closes; hearing it is peer-left',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  let s=shell(),o=open(s);
+  o.c.host();s.fire({type:'status',role:'host',state:'connected'});
+  o.c.leave();o.c.leave();
+  assert.deepEqual(s.sent,['{"type":"bye"}']);
+  assert.deepEqual(s.calls,['host'],'the line goes out first');
+  t.mock.timers.tick(BYE_MS);
+  assert.deepEqual(s.calls,['host','disconnect']);
+  assert.deepEqual(o.events.map(e=>e.type),['paired']);
+  // A link opened meanwhile is not cut by the late close.
+  s=shell();o=open(s);o.c.host();s.fire({type:'status',role:'host',state:'connected'});
+  o.c.leave();open(s).c.join('AA:BB:CC:DD:EE:01');
+  t.mock.timers.tick(BYE_MS);
+  assert.deepEqual(s.calls,['host','join AA:BB:CC:DD:EE:01']);
+  // The peer's goodbye: peer-left, never a message, and this side closes too.
+  s=shell();o=open(s);o.c.join('AA:BB:CC:DD:EE:01');
+  s.fire({type:'status',role:'guest',state:'connected'});
+  s.fire({type:'line',line:'{"type":"bye"}'});
+  s.fire({type:'status',role:'none',state:'error',detail:'LINK_LOST'});
+  assert.deepEqual(o.types(),['paired','peer-left']);
+  assert.deepEqual(s.calls,['join AA:BB:CC:DD:EE:01','disconnect']);
 });
 
 // The Android template: secure RFCOMM to paired devices, connect permission

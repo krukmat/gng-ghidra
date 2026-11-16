@@ -2,10 +2,17 @@
  * window.ShellBluetooth) as events for the two-phone flow (app.mjs):
  *   waiting, connecting, paired {role}, message {message},
  *   peer-left {reason}, closed {reason}.
- * Lines are JSON. No rejoin: a dropped link ends the session. While no
- * client is open, the shell's events go to the page's own handler (the one
- * found in __shellBluetooth when the client was created).
+ * Lines are JSON. No rejoin: a dropped link ends the session. A phone that
+ * leaves sends a goodbye line first, so the other one hears peer-left: on a
+ * real radio the link's close alone reads as a lost link. While no client is
+ * open, the shell's events go to the page's own handler (the one found in
+ * __shellBluetooth when the client was created).
  */
+// The link's own goodbye: the app's messages never use this type.
+const BYE=JSON.stringify({type:'bye'});
+/** How long a leaving phone keeps the link for its goodbye line to go out. */
+export const BYE_MS=300;
+let newest=0; // an older client's late close must not cut a newer link
 export const bluetoothBridge=(scope=globalThis)=>scope.ShellBluetooth??null;
 
 export function bluetoothStatus(bridge){
@@ -26,7 +33,7 @@ const reasonOf=(status,connected)=>status?.state==='permission-required'?'permis
 export function createBluetoothClient({onEvent,bridge=bluetoothBridge(),scope=globalThis}){
   if(typeof onEvent!=='function')throw Error('NET_BLUETOOTH_HANDLER_MISSING');
   if(!bridge)throw Error('NET_BLUETOOTH_UNAVAILABLE');
-  const idle=scope.__shellBluetooth;
+  const idle=scope.__shellBluetooth,id=++newest;
   let connected=false,closed=false;
   const emit=(type,data={})=>onEvent({type,...data});
   const finish=(type,data)=>{
@@ -38,6 +45,7 @@ export function createBluetoothClient({onEvent,bridge=bluetoothBridge(),scope=gl
     if(e.type==='line'){
       let message;
       try{message=JSON.parse(e.line);}catch{bridge.disconnect();return finish('closed',{reason:'protocol'});}
+      if(message?.type==='bye'){bridge.disconnect();return finish('peer-left',{reason:'peer-left'});}
       return emit('message',{message});
     }
     if(e.type!=='status')return;
@@ -58,7 +66,9 @@ export function createBluetoothClient({onEvent,bridge=bluetoothBridge(),scope=gl
     leave(){
       if(closed)return;
       closed=true;scope.__shellBluetooth=idle;
-      try{bridge.disconnect();}catch{}
+      if(!connected){try{bridge.disconnect();}catch{}return;}
+      try{bridge.send(BYE);}catch{}
+      setTimeout(()=>{if(id===newest)try{bridge.disconnect();}catch{}},BYE_MS);
     },
   };
 }
