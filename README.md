@@ -44,6 +44,24 @@ The same page runs in Chromium and inside the WebView of an Android app, with no
 
 Game options (difficulty and lives per game) apply on restart. Jugar is free: the app supplies the required credits internally and waits for the game to accept them before starting; there is no coin button or coin key. Keyboard 1 starts a new game, and 2 starts two players. The configured lives are played consecutively; after the last life the game ends without a Continue countdown or another set of lives. Each player in a two-player game has their own starting lives. One difficulty selector combines the original DIP setting with enemy pace: Very easy = Easy / 50%, Easy = Easy / 75%, Normal = Normal / 100%, Hard = Hard / 100%, and Very hard = Hardest / 100%. Arthur keeps his usual speed. Saved games and replays retain their exact original options, including the original Continue rules in older saves. Two players alternate on the same controls, as on the upright cabinet. On Android, two phones paired in the Bluetooth settings play one game by turns over a secure RFCOMM link: the phone whose player has the turn sends its inputs frame by frame, the other replays them at the same CPU cycles, and both compare a RAM hash every second. Once both players run out of lives, the match ends. The Two players option of the game options chooses how they play: By turns, each player has their own game and the higher score wins; in Cooperative, both advance one shared game: when the turn changes, the entering player resumes where the other one got to (same stage, checkpoint and weapon) with their own lives and score, and the result is the team's total. Cooperative works the same on one device and over Bluetooth, where both phones must run this version (`gng.netplay.v2`).
 
+### Two players: by turns, cooperative and over Bluetooth
+
+The ROM keeps the playing player's block at `0x60`–`0x8F` and the waiting player's copy at `0x440`–`0x46F`, and swaps them in the routine at `0x77EC` when a player dies (the turn is RAM `0x27`). By turns is the original game, unchanged. Cooperative wraps that routine: just before the swap it copies the leaving player's block to the waiting one, except lives (`+0x00`), extra-life bookkeeping (`+0x02`–`+0x07`) and score (`+0x08`–`+0x0B`). So the entering player restarts from the last checkpoint the other player reached, at the same stage and with the same weapon, which is where the player who died would have respawned. The rule depends only on RAM, so tapes, saved games and the Bluetooth lockstep stay exact.
+
+Over Bluetooth both phones run the whole board from reset with the same options ([src/netplay_turns.mjs](src/netplay_turns.mjs)). The phone whose player has the turn sends the port changes it read each frame (port, cycle, value); the other reads the same values at the same cycles and does not run a frame it has not received. Both derive the next frame's owner from RAM ([games/gngb/netplay.mjs](games/gngb/netplay.mjs)), so the turn passes at the same frame on both without an extra message, and an FNV-1a hash of work RAM is compared every 60 frames; a mismatch ends the session.
+
+Private checks on the shipped program bundle (they need the ROM-derived bundle in `out/`):
+
+| Script | What it shows |
+|---|---|
+| [scripts/gng_coop_check.mjs](scripts/gng_coop_check.mjs) | The same game played cooperative and by turns: in cooperative P2 enters past P1's checkpoint with P1's progress and its own lives and score; by turns P2 starts the stage again. The cooperative session replays from its tape to the same CPU state. |
+| [scripts/gng_netplay_check.mjs](scripts/gng_netplay_check.mjs) `--coop` | Two boards joined by a simulated link with jitter and an outage end in the same state as one board replaying the session tape from reset. |
+| [scripts/ao_coop_check.mjs](scripts/ao_coop_check.mjs) | The options dialog and a whole cooperative game in headless Chromium, ending with the team's total. |
+| [scripts/gng_coop_video.mjs](scripts/gng_coop_video.mjs) | Side-by-side video of the same game cooperative and by turns. |
+| [scripts/gng_coop_netplay_video.mjs](scripts/gng_coop_netplay_video.mjs) | Video of two linked boards, each under a strip with its phone, whether it plays or watches, and its player's score. In the recorded run both players scored (4,400 and 4,800) over six turn changes. |
+
+Not yet done: a test on two real phones with an APK that includes the cooperative option.
+
 ## 4. Verification: nothing moves forward without a comparison
 
 MAME is the oracle: it is used only to compare and never ships in the product. Each piece is validated on its own; anything unknown stops the run instead of being guessed.
@@ -82,6 +100,8 @@ For example, if five obstacles each have a one-in-ten chance of being passed, cl
 - A saved place is replaced only when the bot reaches that same place with less damage or in fewer frames.
 
 Go-Explore found routes into difficult sections; a beam search and short scripted button sequences completed boss fights and narrow passages. In total, the search ran about 3.4 million rounds and 286 million game frames in about 11 CPU hours. Commands, criteria and evidence: [docs/go-explore](docs/go-explore/README.md).
+
+The same method now searches a cooperative two-player game ([scripts/gng_coop_explore.mjs](scripts/gng_coop_explore.mjs)). A stage only counts if both players played in it: the search cuts any branch that completes a stage before a turn change, and gives extra weight to cells where the turn has already passed. The cell key adds a time bucket while Arthur stands still during the map shown between stages; without it the search stalled there. A search can resume from an earlier tape (`COOP_FROM`), and [scripts/gng_coop_tape_check.mjs](scripts/gng_coop_tape_check.mjs) replays any tape from reset on the shipped bundle, checks the stages, the turn changes and the frames, and renders the video. Result so far: stage 1 completed by both players, with four turn changes, verified from reset; the search for stage 2 is still running.
 
 ## 6. The next game
 
