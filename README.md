@@ -58,7 +58,7 @@ Private checks on the shipped program bundle (they need the ROM-derived bundle i
 | [scripts/gng_netplay_check.mjs](scripts/gng_netplay_check.mjs) `--coop` | Two boards joined by a simulated link with jitter and an outage end in the same state as one board replaying the session tape from reset. |
 | [scripts/ao_coop_check.mjs](scripts/ao_coop_check.mjs) | The options dialog and a whole cooperative game in headless Chromium, ending with the team's total. |
 | [scripts/gng_coop_video.mjs](scripts/gng_coop_video.mjs) | Side-by-side video of the same game cooperative and by turns. |
-| [scripts/gng_coop_netplay_video.mjs](scripts/gng_coop_netplay_video.mjs) | Video of two linked boards, each under a strip with its phone, whether it plays or watches, and its player's score. In the recorded run both players scored (4,400 and 4,800) over six turn changes. |
+| [scripts/gng_coop_netplay_video.mjs](scripts/gng_coop_netplay_video.mjs) | Video of two linked boards, each under a strip with its phone, whether it plays or watches, its player's score and the checkpoint on screen. P1 passes the first checkpoint before dying, and P2 enters there at every turn; in the recorded run both players scored (1,700 and 900) over five turn changes. |
 
 Not yet done: a test on two real phones with an APK that includes the cooperative option.
 
@@ -101,7 +101,7 @@ For example, if five obstacles each have a one-in-ten chance of being passed, cl
 
 Go-Explore found routes into difficult sections; a beam search and short scripted button sequences completed boss fights and narrow passages. In total, the search ran about 3.4 million rounds and 286 million game frames in about 11 CPU hours. Commands, criteria and evidence: [docs/go-explore](docs/go-explore/README.md).
 
-The same method now searches a cooperative two-player game ([scripts/gng_coop_explore.mjs](scripts/gng_coop_explore.mjs)). A stage only counts if both players played in it: the search cuts any branch that completes a stage before a turn change, and gives extra weight to cells where the turn has already passed. The cell key adds a time bucket while Arthur stands still during the map shown between stages; without it the search stalled there. A search can resume from an earlier tape (`COOP_FROM`), and [scripts/gng_coop_tape_check.mjs](scripts/gng_coop_tape_check.mjs) replays any tape from reset on the shipped bundle, checks the stages, the turn changes and the frames, and renders the video. Result so far: stage 1 completed by both players, with four turn changes, verified from reset; the search for stage 2 is still running.
+The same method now searches a cooperative two-player game ([scripts/gng_coop_explore.mjs](scripts/gng_coop_explore.mjs)). A stage only counts if both players played in it: the search cuts any branch that completes a stage before a turn change, and gives extra weight to cells where the turn has already passed. The cell key adds a time bucket while Arthur stands still during the map shown between stages; without it the search stalled there. A search can resume from an earlier tape (`COOP_FROM`), and [scripts/gng_coop_tape_check.mjs](scripts/gng_coop_tape_check.mjs) replays any tape from reset on the shipped bundle, checks the stages, the turn changes and the frames, and renders the video. Result: stage 1 completed by both players, with four turn changes, verified from reset. Stage 2 was not pursued further: after an hour the searches stalled at about 80% of the stage.
 
 ## 6. The next game
 

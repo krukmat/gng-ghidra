@@ -6,12 +6,14 @@
  * with jitter as in scripts/gng_netplay_check.mjs. No radio is involved.
  * Both screens are recorded side by side at each tick of real time, each
  * under a strip that names the phone, says whether it plays (green) or
- * watches (grey) and shows that player's score. PASS = both players score,
- * the turn passes at the same frames on both phones and both boards end in
- * the same state. Writes out/gng-coop/video/bluetooth-coop.{mp4,json}.
+ * watches (grey) and shows that player's score and the checkpoint on that
+ * screen. P1 follows the true-ending tape past the first checkpoint, so P2's
+ * first turn starts there. PASS = both players score, P2 enters at P1's
+ * checkpoint, the turn passes at the same frames on both phones and both
+ * boards end in the same state. Writes out/gng-coop/video/bluetooth-coop.{mp4,json}.
  * Needs the ROM-derived bundle (AO_BUNDLE, default out/rp4/build/bundle),
  * roms/gng.zip and ffmpeg.
- * Usage: node scripts/gng_coop_netplay_video.mjs
+ * Usage: node scripts/gng_coop_netplay_video.mjs [--no-video]
  */
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
@@ -25,7 +27,7 @@ import {defineInputSchedule,readScheduledPort,INPUT_DEFAULTS}
 import {createPortRecorder} from '../src/v3_b3_live_tape.mjs';
 import {createTurnSession} from '../src/netplay_turns.mjs';
 import {createGngTurnRule} from '../games/gngb/netplay.mjs';
-import {observeGameState} from '../games/gngb/state.mjs';
+import {observeGameState,RAM} from '../games/gngb/state.mjs';
 import {createMatchTracker} from '../src/ao_match.mjs';
 import {gameOptions,optionDips,withGameOptions} from '../games/gngb/options.mjs';
 import {rendererUnknownCount} from '../src/v2_b1_observable.mjs';
@@ -39,6 +41,12 @@ const OUT=join(ROOT,'out/gng-coop/video');
 const F=25152,FPS=`1500000/${F}`,LIMIT=30000,FROM=540,TAIL=240;
 const SW=256,SH=224,GAP=8,STRIP=24,W=SW*2+GAP,H=STRIP+SH;
 const OPTIONS=gameOptions({coop:true,continues:false});
+const VIDEO=!process.argv.includes('--no-video');
+// The guest's rhythm in frames: walk period, steps held, fire period, jump period.
+const GUEST=(process.env.GUEST??'400,10,8,0').split(',').map(Number);
+// P1 follows the true-ending tape past the first checkpoint, as in
+// scripts/gng_coop_check.mjs, so P2 visibly enters there.
+const TAPE=join(ROOT,'out/h3/loop2/l2-ending-96340.json'),CUT=3600,CHECKPOINT=0x81;
 const press=(f,control,n)=>[{cycle:f*F,control,pressed:true},
   {cycle:(f+n)*F,control,pressed:false}];
 const manifest=JSON.parse(readFileSync(join(BUNDLE,'manifest.json'),'utf8'));
@@ -49,7 +57,8 @@ const blocks=withGameOptions(plain,OPTIONS);
 const gfx=gngbGraphics(name=>execFileSync('unzip',['-p',join(ROOT,'roms/gng.zip'),name],
   {maxBuffer:1<<20,stdio:['ignore','pipe','ignore']}));
 
-const GLYPHS={A:'01110100011000111111100011000110001',D:'11110100011000110001100011000111110',
+const GLYPHS={C:'01110100011000010000100001000101110',H:'10001100011000111111100011000110001',
+  K:'10001100101010011000101001001010001',A:'01110100011000111111100011000110001',D:'11110100011000110001100011000111110',
   E:'11111100001000011110100001000011111',F:'11111100001000011110100001000010000',
   G:'01110100011000010111100011000101111',I:'01110001000010000100001000010001110',
   J:'00111000100001000010000101001001100',L:'10000100001000010000100001000011111',
@@ -72,7 +81,7 @@ function text(buf,x,y,s){
     x+=6;
   }
 }
-function strip(buf,x0,phone,plays,score){
+function strip(buf,x0,phone,plays,score,cp){
   const [r,g,b]=plays?[0,130,60]:[70,70,70];
   for(let y=0;y<STRIP;y++)for(let x=x0;x<x0+SW;x++){
     const o=(y*W+x)*4;buf[o]=r;buf[o+1]=g;buf[o+2]=b;buf[o+3]=255;
@@ -81,16 +90,29 @@ function strip(buf,x0,phone,plays,score){
   text(buf,x0+4,3,`TELEFONO ${phone} - JUGADOR ${phone}`);
   text(buf,x0+SW-4-state.length*6,3,state);
   text(buf,x0+4,14,'PUNTOS '+String(score).padStart(6,'0'));
+  text(buf,x0+SW-4-12*6,14,'CHECKPOINT '+cp);
 }
 
-// The host inserts two coins and presses Start 2; then each player walks
-// right and fires on its own rhythm (the guest also jumps).
+// The host: the tape's coin plus one, Start 2 where the tape pressed Start 1
+// and the tape's play until CUT; then each player walks right and fires on
+// its own rhythm (the guest edges forward and fires, so it scores in the forest).
 function schedule(role){
-  const e=role==='host'?[...press(560,'coin1',12),...press(600,'coin1',12),
-    ...press(680,'start2',12)]:[];
-  for(let f=1240;f<LIMIT;f+=role==='host'?80:64)e.push(...press(f,'p1.right',role==='host'?36:30));
-  for(let f=1300;f<LIMIT;f+=role==='host'?12:10)e.push(...press(f,'p1.button1',4));
-  if(role==='guest')for(let f=1500;f<LIMIT;f+=230)e.push(...press(f,'p1.button2',6));
+  const e=[];
+  if(role==='host'){
+    const held=new Set();
+    for(const x of JSON.parse(readFileSync(TAPE,'utf8')).events){
+      if(x.cycle>=CUT*F)break;
+      e.push(x.control==='start1'?{...x,control:'start2'}:x);
+      if(x.pressed)held.add(x.control);else held.delete(x.control);
+    }
+    for(const control of held)e.push({cycle:CUT*F,control,pressed:false});
+    e.push(...press(600,'coin1',12));
+  }
+  const from=role==='host'?CUT+30:1240;
+  const [walk,step,fire,jump]=role==='host'?[80,36,12,0]:GUEST;
+  for(let f=from;f<LIMIT;f+=walk)e.push(...press(f,'p1.right',step));
+  for(let f=from+60;f<LIMIT;f+=fire)e.push(...press(f,'p1.button1',4));
+  if(jump)for(let f=1500;f<LIMIT;f+=jump)e.push(...press(f,'p1.button2',6));
   return defineInputSchedule(e.sort((a,b)=>a.cycle-b.cycle));
 }
 // Ordered link with seeded jitter.
@@ -154,7 +176,9 @@ try{
         if(!s||k2===key)continue;
         key=k2;
         for(const e of match.update(s)){
-          log.push({frame:p.frame,at:seconds(),...e});
+          const b=p.last.record;
+          log.push({frame:p.frame,at:seconds(),...e,...e.type==='turn'?{checkpoint:b[CHECKPOINT],
+            x:b[RAM.world]<<8|b[RAM.world+1]}:{}});
           if(e.type==='start')started=true;
           if(e.type==='result')end=Math.min(end,p.frame+TAIL);
         }
@@ -167,17 +191,18 @@ try{
     net.deliver(peers);
     for(const p of Object.values(peers))assert.equal(p.session.ended,null,JSON.stringify(p.session.ended));
     maxLead=Math.max(maxLead,Math.abs(peers.host.frame-peers.guest.frame));
-    if(peers.host.frame<FROM)continue;
+    if(!VIDEO||peers.host.frame<FROM)continue;
     [peers.host,peers.guest].forEach((p,i)=>{
       p.render();
       const x0=i*(SW+GAP);
       for(let y=0;y<SH;y++)p.screen.copy(canvas,((STRIP+y)*W+x0)*4,y*SW*4,(y+1)*SW*4);
-      strip(canvas,x0,i+1,p.session.owns(),scores[i]);
+      strip(canvas,x0,i+1,p.session.owns(),scores[i],p.last.record[CHECKPOINT]);
     });
     writeSync(fd,canvas);videoFrames++;
   }
   closeSync(fd);
   const {host,guest}=peers;
+  console.log(JSON.stringify(log.filter(e=>e.type!=='score')));
   const turns=p=>p.events.filter(e=>e.type==='owner').map(e=>e.owner+'@'+e.frame);
   assert.deepEqual(turns(guest),turns(host),'turns at the same frames on both phones');
   assert.ok(turns(host).length>=2,'the turn passes');
@@ -185,7 +210,9 @@ try{
   const result=log.find(e=>e.type==='result');
   assert.ok(result,'the game ended at the title');
   assert.ok(result.scores[0]>0&&result.scores[1]>0,'both players scored');
-  execFileSync('ffmpeg',['-nostdin','-hide_banner','-loglevel','error','-y',
+  const p2=log.find(e=>e.type==='turn'&&e.player===2);
+  assert.ok(p2.checkpoint>=1&&p2.x>0x700,'P2 enters at the checkpoint P1 reached');
+  if(VIDEO)execFileSync('ffmpeg',['-nostdin','-hide_banner','-loglevel','error','-y',
     '-f','rawvideo','-pixel_format','rgba','-video_size',`${W}x${H}`,'-framerate',FPS,
     '-i',raw,'-vf','scale=iw*2:ih*2:flags=neighbor','-an','-c:v','libx264',
     '-preset','medium','-crf','18','-pix_fmt','yuv420p','-movflags','+faststart',mp4]);
