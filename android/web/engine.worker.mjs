@@ -108,7 +108,6 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
     },
     message(m){
       if(m?.type==='net')session?.receive(m.m);
-      else if(m?.type==='net-resend')session?.resend();
       else if(m?.type==='net-leave')session?.leave();
     },
     render:frame=>renderGngbRgba(rendererInputs(frame.record,

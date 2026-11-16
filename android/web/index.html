@@ -82,6 +82,7 @@
   #online-open{min-height:32px;font-size:11px;border-radius:9px;
     border-color:#6d5c9b;color:#cdbdf5;background:transparent}
   #footer #online-open{flex-basis:100%}
+  #online-open[hidden]{display:none}
   #online-open.on{background:#2b2440;color:#fff}
   #sound{min-height:34px;font-size:12px;border-radius:10px;background:transparent}
   #footer{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
@@ -113,21 +114,10 @@
   #options p,#online p{margin:0;font-size:11px;color:#8da0b3}
   #options-actions,.online-row{display:flex;gap:8px}
   #options-actions button,.online-row button{flex:1;min-height:38px;font-size:12px;border-radius:10px}
-  /* Online play (app.mjs): a room on the relay, two phones by turns. */
-  #online input{font:inherit;font-size:14px;color:#e7edf4;background:#0a1118;
-    border:1px solid #425465;border-radius:10px;padding:8px 10px;min-width:0;
-    user-select:text;-webkit-user-select:text;touch-action:auto}
-  #online-code{flex:1;text-transform:uppercase;letter-spacing:.2em;text-align:center}
-  #online-host,#online-join button{border-color:#6d5c9b;color:#cdbdf5}
-  #online #online-room{margin:0;font-size:28px;font-weight:700;letter-spacing:.3em;
-    text-align:center;color:#f8d582}
-  #online-room[hidden],#online-setup[hidden],#online-leave[hidden]{display:none}
+  /* Two phones over Bluetooth (app.mjs), by turns. */
+  #online-setup{display:flex;flex-direction:column;gap:8px}
+  #online-setup[hidden],#online-leave[hidden],#bt-permission[hidden]{display:none}
   #online #online-status{font-size:12px;color:#e7edf4;min-height:1.3em}
-  /* Internet and Bluetooth side by side when there is room. */
-  #online-setup{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px 14px}
-  .online-col{display:flex;flex-direction:column;gap:8px}
-  #online-bt[hidden],#bt-permission[hidden]{display:none}
-  #online .online-way{font-size:12px;font-weight:650;color:#acbdcc}
   #online select{font:inherit;font-size:13px;color:#e7edf4;background:#0a1118;
     border:1px solid #425465;border-radius:10px;padding:8px;flex:1;min-width:0;
     touch-action:auto}
@@ -183,7 +173,7 @@
         <button id="options-open" title="Opciones de juego">Opciones</button>
         <button id="ck-save" disabled title="Guardar checkpoint">Guardar</button>
         <button id="ck-load" disabled title="Sin checkpoint guardado">Cargar</button>
-        <button id="online-open" title="Dos teléfonos por turnos">En línea</button>
+        <button id="online-open" title="Dos teléfonos por Bluetooth, por turnos" hidden>Bluetooth</button>
         <output id="status">cargando…</output>
       </div>
     </div>
@@ -228,38 +218,23 @@
 </div>
 <div id="online" hidden role="dialog" aria-modal="true" aria-labelledby="online-title">
   <div id="online-box">
-    <h2 id="online-title">Jugar en línea</h2>
-    <p>Dos teléfonos por turnos, como 2 Jugadores. Quien crea la partida es
-      el Jugador 1 y elige las opciones.</p>
+    <h2 id="online-title">Dos teléfonos por Bluetooth</h2>
+    <p>Por turnos, como 2 Jugadores. Vinculá los teléfonos antes en Ajustes de
+      Bluetooth. Quien toca Esperar es el Jugador 1 y elige las opciones.</p>
     <div id="online-setup">
-     <div class="online-col">
-      <p class="online-way">Por internet</p>
-      <input id="online-url" type="url" inputmode="url" autocomplete="off"
-        spellcheck="false" placeholder="Servidor: wss://…" aria-label="Servidor">
-      <div class="online-row"><button type="button" id="online-host">Crear sala</button></div>
-      <form id="online-join" class="online-row">
-        <input id="online-code" maxlength="4" autocomplete="off" spellcheck="false"
-          autocapitalize="characters" placeholder="Código" aria-label="Código de la sala">
-        <button type="submit">Unirse</button>
-      </form>
-     </div>
-      <div id="online-bt" class="online-col" hidden>
-        <p class="online-way">Por Bluetooth · vinculados en Ajustes</p>
-        <div class="online-row">
-          <button type="button" id="bt-permission" hidden>Permitir Bluetooth</button>
-          <button type="button" id="bt-host">Esperar por Bluetooth</button>
-        </div>
-        <div class="online-row">
-          <select id="bt-device" aria-label="Teléfono vinculado"></select>
-          <button type="button" id="bt-join">Conectar</button>
-        </div>
+      <div class="online-row">
+        <button type="button" id="bt-permission" hidden>Permitir Bluetooth</button>
+        <button type="button" id="bt-host">Esperar por Bluetooth</button>
+      </div>
+      <div class="online-row">
+        <select id="bt-device" aria-label="Teléfono vinculado"></select>
+        <button type="button" id="bt-join">Conectar</button>
       </div>
     </div>
-    <p id="online-room" hidden></p>
     <p id="online-status" aria-live="polite"></p>
     <div class="online-row">
       <button type="button" id="online-close">Cerrar</button>
-      <button type="button" id="online-leave" hidden>Salir de la sala</button>
+      <button type="button" id="online-leave" hidden>Desconectar</button>
     </div>
   </div>
 </div>

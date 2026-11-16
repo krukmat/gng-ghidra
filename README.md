@@ -38,11 +38,11 @@ bash scripts/ao_build_apk.sh           # Android: APK in out/android/
 
 ## 3. Runtime
 
-The same page runs in Chromium and inside the WebView of an Android app, with no server; the network is used only when a player opens an online room.
+The same page runs in Chromium and inside the WebView of an Android app, with no server or network.
 
 ![Runtime in three threads](docs/img/arch-runtime.svg)
 
-Game options (difficulty, lives, and an enemy-pace assist that slows the enemies but not Arthur) apply on restart. Two players alternate on the same controls, as on the upright cabinet. Online, two phones play one game by turns through a small room relay (`node scripts/netplay_relay.mjs`, behind a `wss://` proxy): the phone whose player has the turn sends its inputs frame by frame, the other replays them at the same CPU cycles, and both compare a RAM hash every second.
+Game options (difficulty, lives, and an enemy-pace assist that slows the enemies but not Arthur) apply on restart. Two players alternate on the same controls, as on the upright cabinet. On Android, two phones paired in the Bluetooth settings play one game by turns over a secure RFCOMM link: the phone whose player has the turn sends its inputs frame by frame, the other replays them at the same CPU cycles, and both compare a RAM hash every second.
 
 ## 4. Verification: nothing moves forward without a comparison
 

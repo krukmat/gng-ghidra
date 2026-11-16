@@ -6,7 +6,6 @@ import {keyAction} from './lib/ao_keyboard.mjs';
 import {checkedCheckpointTape} from './lib/v3_b3_live_tape.mjs';
 import {DEFAULT_OPTIONS,gameOptions} from './games/gngb/options.mjs';
 import {createMatchTracker} from './lib/ao_match.mjs';
-import {createRelayClient} from './lib/net_relay_client.mjs';
 import {bluetoothBridge,bluetoothStatus,pairedDevices,createBluetoothClient}
   from './lib/net_bluetooth_client.mjs';
 import {NET_PROTOCOL} from './lib/netplay_turns.mjs';
@@ -49,33 +48,27 @@ const twoButton=document.getElementById('two-players');
 const turnBanner=document.getElementById('turn'),resultBox=document.getElementById('result');
 const match=createMatchTracker();
 let twoPending=null,turnTimer=null; // since when 2 Jugadores waits for credits
-// Online: a room on the relay (net_relay_client.mjs) or a Bluetooth link to
-// a paired phone (net_bluetooth_client.mjs, Android only) joins two phones
-// that play by turns (netplay_turns.mjs, in the engine worker). The host is
-// Jugador 1 and its options rule; both check they run the same program.
-// `online`: {client, label, role, code, phase:'connecting'|'playing', owner,
-// inbox (peer messages until the engine is ready), ready, started}.
-const RELAY_KEY='gng-relay';
+// Two phones over Bluetooth (net_bluetooth_client.mjs: the Android shell's
+// link to a phone paired in Settings) play by turns (netplay_turns.mjs, in
+// the engine worker). The host is Jugador 1 and its options rule; both check
+// they run the same program. `online`: {client, role,
+// phase:'connecting'|'playing', owner, inbox (peer messages until the engine
+// is ready), ready, started}.
 const onlineDialog=document.getElementById('online');
 const onlineButton=document.getElementById('online-open');
-const onlineUrl=document.getElementById('online-url');
 const onlineStatus=document.getElementById('online-status');
 const againButton=document.getElementById('result-again');
 let online=null,programSha=null;
 const netPlaying=()=>online?.phase==='playing';
 const myPlayer=()=>online?.role==='guest'?2:1;
-const RELAY_ERRORS={ROOM_NOT_FOUND:'No hay ninguna sala con ese código.',
-  ROOM_FULL:'Esa sala ya tiene dos jugadores.',RELAY_FULL:'El servidor está lleno.',
-  REJOIN_REFUSED:'La sala ya no existe.'};
-const CLOSED={unreachable:'No se pudo conectar con el servidor.',
-  'bad-url':'La dirección del servidor no es válida.',lost:'Se perdió la conexión.',
+const CLOSED={lost:'Se perdió la conexión.',
   'bt-unreachable':'No se pudo conectar. ¿El otro teléfono está en Esperar por Bluetooth?',
   'bluetooth-off':'Activá el Bluetooth en Ajustes.',
   permission:'Falta el permiso de Bluetooth (Dispositivos cercanos).',
   unavailable:'Este teléfono no tiene Bluetooth.',protocol:'El otro teléfono envió datos inválidos.',
   cancelled:''};
 const ENDED={desync:'Las dos partidas dejaron de coincidir.',
-  protocol:'El otro teléfono envió datos inválidos.','peer-left':'El rival salió de la sala.'};
+  protocol:'El otro teléfono envió datos inválidos.','peer-left':'El otro teléfono se desconectó.'};
 const REFUSED={protocol:'Los dos teléfonos tienen versiones distintas de la app.',
   program:'Los dos teléfonos tienen versiones distintas del juego.',
   options:'Las opciones de juego del Jugador 1 no son válidas.'};
@@ -271,7 +264,7 @@ function updateHint(){
   hint.hidden=game.inGame;
   startButton.textContent=game.canContinue?'Continuar':'Start';
   hint.textContent=!playable?'Cargando el juego…':netPlaying()?
-    'En línea · Jugador '+myPlayer()+'\n'+(online.role==='host'?
+    'Bluetooth · Jugador '+myPlayer()+'\n'+(online.role==='host'?
       'La partida empieza sola':'El Jugador 1 empieza la partida'):game.inGame?
     'Tocá y mantené los controles':game.readyToStart?
     (game.canContinue?'2 · Continuar':'2 · Start'):
@@ -404,49 +397,31 @@ function startAudio(){
   };
 }
 const toEngine=message=>worker?.postMessage({type:'engine',message});
-const relayUrl=()=>{
-  const query=new URLSearchParams(location.search).get('relay');
-  try{return query??localStorage.getItem(RELAY_KEY)??'';}catch{return query??'';}
-};
 const program=()=>programSha??=fetch('bundle/manifest.json').then(r=>r.json())
   .then(m=>m.files['program.mjs']);
 function updateOnline(note=null){
   if(note!==null)onlineStatus.textContent=note;
   document.getElementById('online-setup').hidden=online!==null;
   document.getElementById('online-leave').hidden=online===null;
-  const room=document.getElementById('online-room');
-  room.hidden=!online?.code;room.textContent=online?.code??'';
   onlineButton.classList.toggle('on',online!==null);
-  onlineButton.textContent=online?.label?'En línea · '+online.label:
-    online?'En línea…':'En línea';
+  onlineButton.textContent=!online?'Bluetooth':
+    netPlaying()?'Bluetooth · Jugador '+myPlayer():'Bluetooth…';
   for(const id of ['restart','options-open'])document.getElementById(id).disabled=online!==null;
   enable(playable);
 }
-// A note over the game while the link is down (the follower's engine waits).
-function netNote(text){
-  clearTimeout(turnTimer);
-  turnBanner.textContent=text;turnBanner.hidden=!text;
-}
-function connectRelay(action){
-  const url=onlineUrl.value.trim();
-  if(!/^wss?:\/\/\S+$/i.test(url))
-    return updateOnline('Escribí la dirección del servidor (wss://…).');
-  try{localStorage.setItem(RELAY_KEY,url);}catch{}
-  connect(onEvent=>createRelayClient(url,{onEvent}),action,null);
-}
-function connect(make,action,label){
-  const o={client:null,label,role:null,code:null,phase:'connecting',owner:'host',
+function connect(action){
+  const o={client:null,role:null,phase:'connecting',owner:'host',
     inbox:[],ready:false,started:false};
   online=o;updateOnline('Conectando…');
-  try{o.client=make(e=>{if(online===o)relayEvent(o,e);});}
-  catch(e){return endOnline(CLOSED.unavailable);}
+  try{o.client=createBluetoothClient({onEvent:e=>{if(online===o)linkEvent(o,e);}});}
+  catch{return endOnline(CLOSED.unavailable);}
   if(online===o)action(o.client);
 }
-// Bluetooth (Android shell only): permission, then the phones paired in Settings.
+// The Android shell's Bluetooth: the button shows only where there is one;
+// the dialog asks for the permission, then lists the phones paired in Settings.
+const bluetoothUsable=()=>{try{return !!bluetoothBridge()?.available();}catch{return false;}};
 function refreshBluetooth(){
-  const bridge=bluetoothBridge(),box=document.getElementById('online-bt');
-  let usable=false;try{usable=!!bridge?.available();}catch{}
-  box.hidden=!usable;if(!usable)return;
+  const bridge=bluetoothBridge();
   const needs=bluetoothStatus(bridge)?.state==='permission-required';
   const devices=needs?[]:pairedDevices(bridge),select=document.getElementById('bt-device');
   document.getElementById('bt-permission').hidden=!needs;
@@ -458,32 +433,18 @@ function refreshBluetooth(){
 }
 // The shell's events while no Bluetooth client is open: a permission answer.
 window.__shellBluetooth=e=>{if(e?.type==='status'&&!onlineDialog.hidden&&!online)refreshBluetooth();};
-async function relayEvent(o,e){
+function linkEvent(o,e){
   if(e.type!=='message')log('AO_ONLINE',e);
   switch(e.type){
-    case 'room':o.code=o.label=e.code;o.role='host';
-      updateOnline('Pasale este código al otro jugador. Esperando…');break;
     case 'waiting':o.role='host';updateOnline('Esperando al otro teléfono por Bluetooth…');break;
     case 'connecting':updateOnline('Conectando por Bluetooth…');break;
     case 'paired':
-      if(e.code)o.code=o.label=e.code;
       o.role=e.role;
-      if(e.again){
-        netNote('');updateOnline(netPlaying()?'':null);
-        if(o.ready)toEngine({type:'net-resend'});
-        if(o.phase==='connecting'&&o.role==='host')sendHello(o);
-      }else if(o.role==='host'){updateOnline('Rival conectado · preparando…');sendHello(o);}
+      if(o.role==='host'){updateOnline('Rival conectado · preparando…');sendHello(o);}
       else updateOnline('Conectado · esperando al Jugador 1…');
       break;
     case 'message':peerMessage(o,e.message);break;
-    case 'reconnecting':
-      if(o.phase==='playing')netNote('Reconectando…');else updateOnline('Reconectando…');break;
-    case 'peer-gone':
-      if(o.phase==='playing')netNote('El rival perdió la conexión · esperando…');
-      else updateOnline('El rival perdió la conexión · esperando…');
-      break;
     case 'peer-left':endOnline(ENDED['peer-left']);break;
-    case 'error':endOnline(RELAY_ERRORS[e.code]??'Error del servidor: '+e.code);break;
     case 'closed':endOnline(CLOSED[e.reason]??CLOSED.lost);break;
   }
 }
@@ -494,8 +455,7 @@ async function sendHello(o){
 async function peerMessage(o,m){
   if(m?.type==='net'){
     if(o.ready)toEngine({type:'net',m:m.m});else o.inbox.push(m.m);
-  }else if(m?.type==='hello'&&o.role==='guest'){
-    if(o.phase==='playing')return o.client.send({type:'hello-ok'}); // it was lost
+  }else if(m?.type==='hello'&&o.role==='guest'&&o.phase==='connecting'){
     const sha=await program();
     if(online!==o)return;
     let options=null;try{options=gameOptions(m.options);}catch{}
@@ -512,7 +472,7 @@ async function peerMessage(o,m){
 }
 // Both phones restart from reset with the host's options.
 function play(o,options){
-  o.phase='playing';log('AO_ONLINE_PLAY',{role:o.role,code:o.code,options});
+  o.phase='playing';log('AO_ONLINE_PLAY',{role:o.role,options});
   onlineDialog.hidden=true;updateOnline('');
   start(null,{role:o.role,options});
 }
@@ -524,23 +484,23 @@ function engineMessage(m){
     else if(e.type==='end'){log('AO_NET_END',e);endOnline(ENDED[e.reason]??'');}
   }
 }
-// The room is left; a session in play stays on screen, halted, until Reiniciar.
+// The link is closed; a session in play stays on screen, halted, until Reiniciar.
 function endOnline(message,restart=false){
   const o=online;if(!o)return;
   online=null;o.client?.leave();
   log('AO_ONLINE_END',{phase:o.phase,message});
   updateOnline(message);
   if(o.phase!=='playing')return;
-  netNote('');
+  clearTimeout(turnTimer);turnBanner.hidden=true;
   if(restart)start();
-  else{closeSession();worker?.terminate();stop(message||'La partida en línea terminó.');}
+  else{closeSession();worker?.terminate();stop(message||'La partida por Bluetooth terminó.');}
 }
 function openOnline(){
   releaseAll();
-  if(!online){onlineUrl.value=relayUrl();refreshBluetooth();}
+  if(!online)refreshBluetooth();
   updateOnline();onlineDialog.hidden=false;
   (online?document.getElementById('online-close'):
-    onlineUrl.value?document.getElementById('online-code'):onlineUrl).focus();
+    document.querySelector('#online-setup button:not([hidden])'))?.focus();
 }
 function closeOnline(){onlineDialog.hidden=true;onlineButton.focus();}
 // Reiniciar and Cargar: a cold engine and audio producer; checkpoint is the
@@ -573,7 +533,7 @@ function start(checkpoint=null,net=null){
         status.textContent=Math.round(drawn*1000/data.windowMs)+' fps'+
           (audioNote?' · '+audioNote:'')+
           (performance.now()<ckNoteUntil?' · '+ckNote:'')+
-          (netPlaying()?' · en línea '+online.label:'');
+          (netPlaying()?' · Bluetooth':'');
         drawn=0;audioStats();break;
       case 'audio-stop':audioDead=data.code;audioStop(data.code);break;
       case 'audio-clock-lost':log('AO_AUDIO_CLOCK_LOST',data);break;
@@ -653,7 +613,7 @@ document.addEventListener('visibilitychange',()=>{
       e=>audioStop('AUDIO_CONTEXT_FAILED',{message:String(e)}));
   }
 });
-document.addEventListener('contextmenu',e=>{if(!e.target.closest?.('input'))e.preventDefault();});
+document.addEventListener('contextmenu',e=>e.preventDefault());
 document.getElementById('restart').addEventListener('click',()=>start());
 twoButton.addEventListener('click',startTwoPlayers);
 document.getElementById('result-ok').addEventListener('click',()=>{resultBox.hidden=true;});
@@ -664,27 +624,20 @@ againButton.addEventListener('click',()=>{
 onlineButton.addEventListener('click',openOnline);
 document.getElementById('online-close').addEventListener('click',closeOnline);
 onlineDialog.addEventListener('click',e=>{if(e.target===onlineDialog)closeOnline();});
-document.getElementById('online-host').addEventListener('click',()=>connectRelay(c=>c.host()));
-document.getElementById('bt-host').addEventListener('click',()=>
-  connect(onEvent=>createBluetoothClient({onEvent}),c=>c.host(),'Bluetooth'));
+document.getElementById('bt-host').addEventListener('click',()=>connect(c=>c.host()));
 document.getElementById('bt-join').addEventListener('click',()=>{
   const address=document.getElementById('bt-device').value;
-  if(address)connect(onEvent=>createBluetoothClient({onEvent}),c=>c.join(address),'Bluetooth');
+  if(address)connect(c=>c.join(address));
 });
 document.getElementById('bt-permission').addEventListener('click',()=>{
   try{if(!bluetoothBridge()?.requestPermission())refreshBluetooth();}catch{refreshBluetooth();}
 });
-document.getElementById('online-join').addEventListener('submit',e=>{
-  e.preventDefault();
-  const code=document.getElementById('online-code').value.trim();
-  if(!/^[a-z0-9]{4}$/i.test(code))return updateOnline('El código tiene cuatro letras o números.');
-  connectRelay(c=>c.join(code));
-});
 document.getElementById('online-leave').addEventListener('click',()=>{
   const playing=netPlaying();
-  endOnline('Saliste de la sala.',true);
+  endOnline('Desconectado.',true);
   if(playing)closeOnline();
 });
+onlineButton.hidden=!bluetoothUsable();
 function openOptions(){
   releaseAll();
   for(const [name,value] of Object.entries(chosen))

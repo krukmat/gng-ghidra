@@ -1,6 +1,5 @@
 /** The Android shell's Bluetooth line channel (base template BluetoothLine.kt,
- * window.ShellBluetooth) behind the relay client's events
- * (net_relay_client.mjs), so the online flow takes either one:
+ * window.ShellBluetooth) as events for the two-phone flow (app.mjs):
  *   waiting, connecting, paired {role}, message {message},
  *   peer-left {reason}, closed {reason}.
  * Lines are JSON. No rejoin: a dropped link ends the session. While no
@@ -45,7 +44,7 @@ export function createBluetoothClient({onEvent,bridge=bluetoothBridge(),scope=gl
     if(e.state==='waiting')emit('waiting');
     else if(e.state==='connecting')emit('connecting');
     else if(e.state==='connected'){
-      if(!connected){connected=true;emit('paired',{role:e.role,again:false});}
+      if(!connected){connected=true;emit('paired',{role:e.role});}
     }else if(e.state==='disconnected')
       finish(connected?'peer-left':'closed',{reason:connected?'peer-left':'cancelled'});
     else finish('closed',{reason:reasonOf(e,connected)});
@@ -61,6 +60,5 @@ export function createBluetoothClient({onEvent,bridge=bluetoothBridge(),scope=gl
       closed=true;scope.__shellBluetooth=idle;
       try{bridge.disconnect();}catch{}
     },
-    get room(){return null;},
   };
 }

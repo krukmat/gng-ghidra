@@ -38,12 +38,11 @@ test('host: waits, pairs, exchanges JSON lines and hears the peer leave',()=>{
   s.fire({type:'status',role:'none',state:'disconnected'});
   s.fire({type:'line',line:'{"late":true}'}); // after the end: ignored
   assert.deepEqual(types(),['waiting','paired','message','peer-left']);
-  assert.deepEqual(events[1],{type:'paired',role:'host',again:false});
+  assert.deepEqual(events[1],{type:'paired',role:'host'});
   assert.deepEqual(events[2].message,{type:'hello-ok'});
   assert.deepEqual(s.sent,['{"type":"hello","n":1}']);
   assert.deepEqual(s.calls,['host']);
   assert.equal(s.scope.__shellBluetooth,s.idle,'the page handler is back');
-  assert.equal(c.room,null);
 });
 
 test('guest: a refused start, a bad line and a lost link end with a reason',()=>{
@@ -89,7 +88,7 @@ test('leave disconnects once and stays quiet; devices and status are checked',()
 });
 
 // The Android template: secure RFCOMM to paired devices, connect permission
-// only, the bridge registered under the name the page looks for.
+// only (no network), the bridge registered under the name the page looks for.
 test('Android template: Bluetooth permissions and bridge',()=>{
   const base='base/templates/android/app/src/main/';
   const manifest=readFileSync(new URL('../'+base+'AndroidManifest.xml',import.meta.url),'utf8');
@@ -101,7 +100,7 @@ test('Android template: Bluetooth permissions and bridge',()=>{
   assert.match(manifest,/android\.permission\.BLUETOOTH" android:maxSdkVersion="30"/);
   assert.match(manifest,/android\.hardware\.bluetooth" android:required="false"/);
   assert.match(manifest,/android:usesCleartextTraffic="false"/);
-  for(const absent of ['BLUETOOTH_SCAN','BLUETOOTH_ADVERTISE','LOCATION'])
+  for(const absent of ['INTERNET','BLUETOOTH_SCAN','BLUETOOTH_ADVERTISE','LOCATION'])
     assert.doesNotMatch(manifest,new RegExp(absent));
   assert.match(line,/listenUsingRfcommWithServiceRecord/);
   assert.match(line,/createRfcommSocketToServiceRecord/);
