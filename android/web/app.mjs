@@ -35,6 +35,10 @@ let game={credits:0,readyToStart:false,inGame:false};
 // browser; `current` is what the running session plays with (a loaded
 // checkpoint keeps the options it was saved with).
 const OPTIONS_KEY='gng-options';
+// Controls preferences: applied at once, never part of a game's options.
+const AUTOFIRE_KEY='gng-autofire';
+let autofire=false;
+try{autofire=localStorage.getItem(AUTOFIRE_KEY)==='1';}catch{}
 const optionsDialog=document.getElementById('options');
 const optionsForm=document.getElementById('options-form');
 const optionsButton=document.getElementById('options-open');
@@ -148,6 +152,9 @@ async function loadCheckpoint(){
   }
 }
 const controls=createTouchControls((ports,held,pulse)=>{
+  // The fingers alone, change by change, for the engine's per-frame shaping
+  // (src/ao_input_shaper.mjs); the taps stay in `ports`.
+  worker?.postMessage({type:'engine',message:{type:'p1',value:ports[1]|pulse[1]}});
   worker?.postMessage({type:'ports',ports,pulse});
   for(const button of buttons){
     const active=held.includes(button.dataset.hold??button.dataset.pulse);
@@ -539,6 +546,7 @@ function start(checkpoint=null,net=null){
       case 'audio-clock-lost':log('AO_AUDIO_CLOCK_LOST',data);break;
       case 'ready':
         log('AO_READY',data);current=data.options??null;
+        toEngine({type:'p1-repeat',fire:autofire});
         if(online&&data.net){
           online.ready=true;
           for(const m of online.inbox.splice(0))toEngine({type:'net',m});
@@ -566,6 +574,39 @@ function start(checkpoint=null,net=null){
   };
 }
 
+// Fire and Jump answer in the whole zone around them: the nearer button
+// takes the finger, and a finger that slides to the other one changes button.
+const actionZone=document.getElementById('button-stack');
+const actionButtons=[...actionZone.querySelectorAll('[data-hold]')];
+const ACTION_KEEP=14; // px the held button keeps past the middle
+const actionFingers=new Map(); // pointerId -> button
+function actionAt(e,current){
+  let best=null,nearest=Infinity;
+  for(const button of actionButtons){
+    const r=button.getBoundingClientRect();
+    const d=Math.hypot(Math.max(r.left-e.clientX,0,e.clientX-r.right),
+      Math.max(r.top-e.clientY,0,e.clientY-r.bottom))-(button===current?ACTION_KEEP:0);
+    if(d<nearest){nearest=d;best=button;}
+  }
+  return best;
+}
+function actionMove(e,current){
+  const button=actionAt(e,current);
+  if(button===current||button.disabled)return;
+  actionFingers.set(e.pointerId,button);
+  controls.hold(e.pointerId,button.dataset.hold);
+}
+actionZone.addEventListener('pointerdown',e=>{
+  if(e.button!==0||actionFingers.has(e.pointerId))return;
+  e.preventDefault();
+  actionZone.setPointerCapture(e.pointerId);
+  actionMove(e,null);
+});
+actionZone.addEventListener('pointermove',e=>{
+  if(actionFingers.has(e.pointerId))actionMove(e,actionFingers.get(e.pointerId));
+});
+for(const event of ['pointerup','pointercancel','lostpointercapture'])
+  actionZone.addEventListener(event,e=>actionFingers.delete(e.pointerId));
 document.getElementById('layout').addEventListener('pointerdown',e=>{
   const button=e.target.closest('[data-hold],[data-pulse]');
   if(!button||button.disabled||e.button!==0)return;
@@ -642,6 +683,7 @@ function openOptions(){
   releaseAll();
   for(const [name,value] of Object.entries(chosen))
     optionsForm.elements[name].value=String(value);
+  optionsForm.elements.autofire.value=autofire?'1':'0';
   document.getElementById('options-current').textContent=
     current?'Partida actual: '+describeOptions(current):'';
   optionsDialog.hidden=false;
@@ -651,6 +693,14 @@ function closeOptions(){optionsDialog.hidden=true;optionsButton.focus();}
 optionsButton.addEventListener('click',openOptions);
 document.getElementById('options-cancel').addEventListener('click',closeOptions);
 optionsDialog.addEventListener('click',e=>{if(e.target===optionsDialog)closeOptions();});
+optionsForm.addEventListener('change',e=>{
+  if(e.target.name!=='autofire')return;
+  autofire=e.target.value==='1';
+  try{localStorage.setItem(AUTOFIRE_KEY,autofire?'1':'0');}
+  catch(err){log('AO_OPTIONS_NOT_STORED',{message:String(err?.message??err)});}
+  log('AO_AUTOFIRE',{autofire});
+  toEngine({type:'p1-repeat',fire:autofire});
+});
 optionsForm.addEventListener('submit',e=>{
   e.preventDefault();
   const f=optionsForm.elements;

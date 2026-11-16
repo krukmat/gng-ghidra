@@ -68,11 +68,13 @@
   #result-again{border-color:#6d5c9b;color:#cdbdf5}
   #result-again[hidden]{display:none}
   #result button{min-height:38px;padding:4px 22px;font-size:12px;border-radius:10px}
-  #button-stack{position:absolute;left:max(12px,env(safe-area-inset-left));
-    bottom:max(12px,env(safe-area-inset-bottom));display:flex;flex-direction:column;
-    gap:8px;width:clamp(76px,10vw,96px);background:transparent}
-  #button-stack button{min-height:clamp(46px,13dvh,58px);padding:6px;
-    border-radius:12px;font-size:13px;backdrop-filter:none}
+  /* Fire and Jump: the whole zone answers, for the nearer button (app.mjs). */
+  #button-stack{position:absolute;left:0;bottom:0;display:flex;flex-direction:column;
+    justify-content:flex-end;gap:10px;width:clamp(150px,26vw,250px);height:64dvh;
+    padding:0 0 max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+    touch-action:none;background:transparent}
+  #button-stack button{width:clamp(96px,13vw,124px);min-height:clamp(58px,17dvh,76px);
+    padding:6px;border-radius:14px;font-size:14px;backdrop-filter:none;pointer-events:none}
   #attack{border-color:#c08558b3;background:#39291e55}
   #jump{border-color:#5e9eabb3;background:#1c303755}
   #button-stack button.held{background:#285c6199;border-color:#87e1c9;color:#fff}
@@ -206,9 +208,16 @@
       <label><input type="radio" name="enemyPace" value="75"><span>75 %</span></label>
       <label><input type="radio" name="enemyPace" value="50"><span>50 %</span></label>
     </div>
-    <p>La velocidad de enemigos es una ayuda que el original no tiene: los
-      enemigos van más lentos y Arthur se mueve igual. Las opciones se aplican al
-      reiniciar; una partida cargada sigue con las suyas.</p>
+    <div class="opt" role="radiogroup" aria-labelledby="o-autofire">
+      <span class="opt-name" id="o-autofire">Disparo sostenido</span>
+      <label><input type="radio" name="autofire" value="0"><span>No</span></label>
+      <label><input type="radio" name="autofire" value="1"><span>Sí</span></label>
+    </div>
+    <p>La velocidad de enemigos y el disparo sostenido son ayudas que el original
+      no tiene: los enemigos van más lentos y Arthur se mueve igual; con el botón
+      apretado, Arthur sigue disparando. El disparo sostenido se aplica al
+      instante; las demás opciones, al reiniciar, y una partida cargada sigue con
+      las suyas.</p>
     <p id="options-current"></p>
     <div id="options-actions">
       <button type="button" id="options-cancel">Cancelar</button>

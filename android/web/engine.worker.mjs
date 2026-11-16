@@ -10,6 +10,10 @@
  * `net` ({role: 'host'|'guest'}) plays a two-player game over a link
  * (src/netplay_turns.mjs): from reset only, without saves; session messages
  * go out as engine messages {type:'net', m} and come in the same way.
+ * The P1 port is read through the input shaper (src/ao_input_shaper.mjs,
+ * numbers in games/gngb/inputs.mjs): the page sends its fingers as engine
+ * messages {type:'p1', value} and {type:'p1-repeat', fire}; Coin, Start and
+ * Continue taps stay in the host's `ports`.
  */
 import {startEngineWorker} from './base/src/host/web/engine-worker.mjs';
 import {GNG_WEB_HOST} from './boards/gng/web-host-config.mjs';
@@ -22,11 +26,12 @@ async function bytes(name){
 async function createGngEngine({checkpoint:checkpointText,ports,sink,options:chosen,net}){
   const [{blocks},{createBoard},{gngCode},
     {renderGngbRgba},
-    {rendererInputs},{rendererUnknownCount},{INPUT_DEFAULTS},
+    {rendererInputs},{rendererUnknownCount},{INPUT_DEFAULTS,INPUT_CONTROLS},
     {unpackGfx},{createPortReadWitness},{observeGameState},
     {encodeCheckpoint,decodeCheckpoint},{createPortRecorder},
     {gameOptions,optionDips,withEnemyPace},
-    {createTurnSession},{createGngTurnRule}]=await Promise.all([
+    {createTurnSession},{createGngTurnRule},
+    {createInputShaper},{p1Shaper,P1_SHAPING}]=await Promise.all([
     import('./bundle/program.mjs'),import('./boards/gng/runtime.mjs'),
     import('./boards/gng/bundle.mjs'),
     import('./lib/gngb_frame_renderer.mjs'),import('./lib/gngb_render_inputs.mjs'),
@@ -34,7 +39,8 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
     import('./lib/ao_web_assets.mjs'),import('./lib/v3_b2c_port_witness.mjs'),
     import('./games/gngb/state.mjs'),import('./lib/checkpoint_format.mjs'),
     import('./lib/v3_b3_live_tape.mjs'),import('./games/gngb/options.mjs'),
-    import('./lib/netplay_turns.mjs'),import('./games/gngb/netplay.mjs')]);
+    import('./lib/netplay_turns.mjs'),import('./games/gngb/netplay.mjs'),
+    import('./lib/ao_input_shaper.mjs'),import('./games/gngb/inputs.mjs')]);
   const res=await fetch('bundle/manifest.json');
   if(!res.ok)throw Error('AO_FETCH_'+res.status+' manifest');
   const manifest=await res.json();
@@ -57,9 +63,13 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
   const session=net?createTurnSession({role:net.role,ownerAfter:createGngTurnRule(),
     defaults:INPUT_DEFAULTS.slice(0,3),send:m=>sink.post({type:'net',m}),
     onEvent:event=>sink.post({type:'net-event',event})}):null;
+  // Our controls: P1 as shaped for this frame once the page reports fingers.
+  const shaper=createInputShaper(p1Shaper(INPUT_CONTROLS,INPUT_DEFAULTS[1]));
+  let p1=INPUT_DEFAULTS[1];
+  const own=addr=>addr===0x3001&&shaper.active?p1:ports[addr-0x3000];
   // In a session the frames the peer owns read its stream, not our controls.
-  const portRead=session?(addr,cycle)=>session.owns()?ports[addr-0x3000]:
-    session.read(addr-0x3000,cycle):addr=>ports[addr-0x3000];
+  const portRead=session?(addr,cycle)=>session.owns()?own(addr):
+    session.read(addr-0x3000,cycle):own;
   const witness=createPortReadWitness();
   const readPorts=new Uint8Array(3).fill(255);
   let last=null,stateKey=null,gameState=null;
@@ -96,6 +106,8 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
       // A frame the peer has not sent yet (or a session that ended) waits.
       if(session&&!session.canRun(until))
         return {status:'WAIT',frame:cpu.state.records.length,cycle:cpu.state.C};
+      // A bit the host's tap latch presses and no finger holds stays pressed.
+      p1=shaper.frame()&(ports[1]|~shaper.raw)&0xff;
       const result=cpu.run(until);
       if(session&&result?.status==='FRAMES_DONE'){
         // Drained when run returns: every read of this frame is in it.
@@ -109,6 +121,9 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
     message(m){
       if(m?.type==='net')session?.receive(m.m);
       else if(m?.type==='net-leave')session?.leave();
+      else if(m?.type==='p1')shaper.push(m.value&0xff);
+      else if(m?.type==='p1-repeat')
+        shaper.setRepeat(INPUT_CONTROLS[P1_SHAPING.fire.control].bit,m.fire);
     },
     render:frame=>renderGngbRgba(rendererInputs(frame.record,
       {scroll:frame.scroll,latch:frame.latch},gfx)),

@@ -27,3 +27,19 @@ export function fourWayConflict(pressed){
   return FOUR_WAY_PLAYERS.some(player=>
     DIRECTIONS.filter(d=>pressed.has(player+'.'+d)).length>1);
 }
+
+/** How the P1 buttons must reach the ROM (src/ao_input_shaper.mjs), measured
+ * on the frozen program in play, stage 1 (2026-11-16): a press read in one
+ * frame is enough for either button; a Fire press less than 10 frames after
+ * the previous one is ignored, not kept; Jump with a direction first read in
+ * that same frame jumps straight up, one frame later it jumps that way. */
+export const P1_SHAPING=Object.freeze({directionFrames:3,
+  fire:Object.freeze({control:'p1.button1',frames:2,every:10}),
+  jump:Object.freeze({control:'p1.button2',frames:2,afterDirection:1})});
+/** Shaper configuration from the board's controls ({port, bit} by name). */
+export function p1Shaper(controls,idle){
+  const bit=name=>controls[name].bit;
+  return {idle,directionFrames:P1_SHAPING.directionFrames,
+    directions:DIRECTIONS.reduce((m,d)=>m|bit('p1.'+d),0),
+    buttons:[P1_SHAPING.fire,P1_SHAPING.jump].map(b=>({...b,bit:bit(b.control)}))};
+}

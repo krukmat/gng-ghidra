@@ -3,7 +3,8 @@
  * (adb input motionevent) on the installed APK. Coin, Start, run right,
  * raise the thumb ~20 px into the jump diagonal, back to running, release.
  * The CPU's own port reads (?inputCheck probes) must show Right, then
- * Right+Jump, then Right, then neutral; screenshots show the jump.
+ * Right+Jump, then Right, then neutral; screenshots show the jump. Then six
+ * OS taps on Jump and six on Fire must each be read for two frames.
  * Usage: node scripts/ao_stick_android_check.mjs [adb serial]
  */
 import assert from 'node:assert/strict';
@@ -113,6 +114,18 @@ try{
   const rest=await until(p=>p.reads[1]===NEUTRAL,'released');
   report.steps.push({step:'released',frame:rest.frame,p1:rest.reads[1]});
   report.jumpReads=jump.witness.activeSamples['p1.button2'];
+  // OS taps (down and up together) on Jump and Fire: the input shaper keeps
+  // each one for its two frames, also when both arrive between two bursts.
+  const TAPS=6,before=latest().witness.activeSamples;
+  for(const id of ['jump','attack'])
+    for(let k=0;k<TAPS;k++){await tap(id);await page.waitForTimeout(400);}
+  const mark=latest().frame;
+  const tapped=await until(p=>p.frame>mark+60,'taps read');
+  const reads=key=>tapped.witness.activeSamples[key]-before[key];
+  report.taps={each:TAPS,jumpReads:reads('p1.button2'),fireReads:reads('p1.button1')};
+  report.steps.push({step:'taps',...report.taps});
+  assert.ok(report.taps.jumpReads>=2*TAPS&&report.taps.fireReads>=2*TAPS,
+    'taps lost '+JSON.stringify(report.taps));
   report.status='PASS';
 }catch(e){report.status='STOP';report.error=String(e?.stack??e).slice(0,1200);}
 finally{
