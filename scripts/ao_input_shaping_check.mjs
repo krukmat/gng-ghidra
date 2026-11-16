@@ -50,8 +50,6 @@ try{
   };
   const centre=b=>[b.x+b.width/2,b.y+b.height/2];
   await page.goto('http://127.0.0.1:'+server.address().port+'/index.html?inputCheck=1');
-  await page.waitForFunction(()=>!document.getElementById('coin').disabled);
-  await page.locator('#coin').tap();
   await page.waitForFunction(()=>!document.getElementById('start').disabled);
   await page.locator('#start').tap();
   await page.waitForFunction(()=>!document.getElementById('attack').disabled);

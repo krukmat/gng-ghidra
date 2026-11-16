@@ -7,9 +7,9 @@ import {encodeCheckpoint,CYCLES_PER_FRAME,SAMPLES_PER_FRAME}
   from '../src/checkpoint_format.mjs';
 import {INPUT_CONTROLS} from '../src/gngb_input_contract.mjs';
 
-test('keys of the retired desktop route, no modifiers, own keys only',()=>{
-  assert.deepEqual(keyAction({code:'Digit5'}),{pulse:'coin1'});
-  assert.deepEqual(keyAction({code:'Digit1'}),{pulse:'start1'});
+test('play without coin keys, no modifiers, own keys only',()=>{
+  assert.equal(keyAction({code:'Digit5'}),null);
+  assert.deepEqual(keyAction({code:'Digit1'}),{command:'play'});
   assert.deepEqual(keyAction({code:'KeyZ'}),{hold:'p1.button1'});
   assert.deepEqual(keyAction({code:'KeyT'}),{command:'tape'});
   for(const mod of ['ctrlKey','metaKey','altKey'])

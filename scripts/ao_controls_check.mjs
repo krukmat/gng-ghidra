@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /** Private AO-4 check. Build assets first; Chromium stays headless.
  * Real touch events -> worker messages -> real MC6809 reads.
- * Five cold boots must accept Coin then Start; Start without Coin must fail.
- * Add --gameover to wait for a real loss and verify Coin + Continue.
- * Then the desktop keyboard after Reiniciar: 5 Coin, 1 Start, arrows and Z
+ * Five cold boots must accept Jugar without a visible coin control.
+ * Add --gameover to wait for a real loss and verify free Continue.
+ * Then the desktop keyboard after Reiniciar: 1 Jugar, arrows and Z
  * read by the CPU, and T exports the session tape (out/android/check) with
  * the record hash of its frame.
  */
@@ -70,34 +70,31 @@ try{
     if(trial===1)await page.goto('http://127.0.0.1:'+server.address().port+
       '/index.html?inputCheck=1');
     else await page.locator('#restart').tap();
-    await page.waitForFunction(()=>!document.getElementById('coin').disabled);
+    await page.waitForFunction(()=>!document.getElementById('start').disabled);
     assert.equal(await page.locator('#system-controls').isVisible(),true);
     assert.equal(await page.locator('#sound').textContent(),'Sonido OFF');
     let baseline=await until(p=>p.frame>=320);
     assert.equal(baseline.ram2,0);assert.equal(baseline.ram23,0);
     if(trial===1){
-      assert.equal(await page.locator('#start').isDisabled(),true);
+      assert.equal(await page.locator('#coin').count(),0);
+      await page.keyboard.press('Digit5');
       const negative=await until(p=>p.frame>baseline.frame+90);
-      assert.equal(negative.ram2,0,'Start without Coin must not start a game');
+      assert.equal(negative.ram23,0,'the retired Coin key cannot add credits');
       assert.equal(negative.witness.activeSamples.start1,0);
-      report.startWithoutCoin='PREVENTED';baseline=negative;
+      report.coinControl='REMOVED';baseline=negative;
       await page.screenshot({path:join(CHECK,'ao4-menu.png')});
     }
-    await page.locator('#coin').tap();
-    const coin=await until(p=>p.frame>baseline.frame&&p.ram23===1);
-    const coinReads=coin.witness.activeSamples.coin1;
-    assert.ok(coinReads>0&&coinReads<=12,'Coin active reads='+coinReads);
-    await page.waitForFunction(()=>!document.getElementById('start').disabled);
     await page.locator('#start').tap();
-    const started=await until(p=>p.frame>coin.frame&&p.ram2>=2&&p.ram23===0);
+    const started=await until(p=>p.frame>baseline.frame&&p.ram2>=2&&p.ram23===0);
+    const coinReads=started.witness.activeSamples.coin1;
+    assert.ok(coinReads>0&&coinReads<=12,'automatic Coin active reads='+coinReads);
     assert.ok(started.witness.activeSamples.start1>0);
     assert.equal(await page.locator('#system-controls').isVisible(),false);
-    assert.equal(await page.locator('#coin').isDisabled(),true);
     assert.equal(await page.locator('#start').isDisabled(),true);
-    report.coinStartDuringGame='HIDDEN_AND_DISABLED';
+    report.playDuringGame='HIDDEN_AND_DISABLED';
     assert.equal(await page.locator('#sound').isVisible(),true);
     report.soundControl='PREPARED_DISABLED';
-    report.trials.push({trial,coinReads,coinCounter:coin.ram23,
+    report.trials.push({trial,coinReads,
       startedFrame:started.frame,gameMode:started.ram2});
     console.log('AO4_TRIAL='+trial+' PASS coinReads='+coinReads);
     if(trial!==1)continue;
@@ -161,18 +158,14 @@ try{
     await page.screenshot({path:join(CHECK,'ao4-controls-compact.png')});
     await page.setViewportSize({width:900,height:400});
     if(checkGameOver){
-      const ended=await until(p=>p.frame>preview.frame&&p.gameState.gameOver,90000);
+      const ended=await until(p=>p.frame>preview.frame&&p.gameState.canContinue,90000);
       assert.equal(await page.locator('#system-controls').isVisible(),true);
-      assert.equal(await page.locator('#coin').isDisabled(),false);
-      assert.equal(await page.locator('#start').isDisabled(),true);
+      assert.equal(await page.locator('#start').isDisabled(),false);
       await page.screenshot({path:join(CHECK,'ao4-game-over.png')});
-      await page.locator('#coin').tap();
-      const credited=await until(p=>p.frame>ended.frame&&p.gameState.credits===1);
-      await page.waitForFunction(()=>!document.getElementById('start').disabled);
       assert.equal(await page.locator('#start').textContent(),'Continuar');
       await page.screenshot({path:join(CHECK,'ao4-continue.png')});
       await page.locator('#start').tap();
-      const resumed=await until(p=>p.frame>credited.frame&&p.ram2===2&&p.ram5===1&&
+      const resumed=await until(p=>p.frame>ended.frame&&p.ram2===2&&p.ram5===1&&
         p.gameState.credits===0&&p.gameState.inGame);
       const delta=key=>resumed.witness.activeSamples[key]-ended.witness.activeSamples[key];
       assert.ok(delta('coin1')>0&&delta('coin1')<=12);
@@ -187,17 +180,14 @@ try{
   }
   await page.locator('#restart').tap();
   await page.waitForFunction(()=>!document.getElementById('system-controls').hidden&&
-    document.getElementById('coin').disabled);
+    document.getElementById('start').disabled);
   report.restartReturnsToMenu='PASS';
   // Keyboard: the same controls; a held key is one more finger.
   probes.length=0;
-  await page.waitForFunction(()=>!document.getElementById('coin').disabled);
-  const kbBase=await until(p=>p.frame>=320);
-  await page.keyboard.press('Digit5');
-  const kbCoin=await until(p=>p.frame>kbBase.frame&&p.ram23===1);
   await page.waitForFunction(()=>!document.getElementById('start').disabled);
+  const kbBase=await until(p=>p.frame>=320);
   await page.keyboard.press('Digit1');
-  const kbStart=await until(p=>p.frame>kbCoin.frame&&p.ram2>=2&&p.ram23===0);
+  const kbStart=await until(p=>p.frame>kbBase.frame&&p.ram2>=2&&p.ram23===0);
   await page.keyboard.down('ArrowRight');await page.keyboard.down('KeyZ');
   const kbHeld=await until(p=>p.frame>kbStart.frame&&p.reads[1]===0xee);
   await page.keyboard.down('ArrowUp'); // 4-way: refused while Right is held
@@ -216,7 +206,7 @@ try{
   // Record hash of the export frame, checked by a lab replay (h3_explore import).
   assert.equal(tape.check?.frame,tape.frame);
   assert.match(tape.check.record_sha256,/^[0-9a-f]{64}$/);
-  report.keyboard={status:'PASS',coinReads:kbCoin.witness.activeSamples.coin1,
+  report.keyboard={status:'PASS',coinReads:kbStart.witness.activeSamples.coin1,
     startedFrame:kbStart.frame,heldP1:kbHeld.reads[1],tapeFrame:tape.frame,
     tapeChanges:tape.changes.length,tape:'out/android/check/ao4-tape.json'};
   console.log('AO4_KEYBOARD=PASS tape_frame='+tape.frame);

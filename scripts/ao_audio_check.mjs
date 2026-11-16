@@ -45,8 +45,7 @@ const enabled=id=>page.waitForFunction(id=>!document.getElementById(id).disabled
   id,{timeout:30000});
 const tapSound=async()=>{await page.tap('#sound');await page.waitForTimeout(300);};
 const soundLabel=()=>page.textContent('#sound');
-async function coinStart(){
-  await enabled('coin');await page.tap('#coin');
+async function startGame(){
   await enabled('start');await page.tap('#start');
   await page.waitForFunction(()=>document.getElementById('system-controls').hidden,
     null,{timeout:30000});
@@ -118,7 +117,7 @@ try{
   await enabled('sound');
 
   // Producer runs with Sound OFF; nothing reaches the worklet yet.
-  await coinStart();
+  await startGame();
   await phase('offInGame',10,{playing:false});
   const p=report.phases.offInGame.producer;
   assert.ok(p.nonzeroSamples>0&&p.sentSamples===0,'producer while OFF');
@@ -185,7 +184,7 @@ try{
   await until((l,i)=>l.tag==='AO_AUDIO_READY'&&logs.indexOf(l)>=mark,'ready after restart');
   const restarted=of('AO_AUDIO_SESSION',since(mark));
   assert.equal(restarted.length,1);
-  await coinStart();
+  await startGame();
   await page.waitForTimeout(2000);
   await phase('steady',STEADY);
   report.restartSession=restarted[0].sessionId;

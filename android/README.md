@@ -8,7 +8,7 @@ El módulo `:app` es la plantilla genérica de la base. `settings.gradle.kts` lo
 | --- | --- | --- |
 | `SHELL_APP_ID` | `org.gng.offline` | ID del paquete instalado |
 | `SHELL_APP_LABEL` | `Ghosts'n Goblins` | Etiqueta visible |
-| `SHELL_VERSION_CODE`, `SHELL_VERSION_NAME` | `8`, `0.7.0` | Versión |
+| `SHELL_VERSION_CODE`, `SHELL_VERSION_NAME` | `10`, `0.9.0` | Versión |
 | `SHELL_ASSETS_DIR` | `../out/android/assets` | Carpeta local de assets web, relativa a `android/` |
 
 `scripts/ao_build_apk.sh` traduce las variables de entorno `AO_APP_ID`, `AO_APP_LABEL` y `AO_ASSETS_DIR` a esas propiedades.

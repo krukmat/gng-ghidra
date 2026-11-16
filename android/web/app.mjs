@@ -4,8 +4,10 @@ import {createTouchControls} from './lib/ao_touch_controls.mjs';
 import {followBase,knobOffset,stickSector} from './lib/ao_stick.mjs';
 import {keyAction} from './lib/ao_keyboard.mjs';
 import {checkedCheckpointTape} from './lib/v3_b3_live_tape.mjs';
-import {DEFAULT_OPTIONS,gameOptions} from './games/gngb/options.mjs';
+import {DEFAULT_OPTIONS,gameOptions,difficultyOptions,difficultyLevel}
+  from './games/gngb/options.mjs';
 import {createMatchTracker} from './lib/ao_match.mjs';
+import {createPlayStarter} from './lib/ao_play.mjs';
 import {bluetoothBridge,bluetoothStatus,pairedDevices,createBluetoothClient}
   from './lib/net_bluetooth_client.mjs';
 import {NET_PROTOCOL} from './lib/netplay_turns.mjs';
@@ -42,16 +44,20 @@ try{autofire=localStorage.getItem(AUTOFIRE_KEY)==='1';}catch{}
 const optionsDialog=document.getElementById('options');
 const optionsForm=document.getElementById('options-form');
 const optionsButton=document.getElementById('options-open');
-const DIFFICULTY_NAMES={easy:'Fácil',normal:'Normal',hard:'Difícil',hardest:'Muy difícil'};
-const describeOptions=o=>DIFFICULTY_NAMES[o.difficulty]+' · '+o.lives+' vidas · enemigos '+
-  o.enemyPace+' %';
+const DIFFICULTY_NAMES={easiest:'Muy fácil',easy:'Fácil',normal:'Normal',
+  hard:'Difícil',hardest:'Muy difícil'};
+const describeOptions=o=>(DIFFICULTY_NAMES[difficultyLevel(o)]??'Personalizada')+
+  ' · '+o.lives+' vidas';
 const defaultOptions=o=>Object.keys(DEFAULT_OPTIONS).every(k=>o[k]===DEFAULT_OPTIONS[k]);
 let chosen=storedOptions(),current=null;
 // Two players alternate on the same controls (games/gngb/state.mjs).
 const twoButton=document.getElementById('two-players');
 const turnBanner=document.getElementById('turn'),resultBox=document.getElementById('result');
 const match=createMatchTracker();
-let twoPending=null,turnTimer=null; // since when 2 Jugadores waits for credits
+let turnTimer=null;
+const playStarter=createPlayStarter({pulse:key=>controls.pulse(key),
+  onChange:()=>{enable(playable);updateHint();},
+  onTimeout:()=>log('AO_PLAY_TIMEOUT',game)});
 // Two phones over Bluetooth (net_bluetooth_client.mjs: the Android shell's
 // link to a phone paired in Settings) play by turns (netplay_turns.mjs, in
 // the engine worker). The host is Jugador 1 and its options rule; both check
@@ -77,7 +83,10 @@ const REFUSED={protocol:'Los dos teléfonos tienen versiones distintas de la app
   program:'Los dos teléfonos tienen versiones distintas del juego.',
   options:'Las opciones de juego del Jugador 1 no son válidas.'};
 function storedOptions(){
-  try{return gameOptions(JSON.parse(localStorage.getItem(OPTIONS_KEY)));}
+  try{
+    const o=gameOptions(JSON.parse(localStorage.getItem(OPTIONS_KEY)));
+    return difficultyOptions(difficultyLevel(o)??o.difficulty,{lives:o.lives});
+  }
   catch{return gameOptions();}
 }
 // One quick-save checkpoint (gng.checkpoint.v1) in IndexedDB; the engine
@@ -219,27 +228,22 @@ function enable(value){
   zone.classList.toggle('disabled',!active);
   if(!active)restStick();
   for(const button of buttons)button.disabled=!active||
-    (button.dataset.pulse&&(game.inGame||netPlaying()))||
-    (button.dataset.pulse==='start1'&&!game.readyToStart);
-  twoButton.disabled=!value||online!==null||game.mode!==1||twoPending!==null;
-  againButton.disabled=!active||game.mode!==1||twoPending!==null;
+    (button.dataset.pulse&&(game.inGame||playStarter.busy))||
+    (button.dataset.pulse==='start1'&&
+      !(game.mode===0||game.mode===1||game.canContinue))||
+    (button.dataset.pulse&&netPlaying()&&!game.canContinue);
+  twoButton.disabled=!value||online!==null||
+    !(game.mode===0||game.mode===1)||playStarter.busy;
+  againButton.disabled=!active||game.mode!==1||playStarter.busy;
   updateCheckpoint();
 }
-// 2 Jugadores: the coins still missing for two credits, then Start 2 once the
-// title counts them. Online the host does it by itself at the title.
+// The same credit/start sequence for one player, two players and Continue.
+// Online the host starts two players automatically at the title.
+function startOnePlayer(){if(!startButton.disabled)playStarter.request(game);}
 function startTwoPlayers(){if(!twoButton.disabled)beginTwoPlayers();}
 function beginTwoPlayers(){
   resultBox.hidden=true;
-  for(let i=game.credits;i<2;i++)controls.pulse('coin1');
-  twoPending=performance.now();enable(playable);checkTwoPlayers();
-  setTimeout(()=>{checkTwoPlayers();enable(playable);},5100);
-}
-function checkTwoPlayers(){
-  if(twoPending===null)return;
-  if(game.mode===1&&game.credits>=2){twoPending=null;controls.pulse('start2');}
-  else if(performance.now()-twoPending>=5000){
-    twoPending=null;log('AO_TWO_PLAYERS_TIMEOUT',game);
-  }
+  playStarter.request(game,2);
 }
 function showTurn(player,first){
   clearTimeout(turnTimer);
@@ -267,22 +271,24 @@ function matchEvents(state){
   }
 }
 function updateHint(){
-  systemControls.hidden=game.inGame||netPlaying();
+  systemControls.hidden=game.inGame||netPlaying()&&!game.canContinue;
+  twoButton.hidden=netPlaying();
   hint.hidden=game.inGame;
-  startButton.textContent=game.canContinue?'Continuar':'Start';
+  startButton.textContent=game.canContinue?'Continuar':'Jugar';
   hint.textContent=!playable?'Cargando el juego…':netPlaying()?
-    'Bluetooth · Jugador '+myPlayer()+'\n'+(online.role==='host'?
-      'La partida empieza sola':'El Jugador 1 empieza la partida'):game.inGame?
-    'Tocá y mantené los controles':game.readyToStart?
-    (game.canContinue?'2 · Continuar':'2 · Start'):
-    game.credits>0?'Moneda lista · un momento…':'1 · Moneda     2 · Start';
+    'Bluetooth · Jugador '+myPlayer()+'\n'+(game.canContinue?
+      (online.owner===online.role?'Tocá Continuar para seguir':'El otro jugador puede continuar'):
+      online.role==='host'?'La partida empieza sola':'El Jugador 1 empieza la partida'):
+    playStarter.busy?'Preparando la partida…':game.inGame?
+    'Tocá y mantené los controles':game.canContinue?'Tocá Continuar para seguir':
+    game.mode===0||game.mode===1?'Tocá Jugar para empezar':'Un momento…';
   if(playable&&current&&!defaultOptions(current))
     hint.textContent+='\n'+describeOptions(current);
   optionsButton.classList.toggle('custom',current!==null&&!defaultOptions(current));
   optionsButton.title=current?describeOptions(current):'Opciones de juego';
 }
 function stop(message){
-  enable(false);halt.textContent=message;halt.hidden=false;
+  enable(false);playStarter.cancel();halt.textContent=message;halt.hidden=false;
   hint.hidden=false;
   hint.textContent='Tocá Reiniciar para volver a empezar.';
 }
@@ -487,7 +493,11 @@ function engineMessage(m){
   if(m?.type==='net')online?.client.send({type:'net',m:m.m});
   else if(m?.type==='net-event'&&netPlaying()){
     const e=m.event;
-    if(e.type==='owner'){online.owner=e.owner;enable(playable);}
+    if(e.type==='owner'){
+      online.owner=e.owner;
+      if(e.owner!==online.role)playStarter.cancel();
+      enable(playable);updateHint();
+    }
     else if(e.type==='end'){log('AO_NET_END',e);endOnline(ENDED[e.reason]??'');}
   }
 }
@@ -514,9 +524,9 @@ function closeOnline(){onlineDialog.hidden=true;onlineButton.focus();}
 // saved text or null for the reset vector; net {role, options} plays online.
 function start(checkpoint=null,net=null){
   if(ckSaving!==null){clearTimeout(ckSaving);ckSaving=null;}
-  enable(false);closeSession();worker?.terminate();
+  enable(false);playStarter.cancel();closeSession();worker?.terminate();
   game={credits:0,readyToStart:false,inGame:false};current=null;
-  match.reset();twoPending=null;clearTimeout(turnTimer);
+  match.reset();clearTimeout(turnTimer);
   turnBanner.hidden=true;resultBox.hidden=true;
   pending=null;drawn=0;ctx2d.clearRect(0,0,256,224);halt.hidden=true;
   updateHint();status.textContent='cargando…';
@@ -554,7 +564,7 @@ function start(checkpoint=null,net=null){
         updateHint();break;
       case 'engine':engineMessage(data.message);break;
       case 'game-state':
-        game=data;matchEvents(data);checkTwoPlayers();
+        game=data;matchEvents(data);playStarter.update(data);
         // Online the host puts the two credits in and starts, once.
         if(netPlaying()&&online.role==='host'&&!online.started&&game.mode===1){
           online.started=true;beginTwoPlayers();
@@ -615,9 +625,9 @@ document.getElementById('layout').addEventListener('pointerdown',e=>{
   button.setPointerCapture(e.pointerId);
   controls.hold(e.pointerId,button.dataset.hold);
 });
-const pulse=key=>controls.pulse(key==='start1'&&game.canContinue?'continue1':key);
+const pulse=key=>key==='start1'?startOnePlayer():controls.pulse(key);
 const release=e=>{if(e.pointerId!==stick?.id)controls.release(e.pointerId);};
-// A held key is one more finger; Coin and Start obey their buttons' state.
+// A held key is one more finger; Jugar / Continuar obeys its button's state.
 document.addEventListener('keydown',e=>{
   // A dialog keeps the keyboard; Escape closes it.
   if(!optionsDialog.hidden||!onlineDialog.hidden){
@@ -627,11 +637,9 @@ document.addEventListener('keydown',e=>{
   const action=keyAction(e);if(!action)return;
   e.preventDefault();if(e.repeat)return;
   if(action.hold)controls.hold('key:'+e.code,action.hold);
+  else if(action.command==='play')startOnePlayer();
   else if(online)return; // online: only the game controls
-  else if(action.pulse){
-    const button=buttons.find(b=>b.dataset.pulse===action.pulse);
-    if(!button.disabled)pulse(action.pulse);
-  }else if(action.command==='twoPlayers')startTwoPlayers();
+  else if(action.command==='twoPlayers')startTwoPlayers();
   else if(action.command==='save')saveCheckpoint();
   else if(action.command==='load')loadCheckpoint();
   else saveCheckpoint(true);
@@ -640,7 +648,7 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('keyup',e=>controls.release('key:'+e.code));
 for(const event of ['pointerup','pointercancel','lostpointercapture'])
   document.addEventListener(event,release);
-const releaseAll=()=>{restStick();controls.releaseAll();};
+const releaseAll=()=>{playStarter.cancel();restStick();controls.releaseAll();};
 window.addEventListener('blur',releaseAll);
 window.addEventListener('pagehide',releaseAll);
 document.addEventListener('visibilitychange',()=>{
@@ -681,8 +689,8 @@ document.getElementById('online-leave').addEventListener('click',()=>{
 onlineButton.hidden=!bluetoothUsable();
 function openOptions(){
   releaseAll();
-  for(const [name,value] of Object.entries(chosen))
-    optionsForm.elements[name].value=String(value);
+  optionsForm.elements.difficulty.value=difficultyLevel(chosen)??chosen.difficulty;
+  optionsForm.elements.lives.value=String(chosen.lives);
   optionsForm.elements.autofire.value=autofire?'1':'0';
   document.getElementById('options-current').textContent=
     current?'Partida actual: '+describeOptions(current):'';
@@ -704,8 +712,7 @@ optionsForm.addEventListener('change',e=>{
 optionsForm.addEventListener('submit',e=>{
   e.preventDefault();
   const f=optionsForm.elements;
-  chosen=gameOptions({difficulty:f.difficulty.value,lives:Number(f.lives.value),
-    enemyPace:Number(f.enemyPace.value)});
+  chosen=difficultyOptions(f.difficulty.value,{lives:Number(f.lives.value)});
   try{localStorage.setItem(OPTIONS_KEY,JSON.stringify(chosen));}
   catch(err){log('AO_OPTIONS_NOT_STORED',{message:String(err?.message??err)});}
   log('AO_OPTIONS',chosen);

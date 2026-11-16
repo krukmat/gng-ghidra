@@ -46,7 +46,6 @@
   #stick-zone.active #stick-knob{opacity:1}
   #stick-zone[data-dir] #stick-knob{background:#285c61cc;border-color:#87e1c9}
   #stick-zone[data-dir^="up-"] #stick-knob{background:#5c4a28cc;border-color:#f8d582}
-  #coin{border-color:#8d7845;color:#f8d582}
   #start{border-color:#5c9b8b;color:#a4ead6}
   #menu{display:flex;flex-direction:column;gap:10px;width:100%}
   #system-controls{display:flex;flex-wrap:wrap;gap:6px;width:100%}
@@ -159,14 +158,13 @@
   </div>
   <section class="side" aria-label="Dirección y opciones">
     <div id="menu">
-      <div id="system-controls" role="group" aria-label="Moneda e inicio">
-        <button id="coin" data-pulse="coin1" disabled>Moneda</button>
-        <button id="start" data-pulse="start1" disabled>Start</button>
+      <div id="system-controls" role="group" aria-label="Inicio de partida">
+        <button id="start" data-pulse="start1" disabled>Jugar</button>
         <button id="two-players" disabled
           title="Dos jugadores por turnos con los mismos controles">2 Jugadores</button>
       </div>
       <p id="hint">Cargando el juego…</p>
-      <p id="keys">Teclado: 5 moneda · 1 start · 2 dos jugadores · flechas · Z disparo · X salto ·
+      <p id="keys">Teclado: 1 jugar / continuar · 2 dos jugadores · flechas · Z disparo · X salto ·
         G guardar · C cargar · T cinta</p>
       <button id="sound" disabled aria-pressed="false"
         title="Preparando el sonido…">Sonido OFF</button>
@@ -190,32 +188,29 @@
     <h2 id="options-title">Opciones de juego</h2>
     <div class="opt" role="radiogroup" aria-labelledby="o-difficulty">
       <span class="opt-name" id="o-difficulty">Dificultad</span>
+      <label><input type="radio" name="difficulty" value="easiest"><span>Muy fácil</span></label>
       <label><input type="radio" name="difficulty" value="easy"><span>Fácil</span></label>
       <label><input type="radio" name="difficulty" value="normal"><span>Normal</span></label>
       <label><input type="radio" name="difficulty" value="hard"><span>Difícil</span></label>
       <label><input type="radio" name="difficulty" value="hardest"><span>Muy difícil</span></label>
     </div>
     <div class="opt" role="radiogroup" aria-labelledby="o-lives">
-      <span class="opt-name" id="o-lives">Vidas</span>
+      <span class="opt-name" id="o-lives">Vidas por intento</span>
       <label><input type="radio" name="lives" value="3"><span>3</span></label>
       <label><input type="radio" name="lives" value="4"><span>4</span></label>
       <label><input type="radio" name="lives" value="5"><span>5</span></label>
       <label><input type="radio" name="lives" value="7"><span>7</span></label>
-    </div>
-    <div class="opt" role="radiogroup" aria-labelledby="o-enemyPace">
-      <span class="opt-name" id="o-enemyPace">Velocidad de enemigos</span>
-      <label><input type="radio" name="enemyPace" value="100"><span>100 %</span></label>
-      <label><input type="radio" name="enemyPace" value="75"><span>75 %</span></label>
-      <label><input type="radio" name="enemyPace" value="50"><span>50 %</span></label>
     </div>
     <div class="opt" role="radiogroup" aria-labelledby="o-autofire">
       <span class="opt-name" id="o-autofire">Disparo sostenido</span>
       <label><input type="radio" name="autofire" value="0"><span>No</span></label>
       <label><input type="radio" name="autofire" value="1"><span>Sí</span></label>
     </div>
-    <p>La velocidad de enemigos y el disparo sostenido son ayudas que el original
-      no tiene: los enemigos van más lentos y Arthur se mueve igual; con el botón
-      apretado, Arthur sigue disparando. El disparo sostenido se aplica al
+    <p>En Fácil y Muy fácil, los enemigos también actúan más despacio.
+      Arthur mantiene su velocidad habitual. Jugar y Continuar son gratuitos;
+      cada intento empieza con las vidas elegidas. Normal conserva la dificultad
+      original. Con el disparo sostenido y el botón apretado, Arthur sigue
+      disparando. El disparo sostenido se aplica al
       instante; las demás opciones, al reiniciar, y una partida cargada sigue con
       las suyas.</p>
     <p id="options-current"></p>

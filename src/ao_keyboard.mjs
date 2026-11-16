@@ -1,10 +1,10 @@
 /** Desktop keyboard for the common app: the same holds and pulses as touch
  * (ao_touch_controls.mjs) plus checkpoint and tape commands. Keys are the
- * ones of the retired desktop route: 5 Coin, 1 Start, arrows, Z attack,
+ * 1 Jugar / Continuar, 2 two players, arrows, Z attack,
  * X jump, G save, C load; T exports the tape.
  */
 export const KEYS=Object.freeze({
-  Digit5:{pulse:'coin1'},Digit1:{pulse:'start1'},Digit2:{command:'twoPlayers'},
+  Digit1:{command:'play'},Digit2:{command:'twoPlayers'},
   ArrowUp:{hold:'p1.up'},ArrowDown:{hold:'p1.down'},
   ArrowLeft:{hold:'p1.left'},ArrowRight:{hold:'p1.right'},
   KeyZ:{hold:'p1.button1'},KeyX:{hold:'p1.button2'},

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Private Android checkpoint check. Build assets first; Chromium stays
  * headless (no window, no focus, no keyboard). Page = out/android/assets.
- * Coin, Start, Sound ON -> Guardar -> play -> Cargar -> fire -> Guardar.
+ * Jugar, Sound ON -> Guardar -> play -> Cargar -> fire -> Guardar.
  * PASS = both checkpoints (the one saved before the load and the one saved
  * after it) are exactly the state their tape reaches from reset: CPU, Z80
  * and YM bytes (WASM) identical; audio keeps PLAYING with no STOP, underrun
@@ -175,7 +175,6 @@ try{
   assert.ok(await page.$eval('#ck-load',b=>b.disabled),'no checkpoint yet');
   await enabled('sound');await press('#sound');
   await until(l=>l.tag==='AO_AUDIO_SESSION','session');
-  await enabled('coin');await press('#coin');
   await enabled('start');await press('#start');
   await page.waitForFunction(()=>document.getElementById('system-controls').hidden,
     null,{timeout:30000});

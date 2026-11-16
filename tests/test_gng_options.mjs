@@ -1,7 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DIP_DEFAULTS,dipSwitches} from '../games/gngb/inputs.mjs';
-import {DEFAULT_OPTIONS,gameOptions,optionDips,withEnemyPace} from '../games/gngb/options.mjs';
+import {DEFAULT_OPTIONS,gameOptions,optionDips,withEnemyPace,difficultyOptions,
+  difficultyLevel} from '../games/gngb/options.mjs';
 import {createBoard} from '../boards/gng/runtime.mjs';
 import {encodeCheckpoint,decodeCheckpoint} from '../src/checkpoint_format.mjs';
 import {checkpointTape} from '../src/v3_b3_live_tape.mjs';
@@ -28,6 +29,28 @@ test('game options: defaults fill missing fields, invalid values refused',()=>{
 test('board: DIP bytes validated before anything runs',()=>{
   for(const dips of [[1],[1,2,3],[0,256],['a',1]])
     assert.throws(()=>createBoard(null,new Map(),{dips}),/GNG_DIPS_INVALID/);
+});
+
+test('unified difficulty selects the original DIP and enemy pace together',()=>{
+  const expected={easiest:['easy',50,0xdb],easy:['easy',75,0xdb],
+    normal:['normal',100,0xfb],hard:['hard',100,0xbb],hardest:['hardest',100,0x9b]};
+  for(const [level,[difficulty,enemyPace,dsw2]] of Object.entries(expected)){
+    const options=difficultyOptions(level);
+    assert.deepEqual(options,{lives:3,difficulty,enemyPace});
+    assert.deepEqual(optionDips(options),[0xdf,dsw2]);
+    assert.equal(difficultyLevel(options),level);
+    assert.equal(difficultyOptions(level,{lives:7}).lives,7);
+  }
+  assert.deepEqual(difficultyOptions('normal'),DEFAULT_OPTIONS);
+  for(const level of ['unknown','toString',undefined])
+    assert.throws(()=>difficultyOptions(level),/GNG_OPTIONS_INVALID/);
+});
+
+test('legacy combinations remain exact and are identified as custom',()=>{
+  const options={lives:5,difficulty:'hard',enemyPace:50};
+  assert.equal(difficultyLevel(options),null);
+  const restored=decodeCheckpoint(checkpoint(options),{programSha256:SHA}).options;
+  assert.deepEqual(gameOptions(restored),options);
 });
 
 // A machine state that only knows what the paced block reads and writes.

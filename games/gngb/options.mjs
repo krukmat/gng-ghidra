@@ -19,6 +19,27 @@ import {dipSwitches,LIVES,DIFFICULTIES} from './inputs.mjs';
 
 export const ENEMY_PACES=Object.freeze([100,75,50]);
 export const DEFAULT_OPTIONS=Object.freeze({lives:3,difficulty:'normal',enemyPace:100});
+// The menu exposes one difficulty; saves and replays retain the exact DIP
+// and pace values, including combinations chosen before the unified menu.
+export const DIFFICULTY_LEVELS=Object.freeze({
+  easiest:Object.freeze({difficulty:'easy',enemyPace:50}),
+  easy:Object.freeze({difficulty:'easy',enemyPace:75}),
+  normal:Object.freeze({difficulty:'normal',enemyPace:100}),
+  hard:Object.freeze({difficulty:'hard',enemyPace:100}),
+  hardest:Object.freeze({difficulty:'hardest',enemyPace:100})
+});
+export function difficultyOptions(level,{lives=DEFAULT_OPTIONS.lives}={}){
+  if(!Object.hasOwn(DIFFICULTY_LEVELS,level))throw Error('GNG_OPTIONS_INVALID');
+  return gameOptions({lives,...DIFFICULTY_LEVELS[level]});
+}
+/** null means a legacy combination, which must replay without conversion. */
+export function difficultyLevel(options){
+  const o=gameOptions(options);
+  return Object.keys(DIFFICULTY_LEVELS).find(level=>{
+    const p=DIFFICULTY_LEVELS[level];
+    return p.difficulty===o.difficulty&&p.enemyPace===o.enemyPace;
+  })??null;
+}
 const ENEMY_CALL=0xa0c1,ENEMY_RETURN=0xa0c9;
 const SKIP=Object.freeze({75:t=>(t&3)===0,50:t=>(t&1)===0});
 // Block keys: the board's code identity for fixed ROM (boards/gng/code-view.mjs:

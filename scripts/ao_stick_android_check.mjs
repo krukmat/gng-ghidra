@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** Private stick check on an Android device or emulator: real OS touches
- * (adb input motionevent) on the installed APK. Coin, Start, run right,
+ * (adb input motionevent) on the installed APK. Jugar, run right,
  * raise the thumb ~20 px into the jump diagonal, back to running, release.
  * The CPU's own port reads (?inputCheck probes) must show Right, then
  * Right+Jump, then Right, then neutral; screenshots show the jump. Then six
@@ -82,8 +82,6 @@ try{
     await device.screenshot({path:join(CHECK,name)});report.steps.push({shot:name});
   };
 
-  await page.waitForFunction(()=>!document.getElementById('coin').disabled,null,{timeout:60000});
-  await tap('coin');
   await page.waitForFunction(()=>!document.getElementById('start').disabled,null,{timeout:30000});
   await tap('start');
   const started=await until(p=>p.gameState?.inGame,'in game');
