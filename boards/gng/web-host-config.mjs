@@ -8,5 +8,8 @@ export const GNG_WEB_HOST=Object.freeze({
   samplesPerFrame:CYCLES_PER_FRAME*sourceSampleRate/cpuHz,
   leadFrames:8,maxBehindFrames:30,clockLostMs:250,startWaitMs:1000,
   maxAudioBacklog:120,maxAudioEvents:5000,heardCapacity:40,
-  inputPortCount:PORT_DEFAULTS.length,width:256,height:224
+  inputPortCount:PORT_DEFAULTS.length,width:256,height:224,
+  // A Coin or Start tap in frames: PULSE_MS and PULSE_GAP_MS
+  // (src/ao_touch_controls.mjs, 100 and 200 ms) at about 60 frames/s.
+  pulse:Object.freeze({frames:6,gapFrames:12})
 });

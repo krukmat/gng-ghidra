@@ -14,12 +14,16 @@ const PORTS=['SYSTEM','P1','P2','DSW1','DSW2'];
 export function createTouchControls(onChange){
   const held=new Map(),pulses=new Map();
   let enabled=false;
+  // onChange(ports, keys, pulse): pulse names per port the bits only a tap
+  // holds (the engine worker makes each tap last its frames), never a finger's.
   const publish=()=>{
     const keys=[...new Set(held.values())],ports=[...INPUT_DEFAULTS];
-    for(const key of keys){
-      const {port,bit}=INPUT_CONTROLS[key];ports[PORTS.indexOf(port)]&=~bit;
+    const tap=ports.map(()=>0),finger=ports.map(()=>0);
+    for(const [source,key] of held){
+      const {port,bit}=INPUT_CONTROLS[key],i=PORTS.indexOf(port);
+      ports[i]&=~bit;(String(source).startsWith('pulse:')?tap:finger)[i]|=bit;
     }
-    onChange(ports,keys);
+    onChange(ports,keys,tap.map((bits,i)=>bits&~finger[i]));
   };
   const release=source=>{if(held.delete(source))publish();};
   const releaseAll=()=>{

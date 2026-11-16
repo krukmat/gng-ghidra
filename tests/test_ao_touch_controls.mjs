@@ -48,3 +48,12 @@ test('Continue pulses Start and Disparo together without releasing another finge
   c.releaseAll();t.mock.timers.tick(2000);
   assert.deepEqual(ports,[255,255,255,223,251]);
 });
+test('Taps name their bits for the engine worker, never a held finger\'s',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  let pulse;const c=createTouchControls((p,k,m)=>{pulse=m;});c.setEnabled(true);
+  c.pulse('coin1');assert.deepEqual(pulse,[0x40,0,0,0,0]);
+  t.mock.timers.tick(PULSE_MS);assert.deepEqual(pulse,[0,0,0,0,0]);
+  t.mock.timers.tick(PULSE_GAP_MS);
+  c.hold(1,'p1.button1');c.pulse('continue1');
+  assert.deepEqual(pulse,[0x01,0,0,0,0]);
+});

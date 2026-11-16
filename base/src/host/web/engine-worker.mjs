@@ -9,7 +9,10 @@
  * on the same port and the integration encodes the checkpoint text.
  *
  * `config`: cpuHz, cyclesPerFrame, width, height, inputPortCount,
- * maxAudioBacklog, maxAudioEvents, heardCapacity and the pacer fields.
+ * maxAudioBacklog, maxAudioEvents, heardCapacity, the pacer fields and an
+ * optional pulse {frames, gapFrames} (createPulseLatch). The page sends
+ * {type:'ports', ports, pulse}: the port values and, per port, the bits that
+ * a tap presses.
  * `createEngine({checkpoint, ports, sink, options, net})` loads the program
  * and resolves to {resumeFrame, audioState, ready, step(frame), render(frame),
  * checkpointPart(frame), encodeCheckpoint(part, audioState), probe()} and an
@@ -22,10 +25,52 @@
  */
 import {createFramePacer} from './frame-pacer.mjs';
 
+/** Taps (coin, start) as the game must see them. The page times a tap in
+ * milliseconds, but the frames run in bursts: on a slow device a tap and its
+ * release can both arrive between two bursts and the game never sees it.
+ * Each new bit in a message's `pulse` masks therefore stays at its pressed
+ * level for `frames` emulated frames; a tap that comes while that bit is
+ * still showing one follows after `gapFrames` released frames. The other
+ * bits are the page's values as they come. Without `frames`, a plain copy. */
+export function createPulseLatch({frames=0,gapFrames=0}={},count){
+  const raw=new Uint8Array(count),seen=new Uint8Array(count),taps=new Map();
+  return {
+    input(values,pulse){
+      raw.set(values);
+      for(let i=0;i<count;i++){
+        const now=frames>0?Number(pulse?.[i])&0xff:0,fresh=now&~seen[i];
+        seen[i]=now;
+        for(let bit=1;bit<0x100;bit<<=1){
+          if(!(fresh&bit))continue;
+          const tap=taps.get(i<<8|bit);
+          if(tap)tap.queued++;
+          else taps.set(i<<8|bit,{i,bit,level:values[i]&bit,gap:false,left:frames,queued:0});
+        }
+      }
+    },
+    // After each emulated frame.
+    frame(){
+      for(const [key,tap] of taps){
+        if(--tap.left>0)continue;
+        if(tap.gap){tap.gap=false;tap.left=frames;tap.queued--;}
+        else if(tap.queued>0){tap.gap=true;tap.left=Math.max(1,gapFrames);}
+        else taps.delete(key);
+      }
+    },
+    apply(ports){
+      ports.set(raw);
+      for(const tap of taps.values())
+        ports[tap.i]=(ports[tap.i]&~tap.bit)|(tap.gap?tap.level^tap.bit:tap.level);
+    },
+    get active(){return taps.size>0;},
+  };
+}
+
 export function startEngineWorker({config,createEngine,scope=globalThis,
   params=new URLSearchParams(scope.location?.search??'')}){
   const post=(msg,transfer=[])=>scope.postMessage(msg,transfer);
   const ports=new Uint8Array(config.inputPortCount);
+  const taps=createPulseLatch(config.pulse,ports.length);
   const pacer=createFramePacer({...config,
     frameMs:config.cyclesPerFrame/config.cpuHz*1000});
   let audioPort=null,audioAcked=0,audioDead=false;
@@ -37,7 +82,9 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
     if(data?.type==='boot'&&!booted){booted=true;start(data).catch(fail);}
     else if(data?.type==='save')saveWanted=true;
     else if(data?.type==='engine')engine?.message?.(data.message);
-    else if(data?.type==='ports'&&data.ports?.length===ports.length)ports.set(data.ports);
+    else if(data?.type==='ports'&&data.ports?.length===ports.length){
+      taps.input(data.ports,data.pulse);taps.apply(ports);
+    }
     // Test only (?audioTest): block this worker, as a slow phone frame would.
     else if(data?.type==='test-stall'&&params.has('audioTest')){
       const end=performance.now()+Math.min(2000,data.ms);
@@ -170,6 +217,7 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
         if(ran===null){waiting=true;break;}
         if(!ran)return;
         win.frames++;if(paced)win.audioFrames++;
+        if(taps.active){taps.frame();taps.apply(ports);}
       }
       const c1=performance.now();
       win.cpuMs+=c1-c0;

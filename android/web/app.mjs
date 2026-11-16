@@ -147,8 +147,8 @@ async function loadCheckpoint(){
     updateCheckpoint('no se pudo cargar');
   }
 }
-const controls=createTouchControls((ports,held)=>{
-  worker?.postMessage({type:'ports',ports});
+const controls=createTouchControls((ports,held,pulse)=>{
+  worker?.postMessage({type:'ports',ports,pulse});
   for(const button of buttons){
     const active=held.includes(button.dataset.hold??button.dataset.pulse);
     button.classList.toggle('held',active);
