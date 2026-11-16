@@ -2,7 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DIP_DEFAULTS,dipSwitches} from '../games/gngb/inputs.mjs';
 import {DEFAULT_OPTIONS,gameOptions,optionDips,withEnemyPace,difficultyOptions,
-  difficultyLevel} from '../games/gngb/options.mjs';
+  difficultyLevel,withSharedProgress,withGameOptions,SHARED_PROGRESS}
+  from '../games/gngb/options.mjs';
 import {createBoard} from '../boards/gng/runtime.mjs';
 import {encodeCheckpoint,decodeCheckpoint} from '../src/checkpoint_format.mjs';
 import {checkpointTape} from '../src/v3_b3_live_tape.mjs';
@@ -61,6 +62,50 @@ test('the life limit travels with saves while old sessions keep their rules',()=
   assert.equal(gameOptions(DEFAULT_OPTIONS).continues,undefined);
   for(const continues of [0,'false',null])
     assert.throws(()=>gameOptions({continues}),/GNG_OPTIONS_INVALID/);
+});
+
+test('cooperative: kept only when true, with any difficulty, and in saves',()=>{
+  assert.deepEqual(gameOptions({coop:true}),{...DEFAULT_OPTIONS,coop:true});
+  assert.deepEqual(gameOptions({coop:false}),DEFAULT_OPTIONS);
+  assert.deepEqual(difficultyOptions('easy',{lives:5,coop:true}),
+    {lives:5,difficulty:'easy',enemyPace:75,coop:true});
+  assert.equal(difficultyLevel({coop:true}),'normal');
+  assert.equal(difficultyOptions('easy',{coop:false}).coop,undefined);
+  const options=gameOptions({coop:true,continues:false});
+  assert.deepEqual(gameOptions(decodeCheckpoint(checkpoint(options),
+    {programSha256:SHA}).options),options);
+  for(const coop of [1,'true',null])
+    assert.throws(()=>gameOptions({coop}),/GNG_OPTIONS_INVALID/);
+});
+
+for(const key of [0x77ec,'fixed\u0000main\u00000\u000030700']){
+  test('cooperative wraps the turn swap under key '+JSON.stringify(key),()=>{
+    // RAM where the playing block holds 0x10+i and the waiting one 0x80+i.
+    const ram=new Uint8Array(0x500);
+    for(let i=0;i<0x30;i++){ram[0x60+i]=0x10+i;ram[0x440+i]=0x80+i;}
+    const seen=[];
+    const swap=$=>{seen.push(Array.from(ram.subarray(0x440,0x470)));$.PC=0x1234;};
+    const blocks=new Map([[key,swap]]),shared=withSharedProgress(blocks);
+    const $={PC:0x77ec,C:100,rd:a=>ram[a],w:(a,v)=>{ram[a]=v;}};
+    shared.get(key)($);
+    assert.equal(seen.length,1,'the swap itself still runs');
+    assert.deepEqual([$.PC,$.C],[0x1234,100],'at no CPU cost');
+    const personal=[0,2,3,4,5,6,7,8,9,10,11];
+    assert.equal(SHARED_PROGRESS.length,0x30-personal.length);
+    seen[0].forEach((v,i)=>assert.equal(v,(personal.includes(i)?0x80:0x10)+i,'+'+i));
+    assert.deepEqual(Array.from(ram.subarray(0x60,0x90)),
+      Array.from({length:0x30},(_,i)=>0x10+i),'the playing block is only read');
+    // Any other entry of that block runs untouched.
+    ram[0x440+0x12]=0xee;$.PC=0x77f6;shared.get(key)($);
+    assert.equal(seen[1][0x12],0xee);
+    assert.equal(blocks.get(key),swap,'original blocks untouched');
+    // Only cooperative games get the wrapper.
+    assert.equal(withGameOptions(blocks,{}).get(key),swap);
+    assert.notEqual(withGameOptions(blocks,{coop:true}).get(key),swap);
+  });
+}
+test('cooperative refuses a program without the turn swap',()=>{
+  assert.throws(()=>withSharedProgress(new Map()),/GNG_TURN_SWAP_BLOCK_MISSING/);
 });
 
 // A machine state that only knows what the paced block reads and writes.

@@ -47,8 +47,8 @@ const optionsButton=document.getElementById('options-open');
 const DIFFICULTY_NAMES={easiest:'Muy fácil',easy:'Fácil',normal:'Normal',
   hard:'Difícil',hardest:'Muy difícil'};
 const describeOptions=o=>(DIFFICULTY_NAMES[difficultyLevel(o)]??'Personalizada')+
-  ' · '+o.lives+' vidas';
-const defaultOptions=o=>Object.keys(DEFAULT_OPTIONS).every(k=>o[k]===DEFAULT_OPTIONS[k]);
+  ' · '+o.lives+' vidas'+(o.coop?' · cooperativo':'');
+const defaultOptions=o=>!o.coop&&Object.keys(DEFAULT_OPTIONS).every(k=>o[k]===DEFAULT_OPTIONS[k]);
 let chosen=storedOptions(),current=null;
 // Two players alternate on the same controls (games/gngb/state.mjs).
 const twoButton=document.getElementById('two-players');
@@ -85,7 +85,7 @@ const REFUSED={protocol:'Los dos teléfonos tienen versiones distintas de la app
 function storedOptions(){
   try{
     const o=gameOptions(JSON.parse(localStorage.getItem(OPTIONS_KEY)));
-    return difficultyOptions(difficultyLevel(o)??o.difficulty,{lives:o.lives});
+    return difficultyOptions(difficultyLevel(o)??o.difficulty,{lives:o.lives,coop:o.coop});
   }
   catch{return gameOptions();}
 }
@@ -249,6 +249,7 @@ function showTurn(player,first){
   clearTimeout(turnTimer);
   turnBanner.textContent=!netPlaying()?(first?'Empieza el Jugador ':'Turno del Jugador ')+player:
     player===myPlayer()?(first?'Empezás vos':'Tu turno'):
+    current?.coop?(first?'Empieza tu compañero':'Turno de tu compañero'):
     (first?'Empieza el rival':'Turno del rival');
   turnBanner.hidden=false;
   turnTimer=setTimeout(()=>{turnBanner.hidden=true;},2500);
@@ -262,10 +263,16 @@ function matchEvents(state){
       const points=n=>n.toLocaleString('es');
       document.getElementById('result-p1').textContent=points(e.scores[0]);
       document.getElementById('result-p2').textContent=points(e.scores[1]);
-      document.getElementById('result-winner').textContent=!e.winner?'Empate':
+      // Cooperative (games/gngb/options.mjs): one team, one total.
+      const coop=current?.coop===true;
+      document.getElementById('result-title').textContent=coop?
+        'Fin de la partida cooperativa':'Fin de la partida a 2 jugadores';
+      document.getElementById('result-winner').textContent=coop?
+        'Equipo: '+points(e.scores[0]+e.scores[1])+' puntos':!e.winner?'Empate':
         !netPlaying()?'Gana el Jugador '+e.winner:
         e.winner===myPlayer()?'Ganaste':'Ganó el rival';
       againButton.hidden=online?.role==='guest';
+      againButton.textContent=coop?'Otra partida':'Revancha';
       turnBanner.hidden=true;resultBox.hidden=false;
     }
   }
@@ -690,6 +697,7 @@ function openOptions(){
   releaseAll();
   optionsForm.elements.difficulty.value=difficultyLevel(chosen)??chosen.difficulty;
   optionsForm.elements.lives.value=String(chosen.lives);
+  optionsForm.elements.coop.value=chosen.coop?'1':'0';
   optionsForm.elements.autofire.value=autofire?'1':'0';
   document.getElementById('options-current').textContent=
     current?'Partida actual: '+describeOptions(current):'';
@@ -711,7 +719,8 @@ optionsForm.addEventListener('change',e=>{
 optionsForm.addEventListener('submit',e=>{
   e.preventDefault();
   const f=optionsForm.elements;
-  chosen=difficultyOptions(f.difficulty.value,{lives:Number(f.lives.value)});
+  chosen=difficultyOptions(f.difficulty.value,
+    {lives:Number(f.lives.value),coop:f.coop.value==='1'});
   try{localStorage.setItem(OPTIONS_KEY,JSON.stringify(chosen));}
   catch(err){log('AO_OPTIONS_NOT_STORED',{message:String(err?.message??err)});}
   log('AO_OPTIONS',chosen);

@@ -8,7 +8,8 @@
  * the same frames on both; the game ends at the title with a result where
  * the guest's play scored; no desync. Needs the ROM-derived bundle
  * (AO_BUNDLE, default out/rp4/build/bundle); no window.
- * Usage: node scripts/gng_netplay_check.mjs   (writes out/gng-netplay/check.json)
+ * Usage: node scripts/gng_netplay_check.mjs [--coop]   (writes out/gng-netplay/check.json;
+ * --coop plays the cooperative game of games/gngb/options.mjs)
  */
 import assert from 'node:assert/strict';
 import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
@@ -28,7 +29,8 @@ import {gameOptions,optionDips,withGameOptions} from '../games/gngb/options.mjs'
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const BUNDLE=resolve(ROOT,process.env.AO_BUNDLE??'out/rp4/build/bundle');
 const F=25152,FRAMES=14000,OUTAGE=[4000,4300];
-const OPTIONS=gameOptions({difficulty:'hard',enemyPace:75,continues:false});
+const OPTIONS=gameOptions({difficulty:'hard',enemyPace:75,continues:false,
+  coop:process.argv.includes('--coop')});
 const press=(f,control,n)=>[{cycle:f*F,control,pressed:true},
   {cycle:(f+n)*F,control,pressed:false}];
 const manifest=JSON.parse(readFileSync(join(BUNDLE,'manifest.json'),'utf8'));

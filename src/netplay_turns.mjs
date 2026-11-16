@@ -17,7 +17,8 @@
  * kept and `resend()` sends it again after a reconnect. No DOM, no worker:
  * the engine worker and the Node tests drive it.
  */
-export const NET_PROTOCOL='gng.netplay.v1';
+// v2: the options may carry `coop`, which a v1 phone would drop and desync.
+export const NET_PROTOCOL='gng.netplay.v2';
 export const HASH_EVERY=60;
 const ACK_EVERY=30; // a follower acks at least this often
 

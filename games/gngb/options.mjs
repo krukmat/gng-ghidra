@@ -14,6 +14,10 @@
  * paced session is as deterministic as the original. Stage 1 zombies on
  * the shipped bundle: 0.50 px/frame at 100 %, 0.37 at 75 %, 0.23 at 50 %,
  * with Arthur at the same place every frame (scripts/gng_options_check.mjs).
+ *
+ * Cooperative two players (`coop`): the turns still alternate, each player
+ * with their own lives and score, but both advance one shared game. See
+ * withSharedProgress.
  */
 import {dipSwitches,LIVES,DIFFICULTIES} from './inputs.mjs';
 
@@ -28,9 +32,9 @@ export const DIFFICULTY_LEVELS=Object.freeze({
   hard:Object.freeze({difficulty:'hard',enemyPace:100}),
   hardest:Object.freeze({difficulty:'hardest',enemyPace:100})
 });
-export function difficultyOptions(level,{lives=DEFAULT_OPTIONS.lives}={}){
+export function difficultyOptions(level,{lives=DEFAULT_OPTIONS.lives,coop}={}){
   if(!Object.hasOwn(DIFFICULTY_LEVELS,level))throw Error('GNG_OPTIONS_INVALID');
-  return gameOptions({lives,...DIFFICULTY_LEVELS[level]});
+  return gameOptions({lives,coop,...DIFFICULTY_LEVELS[level]});
 }
 /** null means a legacy combination, which must replay without conversion. */
 export function difficultyLevel(options){
@@ -47,15 +51,18 @@ const SKIP=Object.freeze({75:t=>(t&3)===0,50:t=>(t&1)===0});
 // reference bundles key blocks by the bare PC.
 const blockKey=(blocks,pc)=>blocks.has(pc)?pc:`fixed\u0000main\u00000\u0000${pc}`;
 
-/** Validated copy; missing fields take the defaults (older checkpoints). */
+/** Validated copy; missing fields take the defaults (older checkpoints).
+ * `coop` is only kept when true, so every other game keeps its exact options. */
 export function gameOptions(o){
   const out={...DEFAULT_OPTIONS,...(o??{})},lives=Number(out.lives);
   if(!Object.hasOwn(LIVES,lives)||!Object.hasOwn(DIFFICULTIES,out.difficulty)||
      !ENEMY_PACES.includes(out.enemyPace)||
-     out.continues!==undefined&&typeof out.continues!=='boolean')
+     out.continues!==undefined&&typeof out.continues!=='boolean'||
+     out.coop!==undefined&&typeof out.coop!=='boolean')
     throw Error('GNG_OPTIONS_INVALID');
   return Object.freeze({lives,difficulty:out.difficulty,enemyPace:out.enemyPace,
-    ...(out.continues===undefined?{}:{continues:out.continues})});
+    ...(out.continues===undefined?{}:{continues:out.continues}),
+    ...(out.coop===true?{coop:true}:{})});
 }
 export const optionDips=o=>dipSwitches(gameOptions(o));
 
@@ -75,13 +82,40 @@ export function withEnemyPace(blocks,pace){
   return paced;
 }
 
+/** Cooperative two players. The ROM keeps the playing player's game in the
+ * block 0x60-0x8F and the waiting player's in 0x440-0x46F, and swaps them at
+ * 0x77EC when the turn passes: after a death while the other player has lives
+ * (JSR at 0x77E0) and when a player runs out of lives (JMP from 0x7902).
+ * Just before that swap, the leaving player's game is copied over the waiting
+ * one, except for what stays personal: lives (+0x00), the extra-life
+ * bookkeeping (+0x02..+0x07) and the score (+0x08..+0x0B). The entering
+ * player then resumes exactly where a lone player would after that death:
+ * same stage (+0x12), checkpoint (+0x21), loop, weapon (+0x13) and enemy rank
+ * (+0x01). It reads and writes only RAM, at no CPU cost, so a cooperative
+ * session replays like any other (scripts/gng_coop_check.mjs). */
+const TURN_SWAP=0x77ec,PLAYER=0x60,WAITING=0x440,PLAYER_BYTES=0x30;
+const PERSONAL=i=>i===0||i>=0x02&&i<=0x0b;
+export const SHARED_PROGRESS=Object.freeze(
+  Array.from({length:PLAYER_BYTES},(_,i)=>i).filter(i=>!PERSONAL(i)));
+export function withSharedProgress(blocks){
+  const key=blockKey(blocks,TURN_SWAP),swap=blocks.get(key);
+  if(typeof swap!=='function')throw Error('GNG_TURN_SWAP_BLOCK_MISSING');
+  const shared=new Map(blocks);
+  shared.set(key,$=>{
+    if($.PC===TURN_SWAP)for(const i of SHARED_PROGRESS)$.w(WAITING+i,$.rd(PLAYER+i),0);
+    return swap($);
+  });
+  return shared;
+}
+
 /** New app games finish after the player's lives run out. At 0x77E7 the
  * ROM enters Game Over/Continue after the last death. Use its own expired
  * Continue cleanup (0x78EE): it passes to the other player if they still
  * have lives, otherwise returns to the title with the final scores.
  * Older saves omit `continues` and retain their original execution. */
 export function withGameOptions(blocks,options){
-  const o=gameOptions(options),paced=withEnemyPace(blocks,o.enemyPace);
+  const o=gameOptions(options),pacedOnly=withEnemyPace(blocks,o.enemyPace),
+    paced=o.coop?withSharedProgress(pacedOnly):pacedOnly;
   if(o.continues!==false)return paced;
   const key=blockKey(paced,0x77e7),end=paced.get(key);
   if(typeof end!=='function'||typeof paced.get(blockKey(paced,0x78ee))!=='function')

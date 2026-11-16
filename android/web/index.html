@@ -201,6 +201,11 @@
       <label><input type="radio" name="lives" value="5"><span>5</span></label>
       <label><input type="radio" name="lives" value="7"><span>7</span></label>
     </div>
+    <div class="opt" role="radiogroup" aria-labelledby="o-coop">
+      <span class="opt-name" id="o-coop">Dos jugadores</span>
+      <label><input type="radio" name="coop" value="0"><span>Por turnos</span></label>
+      <label><input type="radio" name="coop" value="1"><span>Cooperativo</span></label>
+    </div>
     <div class="opt" role="radiogroup" aria-labelledby="o-autofire">
       <span class="opt-name" id="o-autofire">Disparo sostenido</span>
       <label><input type="radio" name="autofire" value="0"><span>No</span></label>
@@ -209,7 +214,9 @@
     <p>En Fácil y Muy fácil, los enemigos también actúan más despacio.
       Arthur mantiene su velocidad habitual. Jugar es gratuito: las vidas elegidas
       se juegan seguidas y, al agotarlas, termina la partida, sin continuar.
-      En dos jugadores, cada uno tiene sus propias vidas. Normal conserva la dificultad
+      En dos jugadores, cada uno tiene sus propias vidas. En Cooperativo comparten
+      el avance: al cambiar el turno, el que entra sigue desde donde llegó el
+      compañero, con la misma arma, y los puntos se suman. Normal conserva la dificultad
       original. Con el disparo sostenido y el botón apretado, Arthur sigue
       disparando. El disparo sostenido se aplica al
       instante; las demás opciones, al reiniciar, y una partida cargada sigue con
