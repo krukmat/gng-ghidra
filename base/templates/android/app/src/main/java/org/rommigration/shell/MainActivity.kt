@@ -44,6 +44,7 @@ class MainActivity : Activity() {
             }).build()
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
             webViewClient = object : WebViewClientCompat() {
                 override fun shouldInterceptRequest(
                     view: WebView, request: WebResourceRequest

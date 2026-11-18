@@ -146,3 +146,19 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
   };
 }
 startEngineWorker({config:GNG_WEB_HOST,createEngine:createGngEngine});
+
+// Validate with the same CPU and audio import paths before replacing a live game.
+globalThis.addEventListener('message',async ({data})=>{
+  if(data?.type!=='validate-checkpoint')return;
+  let producer;
+  try{
+    const engine=await createGngEngine({checkpoint:data.text,
+      ports:new Uint8Array(GNG_WEB_HOST.inputPortCount),sink:{post(){}}});
+    const [{createGngAudioProducer},soundRom,wasm]=await Promise.all([
+      import('./lib/gngb_audio_producer.mjs'),bytes('audio/gg2.bin'),bytes('audio/ym2203.wasm')]);
+    producer=await createGngAudioProducer({soundRom,wasm});
+    producer.importState(engine.audioState);
+    postMessage({type:'checkpoint-valid'});
+  }catch(error){postMessage({type:'checkpoint-invalid',code:String(error?.message??error)});}
+  finally{producer?.close();}
+});

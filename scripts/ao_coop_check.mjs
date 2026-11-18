@@ -51,13 +51,14 @@ try{
   assert.deepEqual(await page.locator('#options-form .opt:has(input[name=coop]) span').allTextContents(),
     ['Dos jugadores','Por turnos','Cooperativo']);
   await page.locator('label:has(input[name=coop][value="1"])').click();
+  await page.locator('label:has(input[name=lives][value="3"])').click();
   logs.length=0;
   await page.locator('#options-apply').click();
   const boot=await until(l=>l.tag==='AO_READY',30000,'ready');
   assert.equal(boot.data.options.coop,true,'the engine runs the cooperative game');
   assert.equal(boot.data.options.continues,false);
   await ready();
-  assert.equal(JSON.parse(await page.evaluate(()=>localStorage.getItem('gng-options'))).coop,true);
+  assert.equal(JSON.parse(await page.evaluate(()=>localStorage.getItem('gng-preferences'))).options.coop,true);
   assert.match(await page.locator('#hint').textContent(),/cooperativo/);
   await page.locator('#options-open').click();
   assert.equal(await page.locator('input[name=coop]:checked').inputValue(),'1');
@@ -81,6 +82,7 @@ try{
   assert.equal(await page.locator('#result-winner').textContent(),'Equipo: '+total+' puntos');
   await page.screenshot({path:join(CHECK,'coop-result.png')});
   Object.assign(report,{turns,result});
+  await page.waitForFunction(()=>document.getElementById('ck-resume').hidden);
   assert.equal(bad.length,0,bad.join('\n'));
   writeFileSync(join(CHECK,'coop.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});
   console.log(JSON.stringify(report));

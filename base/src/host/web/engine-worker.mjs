@@ -74,13 +74,13 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
   const pacer=createFramePacer({...config,
     frameMs:config.cyclesPerFrame/config.cpuHz*1000});
   let audioPort=null,audioAcked=0,audioDead=false;
-  let booted=false,saveWanted=false,saving=null,engine=null;
+  let booted=false,saveWanted=null,saving=null,engine=null;
 
   const fail=e=>post({type:'error',message:String(e?.message??e),
     code:e?.code??null,stack:String(e?.stack??'').slice(0,2000)});
   scope.onmessage=({data})=>{
     if(data?.type==='boot'&&!booted){booted=true;start(data).catch(fail);}
-    else if(data?.type==='save')saveWanted=true;
+    else if(data?.type==='save')saveWanted={requestId:data.requestId};
     else if(data?.type==='engine')engine?.message?.(data.message);
     else if(data?.type==='ports'&&data.ports?.length===ports.length){
       taps.input(data.ports,data.pulse);taps.apply(ports);
@@ -104,18 +104,18 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
   const audioStop=code=>{
     if(audioDead)return;
     audioDead=true;post({type:'audio-stop',code});
-    if(saving){saving=null;post({type:'checkpoint-failed',code:'CK_AUDIO_STOPPED'});}
+    if(saving){const requestId=saving.requestId;saving=null;post({type:'checkpoint-failed',requestId,code:'CK_AUDIO_STOPPED'});}
   };
   // The audio worker answers after the batch of the saved frame.
   const saved=m=>{
     const s=saving;saving=null;
     if(!s)return;
     if(m.type==='checkpoint-failed')
-      return post({type:'checkpoint-failed',code:'CK_AUDIO_STOPPED'});
+      return post({type:'checkpoint-failed',requestId:s.requestId,code:'CK_AUDIO_STOPPED'});
     try{
-      post({type:'checkpoint',frame:s.frame,
+      post({type:'checkpoint',requestId:s.requestId,frame:s.frame,
         text:engine.encodeCheckpoint(s.part,m.state)});
-    }catch(e){post({type:'checkpoint-failed',code:e?.code??'CK_SAVE_FAILED'});}
+    }catch(e){post({type:'checkpoint-failed',requestId:s.requestId,code:e?.code??'CK_SAVE_FAILED'});}
   };
 
   async function start({checkpoint=null,options=null,net=null}){
@@ -134,7 +134,7 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
         if(frames<=audioFrames)return;
         audioFrames=frames;
         if(saveWanted&&(!audioPort||audioDead)){
-          saveWanted=false;post({type:'checkpoint-failed',code:'CK_AUDIO_STOPPED'});
+          const requestId=saveWanted.requestId;saveWanted=null;post({type:'checkpoint-failed',requestId,code:'CK_AUDIO_STOPPED'});
         }
         if(!audioPort||audioDead)return;
         if(audioFrames-audioAcked>config.maxAudioBacklog)
@@ -144,8 +144,8 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
         audioEvents=[];
         // Frame boundary, between instructions: the only valid save point.
         if(saveWanted&&!saving){
-          saveWanted=false;
-          saving={frame:audioFrames,part:engine.checkpointPart(audioFrames)};
+          saving={requestId:saveWanted.requestId,frame:audioFrames,part:engine.checkpointPart(audioFrames)};
+          saveWanted=null;
           audioPort.postMessage({type:'save'});
         }
       },

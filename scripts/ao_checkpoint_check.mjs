@@ -30,7 +30,7 @@ import {liveTapeReader} from '../src/v3_b3_live_tape.mjs';
 import {selectB3Bundle} from '../src/v3_b3_bundle.mjs';
 import {prepareAudioBundle} from '../src/gngb_audio_bundle_overlay.mjs';
 import {loadFrozen} from '../src/v2_b1_frozen.mjs';
-import {DEFAULT_OPTIONS,gameOptions} from '../games/gngb/options.mjs';
+import {gameOptions,withGameOptions,optionDips} from '../games/gngb/options.mjs';
 
 const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 const ASSETS=join(ROOT,'out/android/assets'),CHECK=join(ROOT,'out/android/check');
@@ -44,7 +44,14 @@ const logs=[],bad=[];
 const report={schema:'gng.ao.checkpoint-check.v1'};
 let browser,page,device;
 // Touch in headless Chromium; the WebView page takes Playwright clicks.
-const press=sel=>android?page.click(sel):page.tap(sel);
+const press=async sel=>{
+  if(sel==='#attack'){
+    const box=await page.locator(sel).boundingBox();
+    if(android)return page.mouse.click(box.x+box.width/2,box.y+box.height/2);
+    return page.touchscreen.tap(box.x+box.width/2,box.y+box.height/2);
+  }
+  return android?page.click(sel):page.tap(sel);
+};
 const of=(tag,list=logs)=>list.filter(l=>l.tag===tag).map(l=>l.data);
 async function until(predicate,what,timeout=30000){
   const end=Date.now()+timeout;
@@ -58,15 +65,15 @@ async function until(predicate,what,timeout=30000){
 const after=(mark,tag)=>l=>l.tag===tag&&logs.indexOf(l)>=mark;
 const enabled=id=>page.waitForFunction(id=>!document.getElementById(id).disabled,
   id,{timeout:30000});
-const slot=()=>page.evaluate(()=>new Promise((ok,ko)=>{
+const slot=(key='quick')=>page.evaluate(key=>new Promise((ok,ko)=>{
   const open=indexedDB.open('gng-checkpoint',1);
   open.onerror=()=>ko(open.error);
   open.onsuccess=()=>{
-    const req=open.result.transaction('slot').objectStore('slot').get('quick');
+    const req=open.result.transaction('slot').objectStore('slot').get(key);
     req.onsuccess=()=>{open.result.close();ok(req.result);};
     req.onerror=()=>ko(req.error);
   };
-}));
+}),key);
 async function save(){
   const mark=logs.length;
   await enabled('ck-save');await press('#ck-save');
@@ -83,13 +90,11 @@ async function fire(times){
 // and compares the board, the Z80 source and the YM bytes with the save.
 async function verify(text,rt){
   const c=decodeCheckpoint(text,{programSha256:rt.programSha256});
-  // The reference runtime knows no game options: this flow plays the defaults
-  // (paced and DIP replays: scripts/gng_options_check.mjs).
-  assert.deepStrictEqual({...gameOptions(c.options)},{...DEFAULT_OPTIONS},'default options');
+  const options=gameOptions(c.options);
   const source=await createAudioCommandSource(rt.rom);
   const ym=(await loadYm2203(rt.wasm)).create();
   let events=[],frames=0,got=null;
-  const cpu=rt.createBoard(rt.code,rt.blocks,{frames:c.frame+1,
+  const cpu=rt.createBoard(rt.code,withGameOptions(rt.blocks,options),{frames:c.frame+1,
     portRead:liveTapeReader(c.tape),
     onAudioEvent:e=>events.push({kind:e.kind,value:e.value,cycle:e.cycle}),
     onAudioComplete:m=>{
@@ -101,6 +106,11 @@ async function verify(text,rt){
         audio:structuredClone(source.exportState()),ym:ym.save()};
     },
     onFrame:r=>{cpu.state.records[r.index-1]=null;cpu.state.events.length=0;}});
+  // The frozen reference predates configurable DIP reads. Supply the same
+  // two DIP bytes the shipped board reads, preserving instruction timing.
+  const dips=optionDips(options),read=cpu.state.rd;
+  cpu.state.rd=(address,offset)=>address>=0x3003&&address<=0x3004?
+    dips[address-0x3003]:read(address,offset);
   const status=cpu.run().status;
   ym.destroy();
   assert.equal(status,'FRAMES_DONE');
@@ -181,6 +191,8 @@ try{
   await page.waitForTimeout(6000);
   await fire(3);
 
+  await until(l=>l.tag==='AO_CK_AUTO'&&l.data.frame>1800,'periodic save',45000);
+  const automatic=await slot('auto');
   const first=await save();
   report.save1={frame:first.frame};
   await page.waitForTimeout(4000); // keep playing past the save
@@ -193,7 +205,8 @@ try{
   await until(after(mark,'AO_AUDIO_READY'),'audio ready after load');
   await until(after(mark,'AO_AUDIO_SESSION'),'session after load');
   // The loaded engine starts at the saved frame, not at reset or later.
-  const stats=await until(after(mark,'AO_STATS'),'stats after load');
+  const loadedReady=await until(after(mark,'AO_READY'),'engine ready after load');
+  const stats=await until(l=>l.tag==='AO_STATS'&&logs.indexOf(l)>logs.indexOf(loadedReady),'stats after load');
   assert.ok(stats.data.frames>first.frame&&stats.data.frames<first.frame+120,
     'resumed at the saved frame '+JSON.stringify(stats.data));
   await fire(4);
@@ -213,6 +226,7 @@ try{
   await browser?.close();browser=null;await device?.close();device=null;
 
   const rt=await replayRuntime();
+  report.verifyAutomatic=await verify(automatic.text,rt);
   report.verify1=await verify(first.text,rt);
   report.verify2=await verify(second.text,rt);
   // The second tape starts with the first one: the load kept the history.
