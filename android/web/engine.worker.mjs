@@ -27,7 +27,8 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
   const [{blocks},{createBoard},{gngCode},
     {renderGngbRgba},
     {rendererInputs},{rendererUnknownCount},{INPUT_DEFAULTS,INPUT_CONTROLS},
-    {unpackGfx},{createPortReadWitness},{observeGameState,canAutosave,RAM},
+    {unpackGfx},{createPortReadWitness},{observeGameState,canAutosave,
+      canResumeCheckpoint,RAM},
     {encodeCheckpoint,decodeCheckpoint},{createPortRecorder},
     {gameOptions,optionDips,withGameOptions},
     {createTurnSession},{createGngTurnRule},
@@ -140,15 +141,15 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
       if(session)return {frame,net:true};
       const state=cpu.exportState();
       const frameState={record:state.mem,known:state.km};
-      if(automatic&&!canAutosave(frameState,gameState))
-        return {frame,unsafe:true};
+      if(automatic?!canAutosave(frameState,gameState):!canResumeCheckpoint(frameState))
+        return {frame,unsafe:automatic?'CK_AUTO_UNSAFE':'CK_SAVE_UNSAFE'};
       for(const c of recorder.drain())tape.push(c);
       return {frame,cpu:state,tape:tape.map(c=>[...c])};
     },
     encodeCheckpoint:(part,audio)=>part.net?
       (()=>{const e=Error('NET_SESSION_NO_SAVE');e.code=e.message;throw e;})():
       part.unsafe?
-      (()=>{const e=Error('CK_AUTO_UNSAFE');e.code=e.message;throw e;})():
+      (()=>{const e=Error(part.unsafe);e.code=e.message;throw e;})():
       encodeCheckpoint({programSha256,
       frame:part.frame,cpu:part.cpu,audio:audio.audio,ym:audio.ym,tape:part.tape,
       options}),

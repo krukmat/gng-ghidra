@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {observeGameState} from '../src/ao_game_state.mjs';
-import {canAutosave,lostLife} from '../games/gngb/state.mjs';
+import {canAutosave,canResumeCheckpoint,lostLife} from '../games/gngb/state.mjs';
 import {REC} from '../src/gngb_render_inputs.mjs';
 
 function frame(mode,phase=1,credits=0){
@@ -82,6 +82,21 @@ test('hits cannot be autosaved; armour loss alone does not trigger recovery',()=
   assert.equal(canAutosave(f),false);
   f.known[0xac]=0;
   assert.equal(canAutosave(f),false,'unknown character state cannot replace a recovery point');
+});
+
+test('manual checkpoints resume only from stable gameplay or outside a match',()=>{
+  const f=frame(2);f.record[0x60]=3;
+  assert.equal(canResumeCheckpoint(f),true);
+  f.record[0x503]=3;
+  assert.equal(canResumeCheckpoint(f),false,'death animation is not resumable');
+  f.record[0x503]=0;f.record[0x60]=0;
+  assert.equal(canResumeCheckpoint(f),false,'spent last life is not resumable');
+  f.record[0x60]=3;f.record[5]=4;
+  assert.equal(canResumeCheckpoint(f),false,'game over is not resumable');
+  f.record[2]=1;
+  assert.equal(canResumeCheckpoint(f),true,'title saves remain valid');
+  f.known[2]=0;
+  assert.equal(canResumeCheckpoint(f),false,'unknown mode is not resumable');
 });
 
 test('life counters remain attached to their players across turn swaps',()=>{

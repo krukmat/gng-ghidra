@@ -80,6 +80,13 @@ export function canAutosave(frame,previous=null){
     state.lives?.[state.player-1]>0&&!lostLife(previous,state);
 }
 
+/** Manual checkpoints may include menus, but active play must resume from a
+ * living, stable frame. This also protects older saves made during a death. */
+export function canResumeCheckpoint(frame){
+  return frame.known[RAM.mode]===255&&
+    (frame.record[RAM.mode]!==2||canAutosave(frame));
+}
+
 export function observeGameState(frame){
   const {mode:m,phase:p,credits:c}=RAM;
   if(![m,p,c,c+1].every(a=>frame.known[a]===255))return null;

@@ -11,7 +11,7 @@ import {chromium,_android} from 'playwright-core';
 import {createAssetServer} from './ao_serve.mjs';
 import {canAutosave,observeGameState,RAM} from '../games/gngb/state.mjs';
 import {optionDips,withGameOptions} from '../games/gngb/options.mjs';
-import {decodeCheckpoint} from '../src/checkpoint_format.mjs';
+import {decodeCheckpoint,encodeCheckpoint} from '../src/checkpoint_format.mjs';
 import {liveTapeReader} from '../src/v3_b3_live_tape.mjs';
 import {createBoard} from '../boards/gng/runtime.mjs';
 import {gngCode} from '../boards/gng/bundle.mjs';
@@ -238,6 +238,25 @@ try{
   mark=logs.length;
   await page.locator('#ck-load').click();
   const automaticRestored=await expectArmor(mark,false);
+  // An older manual save made during a death must yield to the living
+  // automatic copy, even when its timestamp makes it the newest slot.
+  const dead=decode(manual);
+  dead.cpu.mem[RAM.lives]=0;
+  const deadText=encodeCheckpoint(dead);
+  await page.evaluate(({text,frame})=>new Promise(resolve=>{
+    const open=indexedDB.open('gng-checkpoint',1);open.onsuccess=()=>{
+      const db=open.result,tx=db.transaction('slot','readwrite');
+      tx.objectStore('slot').put({text,frame,
+        savedAt:new Date(Date.now()+240000).toISOString()},'quick');
+      tx.oncomplete=()=>{db.close();resolve();};};
+  }),{text:deadText,frame:dead.frame});
+  await page.reload();await ready();
+  await page.waitForFunction(()=>document.getElementById('ck-load').title.includes('guardado manual'));
+  mark=logs.length;
+  await page.locator('#ck-load').click();
+  await until('AO_CK_LOAD_FAILED',mark,30000,d=>d.code==='CK_SAVE_UNSAFE'&&!d.automatic);
+  await expectArmor(mark,false);
+  report.deadManualCopy='automatic recovery remains usable';
   mark=logs.length;
   await page.locator('#ck-save').click();await until('AO_CK_SAVE',mark);
   const withArmor=decode(await slot('quick'));

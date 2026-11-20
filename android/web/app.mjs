@@ -10,7 +10,7 @@ import {gameOptions,difficultyOptions,difficultyLevel,addRecoveryLifeLoss}
   from './games/gngb/options.mjs';
 import {createMatchTracker} from './lib/ao_match.mjs';
 import {createPlayStarter} from './lib/ao_play.mjs';
-import {lostLife,canAutosave} from './games/gngb/state.mjs';
+import {lostLife,canAutosave,canResumeCheckpoint} from './games/gngb/state.mjs';
 import {bluetoothBridge,bluetoothStatus,pairedDevices,createBluetoothClient}
   from './lib/net_bluetooth_client.mjs';
 import {NET_PROTOCOL} from './lib/netplay_turns.mjs';
@@ -155,7 +155,8 @@ async function savedCheckpoint(data,code=null,requestId=data?.requestId){
   }catch(e){
     if(code==='CK_AUTO_UNSAFE'){updateCheckpoint();return;}
     log(request.tape?'AO_TAPE_FAILED':'AO_CK_SAVE_FAILED',{code:String(e?.message??e)});
-    updateCheckpoint(request.tape?'no se pudo exportar':'no se pudo guardar');
+    updateCheckpoint(code==='CK_SAVE_UNSAFE'?'esperá a que Arthur reaparezca':
+      request.tape?'no se pudo exportar':'no se pudo guardar');
   }finally{
     if(ckSaving===request){
       ckSaving=null;updateCheckpoint();
@@ -240,8 +241,9 @@ async function loadCheckpoint(automatic=false,recovery=false){
         if(!slot?.text)throw Error('CK_EMPTY');
         const restored=decodeCheckpoint(slot.text,{programSha256:manifest.files['program.mjs']});
         gameOptions(restored.options);
-        if(source&&!canAutosave({record:restored.cpu.mem,known:restored.cpu.km}))
-          throw Error('CK_AUTO_UNSAFE');
+        const frame={record:restored.cpu.mem,known:restored.cpu.km};
+        if(source?!canAutosave(frame):!canResumeCheckpoint(frame))
+          throw Error(source?'CK_AUTO_UNSAFE':'CK_SAVE_UNSAFE');
         await validateCheckpoint(slot.text);
         if(generation!==engineGeneration)return;
         log('AO_CK_LOAD',{frame:slot.frame,automatic:source,recovery});
