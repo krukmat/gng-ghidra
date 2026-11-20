@@ -1,6 +1,6 @@
 # Plan de Lancelot como personaje jugable
 
-**20 de noviembre de 2026 · En planificación · `feature/lancelot` derivada de `main` en `7570b82`**
+**20 de noviembre de 2026 · Fases 1–4 validadas · `feature/lancelot` derivada de `main` en `7570b82`**
 
 Lancelot será seleccionable al iniciar una partida local de un jugador en web y Android. Usará las animaciones, los movimientos, los ataques y las reglas de Arthur. Arthur será la opción predeterminada y el personaje de las partidas guardadas y las cintas anteriores.
 
@@ -49,6 +49,14 @@ Para aceptar el resultado, las partidas de referencia con la misma entrada deben
 
 **Comprobado en Chromium headless.** Al elegir Lancelot, el motor arranca con él y el guardado manual registra `character: "lancelot"`; tras el golpe conserva su pelo. Al elegir Arthur no aparece ningún color de Lancelot. Tras recargar la página, la preferencia sigue en Arthur y al cargar el guardado de Lancelot vuelve Lancelot. Pasó dos ejecuciones seguidas. [Prueba en la página](../scripts/lancelot_page_check.mjs)
 
-**Sin comprobar todavía.** La partida online de extremo a extremo, la reproducción de una cinta de Lancelot y la WebView de Android quedan para la fase 4.
+## Resultado de la fase 4
+
+**WebView de Android.** Se construyó el APK aislado `org.gng.persistence.check` con `AO_APP_ID=org.gng.persistence.check bash scripts/ao_build_apk.sh` y se ejecutó `node scripts/lancelot_page_check.mjs --android` en `emulator-5554`. Pasó la secuencia completa: Lancelot con 42 píxeles del atuendo en el fotograma 923, pérdida de protección con 15 píxeles de pelo en el 1227, Arthur con 51 píxeles de armadura y ninguno de Lancelot, y carga del guardado de Lancelot. Capturas e informe: `out/android/check/lancelot-android-*.png` y `lancelot-android-page-check.json`.
+
+**Online.** `node scripts/lancelot_online_check.mjs` enlazó dos páginas y sus workers con un puente de líneas Bluetooth simulado. El host eligió Lancelot; el invitado arrancó con `character: "lancelot"` y mostró 42 píxeles del atuendo. En otra conexión, el invitado cargó el módulo `src/netplay_turns.mjs` de la base `7570b82` (protocolo `gng.netplay.v2`); rechazó el saludo `gng.netplay.v3` por `protocol` antes de empezar la partida. Informe y captura: `out/android/check/lancelot-online-check.json` y `lancelot-online-guest.png`. La comprobación cubre la página, el saludo y los workers; el transporte de radio físico no se ejercitó.
+
+**Cinta.** `node scripts/lancelot_page_check.mjs` pasó de nuevo en Chromium y exportó `out/android/check/lancelot-tape.json`, con `character: "lancelot"`, 1052 fotogramas y 11 cambios de entrada. `node scripts/lancelot_tape_check.mjs` la reprodujo desde el reset con el programa y el renderer de la app. El hash del fotograma 1052 coincidió con la exportación (`381aa5f4…e1b`); en el fotograma visible 907 aparecieron 42 píxeles del atuendo y 277 píxeles distintos de Arthur. Informe: `out/android/check/lancelot-tape-check.json`.
+
+Las manos verde oliva del atuendo siguen aceptadas según la decisión del 20 de noviembre.
 
 **Base demostrada en `7570b82`.** Con Chromium headless, la partida base arrancó, creó el primer autoguardado en el fotograma 496, leyó la entrada de movimiento en el 540 y recuperó el fotograma 496 tras perder una vida. El lienzo volvió a mostrar el juego y Guardar estaba disponible. El primer hito de Lancelot es mostrar en ese mismo juego cómo pierde el atuendo inicial de arquero y conserva su cara y su pelo tras el golpe.

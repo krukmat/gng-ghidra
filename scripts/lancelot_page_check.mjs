@@ -1,28 +1,33 @@
 #!/usr/bin/env node
-/** Lancelot on the real page: headless Chromium (Playwright), no Chrome
- * window, no MAME. One page session:
+/** Lancelot on the real page: headless Chromium or Android WebView. One session:
  *  1. Opciones -> Lancelot: he starts in the archer outfit; Guardar keeps
  *     the character in the save; walking into the first zombie he loses it
  *     and keeps his dark brown hair.
  *  2. Opciones -> Arthur: Arthur in his armor, no Lancelot colors.
  *  3. Cargar the Lancelot save while Arthur is chosen: Lancelot comes back.
- * Build assets first (node scripts/ao_build_assets.mjs).
+ * Build assets first (node scripts/ao_build_assets.mjs). For --android, build
+ * the isolated APK with AO_APP_ID=org.gng.persistence.check.
  * Canvas captures and report: out/android/check/lancelot-*.png|json
  */
 import assert from 'node:assert/strict';
-import {mkdirSync,writeFileSync} from 'node:fs';
-import {chromium} from 'playwright-core';
+import {execFileSync} from 'node:child_process';
+import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {homedir} from 'node:os';
+import {join} from 'node:path';
+import {chromium,_android} from 'playwright-core';
 import {createAssetServer} from './ao_serve.mjs';
 
 const OUT='out/android/check';
+const android=process.argv.includes('--android');
+const prefix=android?'lancelot-android':'lancelot';
 // Colors from src/lancelot_skin.mjs and the stage-1 sprite palette group 0.
 // Armor and skin colors also occur in the scenery; outfit and hair do not.
 const COLORS={outfit:[112,120,52],hair:[74,46,26],armor:[136,136,170]};
 const server=createAssetServer();
-let browser,page;
+let browser,device,page;
 const logs=[],errors=[],report={status:'RUNNING'};
 // The game canvas alone, at its own 256x224 resolution.
-const snap=async name=>writeFileSync(`${OUT}/lancelot-${name}.png`,Buffer.from((await page.evaluate(()=>
+const snap=async name=>writeFileSync(`${OUT}/${prefix}-${name}.png`,Buffer.from((await page.evaluate(()=>
   document.getElementById('screen').toDataURL('image/png'))).split(',')[1],'base64'));
 const count=()=>page.evaluate(colors=>{
   const c=document.getElementById('screen'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
@@ -77,15 +82,32 @@ async function armoredPlay(name){
 }
 try{
   mkdirSync(OUT,{recursive:true});
-  await new Promise(r=>server.listen(0,'127.0.0.1',r));
-  browser=await chromium.launch({channel:'chromium',headless:true});
-  page=await browser.newPage({viewport:{width:1100,height:700}});
+  let url;
+  if(android){
+    const pkg='org.gng.persistence.check';
+    const metadata=JSON.parse(readFileSync('out/android/gradle-build/app/outputs/apk/debug/output-metadata.json','utf8'));
+    assert.equal(metadata.applicationId,pkg,'build the isolated package first');
+    const adb=(...args)=>execFileSync(join(homedir(),'Library/Android/sdk/platform-tools/adb'),
+      ['-s','emulator-5554',...args],{encoding:'utf8',timeout:60000});
+    adb('install','-r','out/android/gradle-build/app/outputs/apk/debug/app-debug.apk');
+    adb('shell','pm','clear',pkg);
+    adb('shell','am','start','-W','-n',pkg+'/org.rommigration.shell.MainActivity');
+    device=(await _android.devices()).find(d=>d.serial()==='emulator-5554');
+    assert.ok(device,'emulator-5554 is connected');
+    page=await (await device.webView({pkg},{timeout:30000})).page();
+    url='https://appassets.androidplatform.net/assets/index.html?inputCheck';
+  }else{
+    await new Promise(r=>server.listen(0,'127.0.0.1',r));
+    browser=await chromium.launch({channel:'chromium',headless:true});
+    page=await browser.newPage({viewport:{width:1100,height:700}});
+    url=`http://127.0.0.1:${server.address().port}/index.html?inputCheck`;
+  }
   page.setDefaultTimeout(30000);
   page.on('pageerror',e=>errors.push(String(e)));
   page.on('console',m=>{const x=/^(AO_\w+) (.*)$/s.exec(m.text());if(!x)return;
     try{logs.push({tag:x[1],data:JSON.parse(x[2])});}catch{}
     if(['AO_ERROR','AO_HALT'].includes(x[1]))errors.push(m.text());});
-  await page.goto(`http://127.0.0.1:${server.address().port}/index.html?inputCheck`);
+  await page.goto(url);
   await ready();
 
   // 1. Lancelot.
@@ -106,6 +128,13 @@ try{
   report.saveTries=tries;
   const saved=JSON.parse((await slot('quick')).text);
   assert.equal(saved.options.character,'lancelot','the save keeps the character');
+  if(!android){
+    const [download]=await Promise.all([page.waitForEvent('download'),
+      page.keyboard.press('KeyT')]);
+    report.tape=`${OUT}/lancelot-tape.json`;
+    await download.saveAs(report.tape);
+    await until('tape export',()=>logs.findLast(l=>l.tag==='AO_TAPE_EXPORT')?.data);
+  }
   // A real hit. Probes come once a second, so the hurt frame itself may be
   // skipped: the first unarmored probe after the armored one, before any
   // reload (a death reloads the autosave and replays the bare intro).
@@ -149,6 +178,9 @@ try{
   await snap('loaded');
   Object.assign(report,{status:'PASS',lancelot,arthur,
     loaded:{frame:loaded.frame,savedFrame:saved.frame,colors:back}});
-  writeFileSync(`${OUT}/lancelot-page-check.json`,JSON.stringify(report,null,1));
+  writeFileSync(`${OUT}/${prefix}-page-check.json`,JSON.stringify(report,null,1));
   console.log('LANCELOT_PAGE_CHECK=PASS '+JSON.stringify(report));
-}finally{await browser?.close();server.close();}
+}finally{
+  await browser?.close();await device?.close();
+  if(server.listening)await new Promise(resolve=>server.close(resolve));
+}
