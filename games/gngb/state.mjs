@@ -6,7 +6,7 @@ import {REC} from '../../boards/gng/frame-record.mjs';
 
 export const RAM=Object.freeze({mode:0x02,phase:0x05,credits:0x22,
   twoPlayers:0x26,turn:0x27,stage:0x52,lives:0x60,score:0x68,world:0xa0,y:0xa2,
-  waiting:0x440});
+  armor:0xac,waiting:0x440});
 export const BOSS_LIFE=0x0e76;
 
 function hasGameOver({record,known}){
@@ -44,8 +44,40 @@ function playerState({record:b,known:k}){
   if(!bytes.every(a=>k[a]===255))return {};
   const players=b[twoPlayers]?2:1,turnOf=b[turn]&1;
   const own=bcd(b,score,4),other=bcd(b,waiting+8,4);
+  const livesKnown=k[RAM.lives]===255&&(players===1||k[waiting]===255);
+  const ownLives=b[RAM.lives],otherLives=b[waiting];
   return {players,player:turnOf+1,
+    ...(livesKnown?{lives:players===1?[ownLives]:turnOf===0?
+      [ownLives,otherLives]:[otherLives,ownLives]}:{}),
     scores:players===1?[own]:turnOf===0?[own,other]:[other,own]};
+}
+
+// Avoid recovery points during collision or death animations. A collision
+// may only remove armour: the life counters decide when recovery is needed.
+function playerHurt({record:b,known:k}){
+  if(![RAM.armor,0x503,0x510,0x511].every(a=>k[a]===255))return undefined;
+  const handler=b[0x510]<<8|b[0x511];
+  return b[0x503]===3||handler===0x8e05||
+    (handler&0xffe0)===0x9c40||handler===0x9c64;
+}
+
+/** Lives are indexed by player, even while the ROM swaps their RAM blocks. */
+export function lostLife(previous,state){
+  if(previous?.mode!==2||!state||
+    previous.players!==state?.players)return null;
+  const index=state.lives?.findIndex((n,i)=>Number.isInteger(previous.lives?.[i])&&
+    n<previous.lives[i]);
+  return index>=0?index+1:null;
+}
+
+/** Only living gameplay may replace the automatic recovery point. Reads
+ * work RAM only: valid for both frame records and exported CPU memory. */
+export function canAutosave(frame,previous=null){
+  const {record:b,known:k}=frame;
+  const state={mode:b[RAM.mode],...playerState(frame)};
+  return k[RAM.mode]===255&&k[RAM.phase]===255&&state.mode===2&&
+    b[RAM.phase]<2&&playerHurt(frame)===false&&
+    state.lives?.[state.player-1]>0&&!lostLife(previous,state);
 }
 
 export function observeGameState(frame){
@@ -56,7 +88,8 @@ export function observeGameState(frame){
   const canContinue=mode===2&&phase===4;
   const gameOver=mode===2&&(phase>=2||hasGameOver(frame));
   return {mode,credits,canContinue,gameOver,inGame:mode>=2&&!gameOver,
-    readyToStart:credits>0&&(mode===1||canContinue),...playerState(frame)};
+    readyToStart:credits>0&&(mode===1||canContinue),hurt:playerHurt(frame),
+    ...playerState(frame)};
 }
 
 /** Player position, lives and stage. `known` covers world, y and lives;
@@ -70,5 +103,5 @@ export function playerLabels({record:b,known:k}){
 
 /** Exploration labels of one 0x600-byte work RAM view. */
 export const look=b=>({phase:b[0x72],cp:b[0x81],loop:b[0x71],lives:b[RAM.lives],
-  x:b[0xa0]<<8|b[0xa1],y:b[0xa2]<<8|b[0xa3],scroll:b[0x58]<<8|b[0x59],armor:b[0xac],
+  x:b[0xa0]<<8|b[0xa1],y:b[0xa2]<<8|b[0xa3],scroll:b[0x58]<<8|b[0x59],armor:b[RAM.armor],
   mode:b[0x503],handler:b[0x510]<<8|b[0x511]});

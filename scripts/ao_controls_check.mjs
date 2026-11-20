@@ -144,14 +144,14 @@ try{
     assert.ok(report.layout.every(b=>b.fits),'buttons or canvas outside viewport');
     const geometry=await page.evaluate(()=>{
       const box=id=>document.getElementById(id).getBoundingClientRect();
-      const left=box('button-stack'),right=box('stick-base');
-      return {actionsLeft:left.right<innerWidth/2,
-        actionsBottom:left.bottom>innerHeight*.85,
-        directionsRight:right.left>innerWidth/2,
+      const actions=box('button-stack'),directions=box('stick-base');
+      return {actionsRight:actions.left>innerWidth/2,
+        actionsBottom:actions.bottom>innerHeight*.85,
+        directionsLeft:directions.right<innerWidth/2,
         actionsPanel:getComputedStyle(document.getElementById('button-stack')).backgroundColor,
         actionButton:getComputedStyle(document.getElementById('attack')).backgroundColor};
     });
-    assert.ok(geometry.actionsLeft&&geometry.actionsBottom&&geometry.directionsRight);
+    assert.ok(geometry.actionsRight&&geometry.actionsBottom&&geometry.directionsLeft);
     assert.equal(geometry.actionsPanel,'rgba(0, 0, 0, 0)');
     assert.match(geometry.actionButton,/^rgba\(/,'action buttons must be translucent');
     report.geometry=geometry;

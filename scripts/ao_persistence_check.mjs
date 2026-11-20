@@ -7,6 +7,7 @@ import {homedir} from 'node:os';
 import {join} from 'node:path';
 import {chromium,_android} from 'playwright-core';
 import {createAssetServer} from './ao_serve.mjs';
+import {defendUntil} from './ao_check_controls.mjs';
 const server=createAssetServer();
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const android=process.argv.includes('--android');
@@ -39,7 +40,19 @@ try{
       const get=tx.objectStore('slot').get(key);tx.oncomplete=()=>{db.close();resolve(get.result??null);};};
     request.onerror=()=>reject(request.error);
   }),key);
-  const waitAuto=()=>page.waitForFunction(()=>!document.getElementById('ck-resume').hidden&&!document.getElementById('ck-resume').disabled);
+  const newer=key=>page.evaluate(key=>new Promise((resolve,reject)=>{
+    const request=indexedDB.open('gng-checkpoint',1);
+    request.onsuccess=()=>{
+      const db=request.result,tx=db.transaction('slot','readwrite'),store=tx.objectStore('slot');
+      const get=store.get(key);
+      get.onsuccess=()=>store.put({...get.result,savedAt:new Date(Date.now()+60000).toISOString()},key);
+      tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);
+    };request.onerror=()=>reject(request.error);
+  }),key);
+  const waitAuto=()=>page.waitForFunction(()=>{
+    const load=document.getElementById('ck-load');
+    return !load.disabled&&load.title.includes('autoguardado');
+  });
   await page.goto(url);await ready();
   await page.locator('#options-open').click();
   for(const [name,value] of Object.entries({difficulty:'easiest',lives:'7',coop:'0',autofire:'1'}))
@@ -50,18 +63,18 @@ try{
   await page.locator('#start').click();await waitAuto();
   const first=await slot('auto');assert.ok(first?.text);
   await page.locator('#ck-save').click();
-  await page.waitForFunction(()=>!document.getElementById('ck-load').disabled);
+  await page.waitForFunction(()=>document.getElementById('ck-load').title.includes('guardado manual'));
   const manual=await slot('quick');
-  await page.waitForFunction(()=>document.getElementById('status').textContent.includes('autoguardado'),null,{timeout:40000});
   // Wait for a distinct periodic capture, independently of transient status text.
-  const deadline=Date.now()+40000;
   let periodic;
-  while(Date.now()<deadline){periodic=await slot('auto');if(periodic.frame>first.frame+1000)break;await page.waitForTimeout(500);}
+  await defendUntil(page,async()=>{periodic=await slot('auto');return periodic.frame>first.frame+1000;});
   assert.ok(periodic.frame>first.frame+1000,'periodic progress');
   assert.equal((await slot('quick')).text,manual.text,'automatic save preserves manual copy');
   await page.reload();await ready();await waitAuto();
-  await page.locator('#ck-resume').click();
+  assert.equal(await page.locator('#ck-resume').count(),0,'one visible load control');
+  await page.locator('#ck-load').click();
   await page.waitForFunction(()=>document.getElementById('system-controls').hidden);
+  assert.ok(logs.some(l=>l.tag==='AO_CK_LOAD'&&l.data.automatic),'latest automatic copy loaded');
   await waitAuto();
   assert.ok(logs.some(l=>l.tag==='AO_CK_LOAD'&&l.data.frame===periodic.frame));
   // Failed writes preserve a confirmed record and release the save lock.
@@ -76,9 +89,12 @@ try{
   await page.waitForFunction(()=>document.getElementById('status').textContent.includes('no se pudo guardar'));
   assert.equal((await slot('quick')).text,manual.text);
   await page.evaluate(()=>{IDBDatabase.prototype.transaction=window.originalTransaction;});
+  await newer('quick');await page.reload();await ready();
+  await page.waitForFunction(()=>document.getElementById('ck-load').title.includes('guardado manual'));
   await page.locator('#ck-load').click();
   await page.waitForFunction(()=>document.getElementById('system-controls').hidden);
-  // Invalid manual copy must leave a running game available.
+  assert.ok(logs.some(l=>l.tag==='AO_CK_LOAD'&&!l.data.automatic),'latest manual copy loaded');
+  // A damaged newest copy falls back to the older valid one.
   await page.evaluate(()=>new Promise(resolve=>{
     const open=indexedDB.open('gng-checkpoint',1);open.onsuccess=()=>{
       const db=open.result,tx=db.transaction('slot','readwrite');
@@ -86,8 +102,26 @@ try{
     };
   }));
   await page.locator('#ck-load').click();
+  await page.waitForFunction(()=>!document.getElementById('ck-load').disabled);
+  assert.ok(logs.some(l=>l.tag==='AO_CK_LOAD_FAILED'&&l.data.automatic===false));
+  assert.ok(logs.some(l=>l.tag==='AO_CK_LOAD'&&l.data.automatic===true));
+  // If neither copy is valid, leave the running game untouched.
+  await page.evaluate(()=>new Promise(resolve=>{
+    const open=indexedDB.open('gng-checkpoint',1);open.onsuccess=()=>{
+      const db=open.result,tx=db.transaction('slot','readwrite');
+      tx.objectStore('slot').put({text:'invalid'},'auto');tx.oncomplete=()=>{db.close();resolve();};
+    };
+  }));
+  await page.locator('#ck-load').click();
   await page.waitForFunction(()=>document.getElementById('status').textContent.includes('no se pudo cargar'));
   assert.equal(await page.locator('#halt').isVisible(),false);
+  await page.evaluate(([automatic,saved])=>new Promise(resolve=>{
+    const open=indexedDB.open('gng-checkpoint',1);open.onsuccess=()=>{
+      const db=open.result,tx=db.transaction('slot','readwrite'),store=tx.objectStore('slot');
+      store.put(automatic,'auto');store.put(saved,'quick');
+      tx.oncomplete=()=>{db.close();resolve();};
+    };
+  }),[periodic,manual]);
   await page.locator('#options-open').click();
   for(const [name,value] of Object.entries({difficulty:'hard',lives:'4',coop:'1',autofire:'0'}))
     await page.locator('label:has(input[name='+name+'][value="'+value+'"])').click();
@@ -116,7 +150,8 @@ try{
       }
       assert.ok(saved?.text);assert.ok(Date.now()<end,'two-player automatic save');
       await page.reload();await ready();await waitAuto();
-      await page.locator('#ck-resume').click();
+      await newer('auto');await page.reload();await ready();await waitAuto();
+      await page.locator('#ck-load').click();
       await page.waitForFunction(()=>document.getElementById('turn').textContent==='Empieza el Jugador 1');
     }
     report.twoPlayerRestore=['cooperative','by-turns'];
@@ -131,7 +166,7 @@ try{
     page=await (await device.webView({pkg:'org.gng.persistence.check'})).page();
     await ready();await waitAuto();
     assert.equal((await slot('auto')).text,confirmed.text,'force-stop and APK update preserve progress');
-    await page.locator('#ck-resume').click();
+    await page.locator('#ck-load').click();
     await page.waitForFunction(()=>document.getElementById('system-controls').hidden);
     report.androidRestartAndUpdate=true;
   }

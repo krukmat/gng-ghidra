@@ -23,11 +23,11 @@ async function bytes(name){
   if(!res.ok)throw Error('AO_FETCH_'+res.status+' '+name);
   return new Uint8Array(await res.arrayBuffer());
 }
-async function createGngEngine({checkpoint:checkpointText,ports,sink,options:chosen,net}){
+async function createGngEngine({checkpoint:checkpointText,ports,sink,options:chosen,net,restoreArmor}){
   const [{blocks},{createBoard},{gngCode},
     {renderGngbRgba},
     {rendererInputs},{rendererUnknownCount},{INPUT_DEFAULTS,INPUT_CONTROLS},
-    {unpackGfx},{createPortReadWitness},{observeGameState},
+    {unpackGfx},{createPortReadWitness},{observeGameState,canAutosave,RAM},
     {encodeCheckpoint,decodeCheckpoint},{createPortRecorder},
     {gameOptions,optionDips,withGameOptions},
     {createTurnSession},{createGngTurnRule},
@@ -52,8 +52,14 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
   const programSha256=manifest.files['program.mjs'];
   // Refused if made by another AOT program or inconsistent.
   const restored=checkpointText&&decodeCheckpoint(checkpointText,{programSha256});
-  const options=gameOptions(restored?restored.options:{...chosen,continues:false}),
-    dips=optionDips(options);
+  let options=gameOptions(restored?restored.options:{...chosen,continues:false});
+  if(restored&&options.recoveryArmorFrames?.at(-1)>=restored.frame)
+    throw Error('CK_ARMOR_HISTORY_INVALID');
+  if(restoreArmor&&restored?.cpu.mem[RAM.armor]===1){
+    const frames=options.recoveryArmorFrames??[];
+    options=gameOptions({...options,recoveryArmorFrames:[...frames,restored.frame]});
+  }
+  const dips=optionDips(options);
   // Port changes from reset: a loaded session continues the saved tape; a
   // new one starts with its DIP bytes, which the board serves from `dips`
   // (it only asks portRead for 0x3000-0x3002).
@@ -128,20 +134,27 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
     },
     render:frame=>renderGngbRgba(rendererInputs(frame.record,
       {scroll:frame.scroll,latch:frame.latch},gfx)),
-    checkpointPart(frame){
+    checkpointPart(frame,{automatic=false}={}){
       // Runs inside cpu.run: a session's refusal waits for encodeCheckpoint,
       // whose errors become checkpoint-failed.
       if(session)return {frame,net:true};
+      const state=cpu.exportState();
+      const frameState={record:state.mem,known:state.km};
+      if(automatic&&!canAutosave(frameState,gameState))
+        return {frame,unsafe:true};
       for(const c of recorder.drain())tape.push(c);
-      return {frame,cpu:cpu.exportState(),tape:tape.map(c=>[...c])};
+      return {frame,cpu:state,tape:tape.map(c=>[...c])};
     },
     encodeCheckpoint:(part,audio)=>part.net?
       (()=>{const e=Error('NET_SESSION_NO_SAVE');e.code=e.message;throw e;})():
+      part.unsafe?
+      (()=>{const e=Error('CK_AUTO_UNSAFE');e.code=e.message;throw e;})():
       encodeCheckpoint({programSha256,
       frame:part.frame,cpu:part.cpu,audio:audio.audio,ym:audio.ym,tape:part.tape,
       options}),
     probe:()=>({witness:witness.snapshot(),ports:[...ports],reads:[...readPorts],
       ram2:last?.record[2],ram5:last?.record[5],ram23:last?.record[0x23],gameState,
+      armored:last?.known[RAM.armor]===255?last.record[RAM.armor]===0:null,
       net:session?.stats()??null}),
   };
 }
@@ -152,7 +165,7 @@ globalThis.addEventListener('message',async ({data})=>{
   if(data?.type!=='validate-checkpoint')return;
   let producer;
   try{
-    const engine=await createGngEngine({checkpoint:data.text,
+    const engine=await createGngEngine({checkpoint:data.text,restoreArmor:data.restoreArmor,
       ports:new Uint8Array(GNG_WEB_HOST.inputPortCount),sink:{post(){}}});
     const [{createGngAudioProducer},soundRom,wasm]=await Promise.all([
       import('./lib/gngb_audio_producer.mjs'),bytes('audio/gg2.bin'),bytes('audio/ym2203.wasm')]);

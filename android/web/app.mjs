@@ -3,13 +3,14 @@
 import {createTouchControls} from './lib/ao_touch_controls.mjs';
 import {followBase,knobOffset,stickSector} from './lib/ao_stick.mjs';
 import {keyAction} from './lib/ao_keyboard.mjs';
-import {decodeCheckpoint} from './lib/checkpoint_format.mjs';
+import {decodeCheckpoint,encodeCheckpoint} from './lib/checkpoint_format.mjs';
 import {INITIAL_OPTIONS,readPreferences,writePreferences} from './lib/ao_preferences.mjs';
 import {checkedCheckpointTape} from './lib/v3_b3_live_tape.mjs';
-import {gameOptions,difficultyOptions,difficultyLevel}
+import {gameOptions,difficultyOptions,difficultyLevel,addRecoveryLifeLoss}
   from './games/gngb/options.mjs';
 import {createMatchTracker} from './lib/ao_match.mjs';
 import {createPlayStarter} from './lib/ao_play.mjs';
+import {lostLife,canAutosave} from './games/gngb/state.mjs';
 import {bluetoothBridge,bluetoothStatus,pairedDevices,createBluetoothClient}
   from './lib/net_bluetooth_client.mjs';
 import {NET_PROTOCOL} from './lib/netplay_turns.mjs';
@@ -89,10 +90,12 @@ function storedOptions(){return preferences.options;}
 // worker builds and checks it. Saving waits for the next frame boundary.
 const CK_DB='gng-checkpoint',CK_STORE='slot',CK_KEY='quick',CK_SAVE_MS=3000;
 let autoSaved=null,autoActive=false,autoStarted=false,autoElapsed=0;
+let autoInitialPending=false;
 let autoTick=performance.now(),saveSequence=0,engineGeneration=0;
-let manualPending=false,ckLoading=false;
+let manualPending=false,ckLoading=false,lifeRecovering=false;
 let storageQueue=Promise.resolve();
-const resumeButton=document.getElementById('ck-resume');
+const latestCheckpoint=()=>!autoSaved?false:!ckSaved?true:
+  (Date.parse(autoSaved.savedAt)||0)>(Date.parse(ckSaved.savedAt)||0);
 const storedWrite=run=>{
   const result=storageQueue.then(run);
   storageQueue=result.catch(()=>{});
@@ -116,23 +119,21 @@ const ckRequest=(mode,run)=>new Promise((resolve,reject)=>{
 });
 function updateCheckpoint(note=null){
   ckSave.disabled=!playable||ckSaving!==null||ckLoading||online!==null;
-  ckLoad.disabled=ckSaved===null||ckSaving!==null||ckLoading||online!==null;
-  resumeButton.hidden=autoSaved===null;
-  resumeButton.disabled=!playable||ckSaving!==null||ckLoading||online!==null;
-  resumeButton.title=autoSaved?'Reanudar · '+new Date(autoSaved.savedAt).toLocaleString():'';
-  ckLoad.title=ckSaved?'Cargar el checkpoint del frame '+ckSaved.frame:
-    'Sin checkpoint guardado';
+  ckLoad.disabled=!playable||(!autoSaved&&!ckSaved)||ckSaving!==null||ckLoading||online!==null;
+  ckLoad.title=!autoSaved&&!ckSaved?'Sin partida guardada':
+    'Cargar '+(latestCheckpoint()?'autoguardado':'guardado manual')+' más reciente';
   if(note){ckNote=note;ckNoteUntil=performance.now()+4000;status.textContent=note;}
 }
 function saveCheckpoint(tape=false,automatic=false){
   if(!playable||online!==null||ckLoading)return;
+  if(automatic&&(!autoActive||!game.inGame||game.hurt!==false))return;
   if(ckSaving!==null){if(!automatic&&!tape)manualPending=true;return;}
   const request={id:++saveSequence,generation:engineGeneration,tape,automatic,
     timer:null,startedAt:performance.now()};
   ckSaving=request;
   request.timer=setTimeout(()=>savedCheckpoint(null,'CK_SAVE_TIMEOUT',request.id),CK_SAVE_MS);
   updateCheckpoint(tape?'exportando cinta…':automatic?'autoguardando…':'guardando…');
-  worker.postMessage({type:'save',requestId:request.id});
+  worker.postMessage({type:'save',requestId:request.id,automatic});
 }
 async function savedCheckpoint(data,code=null,requestId=data?.requestId){
   const request=ckSaving;
@@ -148,10 +149,11 @@ async function savedCheckpoint(data,code=null,requestId=data?.requestId){
         request.automatic?'auto':CK_KEY));
     });
     if(request.generation!==engineGeneration)return;
-    if(request.automatic){autoSaved=meta;autoElapsed=0;}else ckSaved=meta;
+    if(request.automatic){autoSaved=meta;autoElapsed=0;autoInitialPending=false;}else ckSaved=meta;
     log(request.automatic?'AO_CK_AUTO':'AO_CK_SAVE',{...meta,bytes:data.text.length,durationMs:Math.round(performance.now()-request.startedAt)});
     updateCheckpoint((request.automatic?'autoguardado':'guardado')+' · frame '+meta.frame);
   }catch(e){
+    if(code==='CK_AUTO_UNSAFE'){updateCheckpoint();return;}
     log(request.tape?'AO_TAPE_FAILED':'AO_CK_SAVE_FAILED',{code:String(e?.message??e)});
     updateCheckpoint(request.tape?'no se pudo exportar':'no se pudo guardar');
   }finally{
@@ -161,18 +163,39 @@ async function savedCheckpoint(data,code=null,requestId=data?.requestId){
     }
   }
 }
-function finishAutosave(){
+async function recoverLife(player){
   autoActive=false;autoStarted=false;autoElapsed=0;
-  if(ckSaving?.automatic){clearTimeout(ckSaving.timer);ckSaving=null;}
-  storedWrite(()=>ckRequest('readwrite',store=>store.delete('auto'))).then(()=>{
-    autoSaved=null;updateCheckpoint();
-  },()=>updateCheckpoint('no se pudo actualizar el autoguardado'));
+  lifeRecovering=true;
+  releaseAll();manualPending=false;
+  if(ckSaving){clearTimeout(ckSaving.timer);ckSaving=null;}
+  log('AO_LIFE_LOST',{player,lives:game.lives});
+  try{
+    const generation=engineGeneration;
+    await storedWrite(async()=>{
+      const slot=await ckRequest('readonly',store=>store.get('auto'));
+      if(!slot?.text)throw Error('CK_EMPTY');
+      const manifest=await (await fetch('bundle/manifest.json')).json();
+      const saved=decodeCheckpoint(slot.text,
+        {programSha256:manifest.files['program.mjs']});
+      const options=addRecoveryLifeLoss(saved.options,saved.frame,player);
+      if(generation!==engineGeneration)throw Error('CK_SESSION_CHANGED');
+      const savedAt=new Date().toISOString();
+      const text=encodeCheckpoint({...saved,options,savedAt});
+      await ckRequest('readwrite',store=>store.put({...slot,savedAt,text},'auto'));
+      if(generation===engineGeneration)autoSaved={frame:slot.frame,savedAt};
+    });
+    if(generation===engineGeneration)await loadCheckpoint(true,true);
+  }catch(error){
+    log('AO_CK_LOAD_FAILED',{code:String(error?.message??error),automatic:true});
+    updateCheckpoint('no se pudo descontar la vida');
+    lifeRecovering=false;enable(playable);
+  }
 }
 setInterval(()=>{
   const now=performance.now(),elapsed=now-autoTick;autoTick=now;
   if(!document.hidden&&autoActive&&autoStarted&&game.inGame&&playable&&!online){
     autoElapsed+=Math.min(elapsed,1000);
-    if(autoElapsed>=30000)saveCheckpoint(false,true);
+    if(autoInitialPending||autoElapsed>=30000)saveCheckpoint(false,true);
   }
 },500);
 // The session's port changes from reset, as rp3_compare replays them, with
@@ -196,28 +219,49 @@ async function validateCheckpoint(text){
       timer=setTimeout(()=>reject(Error('CK_VALIDATE_TIMEOUT')),10000);
       validator.onmessage=({data})=>data.type==='checkpoint-valid'?resolve():reject(Error(data.code));
       validator.onerror=event=>reject(Error(event.message));
-      validator.postMessage({type:'validate-checkpoint',text});
+      validator.postMessage({type:'validate-checkpoint',text,restoreArmor:true});
     });
   }finally{clearTimeout(timer);validator.terminate();}
 }
-async function loadCheckpoint(automatic=false){
-  if((automatic?resumeButton:ckLoad).disabled)return;
-  ckLoading=true;updateCheckpoint();
+async function loadCheckpoint(automatic=false,recovery=false){
+  if(!recovery&&(ckLoad.disabled||!(automatic?autoSaved:ckSaved)))return;
+  ckLoading=true;enable(playable);
+  if(recovery)updateCheckpoint('recuperando último autoguardado…');
   const generation=engineGeneration;
+  let failureLogged=false;
   try{
-    const slot=await ckRequest('readonly',store=>store.get(automatic?'auto':CK_KEY));
-    if(!slot?.text)throw Error('CK_EMPTY');
+    await storageQueue;
     const manifest=await (await fetch('bundle/manifest.json')).json();
-    const restored=decodeCheckpoint(slot.text,{programSha256:manifest.files['program.mjs']});
-    gameOptions(restored.options);
-    await validateCheckpoint(slot.text);
-    if(generation!==engineGeneration)return;
-    log('AO_CK_LOAD',{frame:slot.frame});
-    start(slot.text);
+    const sources=recovery?[true]:[automatic,...((automatic?ckSaved:autoSaved)?[!automatic]:[])];
+    for(const source of sources){
+      if(generation!==engineGeneration)return;
+      try{
+        const slot=await ckRequest('readonly',store=>store.get(source?'auto':CK_KEY));
+        if(!slot?.text)throw Error('CK_EMPTY');
+        const restored=decodeCheckpoint(slot.text,{programSha256:manifest.files['program.mjs']});
+        gameOptions(restored.options);
+        if(source&&!canAutosave({record:restored.cpu.mem,known:restored.cpu.km}))
+          throw Error('CK_AUTO_UNSAFE');
+        await validateCheckpoint(slot.text);
+        if(generation!==engineGeneration)return;
+        log('AO_CK_LOAD',{frame:slot.frame,automatic:source,recovery});
+        start(slot.text,null,true);
+        return;
+      }catch(error){
+        if(generation!==engineGeneration)return;
+        log('AO_CK_LOAD_FAILED',{code:String(error?.message??error),automatic:source});
+        failureLogged=true;
+        if(source===sources.at(-1))throw error;
+      }
+    }
   }catch(e){
-    log('AO_CK_LOAD_FAILED',{code:String(e?.message??e)});
-    updateCheckpoint('no se pudo cargar');
-  }finally{ckLoading=false;updateCheckpoint();}
+    if(!failureLogged)log('AO_CK_LOAD_FAILED',{code:String(e?.message??e)});
+    updateCheckpoint(recovery?'no se pudo recuperar el autoguardado':'no se pudo cargar');
+  }finally{ckLoading=false;lifeRecovering=false;enable(playable);}
+}
+function chooseCheckpoint(){
+  if(ckLoad.disabled)return;
+  loadCheckpoint(latestCheckpoint());
 }
 const controls=createTouchControls((ports,held,pulse)=>{
   // The fingers alone, change by change, for the engine's per-frame shaping
@@ -241,12 +285,12 @@ function drawStick(base,knob={x:0,y:0}){
   stickBase.style.transform=`translate(${base.x-r}px,${base.y-r}px)`;
   stickKnob.style.transform=`translate(${base.x+knob.x-k}px,${base.y+knob.y-k}px)`;
 }
-// At rest the stick waits at the bottom right corner of the zone.
+// At rest the stick waits at the bottom left corner of the zone.
 function restStick(){
   if(stick){controls.release(stick.id);controls.release(STICK_JUMP);}
   stick=null;zone.classList.remove('active');delete zone.dataset.dir;
   const r=stickRadius();
-  drawStick({x:zone.clientWidth-r-16,y:zone.clientHeight-r-16});
+  drawStick({x:r+16,y:zone.clientHeight-r-16});
 }
 function moveStick(e){
   const z=zone.getBoundingClientRect(),r=stickRadius();
@@ -282,16 +326,17 @@ window.addEventListener('resize',()=>{if(!stick)restStick();});
 function enable(value){
   playable=value;
   // Online, the controls only count in this phone's turns.
-  const active=value&&(!netPlaying()||online.owner===online.role);
+  const active=value&&!ckLoading&&(!netPlaying()||online.owner===online.role);
   controls.setEnabled(active);
   zone.classList.toggle('disabled',!active);
+  document.getElementById('button-stack').hidden=!active||!game.inGame;
   if(!active)restStick();
   for(const button of buttons)button.disabled=!active||
     (button.dataset.pulse&&(game.inGame||playStarter.busy))||
     (button.dataset.pulse==='start1'&&
       !(game.mode===0||game.mode===1))||
     (button.dataset.pulse&&netPlaying());
-  twoButton.disabled=!value||online!==null||
+  twoButton.disabled=!active||online!==null||
     !(game.mode===0||game.mode===1)||playStarter.busy;
   againButton.disabled=!active||game.mode!==1||playStarter.busy;
   updateCheckpoint();
@@ -588,10 +633,12 @@ function openOnline(){
 function closeOnline(){onlineDialog.hidden=true;onlineButton.focus();}
 // Reiniciar and Cargar: a cold engine and audio producer; checkpoint is the
 // saved text or null for the reset vector; net {role, options} plays online.
-function start(checkpoint=null,net=null){
+function start(checkpoint=null,net=null,restoreArmor=false){
   engineGeneration++;
   if(ckSaving!==null){clearTimeout(ckSaving.timer);ckSaving=null;}
   manualPending=false;autoActive=!!checkpoint&&!net;autoStarted=false;autoElapsed=0;
+  autoInitialPending=!checkpoint;
+  lifeRecovering=false;
   enable(false);playStarter.cancel();closeSession();worker?.terminate();
   game={credits:0,readyToStart:false,inGame:false};current=null;
   match.reset();clearTimeout(turnTimer);
@@ -603,7 +650,7 @@ function start(checkpoint=null,net=null){
   // Reiniciar rebuilds the Z80 session and the chips with the engine.
   startAudio();
   // After the audio port: a loaded state restores the producer first.
-  worker.postMessage({type:'boot',checkpoint,options:net?.options??chosen,
+  worker.postMessage({type:'boot',checkpoint,restoreArmor,options:net?.options??chosen,
     net:net&&{role:net.role}});
   if(online){online.ready=false;online.owner='host';}
   if(soundOn)openSession();
@@ -612,6 +659,7 @@ function start(checkpoint=null,net=null){
     if(generation!==engineGeneration)return;
     switch(data?.type){
       case 'frame':
+        if(lifeRecovering)break;
         pending=data;
         if(!playable){enable(true);updateHint();}
         break;
@@ -634,11 +682,17 @@ function start(checkpoint=null,net=null){
         updateHint();break;
       case 'engine':engineMessage(data.message);break;
       case 'game-state':
+        if(lifeRecovering){game=data;break;}
+        const playerLost=lostLife(game,data);
         game=data;
-        if(autoActive&&data.inGame&&!autoStarted){
-          autoStarted=true;match.update({mode:1});saveCheckpoint(false,true);
+        if(autoActive&&autoStarted&&playerLost&&game.lives[playerLost-1]>0){
+          recoverLife(playerLost);break;
         }
-        if(autoActive&&autoStarted&&data.mode<2)finishAutosave();
+        if(autoActive&&data.inGame&&!autoStarted){
+          autoStarted=true;match.update({mode:1});
+          if(!checkpoint)saveCheckpoint(false,true);
+        }
+        if(autoActive&&autoStarted&&data.mode<2){autoActive=false;autoStarted=false;}
         matchEvents(data);playStarter.update(data);
         // Online the host puts the two credits in and starts, once.
         if(netPlaying()&&online.role==='host'&&!online.started&&game.mode===1){
@@ -716,7 +770,7 @@ document.addEventListener('keydown',e=>{
   else if(online)return; // online: only the game controls
   else if(action.command==='twoPlayers')startTwoPlayers();
   else if(action.command==='save')saveCheckpoint();
-  else if(action.command==='load')loadCheckpoint();
+  else if(action.command==='load')chooseCheckpoint();
   else saveCheckpoint(true);
 });
 // Any key up: a modifier pressed meanwhile must not leave a hold stuck.
@@ -801,8 +855,7 @@ optionsForm.addEventListener('submit',e=>{
   start();
 });
 ckSave.addEventListener('click',()=>saveCheckpoint());
-ckLoad.addEventListener('click',()=>loadCheckpoint());
-resumeButton.addEventListener('click',()=>loadCheckpoint(true));
+ckLoad.addEventListener('click',chooseCheckpoint);
 ckRequest('readonly',store=>store.get('auto')).then(slot=>{
   if(slot?.text){autoSaved={frame:slot.frame,savedAt:slot.savedAt};updateCheckpoint();}
 },()=>updateCheckpoint('Autoguardado no disponible'));

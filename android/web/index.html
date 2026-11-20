@@ -28,8 +28,8 @@
   button:disabled{opacity:.35;cursor:default}
   button.held{background:#285c61;border-color:#87e1c9;color:#fff}
   /* Floating thumbstick: the base appears under the thumb anywhere in the
-     zone; it rests at the bottom right while untouched. */
-  #stick-zone{--r:clamp(40px,12dvh,58px);position:absolute;right:0;bottom:0;
+     zone; it rests at the bottom left while untouched. */
+  #stick-zone{--r:clamp(40px,12dvh,58px);position:absolute;left:0;bottom:0;
     width:clamp(170px,36vw,340px);height:64dvh;touch-action:none;z-index:0}
   #stick-zone.disabled{opacity:.35}
   #stick-base,#stick-knob{position:absolute;left:0;top:0;border-radius:50%;
@@ -68,10 +68,13 @@
   #result-again[hidden]{display:none}
   #result button{min-height:38px;padding:4px 22px;font-size:12px;border-radius:10px}
   /* Fire and Jump: the whole zone answers, for the nearer button (app.mjs). */
-  #button-stack{position:absolute;left:0;bottom:0;display:flex;flex-direction:column;
-    justify-content:flex-end;gap:10px;width:clamp(150px,26vw,250px);height:64dvh;
-    padding:0 0 max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+  #button-stack{position:absolute;right:0;bottom:0;display:flex;flex-direction:column;
+    align-items:flex-end;justify-content:flex-end;gap:10px;
+    width:clamp(150px,26vw,250px);height:64dvh;
+    padding:0 max(12px,env(safe-area-inset-right))
+      max(12px,env(safe-area-inset-bottom)) 0;
     touch-action:none;background:transparent}
+  #button-stack[hidden]{display:none}
   #button-stack button{width:clamp(96px,13vw,124px);min-height:clamp(58px,17dvh,76px);
     padding:6px;border-radius:14px;font-size:14px;backdrop-filter:none;pointer-events:none}
   #attack{border-color:#c08558b3;background:#39291e55}
@@ -171,9 +174,8 @@
       <div id="footer">
         <button id="restart">Reiniciar</button>
         <button id="options-open" title="Opciones de juego">Opciones</button>
-        <button id="ck-resume" hidden disabled>Reanudar partida</button>
         <button id="ck-save" disabled title="Guardar checkpoint">Guardar</button>
-        <button id="ck-load" disabled title="Sin checkpoint guardado">Cargar</button>
+        <button id="ck-load" disabled title="Sin partida guardada">Cargar</button>
         <button id="online-open" title="Dos teléfonos por Bluetooth, por turnos" hidden>Bluetooth</button>
         <output id="status">cargando…</output>
       </div>
@@ -213,8 +215,14 @@
       <label><input type="radio" name="autofire" value="1"><span>Sí</span></label>
     </div>
     <p>En Fácil y Muy fácil, los enemigos también actúan más despacio.
-      Arthur mantiene su velocidad habitual. Jugar es gratuito: las vidas elegidas
-      se juegan seguidas y, al agotarlas, termina la partida, sin continuar.
+      Arthur mantiene su velocidad habitual. Jugar es gratuito. En partidas locales,
+      al perder una vida se recupera el último autoguardado y se descuenta esa vida,
+      conservando el avance,
+      antes de cambiar de turno. Al reanudar desde el autoguardado, Arthur recupera
+      la armadura si la había perdido. Guardar conserva una copia manual aparte;
+      Cargar recupera la copia más reciente, automática o manual. Si está
+      dañada, intenta la otra.
+      Por Bluetooth, las vidas se juegan seguidas y, al agotarlas, termina la partida.
       En dos jugadores, cada uno tiene sus propias vidas. En Cooperativo comparten
       el avance: al cambiar el turno, el que entra sigue desde donde llegó el
       compañero, con la misma arma, y los puntos se suman. Normal conserva la dificultad

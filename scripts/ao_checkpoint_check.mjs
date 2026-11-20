@@ -21,6 +21,7 @@ import {homedir,tmpdir} from 'node:os';
 import {resolve,join} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createAssetServer} from './ao_serve.mjs';
+import {defendUntil} from './ao_check_controls.mjs';
 import {chromium,_android} from 'playwright-core';
 import {decodeCheckpoint,CYCLES_PER_FRAME} from '../src/checkpoint_format.mjs';
 import {checkpointRuntime} from '../src/checkpoint_runtime.mjs';
@@ -191,7 +192,7 @@ try{
   await page.waitForTimeout(6000);
   await fire(3);
 
-  await until(l=>l.tag==='AO_CK_AUTO'&&l.data.frame>1800,'periodic save',45000);
+  await defendUntil(page,()=>logs.some(l=>l.tag==='AO_CK_AUTO'&&l.data.frame>1800));
   const automatic=await slot('auto');
   const first=await save();
   report.save1={frame:first.frame};

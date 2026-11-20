@@ -15,7 +15,7 @@
  * a tap presses.
  * `createEngine({checkpoint, ports, sink, options, net})` loads the program
  * and resolves to {resumeFrame, audioState, ready, step(frame), render(frame),
- * checkpointPart(frame), encodeCheckpoint(part, audioState), probe()} and an
+ * checkpointPart(frame, {automatic}), encodeCheckpoint(part, audioState), probe()} and an
  * optional message(m); it reports through sink.audioEvent(e),
  * sink.audioFrame(frames), sink.frame(frame, drawable), sink.observe(state)
  * and sink.post(m). `options` and `net` come with 'boot' as the integration
@@ -80,7 +80,8 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
     code:e?.code??null,stack:String(e?.stack??'').slice(0,2000)});
   scope.onmessage=({data})=>{
     if(data?.type==='boot'&&!booted){booted=true;start(data).catch(fail);}
-    else if(data?.type==='save')saveWanted={requestId:data.requestId};
+    else if(data?.type==='save')saveWanted={requestId:data.requestId,
+      automatic:data.automatic===true};
     else if(data?.type==='engine')engine?.message?.(data.message);
     else if(data?.type==='ports'&&data.ports?.length===ports.length){
       taps.input(data.ports,data.pulse);taps.apply(ports);
@@ -118,7 +119,7 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
     }catch(e){post({type:'checkpoint-failed',requestId:s.requestId,code:e?.code??'CK_SAVE_FAILED'});}
   };
 
-  async function start({checkpoint=null,options=null,net=null}){
+  async function start({checkpoint=null,options=null,net=null,restoreArmor=false}){
     const t0=performance.now();
     let last=null,latest=null,audioEvents=[],audioFrames=0;
     const heard=[]; // newest drawable frames, for audio-paced presentation
@@ -144,7 +145,8 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
         audioEvents=[];
         // Frame boundary, between instructions: the only valid save point.
         if(saveWanted&&!saving){
-          saving={requestId:saveWanted.requestId,frame:audioFrames,part:engine.checkpointPart(audioFrames)};
+          saving={requestId:saveWanted.requestId,frame:audioFrames,
+            part:engine.checkpointPart(audioFrames,saveWanted)};
           saveWanted=null;
           audioPort.postMessage({type:'save'});
         }
@@ -159,7 +161,7 @@ export function startEngineWorker({config,createEngine,scope=globalThis,
       observe:state=>post({type:'game-state',...state}),
       post:message=>post({type:'engine',message}),
     };
-    engine=await createEngine({checkpoint,ports,sink,options,net});
+    engine=await createEngine({checkpoint,ports,sink,options,net,restoreArmor});
     audioFrames=engine.resumeFrame;
     if(engine.audioState){
       audioAcked=engine.resumeFrame;

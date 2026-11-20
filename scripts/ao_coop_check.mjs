@@ -3,10 +3,9 @@
  * assets first (scripts/ao_build_assets.mjs); Chromium stays headless.
  * The options dialog offers Dos jugadores: Por turnos / Cooperativo; choosing
  * Cooperativo restarts the engine with `coop`, stores it and shows it in the
- * hint. A two-player game then runs with Right held until both players are
- * out of lives: the turns are announced and the result names the team's total.
+ * hint. A real death then restores the automatic copy before the next turn.
  * Usage: node scripts/ao_coop_check.mjs   (writes out/android/check/coop.json
- * and coop-result.png; about two minutes)
+ * and coop-recovery.png)
  */
 import assert from 'node:assert/strict';
 import {writeFileSync,mkdirSync} from 'node:fs';
@@ -66,23 +65,24 @@ try{
   await page.locator('#options-cancel').click();
   report.options=boot.data.options;
 
-  // A whole two-player game walking right.
+  // Losing a life restores the automatic copy before P2 gets a turn.
   await page.locator('#two-players').click();
   await until(l=>l.tag==='AO_MATCH'&&l.data.type==='start',60000,'match start');
   assert.equal(await page.locator('#turn').textContent(),'Empieza el Jugador 1');
+  const automatic=await until(l=>l.tag==='AO_CK_AUTO',30000,'automatic checkpoint');
+  const mark=logs.length;
   await page.keyboard.down('ArrowRight');
-  const result=(await until(l=>l.tag==='AO_MATCH'&&l.data.type==='result',300000,'result')).data;
+  const restored=(await until(l=>logs.indexOf(l)>=mark&&l.tag==='AO_CK_LOAD'&&l.data.recovery,
+    60000,'automatic recovery')).data;
   await page.keyboard.up('ArrowRight');
+  assert.equal(restored.frame,automatic.data.frame);
+  await until(l=>logs.indexOf(l)>=mark&&l.tag==='AO_READY',30000,'restored engine');
   const turns=logs.filter(l=>l.tag==='AO_MATCH'&&l.data.type==='turn').map(l=>l.data.player);
-  assert.ok(turns.length>=3,'turns pass');
-  turns.forEach((p,i)=>assert.equal(p,i%2===0?2:1,'turn '+i));
-  assert.equal(await page.locator('#result').isVisible(),true);
-  assert.equal(await page.locator('#result-title').textContent(),'Fin de la partida cooperativa');
-  const total=(result.scores[0]+result.scores[1]).toLocaleString('es');
-  assert.equal(await page.locator('#result-winner').textContent(),'Equipo: '+total+' puntos');
-  await page.screenshot({path:join(CHECK,'coop-result.png')});
-  Object.assign(report,{turns,result});
-  await page.waitForFunction(()=>document.getElementById('ck-resume').hidden);
+  assert.deepEqual(turns,[]);
+  assert.equal(await page.locator('#result').isVisible(),false);
+  await page.waitForFunction(()=>!document.getElementById('ck-load').disabled);
+  await page.screenshot({path:join(CHECK,'coop-recovery.png')});
+  Object.assign(report,{turns,restored});
   assert.equal(bad.length,0,bad.join('\n'));
   writeFileSync(join(CHECK,'coop.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});
   console.log(JSON.stringify(report));
