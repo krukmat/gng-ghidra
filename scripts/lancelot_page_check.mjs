@@ -21,8 +21,7 @@ const COLORS={outfit:[112,120,52],hair:[74,46,26],armor:[136,136,170]};
 const server=createAssetServer();
 let browser,page;
 const logs=[],errors=[],report={status:'RUNNING'};
-// The canvas itself, not a page screenshot: a mid-game page.screenshot()
-// stalled the headless game in 3 of 4 runs.
+// The game canvas alone, at its own 256x224 resolution.
 const snap=async name=>writeFileSync(`${OUT}/lancelot-${name}.png`,Buffer.from((await page.evaluate(()=>
   document.getElementById('screen').toDataURL('image/png'))).split(',')[1],'base64'));
 const count=()=>page.evaluate(colors=>{
