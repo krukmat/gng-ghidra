@@ -27,9 +27,17 @@ export function playerPiece(graphic){
   return null;
 }
 const rgb=(r,g,b)=>(r<<16)|(g<<8)|b;
-// Armor pens 12/6/7 light-to-dark, 8 darkest, 10/11 red trim.
+// Armor pens 12/6/7 light-to-dark and 8 darkest: olive tunic and hood.
+// The red trim (10/11) is the belt: brown leather.
 const OUTFIT=new Map([[12,rgb(150,158,78)],[6,rgb(112,120,52)],[7,rgb(78,86,36)],
-  [8,rgb(92,58,30)],[10,rgb(222,206,160)],[11,rgb(184,164,120)]]);
+  [8,rgb(58,64,28)],[10,rgb(136,86,44)],[11,rgb(96,60,30)]]);
+// Boots: the armor pens of the lowest rows, in leather.
+const BOOTS=new Map([[12,rgb(150,100,56)],[6,rgb(120,78,40)],[7,rgb(92,58,30)],[8,rgb(64,40,20)]]);
+const BOOT_ROWS=5;
+// Collar: in the outfit, the lower part of Arthur's beard becomes a raw
+// linen collar, which also gives the shaven face a chin.
+const LINEN=new Map([[4,rgb(222,206,160)],[5,rgb(190,172,128)],[9,rgb(222,206,160)]]);
+const CHIN=4;
 const HAIR=new Map([[9,rgb(104,68,40)],[4,rgb(74,46,26)],[5,rgb(48,30,16)]]);
 const SHAVEN=new Map([[4,rgb(170,136,102)],[5,rgb(140,106,76)],[9,rgb(170,136,102)]]);
 const EYE=0;
@@ -58,15 +66,18 @@ export function lancelotOverrides(sprites,rom){
     }
   }
   const eyes=pixels.filter(p=>p.pen===EYE&&p.piece!=='burst');
-  const top=Math.min(...pixels.map(p=>p.y));
+  const top=Math.min(...pixels.map(p=>p.y)),bottom=Math.max(...pixels.map(p=>p.y));
   for(const p of pixels){
-    if(p.piece!=='body'&&OUTFIT.has(p.pen)){overrides.set(p.key,OUTFIT.get(p.pen));continue;}
+    if(p.piece!=='body'&&OUTFIT.has(p.pen)){
+      overrides.set(p.key,p.piece==='outfit'&&p.y>bottom-BOOT_ROWS&&BOOTS.has(p.pen)?
+        BOOTS.get(p.pen):OUTFIT.get(p.pen));continue;}
     if(!HAIR.has(p.pen))continue;
     if(eyes.length){
       const eye=eyes.find(e=>p.x>=e.x-FACE.left&&p.x<=e.x+FACE.right&&
         p.y>=e.y-FACE.up&&p.y<=e.y+FACE.down);
       if(!eye)continue;
-      overrides.set(p.key,(p.y<eye.y?HAIR:SHAVEN).get(p.pen));
+      overrides.set(p.key,(p.y<eye.y?HAIR:p.piece==='outfit'&&p.y>=eye.y+CHIN?
+        LINEN:SHAVEN).get(p.pen));
     }else if(p.piece==='body'&&p.y<top+8)overrides.set(p.key,HAIR.get(p.pen));
   }
   return overrides;
