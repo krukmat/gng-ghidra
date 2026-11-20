@@ -61,6 +61,10 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
     options=gameOptions({...options,recoveryArmorFrames:[...frames,restored.frame]});
   }
   const dips=optionDips(options);
+  // The character is a game option (games/gngb/options.mjs): a loaded save
+  // keeps its own, and an online guest plays with the host's.
+  const spriteColors=options.character==='lancelot'?
+    (await import('./lib/lancelot_skin.mjs')).lancelotOverrides:null;
   // Port changes from reset: a loaded session continues the saved tape; a
   // new one starts with its DIP bytes, which the board serves from `dips`
   // (it only asks portRead for 0x3000-0x3002).
@@ -133,8 +137,8 @@ async function createGngEngine({checkpoint:checkpointText,ports,sink,options:cho
       else if(m?.type==='p1-repeat')
         shaper.setRepeat(INPUT_CONTROLS[P1_SHAPING.fire.control].bit,m.fire);
     },
-    render:frame=>renderGngbRgba(rendererInputs(frame.record,
-      {scroll:frame.scroll,latch:frame.latch},gfx)),
+    render:frame=>renderGngbRgba({...rendererInputs(frame.record,
+      {scroll:frame.scroll,latch:frame.latch},gfx),spriteColors}),
     checkpointPart(frame,{automatic=false}={}){
       // Runs inside cpu.run: a session's refusal waits for encodeCheckpoint,
       // whose errors become checkpoint-failed.

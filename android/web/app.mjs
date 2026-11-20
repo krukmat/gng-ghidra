@@ -50,8 +50,9 @@ const optionsButton=document.getElementById('options-open');
 const DIFFICULTY_NAMES={easiest:'Muy fácil',easy:'Fácil',normal:'Normal',
   hard:'Difícil',hardest:'Muy difícil'};
 const describeOptions=o=>(DIFFICULTY_NAMES[difficultyLevel(o)]??'Personalizada')+
-  ' · '+o.lives+' vidas'+(o.coop?' · cooperativo':'');
-const defaultOptions=o=>!o.coop&&Object.keys(INITIAL_OPTIONS).every(k=>o[k]===INITIAL_OPTIONS[k]);
+  ' · '+o.lives+' vidas'+(o.coop?' · cooperativo':'')+
+  (o.character==='lancelot'?' · Lancelot':'');
+const defaultOptions=o=>!o.coop&&!o.character&&Object.keys(INITIAL_OPTIONS).every(k=>o[k]===INITIAL_OPTIONS[k]);
 let chosen=storedOptions(),current=null;
 // Two players alternate on the same controls (games/gngb/state.mjs).
 const twoButton=document.getElementById('two-players');
@@ -827,6 +828,7 @@ function openOptions(){
   optionsForm.elements.difficulty.value=difficultyLevel(chosen)??chosen.difficulty;
   optionsForm.elements.lives.value=String(chosen.lives);
   optionsForm.elements.coop.value=chosen.coop?'1':'0';
+  optionsForm.elements.character.value=chosen.character??'arthur';
   optionsForm.elements.autofire.value=autofire?'1':'0';
   document.getElementById('options-current').textContent=
     current?'Partida actual: '+describeOptions(current):'';
@@ -849,7 +851,7 @@ optionsForm.addEventListener('submit',e=>{
   e.preventDefault();
   const f=optionsForm.elements;
   chosen=difficultyOptions(f.difficulty.value,
-    {lives:Number(f.lives.value),coop:f.coop.value==='1'});
+    {lives:Number(f.lives.value),coop:f.coop.value==='1',character:f.character.value});
   try{writePreferences(chosen,autofire);}
   catch(err){log('AO_OPTIONS_NOT_STORED',{message:String(err?.message??err)});updateCheckpoint('No se pudieron guardar las opciones');}
   log('AO_OPTIONS',chosen);

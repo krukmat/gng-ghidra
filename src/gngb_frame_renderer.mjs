@@ -17,7 +17,7 @@ export const GNG_VISIBLE_Y_START=16;
 
 export function renderGngbRgba({
   videoAddressSpace,bufferedSprites,chars,tiles,sprites,palette,scroll,
-  flipScreen=false
+  flipScreen=false,spriteColors=null
 }){
   if(!(videoAddressSpace instanceof Uint8Array)||
      videoAddressSpace.length!==65536||
@@ -28,7 +28,8 @@ export function renderGngbRgba({
      !(palette instanceof Uint8Array)||palette.length!==0x400||
      !scroll||!Number.isInteger(scroll.x)||!Number.isInteger(scroll.y)||
      scroll.x<0||scroll.x>65535||scroll.y<0||scroll.y>65535||
-     typeof flipScreen!=='boolean')
+     typeof flipScreen!=='boolean'||
+     (spriteColors!==null&&typeof spriteColors!=='function'))
     throw Error('R42_INVALID_RENDERER_INPUTS');
   const W=GNG_FRAME_WIDTH,H=GNG_FRAME_HEIGHT;
   const rgba=new Uint8ClampedArray(W*H*4);
@@ -38,6 +39,11 @@ export function renderGngbRgba({
     rgba[p]=palette[c];rgba[p+1]=palette[c+1];
     rgba[p+2]=palette[c+2];rgba[p+3]=255;
   };
+  const paintRgb=(x,y,color)=>{
+    if(x<0||y<0||x>=W||y>=H)return;
+    const p=(y*W+x)*4;
+    rgba[p]=color>>16;rgba[p+1]=(color>>8)&255;rgba[p+2]=color&255;rgba[p+3]=255;
+  };
   // MAME gng screen: BG back, sprites DMA buffer, BG front, FG.
   // First pass: group1 split-priority leaves pens 0 and 6 on back.
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
@@ -45,13 +51,19 @@ export function renderGngbRgba({
     const pen=readTilePen('bg',tiles,t.graphic,t.x,t.y);
     if(bgPixelLayer(t.group,pen,'back'))paint(x,y,t.palette*8+pen);
   }
-  for(const sprite of drawOrder(bufferedSprites)){
+  const order=drawOrder(bufferedSprites);
+  // Optional per-pixel colors (src/lancelot_skin.mjs), keyed by slot and
+  // unflipped pixel, so the draw order and priorities stay the hardware's.
+  const overrides=spriteColors?spriteColors(order,sprites):null;
+  for(const sprite of order){
     for(let sy=0;sy<16;sy++)for(let sx=0;sx<16;sx++){
       const pen=readSpritePen(sprites,sprite.graphic,
         sprite.flipX?15-sx:sx,sprite.flipY?15-sy:sy);
       if(pen===15)continue;
-      paint(sprite.x+sx,sprite.y+sy-GNG_VISIBLE_Y_START,
+      const color=overrides?.get(sprite.slot*256+sy*16+sx);
+      if(color===undefined)paint(sprite.x+sx,sprite.y+sy-GNG_VISIBLE_Y_START,
         0x40+sprite.paletteGroup*16+pen);
+      else paintRgb(sprite.x+sx,sprite.y+sy-GNG_VISIBLE_Y_START,color);
     }
   }
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
