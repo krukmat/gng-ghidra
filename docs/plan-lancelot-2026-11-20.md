@@ -8,7 +8,7 @@ Lancelot será seleccionable al iniciar una partida local de un jugador en web y
 
 | Estado del jugador | Aspecto de Lancelot |
 | --- | --- |
-| Al empezar o recuperar la protección | Se ve como un arquero ligero, con túnica verde oliva, cuero marrón y detalles de lino crudo. Lleva la cara afeitada y el pelo de otro color en las poses donde se ven. |
+| Al empezar o recuperar la protección | Se ve como un arquero ligero, con túnica verde oliva, cuero marrón y detalles de lino crudo. Lleva la cara afeitada y el pelo castaño oscuro. |
 | Tras perder la protección | Se ve exactamente como Arthur al perder la armadura y usa los mismos sprites y colores. |
 
 El atuendo inicial corresponde al estado con armadura en las reglas del juego. Inventariar las piezas que se dibujan en ese estado y preparar variantes donde la armadura de Arthur deba verse como tela o cuero, o se vean la cara y el pelo. Reutilizar cada variante en todas las poses que compartan la pieza. El inventario del primer prototipo permitirá ajustar la estimación de arte.
