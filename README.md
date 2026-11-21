@@ -13,6 +13,8 @@ This repository shows **a process** for bringing an arcade game to JavaScript wi
 </tr>
 </table>
 
+<p align="center"><img src="docs/img/lancelot-zoom.png" width="60%" alt="Lancelot close-up at 9x: in his archer outfit, and after losing protection with his own face and dark brown hair"><br><sub>Lancelot at 9× (web canvas pixels): archer outfit while protected, his own face and hair after losing protection.</sub></p>
+
 > Non-commercial research project. No ROM or game assets are included or provided; see the [legal notice](#legal-notice).
 
 ---
