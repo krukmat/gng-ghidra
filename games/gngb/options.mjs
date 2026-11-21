@@ -183,11 +183,27 @@ function withRecoveryLifeLosses(blocks,losses){
           const address=active===player?RAM.lives:RAM.waiting;
           $.w(address,Math.max(0,$.rd(address)-count),0);
         }
+        if(entries.some(([player])=>player===active))
+          trimLifeIcons($,$.rd(RAM.lives));
       }
     }
     return irq($);
   });
   return recovered;
+}
+
+/** The ROM draws reserve lives (total minus the active life) at 0x2380,
+ * using four character tiles per face; see bank 3, 0x5142–0x5173. Recovery
+ * imports that old tilemap without running the ROM's respawn screen.
+ * Remove only obsolete faces, preserving other HUD content and saves from
+ * the opening animation, where these icons have not been drawn yet. */
+function trimLifeIcons($,lives){
+  for(let i=Math.max(0,lives-1);i<7;i++){
+    const top=0x2380+i*2,bottom=top+32;
+    if($.rd(top)!==0x8a||$.rd(top+1)!==0x8b||
+       $.rd(bottom)!==0x9a||$.rd(bottom+1)!==0x9b)continue;
+    for(const at of [top,top+1,bottom,bottom+1])$.w(at,0x20,0);
+  }
 }
 
 /** New app games finish after the player's lives run out. At 0x77E7 the

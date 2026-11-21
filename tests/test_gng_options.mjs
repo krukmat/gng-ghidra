@@ -116,12 +116,17 @@ test('repeated recovery spends lives for the correct player and survives options
   assert.deepEqual(options.recoveryLifeLosses,[[10,1,2],[10,2,1]]);
   assert.deepEqual(gameOptions(decodeCheckpoint(checkpoint(options),
     {programSha256:SHA}).options).recoveryLifeLosses,options.recoveryLifeLosses);
-  const ram=new Uint8Array(0x500);ram[0x27]=1;ram[0x60]=3;ram[0x440]=5;
+  const ram=new Uint8Array(0x2800);ram[0x27]=1;ram[0x60]=3;ram[0x440]=5;
+  ram.set([0x8a,0x8b,0x8a,0x8b],0x2380);
+  ram.set([0x9a,0x9b,0x9a,0x9b],0x23a0);
   const irq=$=>{$.PC=0x1234;};
   const wrapped=withGameOptions(new Map([[0x65c4,irq]]),options);
   const $={PC:0x65c4,frame:10,rd:a=>ram[a],w:(a,v)=>{ram[a]=v;}};
   wrapped.get(0x65c4)($);
   assert.deepEqual([ram[0x60],ram[0x440]],[2,3]);
+  assert.deepEqual([...ram.slice(0x2380,0x2384)],[0x8a,0x8b,0x20,0x20],
+    'remove the spent reserve life from the active player HUD');
+  assert.deepEqual([...ram.slice(0x23a0,0x23a4)],[0x9a,0x9b,0x20,0x20]);
   $.PC=0x65c4;wrapped.get(0x65c4)($);
   assert.deepEqual([ram[0x60],ram[0x440]],[2,3],'the same IRQ only charges once');
   assert.throws(()=>addRecoveryLifeLoss({lives:3,recoveryLifeLosses:[[10,1,3]]},10,1),

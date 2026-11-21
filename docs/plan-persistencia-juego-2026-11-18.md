@@ -8,6 +8,8 @@ Al abrir el juego por primera vez, las opciones y la primera partida local deben
 
 Al cargar una copia automática o manual sin armadura, Arthur la recupera para aguantar un golpe más. La cinta registra en qué punto se aplicó la ayuda para que la partida se pueda reproducir desde el inicio. La prueba admite `--armor-only` para verificar este caso.
 
+**Contador visible de vidas, 21 de noviembre.** El descuento interno dejaba las caritas de la copia guardada sin actualizar. Al aplicar una pérdida se eliminan también las caritas sobrantes del jugador activo. La [prueba del contador en Android](../scripts/ao_lives_display_check.mjs) verifica el mapa gráfico y captura la pantalla tras muertes reales: 3 → 2 → 1 vidas, 2 → 1 → 0 caritas de reserva y vuelta al título al gastar la última vida. Evidencia: `out/android/check/lives-display/report.json` y capturas en esa misma carpeta. La comparación entre carga y reproducción desde el inicio confirmó un estado de CPU idéntico; las 24 pruebas de opciones y observación aprobaron. APK actualizado: 0.9.2 (12).
+
 ## Situación anterior a la implementación
 
 - La web y la WebView de Android usan la misma pantalla. La aplicación lee las reglas elegidas y el disparo sostenido de dos claves de `localStorage`. En un perfil limpio arranca con Normal, 3 vidas, Por turnos y disparo sostenido desactivado. La línea «Partida actual» de la captura describe la sesión que estaba en curso. [Preferencias actuales](../android/web/app.mjs#L35) · [Formulario](../android/web/app.mjs#L696)
