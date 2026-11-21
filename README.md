@@ -4,8 +4,8 @@ This repository shows **a process** for bringing an arcade game to JavaScript wi
 
 <table>
 <tr>
-<td width="50%"><img src="docs/img/web-credito.png" alt="Web version: title screen with CREDIT 1"></td>
-<td width="50%"><img src="docs/img/android-salta.png" alt="Android app: the player character runs and jumps with the touch joystick"></td>
+<td width="50%"><img src="docs/img/web-lancelot.png" alt="Web version: Lancelot in his archer outfit jumping toward a zombie in the first stage"></td>
+<td width="50%"><img src="docs/img/android-lancelot.png" alt="Android app: Lancelot jumping with the touch joystick and buttons, two zombies ahead"></td>
 </tr>
 <tr>
 <td align="center"><sub>Web</sub></td>
