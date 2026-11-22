@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {observeGameState} from '../src/ao_game_state.mjs';
-import {canAutosave,canResumeCheckpoint,lostLife} from '../games/gngb/state.mjs';
+import {canAutosave,canResumeCheckpoint,lostLife,lifeTransitionEnded} from '../games/gngb/state.mjs';
 import {REC} from '../src/gngb_render_inputs.mjs';
 
 function frame(mode,phase=1,credits=0){
@@ -97,6 +97,21 @@ test('manual checkpoints resume only from stable gameplay or outside a match',()
   assert.equal(canResumeCheckpoint(f),true,'title saves remain valid');
   f.known[2]=0;
   assert.equal(canResumeCheckpoint(f),false,'unknown mode is not resumable');
+});
+
+test('life recovery waits for a living character after the native death sequence',()=>{
+  const f=frame(2);f.record[0x60]=2;f.record[0x503]=3;
+  assert.equal(lifeTransitionEnded(observeGameState(f)),false);
+  f.record[0x503]=0;f.record[0x510]=0x9c;f.record[0x511]=0x64;
+  assert.equal(lifeTransitionEnded(observeGameState(f)),false,'death handler still runs');
+  f.record[0x510]=0x97;f.record[0x511]=0x39;
+  assert.equal(lifeTransitionEnded(observeGameState(f)),true);
+  f.record[5]=4;
+  assert.equal(lifeTransitionEnded(observeGameState(f)),false,'game over is not a recovery');
+  f.record[2]=1;
+  assert.equal(lifeTransitionEnded(observeGameState(f)),false,'title is not gameplay');
+  f.known[2]=0;
+  assert.equal(lifeTransitionEnded(observeGameState(f)),false,'unknown state cannot finish a transition');
 });
 
 test('life counters remain attached to their players across turn swaps',()=>{

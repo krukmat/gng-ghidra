@@ -10,7 +10,7 @@ import {gameOptions,difficultyOptions,difficultyLevel,addRecoveryLifeLoss}
   from './games/gngb/options.mjs';
 import {createMatchTracker} from './lib/ao_match.mjs';
 import {createPlayStarter} from './lib/ao_play.mjs';
-import {lostLife,canAutosave,canResumeCheckpoint} from './games/gngb/state.mjs';
+import {lostLife,lifeTransitionEnded,canAutosave,canResumeCheckpoint} from './games/gngb/state.mjs';
 import {bluetoothBridge,bluetoothStatus,pairedDevices,createBluetoothClient}
   from './lib/net_bluetooth_client.mjs';
 import {NET_PROTOCOL} from './lib/netplay_turns.mjs';
@@ -93,6 +93,7 @@ let autoSaved=null,autoActive=false,autoStarted=false,autoElapsed=0;
 let autoInitialPending=false;
 let autoTick=performance.now(),saveSequence=0,engineGeneration=0;
 let manualPending=false,ckLoading=false,lifeRecovering=false;
+let lifeTransition=null;
 let storageQueue=Promise.resolve();
 const latestCheckpoint=()=>!autoSaved?false:!ckSaved?true:
   (Date.parse(autoSaved.savedAt)||0)>(Date.parse(ckSaved.savedAt)||0);
@@ -118,14 +119,14 @@ const ckRequest=(mode,run)=>new Promise((resolve,reject)=>{
   };
 });
 function updateCheckpoint(note=null){
-  ckSave.disabled=!playable||ckSaving!==null||ckLoading||online!==null;
-  ckLoad.disabled=!playable||(!autoSaved&&!ckSaved)||ckSaving!==null||ckLoading||online!==null;
+  ckSave.disabled=!playable||ckSaving!==null||ckLoading||lifeRecovering||online!==null;
+  ckLoad.disabled=!playable||(!autoSaved&&!ckSaved)||ckSaving!==null||ckLoading||lifeRecovering||online!==null;
   ckLoad.title=!autoSaved&&!ckSaved?'Sin partida guardada':
     'Cargar '+(latestCheckpoint()?'autoguardado':'guardado manual')+' más reciente';
   if(note){ckNote=note;ckNoteUntil=performance.now()+4000;status.textContent=note;}
 }
 function saveCheckpoint(tape=false,automatic=false){
-  if(!playable||online!==null||ckLoading)return;
+  if(!playable||online!==null||ckLoading||lifeRecovering)return;
   if(automatic&&(!autoActive||!game.inGame||game.hurt!==false))return;
   if(ckSaving!==null){if(!automatic&&!tape)manualPending=true;return;}
   const request={id:++saveSequence,generation:engineGeneration,tape,automatic,
@@ -167,8 +168,12 @@ async function savedCheckpoint(data,code=null,requestId=data?.requestId){
 async function recoverLife(player){
   autoActive=false;autoStarted=false;autoElapsed=0;
   lifeRecovering=true;
+  const transition=lifeTransition={generation:engineGeneration,player,
+    prepared:false,ended:lifeTransitionEnded(game),startedAt:performance.now()};
   releaseAll();manualPending=false;
+  toEngine({type:'p1-repeat',fire:false});
   if(ckSaving){clearTimeout(ckSaving.timer);ckSaving=null;}
+  enable(playable);
   log('AO_LIFE_LOST',{player,lives:game.lives});
   try{
     const generation=engineGeneration;
@@ -185,12 +190,25 @@ async function recoverLife(player){
       await ckRequest('readwrite',store=>store.put({...slot,savedAt,text},'auto'));
       if(generation===engineGeneration)autoSaved={frame:slot.frame,savedAt};
     });
-    if(generation===engineGeneration)await loadCheckpoint(true,true);
+    if(lifeTransition===transition){transition.prepared=true;finishLifeTransition();}
   }catch(error){
+    if(lifeTransition!==transition)return;
     log('AO_CK_LOAD_FAILED',{code:String(error?.message??error),automatic:true});
     updateCheckpoint('no se pudo descontar la vida');
-    lifeRecovering=false;enable(playable);
+    lifeTransition=null;lifeRecovering=false;
+    toEngine({type:'p1-repeat',fire:autofire});enable(playable);
   }
+}
+function finishLifeTransition(){
+  const transition=lifeTransition;
+  if(!transition?.prepared||!transition.ended||
+    transition.generation!==engineGeneration)return;
+  log('AO_LIFE_TRANSITION_END',{player:transition.player,
+    durationMs:Math.round(performance.now()-transition.startedAt)});
+  // Keep the live engine and its audio output until the native death
+  // sequence ends. Only the checkpoint load now suppresses presentation.
+  lifeTransition=null;
+  loadCheckpoint(true,true);
 }
 setInterval(()=>{
   const now=performance.now(),elapsed=now-autoTick;autoTick=now;
@@ -259,7 +277,11 @@ async function loadCheckpoint(automatic=false,recovery=false){
   }catch(e){
     if(!failureLogged)log('AO_CK_LOAD_FAILED',{code:String(e?.message??e)});
     updateCheckpoint(recovery?'no se pudo recuperar el autoguardado':'no se pudo cargar');
-  }finally{ckLoading=false;lifeRecovering=false;enable(playable);}
+  }finally{
+    ckLoading=false;lifeRecovering=false;
+    if(generation===engineGeneration)toEngine({type:'p1-repeat',fire:autofire});
+    enable(playable);
+  }
 }
 function chooseCheckpoint(){
   if(ckLoad.disabled)return;
@@ -328,7 +350,7 @@ window.addEventListener('resize',()=>{if(!stick)restStick();});
 function enable(value){
   playable=value;
   // Online, the controls only count in this phone's turns.
-  const active=value&&!ckLoading&&(!netPlaying()||online.owner===online.role);
+  const active=value&&!ckLoading&&!lifeRecovering&&(!netPlaying()||online.owner===online.role);
   controls.setEnabled(active);
   zone.classList.toggle('disabled',!active);
   document.getElementById('button-stack').hidden=!active||!game.inGame;
@@ -641,6 +663,7 @@ function start(checkpoint=null,net=null,restoreArmor=false){
   manualPending=false;autoActive=!!checkpoint&&!net;autoStarted=false;autoElapsed=0;
   autoInitialPending=!checkpoint;
   lifeRecovering=false;
+  lifeTransition=null;
   enable(false);playStarter.cancel();closeSession();worker?.terminate();
   game={credits:0,readyToStart:false,inGame:false};current=null;
   match.reset();clearTimeout(turnTimer);
@@ -661,7 +684,7 @@ function start(checkpoint=null,net=null,restoreArmor=false){
     if(generation!==engineGeneration)return;
     switch(data?.type){
       case 'frame':
-        if(lifeRecovering)break;
+        if(lifeRecovering&&!lifeTransition)break;
         pending=data;
         if(!playable){enable(true);updateHint();}
         break;
@@ -684,7 +707,13 @@ function start(checkpoint=null,net=null,restoreArmor=false){
         updateHint();break;
       case 'engine':engineMessage(data.message);break;
       case 'game-state':
-        if(lifeRecovering){game=data;break;}
+        if(lifeRecovering){
+          game=data;
+          if(lifeTransition&&lifeTransitionEnded(data)){
+            lifeTransition.ended=true;finishLifeTransition();
+          }
+          break;
+        }
         const playerLost=lostLife(game,data);
         game=data;
         if(autoActive&&autoStarted&&playerLost&&game.lives[playerLost-1]>0){

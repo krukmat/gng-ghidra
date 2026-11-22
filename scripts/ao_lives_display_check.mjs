@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /** Check life counters and their visible icons after real Android deaths.
- * Build the isolated org.gng.persistence.check APK first. */
+ * Build the isolated org.gng.persistence.check APK first. With --transitions,
+ * also check native presentation and PCM at the Web Audio output. */
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {join} from 'node:path';
@@ -11,10 +13,13 @@ import {decodeCheckpoint} from '../src/checkpoint_format.mjs';
 import {defendUntil} from './ao_check_controls.mjs';
 
 const serial=process.env.AO_ADB_SERIAL??'emulator-5554';
-const pkg='org.gng.persistence.check',dir='out/android/check/lives-display';
+const transitions=process.argv.includes('--transitions');
+const pkg='org.gng.persistence.check',dir='out/android/check/'+
+  (transitions?'life-transitions':'lives-display');
 const adb=(...args)=>execFileSync(join(homedir(),'Library/Android/sdk/platform-tools/adb'),
   ['-s',serial,...args],{timeout:60000});
 const logs=[],errors=[],report={serial,status:'RUNNING',states:[]};
+if(transitions)report.transitions=[];
 let device,page;
 const until=async(tag,mark=0,predicate=()=>true,timeout=45000)=>{
   const end=Date.now()+timeout;
@@ -66,11 +71,22 @@ try{
   device=(await _android.devices()).find(d=>d.serial()===serial);
   assert.ok(device,'Android device available');
   page=await (await device.webView({pkg},{timeout:30000})).page();
+  if(transitions)await page.addInitScript(()=>{
+    const Native=window.AudioContext;
+    window.AudioContext=class extends Native{
+      createGain(){
+        const gain=super.createGain(),analyser=this.createAnalyser();
+        analyser.fftSize=2048;gain.connect(analyser);
+        window.transitionAnalyser=analyser;
+        return gain;
+      }
+    };
+  });
   page.on('pageerror',e=>errors.push(String(e)));
   page.on('console',message=>{
     const match=/^(AO_\w+) (.*)$/s.exec(message.text());if(!match)return;
-    logs.push({tag:match[1],data:JSON.parse(match[2])});
-    if(['AO_ERROR','AO_HALT'].includes(match[1]))errors.push(message.text());
+    logs.push({tag:match[1],data:JSON.parse(match[2]),at:Date.now()});
+    if(['AO_ERROR','AO_HALT','AO_AUDIO_STOP'].includes(match[1]))errors.push(message.text());
   });
   await page.goto('https://appassets.androidplatform.net/assets/index.html?inputCheck');
   await page.waitForFunction(()=>!document.getElementById('start').disabled);
@@ -88,9 +104,49 @@ try{
   report.automaticFrame=automatic.frame;
   writeFileSync(join(dir,'automatic.json'),(await slot('auto')).text);
   await capture('before');
+  if(transitions){
+    await page.locator('#sound').click();
+    await until('AO_AUDIO_STATS',0,d=>d.sound&&d.worklet?.state==='PLAYING');
+  }
   for(let death=1;death<=2;death++){
     mark=logs.length;await page.keyboard.down('ArrowRight');
     await until('AO_LIFE_LOST',mark);await page.keyboard.up('ArrowRight');
+    if(transitions){
+      const samples=[],end=Date.now()+15000;
+      while(!logs.slice(mark).some(l=>l.tag==='AO_LIFE_TRANSITION_END')&&Date.now()<end){
+        assert.deepEqual(errors,[]);
+        assert.equal(logs.slice(mark).some(l=>l.tag==='AO_CK_LOAD'),false,
+          'checkpoint must wait for the native transition');
+        const sample=await page.evaluate(()=>{
+          const analyser=window.transitionAnalyser;
+          const pcm=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(pcm);
+          return {image:document.getElementById('screen').toDataURL(),
+            peak:Math.max(...pcm.map(Math.abs)),
+            blocked:document.getElementById('ck-save').disabled&&
+              document.getElementById('ck-load').disabled&&
+              document.getElementById('stick-zone').classList.contains('disabled')};
+        });
+        assert.equal(sample.blocked,true,'controls and saves remain blocked');
+        const bytes=Buffer.from(sample.image.split(',')[1],'base64');
+        const hash=createHash('sha256').update(bytes).digest('hex');
+        if(!samples.some(s=>s.hash===hash))
+          writeFileSync(join(dir,'death-'+death+'-'+samples.length+'.png'),bytes);
+        samples.push({at:Date.now(),peak:sample.peak,hash});
+        await page.waitForTimeout(200);
+      }
+      const ended=await until('AO_LIFE_TRANSITION_END',mark);
+      assert.ok(ended.durationMs>4000&&ended.durationMs<12000,'native sequence completes before load');
+      assert.ok(samples.filter(s=>s.peak>0.001).length>=5,'audible PCM continues through the transition');
+      assert.ok(new Set(samples.map(s=>s.hash)).size>1,'native transition continues drawing');
+      const endIndex=logs.findIndex((l,i)=>i>=mark&&l.tag==='AO_LIFE_TRANSITION_END');
+      assert.equal(logs.slice(mark,endIndex).some(l=>l.tag==='AO_AUDIO_SESSION'),false,
+        'audio output is not restarted during the native transition');
+      assert.equal(logs.slice(mark).filter(l=>l.tag==='AO_LIFE_LOST').length,1);
+      report.transitions.push({death,durationMs:ended.durationMs,samples,
+        audioStats:logs.slice(mark).filter(l=>l.tag==='AO_AUDIO_STATS')});
+      console.log('LIFE_TRANSITION death='+death+' durationMs='+ended.durationMs+
+        ' audibleSamples='+samples.filter(s=>s.peak>0.001).length);
+    }
     const loaded=await until('AO_CK_LOAD',mark,d=>d.recovery);
     assert.equal(loaded.frame,automatic.frame,'recover the same confirmed checkpoint');
     await until('AO_READY',mark);
@@ -108,6 +164,7 @@ try{
   report.status='PASS';
 }catch(error){report.status='FAIL';report.error=String(error.stack??error);throw error;}
 finally{
+  if(transitions)writeFileSync(join(dir,'logs.json'),JSON.stringify(logs,null,2)+'\n');
   writeFileSync(join(dir,'report.json'),JSON.stringify(report,null,2)+'\n');
   await device?.close();
 }

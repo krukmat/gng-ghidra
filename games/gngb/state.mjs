@@ -70,6 +70,12 @@ export function lostLife(previous,state){
   return index>=0?index+1:null;
 }
 
+/** After a confirmed life loss, the native sequence owns picture and music
+ * until a living character is ready again. Never use a wall-clock delay. */
+export function lifeTransitionEnded(state){
+  return state?.mode===2&&state.inGame===true&&state.hurt===false;
+}
+
 /** Only living gameplay may replace the automatic recovery point. Reads
  * work RAM only: valid for both frame records and exported CPU memory. */
 export function canAutosave(frame,previous=null){
