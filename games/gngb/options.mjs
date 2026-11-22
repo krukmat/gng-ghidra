@@ -22,6 +22,9 @@ import {dipSwitches,LIVES,DIFFICULTIES} from './inputs.mjs';
 import {RAM} from './state.mjs';
 
 export const ENEMY_PACES=Object.freeze([100,75,50]);
+/** Who the player sees (src/lancelot_skin.mjs); only the drawing changes.
+ * Kept only when not Arthur, so older saves and tapes stay Arthur's. */
+export const CHARACTERS=Object.freeze(['arthur','lancelot']);
 export const DEFAULT_OPTIONS=Object.freeze({lives:3,difficulty:'normal',enemyPace:100});
 // The menu exposes one difficulty; saves and replays retain the exact DIP
 // and pace values, including combinations chosen before the unified menu.
@@ -32,9 +35,9 @@ export const DIFFICULTY_LEVELS=Object.freeze({
   hard:Object.freeze({difficulty:'hard',enemyPace:100}),
   hardest:Object.freeze({difficulty:'hardest',enemyPace:100})
 });
-export function difficultyOptions(level,{lives=DEFAULT_OPTIONS.lives,coop}={}){
+export function difficultyOptions(level,{lives=DEFAULT_OPTIONS.lives,coop,character}={}){
   if(!Object.hasOwn(DIFFICULTY_LEVELS,level))throw Error('GNG_OPTIONS_INVALID');
-  return gameOptions({lives,coop,...DIFFICULTY_LEVELS[level]});
+  return gameOptions({lives,coop,character,...DIFFICULTY_LEVELS[level]});
 }
 /** null means a legacy combination, which must replay without conversion. */
 export function difficultyLevel(options){
@@ -61,6 +64,7 @@ export function gameOptions(o){
      !ENEMY_PACES.includes(out.enemyPace)||
      out.continues!==undefined&&typeof out.continues!=='boolean'||
      out.coop!==undefined&&typeof out.coop!=='boolean'||
+     out.character!==undefined&&!CHARACTERS.includes(out.character)||
      !Array.isArray(armorFrames)||armorFrames.some((frame,i)=>
        !Number.isSafeInteger(frame)||frame<1||(i>0&&frame<=armorFrames[i-1]))||
      !Array.isArray(lifeLosses)||lifeLosses.some((entry,i)=>
@@ -74,6 +78,7 @@ export function gameOptions(o){
   return Object.freeze({lives,difficulty:out.difficulty,enemyPace:out.enemyPace,
     ...(out.continues===undefined?{}:{continues:out.continues}),
     ...(out.coop===true?{coop:true}:{}),
+    ...(out.character!==undefined&&out.character!=='arthur'?{character:out.character}:{}),
     ...(armorFrames.length?{recoveryArmorFrames:Object.freeze([...armorFrames])}:{}),
     ...(lifeLosses.length?{recoveryLifeLosses:Object.freeze(
       lifeLosses.map(entry=>Object.freeze([...entry])))}:{})});

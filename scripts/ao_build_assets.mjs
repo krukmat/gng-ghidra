@@ -22,7 +22,7 @@ const ROOT=resolve(fileURLToPath(import.meta.url),'../..');
 export const ASSETS=join(ROOT,'out/android/assets');
 const WEB=join(ROOT,'android/web');
 // Worker entry points in src/; their relative imports are copied too.
-const LIB_ENTRIES=['gngb_frame_renderer.mjs','gngb_render_inputs.mjs',
+const LIB_ENTRIES=['gngb_frame_renderer.mjs','lancelot_skin.mjs','gngb_render_inputs.mjs',
   'v2_b1_observable.mjs','gngb_input_contract.mjs','ao_web_assets.mjs',
   'ao_preferences.mjs','ao_touch_controls.mjs','ao_keyboard.mjs','ao_play.mjs','games/gngb/state.mjs','games/gngb/options.mjs',
   'v3_b2c_port_witness.mjs',

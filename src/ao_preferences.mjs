@@ -18,7 +18,7 @@ export function readPreferences(storage){
     }
   }catch{}
   const options={...INITIAL_OPTIONS};
-  for(const key of ['lives','difficulty','enemyPace','coop']){
+  for(const key of ['lives','difficulty','enemyPace','coop','character']){
     if(raw?.[key]===undefined)continue;
     try{gameOptions({...options,[key]:raw[key]});options[key]=raw[key];}catch{}
   }

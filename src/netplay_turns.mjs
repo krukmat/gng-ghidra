@@ -18,7 +18,9 @@
  * the engine worker and the Node tests drive it.
  */
 // v2: the options may carry `coop`, which a v1 phone would drop and desync.
-export const NET_PROTOCOL='gng.netplay.v2';
+// v3: the host's options may name the character (games/gngb/options.mjs);
+// an older guest would drop it and draw Arthur.
+export const NET_PROTOCOL='gng.netplay.v3';
 export const HASH_EVERY=60;
 const ACK_EVERY=30; // a follower acks at least this often
 
